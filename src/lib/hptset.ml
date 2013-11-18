@@ -26,6 +26,7 @@ module type S = sig
   val empty: t
   val is_empty: t -> bool
   val mem: elt -> t -> bool
+  val find: elt -> t -> elt
   val add: elt -> t -> t
   val singleton: elt -> t
   val remove: elt -> t -> t
@@ -96,6 +97,8 @@ module Make(X: Id_Datatype)
       (fun x (w, wo) -> if f x then add x w, wo else w, add x wo) s (empty, empty)
 
   let mem x s = try find x s; true with Not_found -> false
+
+  let find x s = find x s; x
 
   let diff s1 s2 =
     fold (fun x acc -> if mem x s2 then acc else add x acc) s1 empty

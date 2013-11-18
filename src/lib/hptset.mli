@@ -50,6 +50,9 @@ module type S = sig
     val mem: elt -> t -> bool
     (** [mem x s] tests whether [x] belongs to the set [s]. *)
 
+    val find: elt -> t -> elt
+    (** [find x s] returns the element of [s] equal to [x], or raises [Not_found] if no such element exists. *)
+
     val add: elt -> t -> t
     (** [add x s] returns a set containing all elements of [s],
        plus [x]. If [x] was already in [s], [s] is returned unchanged. *)

@@ -165,6 +165,8 @@ module Make(Ord: Datatype.S) = struct
 	let c = Ord.compare x v in
 	c = 0 || mem x (if c < 0 then l else r)
 
+    let find x s = if mem x s then x else raise Not_found
+
     let singleton x = Node(Empty, x, Empty, 1)
 
     let rec remove x = function

@@ -59,6 +59,8 @@ struct
 
   let mem e s = mem_k (E.id e) s
 
+  let find e s = if mem e s then e else raise Not_found
+
   let lowest_bit x = x land (-x)
     
   let branching_bit p0 p1 = lowest_bit (p0 lxor p1)
@@ -359,6 +361,8 @@ struct
     | Branch (_,_,_,t) -> max_elt t
 
   let mem e s = mem_k (index e) s
+
+  let find e s = if mem e s then e else raise Not_found
 
   let mask k m  = (k lor (m-1)) land (lnot m)
 

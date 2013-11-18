@@ -321,7 +321,8 @@ object(self)
          C variable %a"
 	Printer.pp_logic_var lv Printer.pp_varinfo v
 
-  method vlogic_info_decl li =
+  (*
+   method vlogic_info_decl li =
     List.iter
       (fun lv ->
         if lv.lv_kind <> LVFormal then
@@ -331,7 +332,7 @@ object(self)
             Printer.pp_logic_var lv)
       li.l_profile;
     DoChildren
-
+  *)
 
   method vlogic_var_use v =
     if v.lv_name <> "\\exit_status" then begin

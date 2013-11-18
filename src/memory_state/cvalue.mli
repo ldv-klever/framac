@@ -35,8 +35,8 @@ module V : sig
   include module type of Location_Bytes
     (* Too many aliases, and OCaml module system is not able to keep track
        of all of them. Use some shortcuts *)
-    with type z = Location_Bytes.z
-    and type M.t = Location_Bytes.M.t
+    with type M.t = Location_Bytes.M.t
+    and type z = Location_Bytes.z
 
   include Lattice_With_Isotropy.S
       with type t := t
