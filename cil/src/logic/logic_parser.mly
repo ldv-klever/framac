@@ -214,7 +214,7 @@
 %token INT INTEGER REAL BOOLEAN FLOAT LT GT LE GE EQ NE COMMA ARROW EQUAL
 %token FORALL EXISTS IFF IMPLIES AND OR NOT SEPARATED
 %token TRUE FALSE OLD AT RESULT
-%token BLOCK_LENGTH BASE_ADDR OFFSET VALID VALID_READ VALID_INDEX VALID_RANGE
+%token BLOCK_LENGTH BASE_ADDR OFFSET OFFSET_MAX OFFSET_MIN VALID VALID_READ VALID_INDEX VALID_RANGE
 %token ALLOCATION STATIC REGISTER AUTOMATIC DYNAMIC UNALLOCATED
 %token ALLOCABLE FREEABLE FRESH
 %token DOLLAR QUESTION MINUS PLUS STAR AMP SLASH PERCENT LSQUARE RSQUARE EOF
@@ -426,6 +426,8 @@ lexpr_inner:
 | TRUE { info PLtrue }
 | FALSE { info PLfalse }
 | VALID opt_label_1 LPAR lexpr RPAR { info (PLvalid ($2,$4)) }
+| OFFSET_MAX opt_label_1 LPAR lexpr RPAR { info (PLoffset_max($2, $4)) }
+| OFFSET_MIN opt_label_1 LPAR lexpr RPAR { info (PLoffset_min($2, $4)) }
 | VALID_READ opt_label_1 LPAR lexpr RPAR { info (PLvalid_read ($2,$4)) }
 | VALID_INDEX opt_label_1 LPAR lexpr COMMA lexpr RPAR { 
   let source = fst (loc ()) in
@@ -1803,6 +1805,8 @@ bs_keyword:
 | NULL { () }
 | OLD { () }
 | OFFSET { () }
+| OFFSET_MAX { () }
+| OFFSET_MIN { () }
 | REGISTER { () }
 | RESULT { () }
 | SEPARATED { () }

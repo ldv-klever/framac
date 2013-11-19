@@ -2261,6 +2261,17 @@ struct
                 (mk_logic_pointer_or_StartOf t)
             in t.term_node, t.term_type
           else error loc "subscripted value is neither array nor pointer"
+      | PLoffset_max (l, t) | PLoffset_min (l, t) ->
+          (* offset_max and offset_min need a current label to have some semantics *)
+	  let l = find_current_logic_label loc env l in
+          let t = term env t in
+          if isLogicPointer t then
+            let t =
+              lift_set (fun t -> Logic_const.term (Toffset (l,t)) Linteger)
+                       (mk_logic_pointer_or_StartOf t)
+            in
+            t.term_node, t.term_type
+          else error loc "subscripted value is neither array nor pointer"
       | PLblock_length (l, t) ->
           (* block_length need a current label to have some semantics *)
 	  let l = find_current_logic_label loc env l in
@@ -2906,7 +2917,7 @@ struct
           let tbody = predicate env body in
           { name = []; loc = p0.lexpr_loc;
             content = Plet(var,tbody) }
-      | PLcast _ | PLblock_length _ | PLbase_addr _ | PLoffset _
+      | PLcast _ | PLblock_length _ | PLbase_addr _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
       | PLarrget _ | PLarrow _
       | PLdot _ | PLbinop _ | PLunop _ | PLconstant _
       | PLnull | PLresult | PLcoercion _ | PLcoercionE _ | PLsizeof _

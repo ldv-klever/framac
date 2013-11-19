@@ -118,7 +118,7 @@ let getParenthLevel e =
     | PLunop (Ustar,_) | PLdot _ | PLarrow _ | PLarrget _
     | PLsizeof _ | PLsizeofE _ -> 20
     | PLapp _ | PLold _ | PLat _ 
-    | PLoffset _ | PLbase_addr _ | PLblock_length _
+    | PLoffset _ | PLoffset_max _ | PLoffset_min _ | PLbase_addr _ | PLblock_length _
     | PLupdate _  | PLinitField _ | PLinitIndex _
     | PLvalid _ | PLvalid_read _ | PLinitialized _ 
     | PLallocable _ | PLfreeable _ | PLfresh _ 
@@ -191,6 +191,10 @@ and print_lexpr_level n fmt e =
           fprintf fmt "\\block_length%a(@;@[%a@])" print_label_1 l print_lexpr_plain e
       | PLoffset (l,e) ->
           fprintf fmt "\\offset%a(@;@[%a@])" print_label_1 l print_lexpr_plain e
+      | PLoffset_max (l,e) ->
+          fprintf fmt "\\offset_max%a(@;@[%a@])" print_label_1 l print_lexpr_plain e
+      | PLoffset_min (l,e) ->
+          fprintf fmt "\\offset_min%a(@;@[%a@])" print_label_1 l print_lexpr_plain e
       | PLresult -> pp_print_string fmt "\\result"
       | PLnull -> pp_print_string fmt "\\null"
       | PLcast (t,e) -> fprintf fmt "(@[%a@])@;%a"

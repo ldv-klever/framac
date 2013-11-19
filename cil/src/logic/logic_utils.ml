@@ -992,6 +992,7 @@ and is_same_lexpr l1 l2 =
     | PLvalid_read (l1,e1), PLvalid_read (l2,e2)
     | PLbase_addr (l1,e1), PLbase_addr (l2,e2)
     | PLoffset (l1,e1), PLoffset (l2,e2)
+    | PLoffset_max (l1,e1), PLoffset_min (l2,e2)
     | PLblock_length (l1,e1), PLblock_length (l2,e2)
     | PLinitialized (l1,e1), PLinitialized (l2,e2) ->
 	l1=l2 && is_same_lexpr e1 e2
@@ -1008,7 +1009,7 @@ and is_same_lexpr l1 l2 =
       is_same_list is_same_lexpr l1 l2
     | (PLvar _ | PLapp _ | PLlambda _ | PLlet _ | PLconstant _ | PLunop _
       | PLbinop _ | PLdot _ | PLarrow _ | PLarrget _ | PLold _ | PLat _
-      | PLbase_addr _ | PLblock_length _ | PLoffset _ 
+      | PLbase_addr _ | PLblock_length _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
       | PLresult | PLnull | PLcast _
       | PLrange _ | PLsizeof _ | PLsizeofE _ | PLtypeof _ | PLcoercion _
       | PLcoercionE _ | PLupdate _ | PLinitIndex _ | PLtype _ | PLfalse

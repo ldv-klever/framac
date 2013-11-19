@@ -181,6 +181,8 @@
         "\\nothing", NOTHING;
         "\\null", NULL;
         "\\offset", OFFSET;
+        "\\offset_max", OFFSET_MAX;
+        "\\offset_min", OFFSET_MIN;
         "\\old", OLD;
         "\\register", REGISTER;
         "\\result", RESULT;
