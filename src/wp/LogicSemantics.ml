@@ -552,6 +552,9 @@ struct
 	  ignore label ;
 	  Warning.error "Offset construct not implemented yet"
 
+      | Toffset_max _ | Toffset_min _ ->
+	  Wp_parameters.fatal "Jessie constructs"
+
       | Tblock_length (label,t) -> 
 	  let obj = object_of (Logic_typing.ctype_of_pointed t.term_type) in
 	  let sigma = C.mem_at env (c_label label) in
@@ -756,6 +759,7 @@ struct
       | Tblock_length _ | Tbase_addr _ | Toffset _ | TAddrOf _ 
 	  -> Wp_parameters.fatal "Non-assignable term (%a)" Printer.pp_term t
 	    
+      | Toffset_max _ | Toffset_min _
       | TCoerce (_,_)
       | TCoerceE (_,_) ->
           Wp_parameters.fatal "Jessie constructs"

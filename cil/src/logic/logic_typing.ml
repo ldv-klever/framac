@@ -724,7 +724,8 @@ struct
       match idx.term_node with
         | TConst _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _
         | TAlignOf _ | TAlignOfE _ | Tat _ | Ttypeof _ | Ttype _
-        | Tempty_set | Tbase_addr _ | Toffset _ | Tblock_length _ | Tnull
+        | Tempty_set | Tbase_addr _ | Toffset _ | Toffset_max _ | Toffset_min _
+        | Tblock_length _ | Tnull
           -> false
         | TLval _ -> true
         | TUnOp(_,t) -> needs_at t
@@ -1630,7 +1631,7 @@ struct
       | TConst _ | TLval _ | TSizeOf _ | TSizeOfE _
       | TSizeOfStr _ | TAlignOf _ | TAlignOfE _
       | TUnOp _ | TBinOp _ | TCastE _ | TAddrOf _ | TStartOf _
-      | Tapp _  | TDataCons _ | Tbase_addr _ | Toffset _
+      | Tapp _  | TDataCons _ | Tbase_addr _ | Toffset _ | Toffset_max _ | Toffset_min _
       | Tblock_length _ | Tnull | TCoerce _ | TCoerceE _
       | TUpdate _ | Ttypeof _ | Ttype _ | Tempty_set
         (* [VP] I suppose that an union of functions
@@ -2267,7 +2268,12 @@ struct
           let t = term env t in
           if isLogicPointer t then
             let t =
-              lift_set (fun t -> Logic_const.term (Toffset (l,t)) Linteger)
+              let cil_term t = match pl with
+                | PLoffset_max _ -> Toffset_max (l,t)
+                | PLoffset_min _ -> Toffset_min (l,t)
+                | _ -> assert false
+              in
+              lift_set (fun t -> Logic_const.term (cil_term t) Linteger)
                        (mk_logic_pointer_or_StartOf t)
             in
             t.term_node, t.term_type

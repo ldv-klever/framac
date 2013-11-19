@@ -189,6 +189,7 @@ module Precedence = struct
    (* application and applications-like constructions *)
    | Tapp (_, _,_)|TDataCons _
    | Tblock_length _ | Tbase_addr _ | Toffset _ | Tat (_, _)
+   | Toffset_max _ | Toffset_min _
    | Tunion _ | Tinter _
    | TUpdate _ | Ttypeof _ | Ttype _ -> 10
    | TLval(TVar _, TNoOffset) -> 0        (* Plain variables *)
@@ -1877,6 +1878,10 @@ the arguments."
 	
     | Toffset (l,t) -> 
       fprintf fmt "\\offset%a(%a)" self#labels [l] self#term t
+    | Toffset_max (l,t) -> 
+      fprintf fmt "\\offset_max%a(%a)" self#labels [l] self#term t
+    | Toffset_min (l,t) -> 
+      fprintf fmt "\\offset_min%a(%a)" self#labels [l] self#term t
     | Tbase_addr (l,t) -> 
       fprintf fmt "\\base_addr%a(%a)" self#labels [l] self#term t
     | Tblock_length (l,t) -> 

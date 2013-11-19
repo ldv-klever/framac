@@ -550,6 +550,8 @@ let rec eval_term ~with_alarms env t =
 
     (* TODO *)
     | Toffset _ -> unsupported "\\offset function"
+    | Toffset_max _ -> unsupported "\\offset_max function"
+    | Toffset_min _ -> unsupported "\\offset_min function"
     | Tbase_addr _ -> unsupported "\\base_addr function"
     | Tblock_length _ -> unsupported "\\block_length function"
     | Tinter _ -> unsupported "set intersection"

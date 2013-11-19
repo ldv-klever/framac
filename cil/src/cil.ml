@@ -2037,6 +2037,15 @@ and childrenTermNode vis tn =
         let s' = visitCilLogicLabel vis s in
         let t' = vTerm t in 
 	if t' != t || s' != s then Toffset (s',t') else tn
+    | Toffset_max (s,t) | Toffset_min (s,t) ->
+        let s' = visitCilLogicLabel vis s in
+        let t' = vTerm t in 
+	if t' != t || s' != s then
+          match tn with
+            | Toffset_max _ -> Toffset_max (s',t')
+            | Toffset_min _ -> Toffset_min (s',t')
+            | _ -> assert false
+        else tn
     | Tbase_addr (s,t) ->
         let s' = visitCilLogicLabel vis s in
         let t' = vTerm t in 
@@ -6933,6 +6942,7 @@ let rec free_vars_term bound_vars t = match t.term_node with
   | TCastE (_,t)
   | Tat (t,_)
   | Toffset (_,t)
+  | Toffset_max (_,t) | Toffset_min (_,t)
   | Tbase_addr (_,t)
   | Tblock_length (_,t)
   | TCoerce (t,_)

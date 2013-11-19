@@ -130,7 +130,9 @@ let rank_term = function
   | Tlet _ -> 29
   | Tcomprehension _ -> 30
   | Toffset _ -> 31
-  | TLogic_coerce _ -> 32
+  | Toffset_max _ -> 32
+  | Toffset_min _ -> 33
+  | TLogic_coerce _ -> 34
 
 
 (**************************************************************************)
@@ -1412,6 +1414,8 @@ let rec compare_term t1 t2 =
     | Tbase_addr (l1,t1) , Tbase_addr (l2,t2)
     | Tblock_length (l1,t1) , Tblock_length (l2,t2)
     | Toffset (l1,t1) , Toffset (l2,t2)
+    | Toffset_max (l1,t1), Toffset_max (l2,t2)
+    | Toffset_min (l1,t1), Toffset_min (l2,t2)
     | Tat(t1,l1) , Tat(t2,l2) ->
       let cl = compare_logic_label l1 l2 in
       if cl <> 0 then cl else compare_term t1 t2
@@ -1451,7 +1455,7 @@ let rec compare_term t1 t2 =
     | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TAlignOf _
       | TAlignOfE _ | TUnOp _ | TBinOp _ | TCastE _ | TAddrOf _ | TStartOf _
       | Tapp _ | Tlambda _ | TDataCons _ | Tif _ | Tat _
-      | Tbase_addr _ | Tblock_length _ | Toffset _
+      | Tbase_addr _ | Tblock_length _ | Toffset _ | Toffset_max _ | Toffset_min _
       | Tnull | TCoerce _ | TCoerceE _ | TUpdate _ | Ttypeof _
       | Ttype _ | Tempty_set | Tunion _ | Tinter _  | Tcomprehension _
       | Trange _ | Tlet _ 
@@ -1585,6 +1589,12 @@ let rec hash_term (acc,depth,tot) t =
         hash_term (hash,depth-1,tot-2) t
       | Toffset (l,t) ->
         let hash = acc + 351 + hash_label l in
+        hash_term (hash,depth-1,tot-2) t
+      | Toffset_max (l,t) ->
+        let hash = acc + 353 + hash_label l in
+        hash_term (hash,depth-1,tot-2) t
+      | Toffset_min (l,t) ->
+        let hash = acc + 355 + hash_label l in
         hash_term (hash,depth-1,tot-2) t
       | Tnull -> acc+361, tot - 1
       | TCoerce(t,ty) ->

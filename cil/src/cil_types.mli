@@ -1242,6 +1242,8 @@ and term_node =
       (** term refers to a particular program point. *)
   | Tbase_addr of logic_label * term (** base address of a pointer. *)
   | Toffset of logic_label * term (** offset from the base address of a pointer. *)
+  | Toffset_min of logic_label * term (** minimal offset from the base address of a pointer. *)
+  | Toffset_max of logic_label * term (** maximal offset from the base address of a pointer. *)
   | Tblock_length of logic_label * term (** length of the block pointed to by the term. *)
   | Tnull (** the null pointer. *)
   | TLogic_coerce of logic_type * term
