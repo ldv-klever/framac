@@ -162,6 +162,21 @@ object
     (** Set the pretty-printer for button. *)
 end
 
+(** {1 Contextual Menus} *)
+
+class popup : unit ->
+object
+  method clear : unit
+    (** Remove all items *)
+  method add_item : label:string -> callback:(unit -> unit) -> unit
+    (** Adds an item. *)
+  method add_separator : unit
+    (** Inserts a separator. 
+	Consecutives and trailing separators are eliminated. *)
+  method popup : unit -> unit
+    (** Run the menu. *)
+end
+
 (** {1 Forms and Toolbar Layouts} *)
 
 (** The expansible attribute of a field. *)

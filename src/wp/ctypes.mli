@@ -96,10 +96,6 @@ val c_int_bounds: c_int -> Qed.Z.t * Qed.Z.t
 
 (** All sizes are in bits *)
 
-val i_sizeof  : c_int -> int
-
-val f_sizeof : c_float -> int
-
 val sub_c_int: c_int -> c_int -> bool
 
 val sub_c_float : c_float -> c_float -> bool

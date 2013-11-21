@@ -106,7 +106,8 @@ struct
     (* -------------------------------------------------------------------------- *)
 	  
     method callstyle = CallApply
-
+    method op_spaced (_:string) = true
+      
     (* -------------------------------------------------------------------------- *)
     (* --- Arithmetics                                                        --- *)
     (* -------------------------------------------------------------------------- *)
@@ -117,15 +118,18 @@ struct
 
     method pp_cst fmt cst = 
       let open Numbers in
+      let man = if cst.man = "" then "0" else cst.man in
+      let com = if cst.com = "" then "0" else cst.com in
       match cst.sign , cst.base with
-	| Pos,Dec -> fprintf fmt "%s.%se%d" cst.man cst.com cst.exp
-	| Neg,Dec -> fprintf fmt "(-%s.%se%d)" cst.man cst.com cst.exp
-	| Pos,Hex -> fprintf fmt "0x%s.%sp%d" cst.man cst.com cst.exp
-	| Neg,Hex -> fprintf fmt "(-0x%s.%sp%d)" cst.man cst.com cst.exp
-      
+	| Pos,Dec -> fprintf fmt "%s.%se%d" man com cst.exp
+	| Neg,Dec -> fprintf fmt "(-.%s.%se%d)" man com cst.exp
+	| Pos,Hex -> fprintf fmt "0x%s.%sp%d" man com cst.exp
+	| Neg,Hex -> fprintf fmt "(-.0x%s.%sp%d)" man com cst.exp
+
     method op_real_of_int = Call "real_of_int"
 
     method op_add = function Aint -> Assoc "+"  | Areal -> Assoc "+."
+    method op_sub = function Aint -> Assoc "-"  | Areal -> Assoc "-."
     method op_mul = function Aint -> Assoc "*"  | Areal -> Assoc "*."
     method op_div = function Aint -> Call "div" | Areal -> Op "/."
     method op_mod = function Aint -> Call "mod" | Areal -> Call "rmod"
@@ -300,6 +304,13 @@ struct
 		fprintf fmt " : %a =@ @[<hov 0>%a@]@]@\n" 
 		  self#pp_tau t (self#pp_expr t) e
 	end
+
+    method declare_fixpoint ~prefix fmt f xs t e =
+      begin
+	self#declare_signature fmt f (List.map tau_of_var xs) t ;
+	let fix = prefix ^ self#link_name (ctau t) f in 
+	self#declare_axiom fmt fix xs [] (e_eq (e_fun f (List.map e_var xs)) e) ;
+      end
 
   end
 

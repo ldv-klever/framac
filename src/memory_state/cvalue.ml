@@ -518,7 +518,7 @@ module V = struct
 	  default e1 e2
 
   let bitwise_xor ~with_alarms v1 v2 =
-    arithmetic_function ~with_alarms "^" (Ival.apply_set Int.logxor) v1 v2
+    arithmetic_function ~with_alarms "^" Ival.bitwise_xor v1 v2
 
   let shift_right ~with_alarms ~size e1 e2 =
     let default () = 

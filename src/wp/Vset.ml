@@ -121,7 +121,7 @@ let theory = "vset"
 
 let adt_set = Lang.datatype ~link:"set" ~theory
 let tau_of_set te = Logic.Data( adt_set , [te] )
-let p_member = Lang.extern_p ~theory ~prop:"member" ~bool:"member_bool"
+let p_member = Lang.extern_p ~theory ~prop:"member" ~bool:"member_bool" ()
 let f_empty = Lang.extern_f ~theory "empty"
 let f_union = Lang.extern_f ~theory "union"
 let f_inter = Lang.extern_f ~theory "inter"

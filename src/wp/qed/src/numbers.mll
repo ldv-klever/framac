@@ -46,9 +46,11 @@
     | s -> error "Unexpected sign" s
 
   let exp e = 
+    (* first char: exponent, second char: optional sign *)
     let n = String.length e in
-    if n > 0 then
-      int_of_string (String.sub e 1 (String.length e - 1))
+    if n > 1 then
+      let k = if e.[1] = '+' then 2 else 1 in
+      int_of_string (String.sub e k (String.length e - k))
     else 0
 
   let rec trail s k = if k >= 0 && s.[k] = '0' then trail s (pred k) else k
@@ -110,7 +112,7 @@ and token_hex = parse
 
   let pretty fmt cst =
     begin
-      if cst.sign = Pos then Format.pp_print_char fmt '-' ;
+      if cst.sign = Neg then Format.pp_print_char fmt '-' ;
       Format.pp_print_char fmt '.' ;
       Format.pp_print_string fmt cst.man ;
       Format.pp_print_string fmt cst.com ;
@@ -165,6 +167,12 @@ and token_hex = parse
     let s = String.make (succ e) '0' in
     s.[0] <- '1' ; s
 
-  let significant cst = cst.man ^ cst.com , cst.exp - String.length cst.com
+  let significant cst = 
+    let digits = cst.man ^ cst.com in
+    let coma = String.length cst.com in
+    let exp = match cst.base with
+      | Dec -> cst.exp - coma
+      | Hex -> cst.exp - 4 * coma
+    in digits , exp
 
 }

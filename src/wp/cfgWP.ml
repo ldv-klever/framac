@@ -353,7 +353,7 @@ struct
 
   let new_env ?(lvars=[]) kf =
     let frame = L.frame kf in
-    let env = L.in_frame frame L.env lvars in
+    let env = L.in_frame frame L.new_env lvars in
     { frame = frame ; main = env }
 
   let in_wenv 

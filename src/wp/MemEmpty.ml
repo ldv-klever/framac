@@ -93,7 +93,7 @@ let loc_eq _ _ = no_pointer ()
 let loc_lt _ _ = no_pointer ()
 let loc_leq _ _ = no_pointer ()
 let loc_neq _ _ = no_pointer ()
-let loc_offset _ _ _ = no_pointer ()
+let loc_diff _ _ _ = no_pointer ()
 
 let valid _sigma _l = Warning.error ~source "No validity"
 let scope sigma _s _xs = sigma , []

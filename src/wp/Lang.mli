@@ -58,10 +58,25 @@ and tau = (field,adt) Logic.datatype
 
 type scope = External of theory | Generated
 type lfun =
-  | Function of scope * Engine.link * lfun category * sort 
-  | Predicate of scope * string * string (* prop / bool *)
+  | Function of lfunction 
+  | Predicate of lpredicate
   | ACSL of logic_info
   | CTOR of logic_ctor_info
+      
+and lfunction = {
+  f_scope : scope ;
+  f_link : Engine.link ;
+  f_category : lfun category ;
+  f_params : sort list ;
+  f_result : sort ;
+}
+
+and lpredicate = {
+  p_scope : scope ;
+  p_params : sort list ;
+  p_prop : string ;
+  p_bool : string ;
+}
 
 val builtin : name:string -> link:string -> theory:string -> unit
 val datatype : link:string -> theory:string -> adt
@@ -75,16 +90,25 @@ val fields_of_field : field -> field list
 type balance = Nary | Left | Right
 
 val extern_s : 
-  theory:theory -> ?balance:balance -> ?category:lfun category -> ?sort:sort ->
+  theory:theory -> ?balance:balance -> 
+  ?category:lfun category -> ?params:sort list -> ?result:sort ->
   string -> lfun
-val extern_f : 
-  theory:theory -> ?balance:balance -> ?category:lfun category -> ?sort:sort -> 
-  ('a,Format.formatter,unit,lfun) format4 -> 'a
-val extern_p : theory:theory -> prop:string -> bool:string -> lfun
-val extern_fp : theory:theory -> string -> lfun
 
-val generated_f : ?category:lfun category -> ?sort:sort -> 
+val extern_f : 
+  theory:theory -> ?balance:balance -> 
+  ?category:lfun category -> ?params:sort list -> ?result:sort ->
   ('a,Format.formatter,unit,lfun) format4 -> 'a
+
+val extern_p : 
+  theory:theory -> prop:string -> bool:string -> 
+  ?params:sort list -> unit -> lfun
+
+val extern_fp : theory:theory -> ?params:sort list -> string -> lfun
+
+val generated_f : ?category:lfun category -> 
+  ?params:sort list -> ?result:sort -> 
+  ('a,Format.formatter,unit,lfun) format4 -> 'a
+
 val generated_p : string -> lfun
 
 val link : Engine.cmode -> lfun -> Engine.link
@@ -133,6 +157,7 @@ sig
   val e_int64 : int64 -> term
   val e_fact : int64 -> term -> term
   val e_bigint : Integer.t -> term
+  val e_mthfloat : float -> term
   val e_hexfloat : float -> term
   val e_setfield : term -> field -> term -> term
   val e_range : term -> term -> term (** e_range a b = b+1-a *)
@@ -219,6 +244,10 @@ sig
   type pattern = Fun.t Qed.Pattern.fpattern
   val rewrite : name:string -> vars:tau array -> pattern -> (term array -> term) -> unit
 
+  val add_builtin_1 : lfun -> (term -> term) -> unit
+  val add_builtin_2 : lfun -> (term -> term -> term) -> unit
+  val add_builtin_peq : lfun -> (term -> term -> pred) -> unit
+
 end
 
 (** {2 Fresh Variables and Constraints} *)
@@ -234,6 +263,7 @@ val local : ?pool:pool -> ?gamma:gamma -> ('a -> 'b) -> 'a -> 'b
 val freshvar : ?basename:string -> tau -> var
 val freshen : var -> var
 val assume : pred -> unit  
+val without_assume : ('a -> 'b) -> 'a -> 'b
 val epsilon : ?basename:string -> tau -> (term -> pred) -> term
 val hypotheses : gamma -> pred list
 val variables : gamma -> var list

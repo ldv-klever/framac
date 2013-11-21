@@ -368,6 +368,35 @@ object(self)
 end
 
 (* -------------------------------------------------------------------------- *)
+(* ---  Popup Menu                                                        --- *)
+(* -------------------------------------------------------------------------- *)
+
+class popup () =
+  let menu = GMenu.menu () in
+object
+  
+  val mutable empty = true
+  val mutable separator = false
+  
+  method clear =
+    List.iter menu#remove menu#children
+  
+  method add_separator = separator <- true
+    
+  method add_item ~label ~callback =
+    if not empty && separator then
+      ignore (GMenu.separator_item ~packing:menu#append ()) ;
+    let item = GMenu.menu_item ~label ~packing:menu#append () in
+    ignore (item#connect#activate ~callback) ;
+    empty <- false ; separator <- false
+
+  method popup () =
+    let time = GMain.Event.get_current_time () in
+    menu#popup ~button:3 ~time
+      
+end
+
+(* -------------------------------------------------------------------------- *)
 (* ---  Rack                                                              --- *)
 (* -------------------------------------------------------------------------- *)
   

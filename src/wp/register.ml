@@ -97,8 +97,6 @@ let do_wp_report () =
       List.iter (WpReport.export stats) rfiles ;
     end
 
-
-
 (* ------------------------------------------------------------------------ *)
 (* ---  Wp Results                                                      --- *)
 (* ------------------------------------------------------------------------ *)
@@ -148,6 +146,47 @@ let wp_why3ide_launch task =
   (** Do on_server_stop save why3 session *)
   Task.spawn server task;
   Task.launch server
+
+(* ------------------------------------------------------------------------ *)
+(* ---  Checking prover printing                                        --- *)
+(* ------------------------------------------------------------------------ *)
+
+let do_wp_check_iter iter_on_goals =
+  let provers = [VCS.Coq; VCS.AltErgo; VCS.Why3 "altergo"] in
+  let provers = List.map (fun p -> (false,p)) provers in
+  Wp_parameters.WhyFlags.add     "--type-only";
+  Wp_parameters.AltErgoFlags.add "-type-only";
+  let server = ProverTask.server () in
+  ignore (Wp_parameters.Share.dir ()); (* To prevent further errors *)
+  let do_wpo_feedback goal prover result =
+    match result.VCS.verdict with
+    | VCS.Computing _ -> ()
+    | VCS.Timeout | VCS.Stepout | VCS.Failed ->
+      Wp_parameters.feedback "[%a] Type error %s : %a"
+	VCS.pp_prover prover (Wpo.get_gid goal) (pp_result goal) result;
+    | VCS.NoResult | VCS.Invalid | VCS.Unknown | VCS.Valid
+        when Wp_parameters.has_dkey "prover" ->
+      Wp_parameters.feedback "[%a] Type ok %s : %a"
+	VCS.pp_prover prover (Wpo.get_gid goal) (pp_result goal) result;
+    | VCS.NoResult | VCS.Invalid | VCS.Unknown | VCS.Valid -> ()
+  in
+  iter_on_goals
+    (fun goal ->
+      if not (already_valid goal) then
+	Prover.spawn goal 
+	  ~callin:do_wpo_start ~callback:do_wpo_feedback provers
+    ) ;
+  Task.launch server
+
+
+let do_wp_check () =
+  if Wp_parameters.wpcheck () then
+    do_wp_check_iter (fun f -> Wpo.iter ~on_goal:f ())
+
+let do_wp_check_for goals =
+  if Wp_parameters.wpcheck () then
+    do_wp_check_iter (fun f -> Bag.iter f goals)
+
 
 	
 (* ------------------------------------------------------------------------ *)
@@ -272,6 +311,7 @@ let cmdline_run () =
           do_wp_proofs ();
           do_wp_print ();
 	  do_wp_report ();
+          do_wp_check ();
 	end
     | jb ->
 	let fct = 
@@ -287,6 +327,7 @@ let cmdline_run () =
           do_wp_proofs_for goals ;
           do_wp_print_for goals ;
 	  do_wp_report () ;
+          do_wp_check_for goals;
 	end
 
 (* ------------------------------------------------------------------------ *)

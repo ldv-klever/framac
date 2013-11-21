@@ -1394,22 +1394,77 @@ let max_max x y =
   | None,_ | _,None -> None
   | Some x, Some y -> Some (Int.max x y)
 
-exception Found of Int.t
+(* [extended_euclidian_algorithm a b] returns x,y,gcd such that a*x+b*y=gcd(x,y). *)
+let extended_euclidian_algorithm a b =
+  assert (Int.gt a Int.zero);
+  assert (Int.gt b Int.zero);
+  let a = ref a and b = ref b in
+  let x = ref Int.zero and lastx = ref Int.one in
+  let y = ref Int.one and lasty = ref Int.zero in
+  while not (Int.is_zero !b) do
+    let (q,r) = Int.div_rem !a !b in
+    a := !b;
+    b := r;
+    let tmpx = !x in
+    (x:= Int.sub !lastx (Int.mul q !x); lastx := tmpx);
+    let tmpy = !y in
+    (y:= Int.sub !lasty (Int.mul q !y); lasty := tmpy);
+  done;
+  (!lastx,!lasty,!a)
 
+(* [JS 2013/05/23] unused right now 
+   [modular_inverse a m] returns [x] such that a*x is congruent to 1 mod m. *)
+let _modular_inverse a m =
+  let (x,_,gcd) = extended_euclidian_algorithm a m in
+  assert (Int.equal Int.one gcd);
+  x
 
-let compute_r_common r1 modu1 r2 modu2 =
-  let modu = Int.ppcm modu1 modu2 in
-  try
-    let i = ref Int.zero in (* for i = 0 to modu - 1 *)
-    while (Int.le !i (Int.pred modu))
-    do
-      if (Int.equal (Int.rem !i modu1) r1) && (Int.equal (Int.rem !i modu2) r2)
-      then raise (Found !i);
-      i := Int.succ !i
-    done;
-    raise Error_Bottom
-  with Found i ->
-    i, modu
+(* This function provides solutions to the chinese remainder theorem,
+   i.e. it finds the solutions x such that:
+   x == r1 mod m1 && x == r2 mod m2.
+
+   If no such solution exists, it raises Error_Bottom; else it returns
+   (r,m) such that all solutions x are such that x == r mod m. *)
+let compute_r_common r1 m1 r2 m2 =
+
+  (* (E1) x == r1 mod m1 && x == r2 mod m2
+     <=> \E k1,k2: x = r1 + k1*m1 && x = r2 + k2*m2
+     <=> \E k1,k2: x = r1 + k1*m1 && k1*m1 - k2*m2 = r2 - r1
+
+     Let c = r2 - r1. The equation (E2): k1*m1 - k2*m2 = c is
+     diophantine; there are solutions x to (E1) iff there are
+     solutions (k1,k2) to (E2).
+
+     Let d = pgcd(m1,m2). There are solutions to (E2) only if d
+     divides c (because d divides k1*m1 - k2*m2). Else we raise
+     [Error_Bottom]. *)
+  let (x1,_,pgcd) = extended_euclidian_algorithm m1 m2 in
+  let c = Int.sub r2 r1 in
+  let (c_div_d,c_rem) = Int.div_rem c pgcd in
+  if not (Int.equal c_rem Int.zero)
+  then raise Error_Bottom
+
+  (* The extended euclidian algorithm has provided solutions x1,x2 to
+     the Bezout identity x1*m1 + x2*m2 = d.
+
+     x1*m1 + x2*m2 = d ==> x1*(c/d)*m1 + x2*(c/d)*m2 = d*(c/d).
+
+     Thus, k1 = x1*(c/d), k2=-x2*(c/d) are solutions to (E2)
+     Thus, x = r1 + x1*(c/d)*m1 is a particular solution to (E1). *)
+  else let k1 = Int.mul x1 c_div_d in
+       let x = Int.add r1 (Int.mul k1 m1) in
+
+       (* If two solutions x and y exist, they are equal modulo ppcm(m1,m2).
+	  We have x == r1 mod m1 && y == r1 mod m1 ==> \E k1: x - y = k1*m1
+	          x == r2 mod m2 && y == r2 mod m2 ==> \E k2: x - y = k2*m2
+
+	  Thus k1*m1 = k2*m2 is a multiple of m1 and m2, i.e. is a multiple
+	  of ppcm(m1,m2). Thus x = y mod ppcm(m1,m2). *)
+       let ppcm = Int.divexact (Int.mul m1 m2) pgcd in
+
+       (* x may be bigger than the ppcm, we normalize it. *)
+       (Int.rem x ppcm, ppcm)
+;;
 
 let array_truncate r i =
   if i = 0 
@@ -2144,6 +2199,24 @@ let bitwise_or ~size:_ v1 v2 =
                Some mn2, Some mx2 when Int.ge mn2 Int.zero ->
                  let r = next_pred_power_of_two (Int.logor mx1 mx2) in
                  inject_range (Some (Int.max mn1 mn2)) (Some r)
+             | _ -> top )
+         | _ -> top )
+
+let bitwise_xor v1 v2 =
+  if is_bottom v1 || is_bottom v2
+  then bottom
+  else
+    match v1, v2 with
+     | Float _, _ | _, Float _ -> top
+     | Set s1, Set s2 -> apply2_v Int.logxor s1 s2
+     | Top _, _ | _, Top _ ->
+       (match min_and_max v1 with
+         | Some mn1, Some mx1 when Int.ge mn1 Int.zero ->
+           (match min_and_max v2 with
+             | Some mn2, Some mx2 when Int.ge mn2 Int.zero ->
+               let new_max = next_pred_power_of_two (Int.logor mx1 mx2) in
+	       let new_min = Int.zero in
+               inject_range (Some new_min) (Some new_max)
              | _ -> top )
          | _ -> top )
 

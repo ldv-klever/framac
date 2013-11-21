@@ -260,7 +260,7 @@ struct
     else
       Vexp e
 
-  let env lvars =
+  let new_env lvars =
     let lvars = List.fold_left
       (fun lvars lv ->
 	 let x = fresh_lvar ~basename:lv.lv_name lv.lv_type in
@@ -427,7 +427,7 @@ struct
 		  match vs , sigp with
 		    | v::vs , Sig_value lv :: sigp ->
 			let cond = Cvalues.has_ltype lv.lv_type v in
-		      cond :: conditions vs sigp
+			cond :: conditions vs sigp
 		    | _ -> [] in
 		let result = F.e_fun ldef.d_lfun vs in
 		let lemma = p_hyps (conditions vs sigp) (p result) in

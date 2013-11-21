@@ -505,6 +505,29 @@ struct
 
   include Type.Polymorphic3(P)
 
+  (* cannot declare [name] locally in instantiate since it prevents OCaml
+     generalization *)
+  let name = !poly_name_ref 
+  let instantiate ty1 ty2 ty3 =
+    let res, first = instantiate ty1 ty2 ty3 in
+    if first && name <> "" then begin
+      let ml_name = 
+	Type.sfprintf
+	  "Datatype.%s %a %a %a" 
+	  name
+	  (fun fmt ty -> Type.pp_ml_name ty Type.Call fmt)
+	  ty1
+	  (fun fmt ty -> Type.pp_ml_name ty Type.Call fmt)
+	  ty2
+	  (fun fmt ty -> Type.pp_ml_name ty Type.Call fmt)
+	  ty3
+      in
+      Type.set_ml_name res (Some ml_name)
+    end;
+    res, first
+
+  let () = poly_name_ref := ""
+
   module Make(T1: S)(T2: S)(T3: S) = struct
 
     module T = struct
@@ -628,6 +651,31 @@ module Polymorphic4
 struct
 
   include Type.Polymorphic4(P)
+
+  (* cannot declare [name] locally in instantiate since it prevents OCaml
+     generalization *)
+  let name = !poly_name_ref 
+  let instantiate ty1 ty2 ty3 ty4 =
+    let res, first = instantiate ty1 ty2 ty3 ty4 in
+    if first && name <> "" then begin
+      let ml_name = 
+	Type.sfprintf
+	  "Datatype.%s %a %a %a %a" 
+	  name
+	  (fun fmt ty -> Type.pp_ml_name ty Type.Call fmt)
+	  ty1
+	  (fun fmt ty -> Type.pp_ml_name ty Type.Call fmt)
+	  ty2
+	  (fun fmt ty -> Type.pp_ml_name ty Type.Call fmt)
+	  ty3
+	  (fun fmt ty -> Type.pp_ml_name ty Type.Call fmt)
+	  ty4
+      in
+      Type.set_ml_name res (Some ml_name)
+    end;
+    res, first
+
+  let () = poly_name_ref := ""
 
   module Make(T1: S)(T2: S)(T3: S)(T4: S) = struct
 
@@ -1792,11 +1840,9 @@ and Poly_triple : sig
   include Type.Polymorphic3 with type ('a,'b,'c) poly = 'a * 'b * 'c
   module Make(T1: S)(T2: S)(T3:S) :  S with type t = (T1.t, T2.t, T3.t) poly
 end =
-  struct
   (* Split the functor argument in 2 modules such that ocaml is able to safely
      evaluate the recursive modules *)
-    include Polymorphic3(struct include Triple_arg include Triple_name end)
-  end
+  Polymorphic3(struct include Triple_arg include Triple_name end)
 
 module Triple = Poly_triple.Make
 

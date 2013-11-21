@@ -252,7 +252,7 @@ Consult their specific documentations for details.
 
 For plug-in developers, the API documentation of the Frama-C kernel and
 distributed plug-ins is available in the file frama-c-api.tar.gz, after running
-"make doc".
+"make doc-distrib".
 
 ===============================================================================
 				 UNINSTALLATION

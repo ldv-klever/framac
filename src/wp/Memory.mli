@@ -153,7 +153,7 @@ sig
   val loc_lt : loc -> loc -> pred
   val loc_neq : loc -> loc -> pred
   val loc_leq : loc -> loc -> pred
-  val loc_offset : c_object -> loc -> loc -> term
+  val loc_diff : c_object -> loc -> loc -> term
 
   val valid : sigma -> acs -> segment -> pred
   val scope : sigma -> Mcfg.scope -> varinfo list -> sigma * pred list

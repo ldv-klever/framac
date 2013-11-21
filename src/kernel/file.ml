@@ -1980,9 +1980,7 @@ let create_project_from_visitor ?reorder prj_name visitor =
   let selection =
     State_selection.list_state_union
       ~deps:State_selection.with_dependencies
-      [ Cil.selfMachine ;
-        Kernel.Files.self;
-        Files.pre_register_state ]
+      [ Kernel.Files.self; Files.pre_register_state ]
   in
   let selection = State_selection.diff State_selection.full selection in
   let prj = Project.create_by_copy ~selection prj_name in

@@ -401,7 +401,8 @@ let make_annot ~one_line lexbuf s =
   let start = snd !annot_start_pos in
   let stop, token = Logic_lexer.annot (start, s) in
   lexbuf.Lexing.lex_curr_p <- stop; 
-  E.setCurrentFile stop.Lexing.pos_fname;
+  (* The filename has already been normalized, so we must reuse it "as is". *)
+  E.setCurrentFile ~normalize:false stop.Lexing.pos_fname;
   E.setCurrentLine stop.Lexing.pos_lnum;
   if one_line then E.newline ();
   match token with

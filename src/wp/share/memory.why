@@ -26,10 +26,28 @@
 
 theory Memory
 
+  use import bool.Bool
   use import int.Int
   use import map.Map
 
   type addr = { base : int ; offset : int }
+
+  predicate addr_le addr addr 
+  predicate addr_lt addr addr
+  function addr_le_bool addr addr : bool
+  function addr_lt_bool addr addr : bool
+
+  axiom addr_le_def: forall p q :addr [addr_le p q].
+    p.base = q.base -> (addr_le p q <-> p.offset <= q.offset)
+
+  axiom addr_lt_def: forall p q :addr [addr_lt p q].
+    p.base = q.base -> (addr_lt p q <-> p.offset < q.offset)
+
+  axiom addr_le_bool_def : forall p q : addr [ addr_le_bool p q].
+    addr_le p q <-> addr_le_bool p q = True
+
+  axiom addr_lt_bool_def : forall p q : addr [ addr_lt_bool p q].
+    addr_lt p q <-> addr_lt_bool p q = True
 
   constant null : addr = { base = 0 ; offset = 0 }
   function global (b:int) : addr = { base = b ; offset = 0 }

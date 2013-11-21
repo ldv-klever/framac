@@ -30,7 +30,7 @@ open Plib
 
 (** {2 Identifiers} *)
 
-val is_identop : string -> bool (** Operators is an identifier *)
+val is_ident : string -> bool (** Operators is an identifier *)
 val ident : string -> string (** Filter out non-letter characters *)
 
 (** {2 Allocators} *)

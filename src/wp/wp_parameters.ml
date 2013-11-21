@@ -543,6 +543,23 @@ module OutputDir =
                        Defaults to some temporary directory."
          end)
 
+let () = Plugin.set_group wp_po
+let () = Plugin.do_not_save ()
+module Check =
+  Action(struct
+           let option_name = "-wp-check"
+           let help =
+        "check the syntax and type of the produced file against \n\
+         alt-ergo, why3 and coq when the environnement variable WPCHECK=YES."
+         end)
+let () = on_reset Print.clear
+
+let wpcheck () =
+  Check.get () &&
+    try
+      Sys.getenv "WPCHECK" = "YES"
+    with Not_found -> false
+
 (* -------------------------------------------------------------------------- *)
 (* --- OS environment variables                                           --- *)
 (* -------------------------------------------------------------------------- *)
@@ -660,10 +677,8 @@ let find_lib file =
     let shared = 
       try [Share.dir ~error:false ()] 
       with Share.No_dir -> [] in
-    let kernel = 
-      try [Kernel.Share.dir ~error:false ()] 
-      with Kernel.Share.No_dir -> [] in
-    let directories = includes @ shared @ kernel in
+    let drivers = List.map Filename.dirname (Drivers.get ()) in
+    let directories = includes @ drivers @ shared in
     if not !find_db && has_dkey "includes" then
       begin
 	find_db := true ;

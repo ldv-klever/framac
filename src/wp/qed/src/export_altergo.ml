@@ -120,8 +120,14 @@ struct
     method pp_cst fmt cst = 
       let open Numbers in
       match cst.sign , cst.base with
-	| Pos,Dec -> fprintf fmt "%s.%se%d" cst.man cst.com cst.exp
-	| Neg,Dec -> fprintf fmt "(-%s.%se%d)" cst.man cst.com cst.exp
+	| Pos,Dec -> 
+	    let man = if cst.man = "" then "0" else cst.man in
+	    let com = if cst.com = "" then "0" else cst.com in
+	    fprintf fmt "%s.%se%d" man com cst.exp
+	| Neg,Dec -> 
+	    let man = if cst.man = "" then "0" else cst.man in
+	    let com = if cst.com = "" then "0" else cst.com in
+	    fprintf fmt "(-%s.%se%d)" man com cst.exp
 	| _,Hex ->
 	    let hex,exp = Numbers.significant cst in
 	    let base = Numbers.dec_of_hex hex in
@@ -139,6 +145,7 @@ struct
 
     method op_minus (_:amode) = Op "-"
     method op_add (_:amode) = Assoc "+"
+    method op_sub (_:amode) = Assoc "-"
     method op_mul (_:amode) = Assoc "*"
     method op_div = function Aint -> Call "cdiv" | Areal -> Op "/"
     method op_mod = function Aint -> Call "cmod" | Areal -> Call "rmod"
@@ -212,9 +219,11 @@ struct
     (* --- Atomicity                                                          --- *)
     (* -------------------------------------------------------------------------- *)
 
+    method op_spaced op = is_ident op
     method is_atomic e =
       match T.repr e with
 	| Kint z -> Z.positive z
+	| Kreal _ -> true
 	| Apply _ -> true
 	| Aset _ | Aget _ | Fun _ -> true
 	| _ -> T.is_simple e

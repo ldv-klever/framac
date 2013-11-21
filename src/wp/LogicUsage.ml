@@ -44,9 +44,14 @@ let trim name =
     if ( name.[0]='_' || name.[n-1]='_' ) then
       let p = first name 0 n in
       let q = last name (pred n) in
-      if p <= q then String.sub name p (q+1-p) else ""
+      if p <= q then 
+	let name = String.sub name p (q+1-p) in
+	match name.[0] with
+	  | '0' .. '9' -> "_" ^ name
+	  | _ -> name
+      else "_"
     else name
-  else ""
+  else "_"
 
 (* -------------------------------------------------------------------------- *)
 (* --- Definition Blocks                                                  --- *)

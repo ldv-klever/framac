@@ -129,8 +129,7 @@ You want to open %S and %S is still open"
   let i =
     { linenum = 1; linestart = 0;
       fileName =
-	Filepath.normalize
-	(if useBasename then Filename.basename fname else fname);
+	(if useBasename then Filename.basename fname else Filepath.normalize fname);
       lexbuf = lexbuf; inchan = Some inchan;
       num_errors = 0 } in
   (* Initialize lexer buffer. *)
@@ -184,14 +183,15 @@ let setCurrentLine (i: int) =
 let setCurrentWorkingDirectory s =
   current_working_directory := Some(s);;
 
-let setCurrentFile (n: string) =
+let setCurrentFile ?(normalize=true) (n: string) =
   let n =
-    Filepath.normalize (match !current_working_directory with
+    if not normalize then n
+    else Filepath.normalize (match !current_working_directory with
       | None -> n
       | Some(s) ->
-      if Filename.is_relative n
-      then Filename.concat s n
-      else n) in
+	if Filename.is_relative n
+	then Filename.concat s n
+	else n) in
   (* Update lexer buffer. *)
   let update_file_loc lexbuf file =
     let pos = lexbuf.Lexing.lex_curr_p in

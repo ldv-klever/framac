@@ -33,7 +33,7 @@ open Linker
 
 type op =
   | Op of string (** Infix or prefix operator *)
-  | Assoc of string (** Associative binary operator *)
+  | Assoc of string (** Left-associative binary operator (like + and -) *)
   | Call of string (** Logic function or predicate *)
 
 type link =
@@ -144,7 +144,8 @@ object
   method e_false : cmode -> string (** ["false"] *)
     
   method pp_int : amode -> Z.t printer
-  method pp_cst : Numbers.cst printer
+  method pp_real : R.t printer
+  method pp_cst : Numbers.cst printer (** Non-zero reals *)
     
   (** {3 Variables} *)
     
@@ -164,6 +165,7 @@ object
     
   method op_real_of_int : op
   method op_add : amode -> op
+  method op_sub : amode -> op
   method op_mul : amode -> op
   method op_div : amode -> op
   method op_mod : amode -> op

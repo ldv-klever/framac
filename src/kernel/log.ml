@@ -52,7 +52,7 @@ let nullprintf msg = Format.ifprintf null msg
 
 let min_buffer = 128    (* initial size of buffer *)
 let max_buffer = 2097152 (* maximal size of buffer *)
-let tgr_buffer = 327680 (* elasticity (internal overhead) *)
+let tgr_buffer = 3145728 (* elasticity (internal overhead) *)
 
 type lock =
   | Ready

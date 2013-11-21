@@ -188,10 +188,12 @@ FEEDBACK_ICONS:= $(addprefix share/feedback/, \
 		switch-off.png )
 
 ROOT_LIBC_DIR:= share/libc
-LIBC_DIR:= . sys netinet linux net arpa
-LIBC_DIR:= $(addprefix $(ROOT_LIBC_DIR)/, $(LIBC_DIR))
-FREE_LIBC:= $(addsuffix /*.h, $(LIBC_DIR))
-FREE_LIBC+=$(ROOT_LIBC_DIR)/./__fc_builtin_for_normalization.i
+LIBC_SUBDIRS:= . sys netinet linux net arpa
+LIBC_DIR:= $(addprefix $(ROOT_LIBC_DIR)/, $(LIBC_SUBDIRS))
+FREE_LIBC:= \
+	share/*.h share/*.c \
+	$(addsuffix /*.h, $(LIBC_DIR)) \
+	$(ROOT_LIBC_DIR)/./__fc_builtin_for_normalization.i \
 NONFREE_LIBC:= $(addsuffix /*.[ci], $(LIBC_DIR))
 
 # Kernel files to be included in the distribution.
@@ -939,7 +941,7 @@ PLUGIN_CMO:= kf_state value_parameters stop_at_nth value_util \
 	library_functions mark_noresults separate \
 	state_set state_imp value_results current_table widen warn \
 	eval_op eval_exprs non_linear initial_state \
-	locals_scoping  c_assert builtins builtins_malloc \
+	locals_scoping  c_assert builtins \
 	eval_terms eval_annots mem_exec function_args \
 	split_return local_slevel_types local_slevel eval_stmt eval_slevel \
 	$(patsubst src/value/%.ml,%,\

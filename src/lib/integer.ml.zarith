@@ -150,6 +150,8 @@ let popcount = Z.popcount
 
   let pos_rem = rem
   let native_div = div
+  let divexact = Z.divexact
+  let div_rem = Z.div_rem
 
   let c_div u v =
     let bad_div = div u v in

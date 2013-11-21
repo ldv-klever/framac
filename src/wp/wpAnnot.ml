@@ -694,29 +694,43 @@ let add_stmt_bhv_as_goal config v s b (b_acc, (p_acc, e_acc)) =
                           add_stmt_assigns config s e_acc b l_post in *)
     b_acc, (p_acc, e_acc)
 
-let add_stmt_spec_annots config v s spec ((b_acc, (p_acc, e_acc)) as acc) =
-  let acc = add_variant acc spec in
-  let acc = add_terminates acc spec in
-  match config.cur_bhv with
-    | StmtBhv (_n, cur_s, b) when s.sid = cur_s.sid ->
-        (*
-        begin match get_behav config (Kstmt s) spec.spec_behavior with
-          | None -> (* in some cases, it seems that we can have several spec
-                       for the same statement -> not an error *) acc
-          | Some b ->
-              *)
-              let b_acc, a_acc = add_stmt_bhv_as_goal config v s b acc in
-              let b_acc = add_behaviors_props config (Kstmt s) spec b_acc in
-                b_acc, a_acc
-    | _ -> (* in all other cases, use the specification as hypothesis *)
-        let kind = WpStrategy.Aboth false in
-        let b_acc = 
-          WpStrategy.add_prop_stmt_spec_pre b_acc kind config.kf s spec 
-        in
-        let p_acc, e_acc = 
-          add_stmt_spec_post_as_hyp config v s spec (p_acc, e_acc) 
-        in b_acc, (p_acc, e_acc)
+let is_empty_behavior bhv =
+  bhv.b_requires = [] &&
+  bhv.b_assumes = [] &&
+  bhv.b_post_cond = [] &&
+  bhv.b_assigns = WritesAny &&
+  bhv.b_allocation = FreeAllocAny
 
+let is_empty_spec s =
+  s.spec_variant = None &&
+  s.spec_terminates = None &&
+  List.for_all is_empty_behavior s.spec_behavior
+
+let add_stmt_spec_annots config v s spec ((b_acc, (p_acc, e_acc)) as acc) =
+  if is_empty_spec spec then acc
+  else
+    let acc = add_variant acc spec in
+    let acc = add_terminates acc spec in
+    match config.cur_bhv with
+      | StmtBhv (_n, cur_s, b) when s.sid = cur_s.sid ->
+          (*
+            begin match get_behav config (Kstmt s) spec.spec_behavior with
+            | None -> (* in some cases, it seems that we can have several spec
+            for the same statement -> not an error *) acc
+            | Some b ->
+          *)
+          let b_acc, a_acc = add_stmt_bhv_as_goal config v s b acc in
+          let b_acc = add_behaviors_props config (Kstmt s) spec b_acc in
+          b_acc, a_acc
+      | _ -> (* in all other cases, use the specification as hypothesis *)
+          let kind = WpStrategy.Aboth false in
+          let b_acc = 
+            WpStrategy.add_prop_stmt_spec_pre b_acc kind config.kf s spec 
+          in
+          let p_acc, e_acc = 
+            add_stmt_spec_post_as_hyp config v s spec (p_acc, e_acc) 
+          in b_acc, (p_acc, e_acc)
+	    
 (*----------------------------------------------------------------------------*)
 (* Call annotations                                                           *)
 (*----------------------------------------------------------------------------*)
@@ -764,7 +778,7 @@ let add_called_post called_kf termination_kind =
 
 let get_call_annots config v s fct =
   let l_post = Cil2cfg.get_post_logic_label config.cfg v in
-  match WpStrategy.get_called_kf fct with
+  match Kernel_function.get_called fct with
     | Some kf ->
         let spec = Annotations.funspec kf in
         let before_annots =
@@ -780,7 +794,7 @@ let get_call_annots config v s fct =
         before_annots, (post_annots, exits_annots)
 
     | None ->
-        Wp_parameters.warning ~once:true 
+        Wp_parameters.warning ~once:true ~source:(fst (Stmt.loc s))
           "Call through function pointer in function '%a' not implemented yet: \
            ignore called function properties." 
 	  Kernel_function.pretty config.kf;
@@ -852,7 +866,7 @@ let add_loop_invariant_annot config vloop s ca b_list inv acc =
 let add_stmt_invariant_annot config v s ca b_list inv ((b_acc, a_acc) as acc) =
   let add_to_acc k =
     let b_acc = add_prop_inv_fixpoint config b_acc k s ca inv in
-      (b_acc, a_acc)
+    (b_acc, a_acc)
   in
   let acc =
     match is_annot_for_config config v s b_list with
@@ -860,7 +874,7 @@ let add_stmt_invariant_annot config v s ca b_list inv ((b_acc, a_acc) as acc) =
       | TBRhyp -> add_to_acc (WpStrategy.AcutB false)
       | TBRno -> acc
   in acc
-
+       
 (** Returns the annotations for the three edges of the loop node:
  * - loop_entry : goals for the edge entering in the loop
  * - loop_back  : goals for the edge looping to the entry point
@@ -1365,7 +1379,7 @@ let get_call_pre_strategies stmt =
     "[get_call_pre_strategies] on statement %a@." Stmt.pretty_sid stmt;
   match stmt.skind with
     | Instr(Call(_,f,_,_)) ->
-        let strategies = match WpStrategy.get_called_kf f with
+        let strategies = match Kernel_function.get_called f with
           | None ->
               Wp_parameters.warning
                 "Call through function pointer not implemented yet: \

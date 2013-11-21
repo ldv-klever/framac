@@ -95,10 +95,10 @@ struct
   (* -------------------------------------------------------------------------- *)
 
   type env = C.env
-  let env = C.env
+  let new_env = C.new_env
   let move = C.move
   let sigma = C.sigma
-  let call s = C.move (C.env []) s
+  let call s = C.move (C.new_env []) s
 
   let logic_of_value = function
     | Val e -> Vexp e
@@ -401,7 +401,7 @@ struct
 	  let te = Logic_typing.ctype_of_pointed a.term_type in
 	  let la = loc_of_term env a in
 	  let lb = loc_of_term env b in
-	  Vexp(M.loc_offset (Ctypes.object_of te) la lb)
+	  Vexp(M.loc_diff (Ctypes.object_of te) la lb)
       | Shiftlt -> L.apply Cint.l_lsl (C.logic env a) (C.logic env b)
       | Shiftrt -> L.apply Cint.l_lsr (C.logic env a) (C.logic env b)
       | BAnd -> L.apply Cint.l_and (C.logic env a) (C.logic env b)
@@ -577,7 +577,9 @@ struct
 	    let xs,env,domain = bind_quantifiers env qs in
 	    let condition = match cond with
 	      | None -> p_conj domain
-	      | Some p -> p_conj (C.pred true env p :: domain)
+	      | Some p -> 
+		  let p = Lang.without_assume (C.pred true env) p in
+		  p_conj (p :: domain)
 	    in match C.logic env t with
 	      | Vexp e -> Vset[Vset.Descr(xs,e,condition)]
 	      | Vloc l -> Lset[Sdescr(xs,l,condition)]
@@ -679,11 +681,13 @@ struct
 
       | Pforall(qs,p) ->
 	  let xs,env,hs = bind_quantifiers env qs in
-	  p_forall xs (p_hyps hs (C.pred positive env p))
+	  let p = Lang.without_assume (C.pred positive env) p in
+	  p_forall xs (p_hyps hs p)
 
       | Pexists(qs,p) ->
 	  let xs,env,hs = bind_quantifiers env qs in
-	  p_exists xs (p_conj (C.pred positive env p :: hs))
+	  let p = Lang.without_assume (C.pred positive env) p in
+	  p_exists xs (p_conj (p :: hs))
 
       | Pat(p,label) ->
 	  let clabel = Clabels.c_label label in

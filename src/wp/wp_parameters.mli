@@ -92,6 +92,8 @@ module AltErgoFlags: Plugin.String_list
 module Print: Plugin.Bool
 module Report: Plugin.String_list
 module ReportName: Plugin.String
+module Check: Plugin.Bool
+val wpcheck: unit -> bool
 
 (** {2 Experimental} *)
 

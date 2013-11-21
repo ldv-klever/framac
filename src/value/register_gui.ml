@@ -84,17 +84,21 @@ let lval_or_absolute_to_offsetmap state lv =
 
 let pretty_lva_before_after (main_ui: Design.main_window) ~before ~after lva =
   let pp fmt = main_ui#pretty_information fmt in
-  let offbefore, okbef = lval_or_absolute_to_offsetmap before lva in
-  pp "Before statement%a:@. %a@."
-    pp_eval_ok okbef (pretty_offsetmap lva) offbefore;
-  if Cvalue.Model.is_reachable before then
-    Extlib.may
-      (fun (after, precise_after) ->
-         let offafter, okafter = lval_or_absolute_to_offsetmap after lva in
-         pp "%s statement%a:@. %a@."
-           (if precise_after then "After" else "At next")
-           pp_eval_ok okafter (pretty_offsetmap lva) offafter
-      ) after;
+  try
+    let offbefore, okbef = lval_or_absolute_to_offsetmap before lva in
+    pp "Before statement%a:@. %a@."
+      pp_eval_ok okbef (pretty_offsetmap lva) offbefore;
+    if Cvalue.Model.is_reachable before then
+      Extlib.may
+        (fun (after, precise_after) ->
+          let offafter, okafter = lval_or_absolute_to_offsetmap after lva in
+          pp "%s statement%a:@. %a@."
+            (if precise_after then "After" else "At next")
+            pp_eval_ok okafter (pretty_offsetmap lva) offafter
+        ) after;
+  with Eval_terms.LogicEvalError ee ->
+    Value_parameters.debug "Cannot evaluate term (%a)"
+      Eval_terms.pretty_logic_evaluation_error ee
 ;;
 
 let pretty_lva_callstacks (main_ui: Design.main_window) ~cbefore ~cafter lva =

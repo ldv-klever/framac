@@ -38,7 +38,9 @@ sig
   class virtual engine :
   object
     inherit [ADT.t,Field.t,Fun.t,tau,var,term] Engine.engine
-    method declare_fixpoint : formatter -> Fun.t -> var list -> tau -> term -> unit
+    method op_spaced : string -> bool
+    method declare_fixpoint : prefix:string -> 
+      formatter -> Fun.t -> var list -> tau -> term -> unit
   end
 
 end

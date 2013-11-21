@@ -85,7 +85,7 @@ module LIT = Model.Generator(STR)
 
      let compile s =
        let id = lookup (STR.hash s) in
-       let lfun = Lang.generated_f ~sort:(Sarray Sint) "Lit_%04X" id in
+       let lfun = Lang.generated_f ~result:(Sarray Sint) "Lit_%04X" id in
        define_symbol {
 	 d_lfun = lfun ;
 	 d_cluster = cluster () ;

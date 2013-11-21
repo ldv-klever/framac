@@ -415,7 +415,7 @@ let get_called_post kf termination_kind =
   List.fold_left mk_prop WpStrategy.empty_acc posts
 
 let get_call_hyp kf_caller s l_post fct =
-  match WpStrategy.get_called_kf fct with
+  match Kernel_function.get_called fct with
     | Some kf ->
         let spec = Annotations.funspec kf in
         let before_annots = WpStrategy.empty_acc in

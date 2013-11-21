@@ -39,22 +39,14 @@ open Definitions
 let rec constant = function
   | CInt64(z,_,_) -> e_bigint z
   | CChr c -> e_int64 (Ctypes.char c)
-  | CReal(f,_,_) -> e_hexfloat f
+  | CReal(f,_,_) -> Cfloat.code_lit f
   | CEnum e -> constant_exp e.eival
   | CStr _ | CWStr _ -> Warning.error "String constants not yet implemented"
 
 and logic_constant = function
   | Integer(z,_) -> e_bigint z
   | LChr c -> e_int64 (Ctypes.char c)
-  | LReal { r_literal ; r_nearest } ->
-      let n = String.length r_literal in
-      let suffixed = n > 0 && 
-	match r_literal.[n-1] 
-	with 'f' | 'F' | 'd' | 'D' | 'l' | 'L' -> true | _ -> false
-      in 
-      if suffixed 
-      then e_hexfloat r_nearest 
-      else e_real (R.of_string r_literal)
+  | LReal r -> Cfloat.acsl_lit r
   | LEnum e -> constant_exp e.eival
   | LStr _ | LWStr _ -> Warning.error "String constants not yet implemented"
       

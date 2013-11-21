@@ -30,19 +30,13 @@ open Lang.F
 type model = Real | Float
 val model : model Context.value
 
+val code_lit : float -> term
+val acsl_lit : Cil_types.logic_real -> term
+
 val real_of_int : unop
 val float_of_int : c_float -> unop
 val fconvert : c_float -> unop
 val frange : c_float -> term -> pred
-val fconstant : float -> string -> term
-  (** Returns a real constant.
-      The retained format is usually the string one, unless an explicit conversion
-      suffix is specified (one of ["fFdDlL"] characters).
-
-      In such a case, the hexadecimal representation of the OCaml [float] 
-      value is used for the constant. This is consistent with the [LReal((_,f,_),r)]
-      CIL logic constant.
-  *)
 
 val ropp : unop
 val radd : binop

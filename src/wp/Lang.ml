@@ -57,6 +57,8 @@ let basename def name =
   'C_<c>' ACSL Constructor <c>
   'P_<p>' ACSL Predicate <p> (see LogicUsage.get_name)
   'L_<f>' ACSL Logic function <f> (see LogicUsage.get_name)
+  'FixP_<p>' ACSL Recursive Predicate <p> (see LogicUsage.get_name)
+  'FixL_<f>' ACSL Recursive Logic function <f> (see LogicUsage.get_name)
   'Q_<l>' ACSL Lemma or Axiom
   'S_<n>' Set comprehension predicate
   'Is<phi>' Typing predicate for type <phi>
@@ -302,28 +304,48 @@ end
 (* -------------------------------------------------------------------------- *)
 
 type scope = External of string | Generated
+
 type lfun =
-  | Function of scope * Engine.link * lfun category * sort 
-  | Predicate of scope * string * string (* prop / bool *)
+  | Function of lfunction
+  | Predicate of lpredicate
   | ACSL of logic_info
   | CTOR of logic_ctor_info
       
+and lfunction = {
+  f_scope : scope ;
+  f_link : Engine.link ;
+  f_category : lfun category ;
+  f_params : sort list ;
+  f_result : sort ;
+}
+
+and lpredicate = {
+  p_scope : scope ;
+  p_params : sort list ;
+  p_prop : string ;
+  p_bool : string ;
+}
+
 let tau_of_lfun = function
   | ACSL f -> tau_of_return f
   | CTOR c -> 
       if c.ctor_type.lt_params = [] then Logic.Data(Atype c.ctor_type,[])
       else raise Not_found
   | Predicate _ -> Prop
-  | Function(_,_,_,s) -> 
-      match s with
-	| Sint -> Int
-	| Sreal -> Real
-	| Sbool -> Bool
-	| _ -> raise Not_found
+  | Function f -> match f.f_result with
+      | Sint -> Int
+      | Sreal -> Real
+      | Sbool -> Bool
+      | _ -> raise Not_found
 
 type balance = Nary | Left | Right
 
-let symbolf ~scope ?(balance=Nary) ?(category=Logic.Function) ?(sort=Logic.Sdata) name =
+let symbolf ~scope 
+    ?(balance=Nary) 
+    ?(category=Logic.Function) 
+    ?(params=[]) 
+    ?(result=Logic.Sdata) 
+    name =
   let buffer = Buffer.create 80 in
   Format.kfprintf
     (fun fmt ->
@@ -332,22 +354,53 @@ let symbolf ~scope ?(balance=Nary) ?(category=Logic.Function) ?(sort=Logic.Sdata
        let link = match balance with
 	 | Nary -> Engine.F_call name
 	 | Left -> Engine.F_left("?",name)
-	 | Right -> Engine.F_right("?",name)
-       in Function(scope,link,category,sort)
+	 | Right -> Engine.F_right("?",name) 
+       in Function {
+	 f_scope = scope ;
+	 f_link = link ;
+	 f_category = category ; 
+	 f_params = params ;
+	 f_result = result ;
+       }
     ) (Format.formatter_of_buffer buffer) name
 
-let extern_s ~theory ?(balance=Nary) ?category ?sort name = 
-  symbolf ~scope:(External theory) ~balance ?category ?sort "%s" name
-let extern_f ~theory ?(balance=Nary) ?category ?sort name = 
-  symbolf ~scope:(External theory) ~balance ?category ?sort name
-let extern_p ~theory ~prop ~bool = 
-  Predicate(External theory,prop,bool)
-let extern_fp ~theory phi = 
-  Function(External theory,Engine.F_call phi,Logic.Function,Logic.Sprop)
-let generated_f ?category ?sort name = 
-  symbolf ~scope:Generated ?category ?sort name
+let extern_s ~theory ?(balance=Nary) ?category ?params ?result name = 
+  symbolf ~scope:(External theory) ~balance ?category ?params ?result "%s" name
+
+let extern_f ~theory ?(balance=Nary) ?category ?params ?result name = 
+  symbolf ~scope:(External theory) ~balance ?category ?params ?result name
+
+let extern_p ~theory ~prop ~bool ?(params=[]) () = 
+  Predicate {
+    p_scope = External theory ; 
+    p_params = params ;
+    p_prop = prop ; 
+    p_bool = bool ;
+  }
+
+let extern_fp ~theory ?(params=[]) phi =
+  Function {
+    f_scope = External theory ;
+    f_link = Engine.F_call phi ;
+    f_category = Logic.Function ;
+    f_params = params ;
+    f_result = Logic.Sprop ;
+  }
+
+let generated_f ?category ?params ?result name = 
+  symbolf ~scope:Generated ?category ?params ?result name
+
 let generated_p name = 
-  Function(Generated,Engine.F_call name,Logic.Function,Logic.Sprop)
+  Function {
+    f_scope = Generated ;
+    f_link = Engine.F_call name ;
+    f_category = Logic.Function ;
+    f_params = [] ;
+    f_result = Logic.Sprop ;
+  }
+
+let constructor ct = CTOR ct
+let logic_info lf = ACSL lf
 
 module Fun =
 struct
@@ -355,38 +408,39 @@ struct
   type t = lfun
 
   let id = function
-    | Function(_,f,_,_) -> Export.link_name f
-    | Predicate(_,f,_) -> f
+    | Function f -> Export.link_name f.f_link
+    | Predicate p -> p.p_prop
     | ACSL f -> logic_id f
     | CTOR c -> ctor_id c
 
   let link cmode = function
-    | Function(_,f,_,_) -> f
+    | Function f -> f.f_link
     | ACSL f -> Engine.F_call (logic_id f)
     | CTOR c -> Engine.F_call (ctor_id c)
-    | Predicate(_,p,b) -> 
-	Engine.F_call (match cmode with Engine.Cprop -> p | Engine.Cterm -> b)
+    | Predicate p -> Engine.F_call 
+	(match cmode with Engine.Cprop -> p.p_prop | Engine.Cterm -> p.p_bool)
 
   let theory = function
-    | Predicate(Generated,_,_) | Function(Generated,_,_,_) -> "generated"
-    | Predicate(External t,_,_) | Function(External t,_,_,_) -> t
+    | Function { f_scope=s } | Predicate { p_scope=s } ->
+	(match s with Generated -> "generated" | External t -> t)
     | ACSL _ -> "ACSL"
     | CTOR _ -> "CTOR"
 
   let hash = function
-    | Function(_,f,_,_) -> Hashtbl.hash f
-    | Predicate(_,f,_) -> Hashtbl.hash f
+    | Function f -> Hashtbl.hash f.f_link
+    | Predicate p -> Hashtbl.hash p.p_prop
     | ACSL f -> Logic_info.hash f
     | CTOR c -> Logic_ctor_info.hash c
 
-  let compare f g = 
+  let compare f g =
     if f==g then 0 else
       match f , g with
-	| Function(_,f,_,_) , Function(_,g,_,_) -> 
+	| Function { f_link = f } , Function { f_link = g } -> 
 	    String.compare (Export.link_name f) (Export.link_name g)
 	| Function _ , _ -> (-1)
 	| _ , Function _ -> 1
-	| Predicate(_,f,_) , Predicate(_,g,_) -> String.compare f g
+	| Predicate { p_prop = f } , Predicate { p_prop = g } -> 
+	    String.compare f g
 	| Predicate _ , _ -> (-1)
 	| _ , Predicate _ -> 1
 	| ACSL f , ACSL g -> Logic_info.compare f g
@@ -399,15 +453,24 @@ struct
   let pretty fmt f = Format.pp_print_string fmt (id f)
 
   let category = function
-    | Function(_,_,c,_) -> c
+    | Function f -> f.f_category
     | Predicate _ | ACSL _ -> Logic.Function
     | CTOR _ -> Logic.Constructor
 
   let sort = function
-    | Function(_,_,_,s) -> s
+    | Function f -> f.f_result
     | Predicate _ | ACSL { l_type=None } -> Logic.Sprop
     | ACSL { l_type=Some t } -> sort_of_ltype t
     | CTOR _ -> Logic.Sdata
+
+  let params = function
+    | Function f -> f.f_params
+    | Predicate p -> p.p_params
+    | ACSL lt -> 
+	if lt.l_labels=[] then
+	  List.map (fun x -> sort_of_ltype x.lv_type) lt.l_profile
+	else []
+    | CTOR ct -> List.map sort_of_ltype ct.ctor_params
 
 end
 
@@ -444,6 +507,7 @@ struct
   let e_fact k e = e_times (Z.of_string (Int64.to_string k)) e
   let e_bigint z = e_zint (Z.of_string (Integer.to_string z))
   let e_range a b = e_sum [b;e_one;e_opp a]
+  let e_mthfloat f = T.e_real (R.of_string (string_of_float f))
   let e_hexfloat f = T.e_real (R.of_string (hex_of_float f))
 
   let e_setfield r f v =
@@ -578,6 +642,14 @@ struct
 	  add_builtin f (fun es -> eval (P.pmatch_all ps es))
       | _ -> ()
 
+  let add_builtin_1 f r = 
+    add_builtin f (function [e] -> r e | _ -> raise Not_found)
+
+  let add_builtin_2 f r = 
+    add_builtin f (function [a;b] -> r a b | _ -> raise Not_found)
+
+  let add_builtin_peq = add_builtin_eq
+
 end
 
 open F
@@ -617,9 +689,18 @@ let local ?pool ?gamma f =
 (* -------------------------------------------------------------------------- *)
 (* --- Hypotheses                                                         --- *)
 (* -------------------------------------------------------------------------- *)
-    
+
+let masked = ref false
+
+let without_assume job x =
+  if !masked 
+  then job x
+  else
+    try masked := true ; let y = job x in masked := false ; y
+    with err -> masked := false ; raise err
+
 let assume p =
-  if p != p_true then
+  if p != p_true && not !masked then
     let d = Context.get cgamma in
     d.hyps <- p :: d.hyps
     

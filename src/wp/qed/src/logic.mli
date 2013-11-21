@@ -105,7 +105,8 @@ module type Function =
 sig
   include Symbol 
   val category : t -> t category
-  val sort : t -> sort (** of result *)
+  val params : t -> sort list (** params ; exceeding params use Sdata *)
+  val sort : t -> sort (** result *)
 end
 
 (** {2 Bound Variables} *)
@@ -286,6 +287,10 @@ sig
 	function to returns a properly normalized term.
     *)
 
+  val add_builtin_eq : Fun.t -> (term -> term -> term) -> unit
+    (** Register a builtin equality for comparing any term with head-symbol. 
+	{b Must} only need comparison for strictly smaller terms. *)
+
   val e_funop : Fun.t -> term list -> term
     (** Variant of [e_fun] that do not invoke builtins. 
 	Operator are still normalized, though.
@@ -318,6 +323,7 @@ sig
   val equal : t -> t -> bool (** physical equality *)
   val compare : t -> t -> int (** atoms are lower than complex terms ; otherwise, sorted by id. *)
   val pretty : Format.formatter -> t -> unit
+  val weigth : t -> int (** Informal size *)
 
   (** {3 Utilities} *)
 

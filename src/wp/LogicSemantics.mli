@@ -71,7 +71,7 @@ sig
 
   type env
     
-  val env : logic_var list -> env
+  val new_env : logic_var list -> env
   val move : env -> sigma -> env
   val sigma : env -> sigma
   val mem_at : env -> c_label -> sigma

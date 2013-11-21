@@ -582,10 +582,6 @@ let is_main_init kf =
       Kernel_function.pretty kf (if is_main then "" else "NOT ");
     is_main
 
-let get_called_kf fct = match fct.enode with
-  | Lval (Var vkf, NoOffset) -> Some (Globals.Functions.get vkf)
-  | _ -> None
-
 let mk_variant_properties kf s ca v =
   let vpos_id = WpPropId.mk_var_pos_id kf s ca in
   let vdecr_id = WpPropId.mk_var_decr_id kf s ca in

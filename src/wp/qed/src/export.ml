@@ -43,6 +43,12 @@ let amode = function
   | Mpositive | Mnegative | Mterm | Mterm_int | Mint -> Aint 
   | Mterm_real | Mreal -> Areal
 
+let smode = function
+  | Sprop -> Mpositive
+  | Sint -> Mterm_int
+  | Sreal -> Mterm_real
+  | Sbool | Sarray _ | Sdata -> Mterm
+
 let tmode = function
   | Prop -> Mpositive
   | Bool -> Mterm
@@ -225,10 +231,17 @@ struct
     method virtual pp_cst : Numbers.cst printer
     method virtual is_atomic : term -> bool
 
+    method pp_real fmt x =
+      let cst = Numbers.parse (R.to_string x) in
+      if Numbers.is_zero cst 
+      then self#pp_int Areal fmt Z.zero
+      else self#pp_cst fmt cst
+	
     (* -------------------------------------------------------------------------- *)
     (* --- Calls                                                              --- *)
     (* -------------------------------------------------------------------------- *)
 
+    method virtual op_spaced : string -> bool
     method virtual callstyle : callstyle
     method virtual link : cmode -> Fun.t -> link
     method link_name m f = link_name (self#link m f)
@@ -239,10 +252,22 @@ struct
 	| CallVoid -> Plib.pp_call_void ~f self#pp_flow fmt xs
 	| CallApply -> Plib.pp_call_apply ~f self#pp_atom fmt xs
 
+    method private pp_callsorts ~f fmt sorts xs =
+      let pp_mode pp fmt (m,x) = self#with_mode m (fun _ -> pp fmt x) in
+      let rec wrap sorts xs = match sorts , xs with
+	| [] , _ -> List.map (fun x -> Mterm,x) xs
+	| _ , [] -> []
+	| m::ms , x::xs -> (smode m,x)::(wrap ms xs) in
+      let mxs = wrap sorts xs in
+      match self#callstyle with
+	| CallVar -> Plib.pp_call_var ~f (pp_mode self#pp_flow) fmt mxs
+	| CallVoid -> Plib.pp_call_void ~f (pp_mode self#pp_flow) fmt mxs
+	| CallApply -> Plib.pp_call_apply ~f (pp_mode self#pp_atom) fmt mxs
+
     method private pp_unop ~op fmt x =
       match op with
 	| Assoc op | Op op ->
-	    if is_identop op && self#is_atomic x then
+	    if self#op_spaced op && self#is_atomic x then
 	      fprintf fmt "%s %a" op self#pp_flow x
 	    else
 	      fprintf fmt "%s%a" op self#pp_atom x
@@ -268,9 +293,9 @@ struct
 	      | CallApply -> 
 		  Plib.pp_fold_apply ~e:"?" ~f self#pp_atom fmt xs
 
-    method pp_fun cmode f fmt xs = 
-      match self#link cmode f with
-	| F_call f -> self#pp_call ~f fmt xs
+    method pp_fun cmode fct fmt xs = 
+      match self#link cmode fct with
+	| F_call f -> self#pp_callsorts ~f fmt (Fun.params fct) xs
 	| F_assoc op -> Plib.pp_assoc ~e:"?" ~op self#pp_atom fmt xs
 	| F_left(e,f) ->
 	    begin
@@ -299,6 +324,7 @@ struct
     method virtual op_scope : amode -> string option
     method virtual op_real_of_int : op
     method virtual op_add : amode -> op
+    method virtual op_sub : amode -> op
     method virtual op_mul : amode -> op
     method virtual op_div : amode -> op
     method virtual op_mod : amode -> op
@@ -318,8 +344,13 @@ struct
     (* -------------------------------------------------------------------------- *)
     (* --- Arithmetics Printers                                               --- *)
     (* -------------------------------------------------------------------------- *)
-
+      
     method private pp_arith_arg flow fmt e =
+      match T.repr e with
+	| Kint _ | Kreal _ -> self#pp_atom fmt e
+	| _ -> self#pp_arith_atom flow fmt e
+	    
+    method private pp_arith_atom flow fmt e =
       if mode = Mreal && T.is_int e then
 	self#with_mode Mint
 	  (fun _ -> 
@@ -356,7 +387,7 @@ struct
 	begin fun _ ->
 	  match phi (amode mode) with
 	    | Assoc op | Op op ->
-		if is_identop op && self#is_atomic a then
+		if self#op_spaced op && self#is_atomic a then
 		  fprintf fmt "%s %a" op (self#pp_arith_arg Atom) a
 		else
 		  fprintf fmt "%s%a" op (self#pp_arith_arg Atom) a
@@ -612,6 +643,44 @@ struct
 	  | None -> self#pp_repr fmt e
 	  | Some s -> fprintf fmt "@[<hov 1>(%a)%s@]" self#pp_repr e s
 
+    method private pp_addition fmt xs =
+      let amode = if List.exists T.is_real xs then Areal else Aint in
+      match 
+	self#op_add amode , 
+	self#op_sub amode , 
+	self#op_minus amode 
+      with
+	| Assoc add , Assoc sub , Op minus ->
+	    let factor x = match T.repr x with
+	      | Kint z when Z.negative z -> (false,T.e_zint (Z.opp z))
+	      | Kreal r when R.negative r -> (false,T.e_real (R.opp r))
+	      | Times(k,y) when Z.negative k -> (false,T.e_times (Z.opp k) y)
+	      | _ -> (true,x) in
+	    let sxs = List.map factor xs in
+	    let sxs = List.stable_sort
+	      (fun (s1,e1) (s2,e2) ->
+		 match s1,s2 with
+		   | true,true | false,false ->
+		       Pervasives.compare (T.weigth e1) (T.weigth e2)
+		   | true,false -> (-1)
+		   | false,true -> 1
+	      ) sxs in
+	    Plib.iteri
+	      (fun i (s,x) ->
+		 begin
+		   match i , s with
+		     | (Ifirst | Isingle) , false ->
+			 if self#op_spaced minus && self#is_atomic x
+			 then fprintf fmt "%s " minus
+			 else pp_print_string fmt minus
+		     | (Ifirst | Isingle) , true -> ()
+		     | (Imiddle | Ilast) , true -> fprintf fmt "@ %s " add
+		     | (Imiddle | Ilast) , false -> fprintf fmt "@ %s " sub
+		 end ;
+		 self#pp_arith_arg Atom fmt x
+	      ) sxs
+	| _ -> self#pp_arith_nary ~phi:(self#op_add) fmt xs
+
     method private pp_repr fmt e =
       match T.repr e with
 	| True -> pp_print_string fmt (self#e_true (cmode mode))
@@ -636,30 +705,8 @@ struct
 		| _ -> self#pp_not fmt p 
 	    end
 	| Kint x -> self#pp_int (amode mode) fmt x
-	| Kreal x -> 
-	    let cst = Numbers.parse (R.to_string x) in
-	    if Numbers.is_zero cst 
-	    then self#pp_int Areal fmt Z.zero
-	    else self#pp_cst fmt cst
-	| Add xs -> 
-	    begin
-	      let amode = if List.exists T.is_real xs then Areal else Aint in
-	      match self#op_add amode , self#op_minus amode with
-		| Assoc plus , Op minus ->
-		    let sxs = List.map
-		      (fun x ->
-			 match T.repr x with
-			   | Kint z when Z.negative z -> (false,T.e_zint (Z.opp z))
-			   | Times(k,y) when Z.equal k Z.minus_one -> (false,y)
-			   | _ -> (true,x)
-		      ) xs 
-		    in Plib.iteri
-			 (fun i (s,x) ->
-			    if not s || i <> Ifirst then
-			      fprintf fmt "@ %s " (if s then plus else minus) ;
-			    self#pp_arith_arg Atom fmt x) sxs
-		| _ -> self#pp_arith_nary ~phi:(self#op_add) fmt xs
-	    end
+	| Kreal x -> self#pp_real fmt x
+	| Add xs -> self#pp_addition fmt xs
 	| Mul xs -> self#pp_arith_nary ~phi:(self#op_mul) fmt xs
 	| Div(a,b) -> self#pp_arith_binop ~phi:(self#op_div) fmt a b
 	| Mod(a,b) -> self#pp_arith_binop ~phi:(self#op_mod) fmt a b

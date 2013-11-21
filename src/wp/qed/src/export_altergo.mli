@@ -50,6 +50,7 @@ sig
     method virtual set_typedef : ADT.t -> tau -> unit
 
     inherit [ADT.t,Field.t,Fun.t,tau,var,term] Engine.engine
+    method op_spaced : string -> bool
     method op_record : string * string
     method pp_forall : tau -> var list printer
     method pp_intros : tau -> var list printer

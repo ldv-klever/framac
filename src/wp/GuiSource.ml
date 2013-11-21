@@ -49,7 +49,7 @@ let selection_of_localizable = function
         match stmt with
           | { skind=Instr(Call(_,e,_,_)) } ->
               begin
-                match WpStrategy.get_called_kf e with
+                match Kernel_function.get_called e with
                   | None -> S_none
                   | Some called ->
 		      S_call { 

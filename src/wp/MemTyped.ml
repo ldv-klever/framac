@@ -37,62 +37,74 @@ module L = Qed.Logic
 let datatype = "MemTyped"
 let theory = "memory"
 
-let a_addr = record ~link:"addr" ~theory [ "base" , L.Int ; "offset" , L.Int ]
+let a_addr = Lang.datatype ~theory ~link:"addr"
 let t_addr = L.Data(a_addr,[])
-let f_base = field a_addr "base"
-let f_offset = field a_addr "offset"
-let _f_shift = Lang.extern_f ~theory "shift"
+let f_base   = Lang.extern_f ~theory ~result:L.Sint "base"
+let f_offset = Lang.extern_f ~theory ~result:L.Sint "offset"
+let f_shift  = Lang.extern_f ~theory "shift"
+let f_global = Lang.extern_f ~theory "global"
+let f_null   = Lang.extern_f ~theory "null"
+
 let p_valid_rd = Lang.extern_fp ~theory "valid_rd"
 let p_valid_rw = Lang.extern_fp ~theory "valid_rw"
 let p_separated = Lang.extern_fp ~theory "separated"
 let p_included = Lang.extern_fp ~theory "included"
 let p_eqmem = Lang.extern_fp ~theory "eqmem"
 let p_havoc = Lang.extern_fp ~theory "havoc"
-let f_region = Lang.extern_f ~theory ~sort:L.Sint "region"   (* base -> region *)
+let f_region = Lang.extern_f ~theory ~result:L.Sint "region"   (* base -> region *)
 let p_linked = Lang.extern_fp ~theory "linked" (* allocation-table -> prop *)
 let p_sconst = Lang.extern_fp ~theory "sconst" (* int-memory -> prop *)
 let p_framed = Lang.extern_fp ~theory "framed" (* m-pointer -> prop *)
-let a_lt = Lang.extern_p ~theory ~prop:"addr_lt" ~bool:"addr_lt_bool"
-let a_leq = Lang.extern_p ~theory ~prop:"addr_le" ~bool:"addr_le_bool"
-let a_cast = Lang.extern_f ~sort:L.Sint ~category:L.Injection ~theory "cast"
-let a_hardware = Lang.extern_f ~sort:L.Sint ~category:L.Injection ~theory "hardware"
+let a_lt = Lang.extern_p ~theory ~prop:"addr_lt" ~bool:"addr_lt_bool" ()
+let a_leq = Lang.extern_p ~theory ~prop:"addr_le" ~bool:"addr_le_bool" ()
+let a_cast = Lang.extern_f ~result:L.Sint ~category:L.Injection ~theory "cast"
+let a_hardware = Lang.extern_f ~result:L.Sint ~category:L.Injection ~theory "hardware"
 
 (* -------------------------------------------------------------------------- *)
 (* --- Utilities on loc-as-term                                           --- *)
 (* -------------------------------------------------------------------------- *)
 
-let a_base l = F.e_getfield l f_base
-let a_offset l = F.e_getfield l f_offset
-let a_addr base offset = F.e_record [ f_base , base ; f_offset , offset ]
-let a_shift l k = 
-  if F.is_zero k then l else a_addr (a_base l) (F.e_add (a_offset l) k)
-  (* if F.is_zero k then l else F.e_fun f_shift [l;k] *)
-let a_null = a_addr e_zero e_zero
+let rec a_base l = match F.repr l with
+  | L.Fun(f,[p;_]) when f==f_shift -> a_base p
+  | L.Fun(f,[b]) when f==f_global -> b
+  | L.Fun(f,[]) when f==f_null -> e_zero
+  | _ -> F.e_funraw f_base [l]
 
-(* -------------------------------------------------------------------------- *)
-(* --- Shift Recovery                                                     --- *)
-(* -------------------------------------------------------------------------- *)
+let rec a_offset l = match F.repr l with
+  | L.Fun(f,[p;k]) when f==f_shift -> F.e_add (a_offset p) k
+  | L.Fun(f,_) when f==f_global || f==f_null -> F.e_zero
+  | _ -> F.e_funraw f_offset [l]
 
-let rec keep_delta a = function
-  | [] -> raise Not_found
-  | e::es -> if a == e then es else e :: keep_delta a es
+let rec a_shift l k = match F.repr l with
+  | L.Fun(f,[p;i]) when f==f_shift -> F.e_funraw f_shift [p;e_add i k]
+  | _ -> F.e_funraw f_shift [l;k]
 
-let fold_shift l = 
-  try
-    match F.repr l with
-      | L.Rdef fields ->
-	  let base = List.assq f_base fields in
-	  let offset = List.assq f_offset fields in
-	  begin
-	    match F.repr base , F.repr offset with
-	      | L.Rget(addr,f) , L.Add terms when f == f_base ->
-		  let origin = F.e_getfield addr f_offset in
-		  let delta = keep_delta origin terms in
-		  addr , e_sum delta
-	      | _ -> raise Not_found
-	  end
-      | _ -> raise Not_found
-  with Not_found -> l,F.e_zero
+let a_null = F.e_funraw f_null []
+
+let a_global base = 
+  if base == e_zero then a_null else F.e_funraw f_global [base]
+
+let a_addr base offset = a_shift (a_global base) offset
+
+let eq_shift a b =
+  let p = a_base a in
+  let q = a_base b in
+  let i = a_offset a in
+  let j = a_offset b in
+  if i==j then F.p_equal p q else
+    match F.is_equal p q with
+      | L.No -> F.p_false
+      | L.Yes -> F.p_equal i j
+      | L.Maybe -> raise Not_found
+	  
+let () =
+  begin
+    F.add_builtin_1   f_base   a_base ;
+    F.add_builtin_1   f_offset a_offset ;
+    F.add_builtin_2   f_shift  a_shift ;
+    F.add_builtin_peq f_shift  eq_shift ;
+    F.add_builtin_peq f_global eq_shift ;
+  end
 
 (* -------------------------------------------------------------------------- *)
 (* --- Model Parameters                                                   --- *)
@@ -103,8 +115,6 @@ let configure () =
     Context.set Lang.pointer (fun _ -> t_addr) ;
     Context.set Cvalues.null (p_equal a_null) ;
   end
-
-let theories () = []
 
 type pointer = NoCast | Fits | Unsafe
 let pointer = Context.create ~default:NoCast "MemTyped.pointer"
@@ -301,7 +311,7 @@ module STRING = Model.Generator(LITERAL)
        }
 
      let compile (eid,cst) =
-       let lfun = Lang.generated_f ~sort:L.Sint "Str_%d" eid in
+       let lfun = Lang.generated_f ~result:L.Sint "Str_%d" eid in
        let base = F.e_fun lfun [] in
        Definitions.define_symbol {
 	 d_lfun = lfun ; d_types = 0 ; d_params = [] ; 
@@ -356,7 +366,7 @@ module BASE = Model.Generator(Varinfo)
      let generate x = 
        let prefix = if x.vglob then "G" else if x.vformal then "P" else "L" in
        let lfun = Lang.generated_f 
-	 ~category:L.Constructor ~sort:L.Sint 
+	 ~category:L.Constructor ~result:L.Sint 
 	 "%s_%s_%d" prefix x.vorig_name x.vid in
        let dfun = Definitions.Value( L.Int , Def , e_int (succ x.vid) ) in
        Definitions.define_symbol {
@@ -875,8 +885,8 @@ let loc_eq = p_equal
 let loc_neq = p_neq
 let loc_lt = loc_compare a_lt p_lt
 let loc_leq = loc_compare a_leq p_leq
-let loc_offset obj p q = 
-  let delta = e_sub (a_offset q) (a_offset p) in
+let loc_diff obj p q = 
+  let delta = e_sub (a_offset p) (a_offset q) in
   e_fact (Ctypes.sizeof_object obj) delta
 
 (* -------------------------------------------------------------------------- *)

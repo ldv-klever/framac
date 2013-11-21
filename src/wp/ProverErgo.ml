@@ -288,11 +288,13 @@ open ProverTask
 
 let p_loc = "File " ^ p_string ^ ", line " ^ p_int ^ ", [^:]+:"
 let p_valid = p_loc ^ "Valid (" ^ p_float ^ ") (" ^ p_int ^ ")"
+let p_unsat = p_loc ^ "I don't know"
 let p_limit = "^Steps limit reached: " ^ p_int
 
 let re_error = Str.regexp p_loc
 let re_valid = Str.regexp p_valid
 let re_limit = Str.regexp p_limit
+let re_unsat = Str.regexp p_unsat
 
 class altergo ~pid ~gui ~file ~lines ~logout ~logerr =
 object(ergo)
@@ -303,6 +305,7 @@ object(ergo)
   val mutable error = None
   val mutable valid = false
   val mutable limit = false
+  val mutable unsat = false
   val mutable time = 0.0
   val mutable steps = 0
 
@@ -326,8 +329,13 @@ object(ergo)
       steps <- pred (a#get_int 1) ;
     end
 
+  method private unsat (_ : pattern) =
+    begin
+      unsat <- true ;
+    end
+
   method result r =
-    if r = 0 && not valid && Wp_parameters.UnsatModel.get () then 
+    if unsat && Wp_parameters.UnsatModel.get () then 
       begin
 	let message = Pretty_utils.sfprintf "Model for %a" WpPropId.pretty pid in
 	ProverTask.pp_file ~message ~file:logout ;
@@ -337,19 +345,32 @@ object(ergo)
 	  Wp_parameters.error ~source:pos "Alt-Ergo error:@\n%s" message ;
 	  VCS.failed ~pos message
       | None ->
-	  if r = 0 || r = 1 then
+	  try
 	    let verdict = 
-	      if valid then VCS.Valid else 
-		if limit then VCS.Stepout else
-		  VCS.Unknown in
+	      if unsat then VCS.Unknown else
+		if valid then VCS.Valid else 
+		  if limit then VCS.Stepout else
+		    raise Not_found in
 	    VCS.result ~time:(if gui then 0.0 else time) ~steps verdict
-	  else
+	  with
+          | Not_found when Wp_parameters.wpcheck () ->
+            if r = 0 then VCS.no_result
+            else
+              begin
+	        ProverTask.pp_file ~message:"Alt-Ergo (stdout)" ~file:logout ;
+	        ProverTask.pp_file ~message:"Alt-Ergo (stderr)" ~file:logerr ;
+                VCS.failed "Alt-Ergo type-checking failed"
+              end
+          | Not_found ->
 	    begin
 	      ProverTask.pp_file ~message:"Alt-Ergo (stdout)" ~file:logout ;
 	      ProverTask.pp_file ~message:"Alt-Ergo (stderr)" ~file:logerr ;
-	      VCS.failed (Printf.sprintf "Alt-Ergo exits with status [%d]" r)
+	      if r <> 0 then
+		VCS.failed (Printf.sprintf "Alt-Ergo exits with status [%d]" r)
+	      else
+		VCS.failed "Can not understand Alt-Ergo output."
 	    end
-	      
+
   method prove =
     let depth = Wp_parameters.Depth.get () in
     let steps = Wp_parameters.Steps.get () in
@@ -368,6 +389,7 @@ object(ergo)
     ergo#validate_pattern ~logs:`ERR re_error ergo#error ;
     ergo#validate_pattern ~logs:`OUT re_valid ergo#valid ;
     ergo#validate_pattern ~logs:`OUT re_limit ergo#limit ;
+    ergo#validate_pattern ~logs:`OUT re_unsat ergo#unsat ;
     ergo#run ~logout ~logerr
       
 end

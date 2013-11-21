@@ -84,9 +84,28 @@ val newline: unit -> unit  (* Call this function to announce a new line *)
 
 val getPosition: unit -> Lexing.position * Lexing.position
 
-val setCurrentLine: int -> unit
-val setCurrentFile: string -> unit
+(* The module stores the current file,line, and working directory in a
+   hidden internal state, modified by the three following
+   functions.  *)
+
+(** This function is used especially when the preprocessor has
+    generated linemarkers in the output that let us know the current
+    working directory at the time of preprocessing (option
+    -fworking-directory for GNU CPP). *)
 val setCurrentWorkingDirectory: string -> unit
+
+(** If normalize is false, [setCurrentFile ~normalize:false path]
+    accepts [path] as the current file "as is". Else (the default), if
+    [path] is relative, make it relative to the current working
+    directory if it has been set; then in any case attempts to shorten
+    the path to the current file using [Filepath.normalize]. 
+
+    This function should not be called with a string argument which
+    has been already normalized (because normalization can make [path]
+    relative to a different path). *)
+val setCurrentFile: ?normalize:bool -> string -> unit
+val setCurrentLine: int -> unit
+
 
 (** Type for source-file locations *)
 type location =

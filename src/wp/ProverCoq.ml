@@ -143,12 +143,12 @@ object(self)
 	      d.d_lfun (List.map F.tau_of_var d.d_params) t ;
 	| Value(t,mu,v) ->
 	    let pp = match mu with
-	      | Rec -> engine#declare_fixpoint
+	      | Rec -> engine#declare_fixpoint ~prefix:"Fix"
 	      | Def -> engine#declare_definition
 	    in pp fmt d.d_lfun d.d_params t v
 	| Predicate(mu,p) ->
 	    let pp = match mu with
-	      | Rec -> engine#declare_fixpoint
+	      | Rec -> engine#declare_fixpoint ~prefix:"Fix"
 	      | Def -> engine#declare_definition
 	    in pp fmt d.d_lfun d.d_params Logic.Prop (F.e_prop p)
 	| Inductive _ ->
@@ -183,7 +183,10 @@ let need_recompile ~source ~target =
 (* --- Assembling Goal                                                    --- *)
 (* -------------------------------------------------------------------------- *)
 
-let theories = ref [] (*[LC] Shared : not projectified. *)
+(** theories -> needed directory to include *)
+let compiled_theories : string option Datatype.String.Hashtbl.t
+    = Datatype.String.Hashtbl.create 10
+(*[LC] Shared : not projectified. *)
 
 module CLUSTERS = Model.Index
   (struct
@@ -222,20 +225,27 @@ and assemble_cluster coqcc c =
   add_source coqcc (cluster_file c)
 
 and assemble_theory coqcc thy =
-  if not (List.mem thy !theories) then
-    begin
-      let source = Wp_parameters.Share.file ~error:true (thy ^ ".v") in
-      if Sys.file_exists (source ^ "o") then
-	add_include coqcc (Filename.dirname source)
-      else
-	begin
-	  let tgtdir = Wp_parameters.get_output_dir "wp" in
-	  let target = Printf.sprintf "%s/%s.v" tgtdir thy in
-	  Command.copy source target ;
-	  add_source coqcc target
-	end ;
-      theories := thy :: !theories ;
-    end
+  try
+    let dirinclude = Datatype.String.Hashtbl.find compiled_theories thy in
+    match dirinclude with
+    | None -> ()
+    | Some dirinclude -> add_include coqcc dirinclude
+  with Not_found ->
+    let source = Wp_parameters.Share.file ~error:true (thy ^ ".v") in
+    if Sys.file_exists (source ^ "o") then
+      begin
+        let dirinclude = (Filename.dirname source) in
+	add_include coqcc dirinclude;
+        Datatype.String.Hashtbl.add compiled_theories thy (Some dirinclude)
+      end
+    else
+      begin
+	let tgtdir = Wp_parameters.get_output_dir "wp" in
+	let target = Printf.sprintf "%s/%s.v" tgtdir thy in
+	Command.copy source target ;
+	add_source coqcc target;
+        Datatype.String.Hashtbl.add compiled_theories thy None
+      end
 
 and assemble_userlib coqcc source =
   if Sys.file_exists (source ^ "o") then
@@ -334,8 +344,9 @@ object(coq)
     coq#timeout (coq_timeout ()) ;
     Task.call 
       (fun () ->
-	 let name = Filename.basename source in
-	 Wp_parameters.feedback "[Coq] Compiling '%s'." name) ()
+        if not (Wp_parameters.wpcheck ()) then
+	  let name = Filename.basename source in
+	  Wp_parameters.feedback "[Coq] Compiling '%s'." name) ()
     >>= coq#run ~logout ~logerr 
     >>= fun r ->
       if r <> 0 then coq#failed 
@@ -407,15 +418,18 @@ type coq_wpo = {
   cw_includes : string list ; (* -I ... *)
 }
 
-let make_script w script =
+let make_script ?(admitted=false) w script =
   Command.print_file w.cw_script
     begin fun fmt ->
       Command.pp_from_file fmt w.cw_goal ;
-      Format.fprintf fmt "Proof.@\n%sQed.@\n@." script ;
+      if admitted then
+        Format.fprintf fmt "Proof.@\nAdmitted.@\n@."
+      else
+        Format.fprintf fmt "Proof.@\n%sQed.@\n@." script ;
     end
 
-let try_script w script =
-  make_script w script ; (new runcoq w.cw_includes w.cw_script)#check
+let try_script ?admitted w script =
+  make_script ?admitted w script ; (new runcoq w.cw_includes w.cw_script)#check
 
 let rec try_hints w = function
   | [] -> Task.return false
@@ -480,6 +494,21 @@ let prove_session ~interactive w =
 	  else Task.return false
   end
   >>= Task.call (fun r -> if r then VCS.valid else VCS.unknown)
+
+exception Admitted_not_proved
+
+let check_session w =
+  compile_headers w.cw_includes false w.cw_headers >>=
+    (fun () -> try_script ~admitted:true w "") >>> function
+    | Task.Result true -> Task.return VCS.unknown
+    | Task.Failed e -> Task.raised e
+    | Task.Canceled | Task.Timeout | Task.Result false ->
+      Task.raised Admitted_not_proved
+
+let prove_session ~interactive w =
+  if Wp_parameters.wpcheck ()
+  then check_session w
+  else prove_session ~interactive w
 
 let prove_prop wpo ~interactive ~axioms ~prop =
   let pid = wpo.po_pid in

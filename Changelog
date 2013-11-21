@@ -13,6 +13,27 @@
 ###############################################################################
 
 #####################################
+Open Source Release Fluorine-20130601
+#####################################
+
+-* Value      [2013/06/11] Add missing C library files.
+
+#####################################
+Open Source Release Fluorine-20130501
+#####################################
+
+-  Value      [2013/05/22] Better precision for ^ (bitwise xor) operator
+	      when applied on intervals of positive integers
+-* RTE        [2013/05/22] Fix off-by-one error in alarms on overflowing
+	      unsigned unary minuses.
+-* Value      [2013/05/21] Catch evaluation errors when selecting a logic
+	      l-value in the GUI.
+o* Kernel     [2013/05/06] Fixed Type.pp_ml_name for polymorphic types
+	      with 3 and 4 type variables (bug #1127).
+-* Makefile   [2013/05/06] Fixed installation directory of the doc in
+	      plug-in's Makefile (bug #1278).
+
+#####################################
 Open Source Release Fluorine-20130401
 #####################################
 

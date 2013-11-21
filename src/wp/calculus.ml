@@ -416,7 +416,7 @@ module Cfg (W : Mcfg.S) = struct
     let en_annot = WpStrategy.get_annots strategy en in
     let ee_annot = WpStrategy.get_annots strategy ee in
     let call_asgn = WpStrategy.get_call_asgn en_annot in
-      match WpStrategy.get_called_kf fct with
+      match Kernel_function.get_called fct with
         | None ->
             let obj = W.merge wenv p_post p_exit in
             let lab, obj = add_assigns_hyp wenv obj call_asgn in

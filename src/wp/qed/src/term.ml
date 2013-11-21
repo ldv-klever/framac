@@ -49,6 +49,7 @@ struct
   module VID = struct type t = var let id x = x.vid end
   module Vars = Idxset.Positive(VID)
   module Vmap = Idxmap.Make(VID)
+  module Builtins = Map.Make(Fun)
 
   type 'a symbol = (Field.t,Fun.t,var,'a) term_repr
 
@@ -126,7 +127,6 @@ struct
   let repr e = e.repr
   let hash e = e.hash
   let id e = e.id
-  let sort e = e.sort
   let vars e = e.vars
 
   let hash_subterms = function
@@ -213,6 +213,9 @@ struct
       | _ -> 
 	  assert (hash_head a <> hash_head b) ; false
 
+  let sort x = x.sort
+  let vars x = x.vars
+
   let vars_repr = function
     | True | False | Kint _ | Kreal _ -> Vars.empty
     | Times(_,x) | Not x | Rget(x,_) -> x.vars
@@ -221,7 +224,7 @@ struct
     | Div(x,y) | Mod(x,y) | Eq(x,y) | Neq(x,y) | Leq(x,y) | Lt(x,y) | Aget(x,y) ->
 	Vars.union x.vars y.vars
     | Imply(xs,a) | Apply(a,xs) ->
-	Hcons.fold_list Vars.union (fun x -> x.vars) a.vars xs
+	Hcons.fold_list Vars.union vars a.vars xs
     | If(e,a,b) | Aset(e,a,b) -> Vars.union e.vars (Vars.union a.vars b.vars)
     | Var x -> Vars.singleton x
     | Bind(_,x,e) -> Vars.remove x e.vars
@@ -232,12 +235,9 @@ struct
     | Kint _ -> Sint
     | Kreal _ -> Sreal
     | Times(_,x) -> Kind.merge Sint x.sort
-    | Add xs | Mul xs ->
-	Kind.merge_list (fun x -> x.sort) Sint xs
-    | And xs | Or xs ->
-	Kind.merge_list (fun x -> x.sort) Sbool xs
-    | Imply(hs,p) -> 
-	Kind.merge_list (fun x -> x.sort) p.sort hs
+    | Add xs | Mul xs -> Kind.merge_list sort Sint xs
+    | And xs | Or xs ->  Kind.merge_list sort Sbool xs
+    | Imply(hs,p) -> Kind.merge_list sort p.sort hs
     | Not x -> x.sort
     | Fun(f,_) -> Fun.sort f
     | Aget(m,_) -> Kind.image m.sort
@@ -463,6 +463,7 @@ struct
 
   end
 
+  let weigth e = e.size
   let compare = COMPARE.compare
 
   (* -------------------------------------------------------------------------- *)
@@ -569,8 +570,6 @@ struct
   (* -------------------------------------------------------------------------- *)
   (* --- Builtin Computation Support                                        --- *)
   (* -------------------------------------------------------------------------- *)
-
-  module Builtins = Map.Make(Fun)
 
   let builtins = ref Builtins.empty
   let add_builtin (f:Fun.t) (compute:term list -> term) =
@@ -765,6 +764,7 @@ struct
       if Z.equal z Z.zero then e_zint Z.zero else
 	match e.repr with
 	  | Kint z' -> e_zint (Z.mul z z')
+	  | Kreal r when Z.equal z Z.minus_one -> e_real (R.opp r)
 	  | Times(z',t) -> times (Z.mul z z') t
 	  | _ -> c_times z e
 
@@ -994,9 +994,21 @@ struct
 		| Yes -> Yes
 		| No | Maybe -> Maybe
 
+  let eqbuiltins = ref Builtins.empty
+  let add_builtin_eq f r = eqbuiltins := Builtins.add f r !eqbuiltins
+  let get_builtin_eq x y = 
+    let fetch x = match x.repr with 
+      | Fun(f,_) -> Builtins.find f !eqbuiltins
+      | _ -> raise Not_found
+    in try fetch x x y with Not_found -> fetch y x y
+      
   let rec equality p_not x y =
-    if x == y then e_true else relation (eq_symb p_not) z_eq x y
+    if x == y then e_true else relation (eq_builtin p_not) z_eq x y
 
+  and eq_builtin p_not x y =
+    try get_builtin_eq x y
+    with Not_found -> eq_symb p_not x y
+      
   and eq_symb p_not x y =
     match x.repr , y.repr with
       | Kint z , Kint z' -> if Z.equal z z' then e_true else e_false
@@ -1036,7 +1048,11 @@ struct
     if Field.equal f g then equality p_not x y else raise Exit
 
   let rec disequality p_not x y =
-    if x == y then e_false else relation (neq_symb p_not) z_neq x y
+    if x == y then e_false else relation (neq_builtin p_not) z_neq x y
+
+  and neq_builtin p_not x y =
+    try p_not (get_builtin_eq x y)
+    with Not_found -> neq_symb p_not x y
 
   and neq_symb p_not x y =
     match x.repr , y.repr with

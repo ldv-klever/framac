@@ -35,8 +35,10 @@ open Lang.F
 
 let theory = "cint"
 
-let make_fun_int op i = Lang.extern_f ~theory ~sort:Logic.Sint "%s_%a" op Ctypes.pp_int i
-let make_pred_int op i = Lang.extern_f ~theory ~sort:Logic.Sprop "%s_%a" op Ctypes.pp_int i
+let make_fun_int op i = 
+  Lang.extern_f ~theory ~result:Logic.Sint "%s_%a" op Ctypes.pp_int i
+let make_pred_int op i = 
+  Lang.extern_f ~theory ~result:Logic.Sprop "%s_%a" op Ctypes.pp_int i
 
 (* let fun_int op = Ctypes.imemo (make_fun_int op) *) (* unused for now *)
 (* let pred_int op = Ctypes.imemo (make_pred_int op) *) (* unused for now *)
@@ -75,10 +77,10 @@ let f_to_int = Ctypes.imemo
        | _ -> raise Not_found
      in F.add_builtin f simplify ; f)
 
-let f_of_real = extern_f ~theory:"qed" ~sort:Logic.Sint "int_of_real"
+let f_of_real = extern_f ~theory:"qed" ~result:Logic.Sint "int_of_real"
 
 (* Signature int,int -> int over Z *)
-let sort = Logic.Sint
+let result = Logic.Sint
 let ac = {
   associative = true ;
   commutative = true ;
@@ -99,12 +101,12 @@ let op_lxor = { ac with neutral = E_int 0 ; inversible = true }
 let op_lor  = { ac with neutral = E_int 0 ; absorbant = E_int (-1); idempotent = true }
 let op_land = { ac with neutral = E_int (-1); absorbant = E_int 0 ; idempotent = true }
 
-let f_lnot = Lang.extern_f ~theory ~sort "lnot"
-let f_lor  = Lang.extern_f ~theory ~sort ~category:(Operator op_lor) ~balance "lor"
-let f_land = Lang.extern_f ~theory ~sort ~category:(Operator op_land) ~balance "land"
-let f_lxor = Lang.extern_f ~theory ~sort ~category:(Operator op_lxor) ~balance "lxor"
-let f_lsl = Lang.extern_f ~theory ~sort "lsl"
-let f_lsr = Lang.extern_f ~theory ~sort "lsr"
+let f_lnot = Lang.extern_f ~theory ~result "lnot"
+let f_lor  = Lang.extern_f ~theory ~result ~category:(Operator op_lor) ~balance "lor"
+let f_land = Lang.extern_f ~theory ~result ~category:(Operator op_land) ~balance "land"
+let f_lxor = Lang.extern_f ~theory ~result ~category:(Operator op_lxor) ~balance "lxor"
+let f_lsl = Lang.extern_f ~theory ~result "lsl"
+let f_lsr = Lang.extern_f ~theory ~result "lsr"
 
 (* -------------------------------------------------------------------------- *)
 (* --- Conversion Symbols                                                 --- *)

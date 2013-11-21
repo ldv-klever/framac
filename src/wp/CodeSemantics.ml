@@ -195,7 +195,7 @@ struct
     | MinusPP ->
 	let te = Cil.typeOf_pointed (Cil.typeOf e1) in
 	let obj = Ctypes.object_of te in
-	Val(M.loc_offset obj (loc_of_exp env e1) (loc_of_exp env e2))
+	Val(M.loc_diff obj (loc_of_exp env e1) (loc_of_exp env e2))
 
   (* -------------------------------------------------------------------------- *)
   (* --- Cast                                                               --- *)

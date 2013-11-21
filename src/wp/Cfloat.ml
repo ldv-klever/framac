@@ -34,43 +34,66 @@ open Lang.F
 
 let theory = "cfloat"
 
+let result = Logic.Sreal
+let params = [Logic.Sreal]
+let binop = [Logic.Sreal;Logic.Sreal]
+
 let make_fun_float name = Ctypes.fmemo
-  (fun f -> extern_f ~theory ~sort:Logic.Sreal "%s_%a" name Ctypes.pp_float f)
+  (fun f -> extern_f ~theory ~result ~params "%s_%a" name Ctypes.pp_float f)
 
 let make_pred_float name = Ctypes.fmemo
-  (fun f -> extern_f ~theory ~sort:Logic.Sprop "%s_%a" name Ctypes.pp_float f)
-
-let f_of_int = extern_f ~theory:"qed" ~sort:Logic.Sreal "real_of_int"
-let r_opp = extern_f ~theory ~sort:Logic.Sreal "ropp"
-let r_add = extern_f ~theory ~sort:Logic.Sreal "radd"
-let r_sub = extern_f ~theory ~sort:Logic.Sreal "rsub"
-let r_mul = extern_f ~theory ~sort:Logic.Sreal "rmul"
-let r_div = extern_f ~theory ~sort:Logic.Sreal "rdiv"
+  (fun f -> extern_f ~theory ~result ~params "%s_%a" name Ctypes.pp_float f)
+  
+let f_of_int = extern_f ~theory:"qed" ~result "real_of_int"
+let r_opp = extern_f ~theory ~result ~params "ropp"
+let r_add = extern_f ~theory ~result ~params:binop "radd"
+let r_sub = extern_f ~theory ~result ~params:binop "rsub"
+let r_mul = extern_f ~theory ~result ~params:binop "rmul"
+let r_div = extern_f ~theory ~result ~params:binop "rdiv"
 
 let apply2 f x y = e_fun f [x;y]
   
 (* -------------------------------------------------------------------------- *)
-(* --- Conversion Symbols                                                 --- *)
+(* --- Model Setting                                                      --- *)
 (* -------------------------------------------------------------------------- *)
 
 type model = Real | Float
 
 let model = Context.create ~default:Real "Cfloat.model"
+  
+(* -------------------------------------------------------------------------- *)
+(* --- Litterals                                                          --- *)
+(* -------------------------------------------------------------------------- *)
 
-let fconstant f r =
-  let n = String.length r in
-  let suffixed = n > 0 && 
-    match r.[n-1] 
-    with 'f' | 'F' | 'd' | 'D' | 'l' | 'L' -> true | _ -> false
-  in 
+let code_lit f =
   match Context.get model with
-    | Real -> (* skip suffix in real model *)
-	let cst = if suffixed then String.sub r 0 (n-1) else r in
-	e_real (R.of_string cst)
-    | Float -> (* keep suffix in float model *)
-	if suffixed then e_hexfloat f else e_real (R.of_string r)
+    | Real  -> e_mthfloat f
+    | Float -> e_hexfloat f
 
-let fconvert f a = e_fun (make_fun_float "to" f) [a]
+let acsl_lit = 
+  let open Cil_types in
+  function { r_literal ; r_nearest } ->
+    match Context.get model with
+      | Float ->
+	  let n = String.length r_literal in
+	  let suffixed = n > 0 && 
+	    match r_literal.[n-1] 
+	    with 'f' | 'F' | 'd' | 'D' | 'l' | 'L' -> true | _ -> false
+	  in 
+	  if suffixed 
+	  then e_hexfloat r_nearest 
+	  else e_real (R.of_string r_literal)
+      | Real -> 
+	  e_mthfloat r_nearest
+
+(* -------------------------------------------------------------------------- *)
+(* --- Conversion Symbols                                                 --- *)
+(* -------------------------------------------------------------------------- *)
+
+let fconvert f a = 
+  match Context.get model with
+    | Real -> a
+    | Float -> e_fun (make_fun_float "to" f) [a]
 
 let real_of_int a = e_fun f_of_int [a]
 let float_of_int f a = fconvert f (real_of_int a)

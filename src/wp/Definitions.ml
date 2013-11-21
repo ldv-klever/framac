@@ -320,7 +320,8 @@ object(self)
 	      | Some (LTsum cs) -> 
 		  let cases = List.map
 		    (fun ct ->
-		       CTOR ct , List.map Lang.tau_of_ltype ct.ctor_params
+		       Lang.CTOR ct , 
+		       List.map Lang.tau_of_ltype ct.ctor_params
 		    ) cs in
 		  Qed.Engine.Tsum cases
 	    in self#on_type t def ;
@@ -410,9 +411,10 @@ object(self)
       begin
 	symbols <- DF.add f symbols ;
 	match f with
-	  | Lang.Function(link,_,_,_) | Lang.Predicate(link,_,_) ->
+	  | Lang.Function { f_scope = s }
+	  | Lang.Predicate { p_scope = s } ->
 	      begin
-		match link with
+		match s with
 		  | External thy -> self#vtheory thy
 		  | Generated -> self#vlfun f
 	      end

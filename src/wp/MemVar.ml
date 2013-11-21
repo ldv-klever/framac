@@ -427,12 +427,12 @@ struct
     | Field f :: ofs -> e_add (e_int64 (Ctypes.field_offset f)) (offset ofs)
     | Index(obj,k)::ofs -> e_add (e_fact (Ctypes.sizeof_object obj) k) (offset ofs)
 
-  let loc_offset obj a b =
+  let loc_diff obj a b =
     match a , b with
-      | Mloc l1 , Mloc l2 -> M.loc_offset obj l1 l2
+      | Mloc l1 , Mloc l2 -> M.loc_diff obj l1 l2
       | Fref x , Fref y when Varinfo.equal x y -> e_zero
       | (Fval(x,p)|Mval(x,p)) , (Fval(y,q)|Mval(y,q)) when Varinfo.equal x y ->
-	  e_div (e_sub (offset p) (offset q)) (e_int64 (sizeof_object obj))
+	  e_div (e_sub (offset p) (offset q)) (e_int64 (Ctypes.sizeof_object obj))
       | Mval _ , _ | _ , Mval _
       | Fval _ , _ | _ , Fval _
       | Fref _ , _ | _ , Fref _

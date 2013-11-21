@@ -183,18 +183,20 @@ let add_library lib deps =
 
 let add_logic result name kinds ~theory ?category ?balance 
     ?(link=chop_backslash name) () =
-  let sort = skind result in
-  let lfun = Lang.extern_s ~theory ?category ?balance ~sort link in
+  let result = skind result in
+  let params = List.map skind kinds in
+  let lfun = Lang.extern_s ~theory ?category ?balance ~result ~params link in
   register name kinds (LFUN lfun)
     
-let add_predicate name kinds ~theory 
-    ?(link=chop_backslash name) () =
-  let lfun = Lang.extern_fp ~theory link in
+let add_predicate name kinds ~theory ?(link=chop_backslash name) () =
+  let params = List.map skind kinds in
+  let lfun = Lang.extern_fp ~theory ~params link in
   register name kinds (LFUN lfun)
 
 let add_ctor name kinds ~theory ?(link=name) () =
   let category = Logic.Constructor in
-  let lfun = Lang.extern_s ~theory ~category ~sort:Logic.Sdata link in
+  let params = List.map skind kinds in
+  let lfun = Lang.extern_s ~theory ~category ~params ~result:Logic.Sdata link in
   register name kinds (LFUN lfun)
 
 let add_const name value =

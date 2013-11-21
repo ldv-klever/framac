@@ -148,16 +148,14 @@ let uminus_assertion ~remove_trivial ~warning kf kinstr exp =
   (* - expr overflows if exp is TYPE_MIN *)
   let t = Cil.unrollType (Cil.typeOf exp) in
   let size = Cil.bitsSizeOf t in
-  if size > 64 then
-    (* should never happen *)
-    Options.warn "bitsSize of %a > 64: not treated" Printer.pp_exp exp
-  else
-    let min_ty = Cil.min_signed_number size in
-    let assertion ?status () =
-      register_alarm
-	Generator.emitter ?status kf kinstr
-	(Alarms.Overflow(Alarms.Signed, exp, min_ty, Alarms.Lower_bound))
-    in
+  let min_ty = Cil.min_signed_number size in
+  (* alarm is bound <= exp, hence bound must be MIN_INT+1 *)
+  let bound = Integer.add Integer.one min_ty in
+  let assertion ?status () =
+    register_alarm
+      Generator.emitter ?status kf kinstr
+      (Alarms.Overflow(Alarms.Signed, exp, bound, Alarms.Lower_bound))
+  in
     if remove_trivial then begin
       match get_expr_val exp with
       | None -> ignore (assertion ())
@@ -168,8 +166,7 @@ let uminus_assertion ~remove_trivial ~warning kf kinstr exp =
           if warning then
 	    Options.warn "unary minus assert broken: %a" 
 	      local_printer#code_annotation a
-    end else
-      ignore (assertion ())
+    end
 
 (* assertions for multiplication/addition/subtraction signed overflow *)
 let mult_sub_add_assertion

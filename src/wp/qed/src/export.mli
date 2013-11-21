@@ -85,8 +85,10 @@ sig
     method virtual e_false : cmode -> string
     method virtual pp_int : amode -> Z.t printer
     method virtual pp_cst : Numbers.cst printer
-    method virtual is_atomic : term -> bool
+    method pp_real : R.t printer
 
+    method virtual is_atomic : term -> bool
+    method virtual op_spaced : string -> bool
     method virtual callstyle : callstyle
     method virtual pp_apply : cmode -> term -> term list printer
     method pp_fun : cmode -> Fun.t -> term list printer
@@ -94,6 +96,7 @@ sig
     method virtual op_scope : amode -> string option
     method virtual op_real_of_int : op
     method virtual op_add : amode -> op
+    method virtual op_sub : amode -> op
     method virtual op_mul : amode -> op
     method virtual op_div : amode -> op
     method virtual op_mod : amode -> op

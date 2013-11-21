@@ -547,12 +547,8 @@ let rec funcall_params kf xs es =
 	expr (Context.function_param kf x) e ; 
 	funcall_params kf xs es
 
-let get_called_kf fct = match fct.enode with
-  | Lval (Var vkf, NoOffset) -> Some (Globals.Functions.get vkf)
-  | _ -> None
-
 let funcall (ef:Cil_types.exp) (es:Cil_types.exp list) =
-  match get_called_kf ef with
+  match Kernel_function.get_called ef with
     | None -> 
 	expr Context.epsilon ef ; 
 	List.iter (expr Context.epsilon) es

@@ -45,11 +45,17 @@ let signed  = function
   | UInt8 | UInt16 | UInt32 | UInt64 -> false
   | SInt8 | SInt16 | SInt32 | SInt64 -> true
 
-let i_sizeof = function
+let i_bits = function
   | UInt8  | SInt8  -> 8
   | UInt16 | SInt16 -> 16
   | UInt32 | SInt32 -> 32
   | UInt64 | SInt64 -> 64
+
+let i_bytes = function
+  | UInt8  | SInt8  -> 1
+  | UInt16 | SInt16 -> 2
+  | UInt32 | SInt32 -> 4
+  | UInt64 | SInt64 -> 8
 
 let make_c_int signed = function
   | 1 -> if signed then SInt8 else UInt8
@@ -103,8 +109,8 @@ let c_ptr () =
   make_c_int false Cil.theMachine.Cil.theMachine.sizeof_ptr
 
 let sub_c_int t1 t2 =
-  if (signed t1 = signed t2) then i_sizeof t1 <= i_sizeof t2
- else (not(signed t1) && (i_sizeof t1 < i_sizeof t2))
+  if (signed t1 = signed t2) then i_bits t1 <= i_bits t2
+ else (not(signed t1) && (i_bits t1 < i_bits t2))
 
 type c_float =
   | Float32
@@ -112,7 +118,11 @@ type c_float =
 
 let compare_c_float : c_float -> c_float -> _ = Extlib.compare_basic
 
-let f_sizeof = function
+let f_bytes = function
+  | Float32 -> 4
+  | Float64 -> 8
+
+let f_bits = function
   | Float32 -> 32
   | Float64 -> 64
 
@@ -128,7 +138,7 @@ let c_float fkind =
     | FDouble -> make_c_float mach.sizeof_double
     | FLongDouble -> make_c_float mach.sizeof_longdouble
 
-let sub_c_float f1 f2 = f_sizeof f1 <= f_sizeof f2
+let sub_c_float f1 f2 = f_bits f1 <= f_bits f2
 
 (* Array objects, with both the head view and the flatten view. *)
 
@@ -191,9 +201,9 @@ let fmemo f =
 (* -------------------------------------------------------------------------- *)
 
 let pp_int fmt i = Format.fprintf fmt "%cint%d"
-  (if signed i then 's' else 'u') (i_sizeof i)
+  (if signed i then 's' else 'u') (i_bits i)
 
-let pp_float fmt f = Format.fprintf fmt "float%d" (f_sizeof f)
+let pp_float fmt f = Format.fprintf fmt "float%d" (f_bits f)
 
 let pp_object fmt = function
   | C_int i -> pp_int fmt i
@@ -349,9 +359,9 @@ let int64_max a b =
   if Int64.compare a b < 0 then b else a
 
 let rec sizeof_object = function
- | C_int i -> Int64.of_int (i_sizeof i)
- | C_float f -> Int64.of_int (f_sizeof f)
- | C_pointer _ty -> Int64.of_int (i_sizeof (c_ptr()))
+ | C_int i -> Int64.of_int (i_bytes i)
+ | C_float f -> Int64.of_int (f_bytes f)
+ | C_pointer _ty -> Int64.of_int (i_bytes (c_ptr()))
  | C_comp cinfo ->
      let merge = if cinfo.cstruct then Int64.add else int64_max in
      List.fold_left
@@ -398,8 +408,8 @@ let field_offset f =
 (* with greater rank, whatever      *)
 (* their sign.                      *)
 
-let i_convert t1 t2 = if i_sizeof t1 < i_sizeof t2 then t2 else t1
-let f_convert t1 t2 = if f_sizeof t1 < f_sizeof t2 then t2 else t1
+let i_convert t1 t2 = if i_bits t1 < i_bits t2 then t2 else t1
+let f_convert t1 t2 = if f_bits t1 < f_bits t2 then t2 else t1
 
 let promote a1 a2 =
   match a1 , a2 with

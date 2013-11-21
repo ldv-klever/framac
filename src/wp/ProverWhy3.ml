@@ -70,8 +70,8 @@ let engine =
   let module E = Qed.Export_why3.Make(Lang.F) in
 object(self)
   inherit E.engine
-  method datatype = ADT.id
-  method field = Field.id
+  method datatype x = self#basename (ADT.id x)
+  method field x = self#basename (Field.id x)
   method link e f =
     match Lang.link e f with
       | Engine.F_call   s ->
@@ -180,12 +180,16 @@ object(self)
 	| Logic t ->
 	    engine#declare_signature fmt
 	      d.d_lfun (List.map F.tau_of_var d.d_params) t ;
-	| Value(t,_,v) ->
-	    engine#declare_definition fmt
-	      d.d_lfun d.d_params t v
-	| Predicate(_,p) ->
-	    engine#declare_definition fmt
-	      d.d_lfun d.d_params Logic.Prop (F.e_prop p)
+	| Value(t,mu,v) ->
+	    let pp = match mu with
+	      | Rec -> engine#declare_fixpoint ~prefix:"fix_"
+	      | Def -> engine#declare_definition
+	    in pp fmt d.d_lfun d.d_params t v
+	| Predicate(mu,p) ->
+	    let pp = match mu with
+	      | Rec -> engine#declare_fixpoint ~prefix:"fix_"
+	      | Def -> engine#declare_definition
+	    in pp fmt d.d_lfun d.d_params Logic.Prop (F.e_prop p)
 	| Inductive _ ->
 	    engine#declare_signature fmt
 	      d.d_lfun (List.map F.tau_of_var d.d_params) Logic.Prop
@@ -345,7 +349,8 @@ let assemble_wpo wpo =
           end in
         Command.print_file file
           (fun fmt ->
-            Wpo.iter ~index ~on_goal:(on_goal fmt) ());
+            let fun_index = Wpo.Function(kf,None) in
+            Wpo.iter ~index:fun_index ~on_goal:(on_goal fmt) ());
         assert (!age_max >= Wpo.age wpo);
         FunFile.update kf (!age_max);
       end;

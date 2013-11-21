@@ -123,6 +123,7 @@ struct
     (* -------------------------------------------------------------------------- *)
 	      
     method op_add (_:amode) = Assoc "+"
+    method op_sub (_:amode) = Assoc "-"
     method op_mul (_:amode) = Assoc "*"
     method op_div = function Aint -> Call "Cdiv" | Areal -> Call "Rdiv"
     method op_mod = function Aint -> Call "Cmod" | Areal -> Call "Rmod"
@@ -220,6 +221,8 @@ struct
     (* -------------------------------------------------------------------------- *)
     (* --- Atomicity                                                          --- *)
     (* -------------------------------------------------------------------------- *)
+
+    method op_spaced = is_ident
 
     method is_atomic e =
       match T.repr e with
@@ -353,10 +356,10 @@ struct
 	  fprintf fmt "@[<hov 2>%a@]@].@\n" (self#pp_expr t) e ;
 	end
 
-    method declare_fixpoint fmt f xs t e =
+    method declare_fixpoint ~prefix fmt f xs t e =
       begin
 	self#declare_signature fmt f (List.map tau_of_var xs) t ;
-	let fix = self#link_name (ctau t) f ^ "_fixpoint" in 
+	let fix = prefix ^ self#link_name (ctau t) f in
 	self#declare_axiom fmt fix xs [] (e_eq (e_fun f (List.map e_var xs)) e) ;
       end
 

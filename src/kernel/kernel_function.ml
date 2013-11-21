@@ -280,6 +280,12 @@ let find_label kf label =
         raise Not_found
       with Found_label s -> s
 
+let get_called fct = match fct.enode with
+  | Lval (Var vkf, NoOffset) -> 
+      (try Some (Globals.Functions.get vkf)
+       with Not_found -> None)
+  | _ -> None
+
 (* ************************************************************************* *)
 (** {2 CallSites} *)
 (* ************************************************************************* *)

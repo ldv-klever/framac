@@ -242,8 +242,6 @@ val pp_info_of_strategy : Format.formatter -> strategy -> unit
 (** The function is the main entry point AND it is not a lib entry *)
 val is_main_init : Cil_types.kernel_function -> bool
 
-val get_called_kf : Cil_types.exp -> Cil_types.kernel_function option
-
 (** apply [f_normal] on the [Normal] postconditions,
 * [f_exits] on the [Exits] postconditions, and warn on the others. *)
 val fold_bhv_post_cond : warn:bool ->

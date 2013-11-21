@@ -37,8 +37,10 @@ val mul : t -> t -> t
 val native_div : t -> t -> t
 val rem : t -> t -> t
 val pos_div : t -> t -> t
+val divexact: t -> t -> t (** faster, but produces correct results only when b evenly divides a. *)
 val c_div : t -> t -> t
 val c_rem : t -> t -> t
+val div_rem: t -> t -> (t * t) (** [div_rem a b] returns [(pos_div a b, pos_rem a b)] *)
 val cast: size:t -> signed:bool -> value:t -> t
 val abs : t -> t
 val one : t

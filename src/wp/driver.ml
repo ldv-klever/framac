@@ -286,7 +286,7 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
 # 89 "src/wp/driver.mll"
  
 
-  let _pretty fmt = function
+  let pretty fmt = function
     | EOF -> Format.pp_print_string fmt "<eof>"
     | KEY a | ID a -> Format.fprintf fmt "'%s'" a
     | LINK s -> Format.fprintf fmt "\"%s\"" s
@@ -344,7 +344,7 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
 
   let rec depend input =
     match token input with
-      | ID a -> 
+      | ID a | LINK a ->
 	  skip input ;
 	  ignore (key input ",") ;
 	  a :: depend input
@@ -352,7 +352,7 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
 
   let link input =
     match token input with
-      | LINK f -> skip input ; f
+      | LINK f | ID f -> skip input ; f
       | _ -> failwith "Missing link symbol"
 
   let op = {
@@ -423,7 +423,7 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
       | EOF -> ()
       | KEY "library" ->
 	  skip input ;
-	  let name = ident input in
+	  let name = link input in
 	  ignore (key input ":") ;
 	  let depends = depend input in
 	  ignore (key input ";") ;
@@ -479,7 +479,8 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
       with Failure msg ->
 	close_in inc ;
 	let source = lex.Lexing.lex_start_p in
-	Wp_parameters.error ~source "(Driver Error) %s" msg
+	Wp_parameters.error ~source "(Driver Error) %s (at %a)" msg
+          pretty (token input)
     with exn ->
       Wp_parameters.error "Error in driver '%s': %s" file (Printexc.to_string exn)
 
@@ -500,4 +501,4 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
       end
 
 
-# 504 "src/wp/driver.ml"
+# 505 "src/wp/driver.ml"

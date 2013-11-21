@@ -169,6 +169,7 @@ val min_and_max :
   t -> Abstract_interp.Int.t option * Abstract_interp.Int.t option
 val bitwise_and : size:int -> signed:bool -> t -> t -> t
 val bitwise_or : size:int -> t -> t -> t
+val bitwise_xor : t -> t -> t
 
 val min_and_max_float : t -> F.t * F.t
 val inject_range :

@@ -36,7 +36,7 @@ let is_letter c = c = '_'
   || ('a' <= c && c <= 'z') 
   || ('0' <= c && c <= '9')
 
-let is_identop op = is_letter op.[String.length op - 1]
+let is_ident op = is_letter op.[String.length op - 1]
 
 let ident base =
   let p = Buffer.create 32 in

@@ -152,6 +152,9 @@ let bitwise_extraction first_bit last_bit x =
 
   let rem = mod_big_int
   let div = div_big_int
+  let divexact = div_big_int
+  let div_rem = quomod_big_int
+
   let mul = mult_big_int
 
   let sub = sub_big_int
