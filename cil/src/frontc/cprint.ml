@@ -475,7 +475,13 @@ and print_statement fmt stat =
     | COMPGOTO (exp, _) ->
         fprintf fmt "goto@ @[*%a@];" print_expression exp
     | DEFINITION d -> print_def fmt d
-    | ASM (attrs, tlist, details, _) ->
+    | ASM (attrs, tlist, _, _) 
+    | ASMGOTO (attrs, tlist, _, _, _) ->
+        let lbls, details = match stat.stmt_node with
+          | ASM (_, _, details, _) -> None, details
+          | ASMGOTO (_, _, details, lbls, _) -> Some lbls, Some details
+          | _ -> assert false
+        in
         let print_asm_operand fmt (_identop,cnstr, e) =
           fprintf fmt "@[%s@ (@[%a@])@]" cnstr print_expression e
         in
@@ -491,10 +497,12 @@ and print_statement fmt stat =
             pp_cond (clobs<>[]) fmt ":@ ";
             pp_list ~sep:",@ " pp_print_string fmt clobs
           in
-          fprintf fmt "@[__asm__%a@;(@[%a%a])@]"
+          fprintf fmt "@[__asm__%a%s@;(@[%a%a%a])@]"
             print_attributes attrs
+            (match lbls with Some _ -> " goto" | None -> "")
             (pp_list ~sep:"@ " pp_print_string) tlist
             (pp_opt ~pre:":@ " print_details) details
+            (pp_opt ~pre:":@ " (pp_list ~sep:",@ " pp_print_string)) lbls
 	end
     | TRY_FINALLY (b, h, _) ->
         fprintf fmt "__try@ @[%a@]@ __finally@ @[%a@]"

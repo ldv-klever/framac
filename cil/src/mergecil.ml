@@ -2046,6 +2046,7 @@ begin
     | Instr _ -> 13 + 67
     | Return(_) -> 17
     | Goto(_) -> 19
+    | AsmGoto (_) -> 71
     | Break(_) -> 23
     | Continue(_) -> 29
     | If(_,b1,b2,_) -> 31 + 37*(stmtListSum b1.bstmts)

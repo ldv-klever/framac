@@ -996,6 +996,11 @@ statement:
       let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
       no_ghost [ASM ($2, $4, $5, loc)]
     }
+|   ASM asmattr GOTO LPAREN asmtemplate
+    COLON asmoperands COLON asmoperands COLON asmcloberlst COLON local_label_names RPAREN SEMICOLON {
+      let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
+      no_ghost [ ASMGOTO ($2, $5, { aoutputs = $7; ainputs = $9; aclobbers = $11 }, $13, loc) ]
+    }
 |   MSASM   { no_ghost [ASM ([], [fst $1], None, snd $1)]}
 |   TRY block EXCEPT paren_comma_expression block {
       let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
@@ -1729,8 +1734,13 @@ asmopname:
 
 asmclobber:
     /* empty */                         { [] }
-| COLON asmcloberlst_ne                 { $2 }
+| COLON asmcloberlst                    { $2 }
 ;
+
+asmcloberlst:
+    /*empty*/                           { [] }
+|   asmcloberlst_ne                     { $1 }
+
 asmcloberlst_ne:
    one_string_constant                           { [$1] }
 |  one_string_constant COMMA asmcloberlst_ne     { $1 :: $3 }

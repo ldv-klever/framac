@@ -125,6 +125,16 @@ module TP = struct
        | Instr _ -> Format.sprintf "INSTR <%d>\n%s" s.sid (pretty_raw_stmt s)
        | Return _ -> Format.sprintf "RETURN <%d>" s.sid
        | Goto _ -> Format.sprintf "%s <%d>\n" (pretty_raw_stmt s) s.sid
+       | AsmGoto (_, _, _, _, _, srefs, _) ->
+         let lbls =
+           let rec last_label = function
+             | [] -> "__invalid_label"
+             | [Label (lbl, _, _)] -> lbl
+             | _ :: lbls -> last_label lbls
+           in
+           List.map (fun sref -> last_label !sref.labels) srefs
+         in
+         Format.sprintf "ASM GOTO (%s)" @@ String.concat ", " lbls
        | Break _ -> Format.sprintf "BREAK <%d>" s.sid
        | Continue _ -> Format.sprintf "CONTINUE <%d>" s.sid
        | If(e,_,_,_) ->
@@ -257,7 +267,7 @@ let rec get_block_stmts blk =
 and get_stmt_stmts s =
   let compute_stmt_stmts s = match s.skind with
     | Instr _ | Return _ -> Stmt.Set.singleton s
-    | Continue _ | Break _ | Goto _ -> Stmt.Set.singleton s
+    | Continue _ | Break _ | Goto _ | AsmGoto _ -> Stmt.Set.singleton s
     | Block b | Switch (_, b, _, _) | Loop (_, b, _, _, _) ->
         Stmt.Set.add s (get_block_stmts b)
     | UnspecifiedSequence seq ->

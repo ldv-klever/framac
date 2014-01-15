@@ -227,7 +227,11 @@ and raw_statement =
           string list * (* template *)
           asm_details option * (* extra details to guide GCC's optimizer *)
           cabsloc
-
+ | ASMGOTO of attribute list * (* typically only volatile and const *)
+              string list * (* template *)
+              asm_details * (* extra details to guide GCC's optimizer *)
+              string list * (* labels *)
+              cabsloc
    (** MS SEH *)
  | TRY_EXCEPT of block * expression * block * cabsloc
  | TRY_FINALLY of block * block * cabsloc

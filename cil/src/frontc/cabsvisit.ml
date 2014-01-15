@@ -361,7 +361,17 @@ and childrenStatement vis s =
           let dl' = List.map (fun d' -> {s with stmt_node = DEFINITION d'}) dl in
           {s with stmt_node = BLOCK ({blabels = []; battrs = []; bstmts = dl' }, l, l(*LRICEA*))}
     end
-  | ASM (sl, b, details, l) ->
+  | ASM (sl, b, _, l)
+  | ASMGOTO (sl, b, _, _, l) ->
+      let details, result = match s.stmt_node with
+        | ASM (_, _, details, _) -> details, fun sl b details' l -> ASM (sl, b, details', l)
+        | ASMGOTO (_, _, details, lbls, _) ->
+            Some details,
+            (fun sl b details' l -> match details' with 
+              | Some d -> ASMGOTO (sl, b, d, lbls, l)
+              | None -> Kernel.fatal "Unreachable case hit: ASMGOTO without details")
+        | _ -> Kernel.fatal "Unreachable case hit: neither ASM nor ASMGOTO"
+      in
       let childrenIdentStringExp ((i,s, e) as input) =
         let e' = ve e in
         if e' != e then (i,s, e') else input
@@ -377,7 +387,7 @@ and childrenStatement vis s =
 	    Some { aoutputs = outl'; ainputs = inl'; aclobbers = clobs }
       in
       if details' != details then
-        {s with stmt_node = ASM (sl, b, details', l)} else s
+        {s with stmt_node = result sl b details' l} else s
   | TRY_FINALLY (b1, b2, l) ->
       let b1' = visitCabsBlock vis b1 in
       let b2' = visitCabsBlock vis b2 in

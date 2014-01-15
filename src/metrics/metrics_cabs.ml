@@ -201,7 +201,8 @@ class metricsCabsVisitor = object(self)
       | SWITCH _ -> ()
       | LABEL _ -> ()
       | GOTO _
-      | COMPGOTO _ -> self#incr_both_metrics incr_gotos;
+      | COMPGOTO _
+      | ASMGOTO _ -> self#incr_both_metrics incr_gotos;
       | DEFINITION _
       | ASM _
       | SEQUENCE _

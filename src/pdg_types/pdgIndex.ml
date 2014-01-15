@@ -353,7 +353,7 @@ module Key = struct
           Pretty_utils.to_string Printer.pp_exp exp
         | Loop _ -> "while(1)"
         | Block _ -> "block"
-        | Goto _ | Break _ | Continue _ | Return _ | Instr _ ->
+        | Goto _ | AsmGoto _ | Break _ | Continue _ | Return _ | Instr _ ->
           Pretty_utils.sfprintf "@[<h 1>%a@]" 
 	    (Printer.without_annot Printer.pp_stmt) s
         | UnspecifiedSequence _ -> "unspecified sequence"

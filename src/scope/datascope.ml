@@ -306,7 +306,7 @@ let forward_data_scope modif_stmts s =
 let add_s s acc =
   (* we add only 'simple' statements *)
   match s.skind with
-    | Instr _ | Return _ | Continue _ | Break _ | Goto _
+    | Instr _ | Return _ | Continue _ | Break _ | Goto _ | AsmGoto _
         -> Cil_datatype.Stmt.Set.add s acc
     | Block _ | Switch _ | If _ | UnspecifiedSequence _ | Loop _
     | TryExcept _ | TryFinally _

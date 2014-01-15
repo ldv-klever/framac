@@ -1402,7 +1402,7 @@ module BlockChunk =
           | TryFinally _ | TryExcept _
             ->
             raise (Failure "cannot duplicate: complex stmt")
-          | Instr _ | Goto _ | Return _ | Break _ | Continue _ ->
+          | Instr _ | Goto _ | AsmGoto _ | Return _ | Break _ | Continue _ ->
             incr pCount);
           if !pCount > 5 then raise
             (Failure ("cannot duplicate: too many instr"));
@@ -1415,7 +1415,7 @@ module BlockChunk =
           | Instr _ | TryExcept (_, _, _, _)| TryFinally (_, _, _)
           | UnspecifiedSequence _| Block _| Loop (_, _, _, _, _)
           | Switch (_, _, _, _)| If (_, _, _, _)| Continue _| Break _
-          | Goto (_, _)| Return (_, _) -> assert (c = []); []
+          | Goto (_, _) | AsmGoto (_, _, _, _, _, _, _) | Return (_, _) -> assert (c = []); []
           in
           (s',m,w,r,c)
         in
@@ -1641,7 +1641,7 @@ module BlockChunk =
             | _ -> assert false
           in Stack.push false unspecified_stack;
           ChangeDoChildrenPost(s,change_cases)
-        | Instr _ | Return _ | Goto _ | Break _
+        | Instr _ | Return _ | Goto _ | AsmGoto _ | Break _
         | Continue _ -> DoChildren
     end
 
@@ -3053,6 +3053,7 @@ let rec stmtFallsThrough (s: stmt) : bool =
         blockFallsThrough (block_from_unspecified_sequence seq)
     | Return _ | Break _ | Continue _ -> false
     | Goto _ -> false
+    | AsmGoto _ -> true
     | If (_, b1, b2, _) ->
         blockFallsThrough b1 || blockFallsThrough b2
     | Switch (_e, b, targets, _) ->
@@ -3094,7 +3095,7 @@ and stmtCanBreak (s: stmt) : bool =
   Kernel.debug ~level:4 "stmtCanBreak stmt %a"
     Cil_printer.pp_location (Stmt.loc s);
   match s.skind with
-      Instr _ | Return _ | Continue _ | Goto _ -> false
+      Instr _ | Return _ | Continue _ | Goto _ | AsmGoto _ -> false
     | Break _ -> true
     | UnspecifiedSequence seq ->
         blockCanBreak (block_from_unspecified_sequence seq)
@@ -8629,7 +8630,13 @@ and doStatement local_env (s : A.statement) : chunk =
         *)
         s
 
-    | A.ASM (asmattr, tmpls, details, loc) ->
+    | A.ASM (asmattr, tmpls, _, loc)
+    | A.ASMGOTO (asmattr, tmpls, _, _, loc) ->
+        let details, lbls = match s.stmt_node with
+          | A.ASM (_, _, details, _) -> details, None
+          | A.ASMGOTO (_, _, details, lbls, _) -> Some details, Some lbls
+          | _ -> Kernel.fatal ~current:true "Unreachable case hit: neither ASM, nor ASMGOTO"
+        in
         (* Make sure all the outs are variables *)
         let loc' = convLoc loc in
         let attr' = doAttributes local_env.is_ghost asmattr in
@@ -8678,10 +8685,19 @@ and doStatement local_env (s : A.statement) : chunk =
               in
 	      (tmpls, outs', ins', clobs)
 	in
-        !stmts @@
-          (i2c(mkStmtOneInstr ~ghost:local_env.is_ghost
-                 (Asm(attr', tmpls', outs', ins', clobs', loc')),[],[],[]),
-          ghost)
+        let stmt = match lbls with
+          | None ->
+              let instr = Asm (attr', tmpls', outs', ins', clobs', loc') in
+              mkStmtOneInstr ~ghost:local_env.is_ghost instr
+          | Some lbls ->
+              let stmts' = ListLabels.map lbls ~f:(fun ln ->
+                let gref = ref dummyStmt in
+                addGoto (lookupLabel ln) gref;
+                gref)
+              in
+              mkStmt ~ghost:local_env.is_ghost (AsmGoto (attr', tmpls', outs', ins', clobs', stmts', loc'))
+        in
+        !stmts @@ (i2c (stmt, [], [], []), ghost)
 
     | TRY_FINALLY (b, h, loc) ->
         let loc' = convLoc loc in

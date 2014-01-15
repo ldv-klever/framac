@@ -2900,6 +2900,7 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
 
  and childrenStmt (toPrepend: instr list ref) (vis:cilVisitor) (s:stmt): stmt =
    let fExp e = (visitCilExpr vis e) in
+   let fLval = visitCilLval vis in
    let fBlock b = visitCilBlock vis b in
    let fInst i = visitCilInstr vis i in
    let fLoopAnnot a = mapNoCopy (visitCilCodeAnnotation vis) a in
@@ -2937,6 +2938,24 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
 	 if vis#behavior.is_copy_behavior then
 	   Goto(ref (vis#behavior.memo_stmt !sr),l)
 	 else s.skind
+     | AsmGoto (attrs, tmpls, outs, ins, clobs, stmts, l) ->
+         let attrs' = visitCilAttributes vis attrs in
+         let outs' = mapNoCopy (fun (id,s,lv as triple) ->
+                                 let lv' = fLval lv in
+                                 if lv' != lv then (id,s,lv') else triple)
+                               outs
+         in
+         let ins' = mapNoCopy (fun ((id,s,e) as triple) ->
+                                let e' = fExp e in
+                                if e' != e then (id,s,e') else triple)
+                              ins
+         in
+         if vis#behavior.is_copy_behavior then
+           AsmGoto (attrs', tmpls, outs', ins', clobs, List.map (fun sr -> ref (vis#behavior.memo_stmt !sr)) stmts, l)
+         else if attrs' != attrs || outs' != outs || ins' != ins then
+           AsmGoto (attrs', tmpls, outs', ins', clobs, stmts, l)
+         else
+           s.skind
      | Return (Some e, l) ->
 	 let e' = fExp e in
 	 if e' != e then Return (Some e', l) else s.skind
@@ -4706,7 +4725,7 @@ and offsetOfFieldAcc_GCC (fi: fieldinfo) (sofar: offsetAcc) : offsetAcc =
 and sizeOf ~loc t =
   try
     integer ~loc ((bitsSizeOf t) lsr 3)
-  with SizeOfError _ -> new_exp ?loc (SizeOf(t))
+  with SizeOfError _ -> new_exp ~loc (SizeOf(t))
 
  and bitsOffset (baset: typ) (off: offset) : int * int =
   CacheBitsOffset.memo
@@ -4935,9 +4954,9 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
           kinteger64 ~loc tk (Integer.add i1 i2)
       | MinusA, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_))
           when ik1 = ik2 ->
-          kinteger64 ?loc tk (Integer.sub i1 i2)
+          kinteger64 ~loc tk (Integer.sub i1 i2)
       | Mult, Const(CInt64(i1,ik1,_)), Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
-          kinteger64 ?loc tk (Integer.mul i1 i2)
+          kinteger64 ~loc tk (Integer.mul i1 i2)
       | Mult, Const(CInt64(z,_,_)), _
         when Integer.equal z Integer.zero -> zero ~loc
       | Mult, Const(CInt64(one,_,_)), _ 
@@ -4948,23 +4967,23 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
         when Integer.equal one Integer.one -> e1''
       | Div, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           begin
-            try kinteger64 ?loc tk (Integer.div i1 i2)
-            with Division_by_zero -> new_exp ?loc (BinOp(bop, e1', e2', tres))
+            try kinteger64 ~loc tk (Integer.div i1 i2)
+            with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
       | Div, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_))
           when bytesSizeOfInt ik1 = bytesSizeOfInt ik2 -> begin
-            try kinteger64 ?loc tk (Integer.div i1 i2)
-            with Division_by_zero -> new_exp ?loc (BinOp(bop, e1', e2', tres))
+            try kinteger64 ~loc tk (Integer.div i1 i2)
+            with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
       | Div, _, Const(CInt64(one,_,_)) 
          when Integer.equal one Integer.one -> e1''
       | Mod, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           begin
-            try kinteger64 ?loc tk (Integer.rem i1 i2)
-            with Division_by_zero -> new_exp ?loc (BinOp(bop, e1', e2', tres))
+            try kinteger64 ~loc tk (Integer.rem i1 i2)
+            with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
       | BAnd, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
-          kinteger64 ?loc tk (Integer.logand i1 i2)
+          kinteger64 ~loc tk (Integer.logand i1 i2)
       | BAnd, Const(CInt64(z,_,_)), _ 
         when Integer.equal z Integer.zero -> zero ~loc
       | BAnd, _, Const(CInt64(z,_,_)) 
@@ -4985,10 +5004,10 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
       | Shiftrt, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,_,_))
           when shiftInBounds i2 ->
           if isunsigned ik1 then
-            kinteger64 ?loc tk 
+            kinteger64 ~loc tk 
               (Integer.shift_right_logical i1 i2)
           else
-            kinteger64 ?loc tk (Integer.shift_right i1 i2)
+            kinteger64 ~loc tk (Integer.shift_right i1 i2)
       | Shiftrt, Const(CInt64(z,_,_)), _ 
         when Integer.equal z Integer.zero -> zero ~loc
       | Shiftrt, _, Const(CInt64(z,_,_)) 
@@ -6063,7 +6082,7 @@ let childrenFileSameGlobals vis f =
 	   peepHole1 doone b.bstmts;
 	   peepHole1 doone h.bstmts;
 	   s.skind <- TryExcept(b, (doInstrList il, e), h, l);
-       | Return _ | Goto _ | Break _ | Continue _ -> ())
+       | Return _ | Goto _ | AsmGoto _ | Break _ | Continue _ -> ())
      ss
 
  (* Process two statements and possibly replace them both *)
@@ -6123,7 +6142,7 @@ let childrenFileSameGlobals vis f =
 
        | UnspecifiedSequence seq ->
 	   s.skind <- UnspecifiedSequence (doUnspecifiedStmtList seq)
-       | Return _ | Goto _ | Break _ | Continue _ -> ()
+       | Return _ | Goto _ | AsmGoto _ | Break _ | Continue _ -> ()
    in
    if agressive then List.iter process ss;
    doStmtList [] ss
@@ -6148,7 +6167,7 @@ let childrenFileSameGlobals vis f =
      Mem e, NoOffset -> e
    | b, Index(z, NoOffset) when isZero z -> new_exp ~loc (StartOf (b, NoOffset))
   (* array *)
-   | _ -> new_exp ?loc (AddrOf lval)
+   | _ -> new_exp ~loc (AddrOf lval)
 
  let mkAddrOfVi vi = mkAddrOf vi.vdecl (var vi)
 

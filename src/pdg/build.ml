@@ -1081,7 +1081,8 @@ module Computer (Param:sig
 
       | Continue _
       | Break _
-      | Goto _ ->
+      | Goto _
+      | AsmGoto _ ->
           process_jump_stmt current_pdg ctrl_dpds_infos stmt;
           Dataflow.SDefault
 
@@ -1117,7 +1118,7 @@ let ctrl_no_preds stmts =
   and add_stmt acc s = 
     let acc = if s.preds = [] then s::acc else acc in
     match s.skind with
-    | Instr _ | Return _ | Continue _ | Break _ | Goto _ -> acc
+    | Instr _ | Return _ | Continue _ | Break _ | Goto _ | AsmGoto _ -> acc
     | Block b | Switch (_, b, _, _) | Loop (_, b, _, _, _) ->
           add acc b.bstmts
     | UnspecifiedSequence seq ->

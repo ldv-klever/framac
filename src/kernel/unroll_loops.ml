@@ -293,6 +293,8 @@ let copy_block kf break_continue_must_change bl =
       match stkind with
       |(Instr _ | Return _) as keep -> keep,labelled_stmt_tbl,calls_tbl
       | Goto (stmt_ref, loc) -> Goto (ref !stmt_ref, loc),labelled_stmt_tbl,calls_tbl
+      | AsmGoto (attrs, tmpls, outs, ins, clobs, srefs, loc) ->
+        AsmGoto (attrs, tmpls, outs, ins, clobs, List.map (fun r -> ref !r) srefs, loc),labelled_stmt_tbl,calls_tbl
       | If (exp,bl1,bl2,loc) ->
         CurrentLoc.set loc;
         let new_block1,labelled_stmt_tbl,calls_tbl =

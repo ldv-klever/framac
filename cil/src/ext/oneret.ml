@@ -338,7 +338,7 @@ let oneret (f: fundec) : unit =
       Stack.push ca.annot_content stmt_contract_stack;
       scanStmts (s::acc) mainbody (popstack + 1) rests
 
-    | ({skind=(Goto _ | Instr _ | Continue _ | Break _
+    | ({skind=(Goto _ | AsmGoto _ | Instr _ | Continue _ | Break _
                   | TryExcept _ | TryFinally _)} as s)
       :: rests ->
       popn popstack;

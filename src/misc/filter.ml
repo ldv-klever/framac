@@ -179,7 +179,7 @@ end = struct
             let _ = change loc s in ()
         | Continue loc when cont  && Info.inst_visible finfo s -> 
             let _ = change loc s in ()
-        | Instr _ | Return _ | Break _ | Continue _ | Goto _ -> ()
+        | Instr _ | Return _ | Break _ | Continue _ | Goto _ | AsmGoto _ -> ()
         | If (_, bthen, belse, _) ->
             List.iter (rm_aux cont break) bthen.bstmts;
             List.iter (rm_aux cont break) belse.bstmts;

@@ -290,7 +290,7 @@ module Stmt = struct
   let () = clear_caches := Hptset.clear_caches :: !clear_caches
 
   let rec loc_skind = function
-    | Return(_, l) | Goto(_, l) | Break(l) | Continue l | If(_, _, _, l)
+    | Return(_, l) | Goto(_, l)| AsmGoto (_, _, _, _, _, _, l) | Break(l) | Continue l | If(_, _, _, l)
     | Switch (_, _, _, l) | Loop (_, _, l, _, _)
     | TryFinally (_, _, l) | TryExcept (_, _, _, l) -> l
     | Instr hd -> Instr.loc hd
