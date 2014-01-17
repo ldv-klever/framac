@@ -4097,28 +4097,30 @@ and doType (ghost:bool) isFuncArg
             let cst = constFold true len' in
             (match cst.enode with
             | Const(CInt64(i, _, _)) ->
-              if Integer.lt i Integer.zero then
-                Kernel.error ~once:true ~current:true 
-		  "Length of array is negative"
-             else if Integer.equal i Integer.zero then
-                Kernel.error ~once:true ~source:(fst len'.eloc)
-		  "Length of array is zero. This extension is unsupported";
-
+              if Integer.lt i Integer.zero then begin
+                Kernel.error ~once:true ~current:true "Length of array is negative";
+                Some len'
+              end else if Integer.equal i Integer.zero then begin
+                Kernel.warning ~once:true ~source:(fst len'.eloc)
+		  "Length of array is zero. Using this extension is discouraged in favour of C99 flexible arrays ([])";
+                None
+              end else
+                Some len'
             | _ ->
-              if isConstant cst then
+              if isConstant cst then begin
                 (* e.g., there may be a float constant involved.
                  * We'll leave it to the user to ensure the length is
                  * non-negative, etc.*)
-                Kernel.warning ~current:true
-		  "Unable to do constant-folding on array length %a. \
- Some CIL operations on this array may fail."
-                  Cil_printer.pp_exp cst
-              else
-                Kernel.error ~once:true ~current:true
-		  "Length of array is not a constant: %a"
-                  Cil_printer.pp_exp cst)
-          end;
-          Some len'
+                Kernel.warning ~current:true  ("Unable to do constant-folding on array length %a. " ^^
+                                               "Some CIL operations on this array may fail.")
+                                Cil_printer.pp_exp cst;
+                Some len'
+              end else begin
+                Kernel.error ~once:true ~current:true "Length of array is not a constant: %a" Cil_printer.pp_exp cst;
+                Some len'
+              end)
+          end else
+            Some len'
       in
       let al' = doAttributes ghost al in
       if not isFuncArg && hasAttribute "static" al' then
