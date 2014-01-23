@@ -134,7 +134,7 @@ module TP = struct
            in
            List.map (fun sref -> last_label !sref.labels) srefs
          in
-         Format.sprintf "ASM GOTO (%s)" @@ String.concat ", " lbls
+         Format.sprintf "ASM GOTO (%s)" (String.concat ", " lbls)
        | Break _ -> Format.sprintf "BREAK <%d>" s.sid
        | Continue _ -> Format.sprintf "CONTINUE <%d>" s.sid
        | If(e,_,_,_) ->

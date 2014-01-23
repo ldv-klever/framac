@@ -205,7 +205,7 @@ let computeUseDefStmtKind ?(acc_used=VS.empty)
     | If (e, _, _, _) -> ve e
     | Break _ | Goto _ | Continue _ -> ()
     | AsmGoto (_, _, outs, ins, _, _, _) ->
-        List.iter (fun (_, _, lv) -> ignore @@ visitCilLval useDefVisitor lv) outs;
+        List.iter (fun (_, _, lv) -> ignore (visitCilLval useDefVisitor lv)) outs;
         List.iter (fun (_, _, e) -> ve e) ins
     | Loop (_,_, _, _, _) -> ()
     | Switch (e, _, _, _) -> ve e
@@ -243,7 +243,7 @@ let rec computeDeepUseDefStmtKind ?(acc_used=VS.empty)
       (VS.union (VS.union u u') u'', VS.union (VS.union d d') d'')
   | Break _ | Goto _ | Continue _ -> !varUsed, !varDefs
   | AsmGoto (_, _, outs, ins, _, _, _) ->
-      List.iter (fun (_, _, lv) -> ignore @@ visitCilLval useDefVisitor lv) outs;
+      List.iter (fun (_, _, lv) -> ignore (visitCilLval useDefVisitor lv)) outs;
       List.iter (fun (_, _, e) -> ve e) ins;
       !varUsed, !varDefs
   | Loop (_,b, _, _, _) -> handle_block b
