@@ -647,6 +647,7 @@ struct
         let rt = c_logic_type loc env rt in
         (match prms with
              [] -> Ctype (TFun(rt,None,false,[]))
+           | [ (_, TVoid _, _) ] -> Ctype (TFun (rt, Some [](* void *), false, []))
            | _ -> Ctype (TFun(rt,Some prms,false,[])))
     | LTnamed (id,[]) ->
         (try Lenv.find_type_var id env
