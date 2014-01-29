@@ -3758,10 +3758,12 @@ let rec doSpecList ghost (suggestedAnonName: string)
     | [A.TtypeofE e] ->
       let (_, _, e', t) = doExp (ghost_local_env ghost) false e AType in
       let t' =
-        match e'.enode with
-          StartOf(lv) -> typeOfLval lv
+        match e'.enode, e.expr_node with
+          StartOf(lv), _ -> typeOfLval lv
+        | AddrOf _, A.UNARY (A.ADDROF, _) -> t
+        | AddrOf(lv), _ -> typeOfLval lv (* Strip extra addrof added by doExp *)
         (* If this is a string literal, then we treat it as in sizeof*)
-        | Const (CStr s) -> begin
+        | Const (CStr s), _ -> begin
           match typeOf e' with
           | TPtr(bt, _) -> (* This is the type of array elements *)
             TArray(bt,
