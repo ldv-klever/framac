@@ -6516,9 +6516,14 @@ and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
   if debugInit then
     Kernel.debug "Collecting the initializer for %s@\n" vi.vname;
   let (init, typ'') = collectInitializer !topPreInit typ' in
-  if debugInit then
+  if debugInit then begin
+    (* Thie fallowing call fixes errors produced by the printer for unresolved gotos introduced by *)
+    (* complex initializers. Even more complex cases e.g. loops with continue/breaks inside GNU blocks can still lead *)
+    (* to spurious errors! *)
+    resolveGotos ();
     Kernel.debug "Finished the initializer for %s@\n  init=%a@\n  typ=%a@\n  acc=%a@\n"
-      vi.vname Cil_printer.pp_init init Cil_printer.pp_typ typ' d_chunk acc;
+      vi.vname Cil_printer.pp_init init Cil_printer.pp_typ typ' d_chunk acc
+  end;
   empty @@ (acc, local_env.is_ghost), init, typ''
 
 and blockInitializer local_env vi inite =
