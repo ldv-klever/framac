@@ -3757,10 +3757,15 @@ let rec doSpecList ghost (suggestedAnonName: string)
 
     | [A.TtypeofE e] ->
       let (_, _, e', t) = doExp (ghost_local_env ghost) false e AType in
+      let rec starts_with_addrof = function
+        | A.UNARY (A.ADDROF, _) -> true
+        | A.CAST (_, A.SINGLE_INIT e) -> starts_with_addrof e.expr_node (* Casts can be simplified away by doExpr *)
+        | _ -> false
+      in
       let t' =
         match e'.enode, e.expr_node with
           StartOf(lv), _ -> typeOfLval lv
-        | AddrOf _, A.UNARY (A.ADDROF, _) -> t
+        | AddrOf _, e when starts_with_addrof e -> t
         | AddrOf(lv), _ -> typeOfLval lv (* Strip extra addrof added by doExp *)
         (* If this is a string literal, then we treat it as in sizeof*)
         | Const (CStr s), _ -> begin
