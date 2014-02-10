@@ -5811,6 +5811,36 @@ arguments"
                   | _ ->
                     Kernel.warning ~current:true
 		      "Invalid call to builtin_constant_p");
+               end else if fv.vname = "__builtin_types_compatible_p" then begin
+                 (* Drop the side-effects *)
+                 prechunk := empty;
+
+                 (* This builtin has special representation of arguments through sizeof (to wrap the types as exprs) *)
+                 (match !pargs with
+                    [ { enode = SizeOf t1 }; { enode = SizeOf t2 } ] ->
+                      piscall := false;
+                      let enums_to_ints_visitor = object
+                        method vtype = function
+                          TEnum (ei, attrs) -> ChangeTo (TInt (ei.ekind, addAttributes ei.eattr attrs))
+                        | _ -> DoChildren
+                      end in
+                      let strip_array_length_visitor = object
+                        method vtype = function
+                          TArray (typ, _, _, attrs) ->
+                          ChangeDoChildrenPost (TArray (typ, None, { scache = Not_Computed }, attrs), fun x -> x)
+                        | t -> enums_to_ints_visitor#vtype t
+                      end in
+                      let canonize = visitCilType (object
+                                                     inherit genericCilVisitor (inplace_visit ())
+                                                     method vtype = strip_array_length_visitor#vtype
+                                                   end)
+                      in
+                      let canonize t = typeDeepDropAllAttributes (canonize (unrollTypeDeep t)) in
+                      pres := integer ~loc:e.expr_loc (if need_cast (canonize t1) (canonize t2) then 0 else 1);
+                      prestype := intType
+                  | _ ->
+                    Kernel.warning ~current:true
+                      "Invalid call to __builtin_types_compatible_p")
                end
            end
          | _ -> ());
