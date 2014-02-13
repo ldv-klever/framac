@@ -5832,7 +5832,7 @@ arguments"
                       end in
                       let canonize = visitCilType (object
                                                      inherit genericCilVisitor (inplace_visit ())
-                                                     method vtype = strip_array_length_visitor#vtype
+                                                     method! vtype = strip_array_length_visitor#vtype
                                                    end)
                       in
                       let canonize t = typeDeepDropAllAttributes (canonize (unrollTypeDeep t)) in
