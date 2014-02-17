@@ -6550,7 +6550,7 @@ and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
     (* Thie fallowing call fixes errors produced by the printer for unresolved gotos introduced by *)
     (* complex initializers. Even more complex cases e.g. loops with continue/breaks inside GNU blocks can still lead *)
     (* to spurious errors! *)
-    resolveGotos ();
+    if Kernel.debug_atleast 1 then resolveGotos ();
     Kernel.debug "Finished the initializer for %s@\n  init=%a@\n  typ=%a@\n  acc=%a@\n"
       vi.vname Cil_printer.pp_init init Cil_printer.pp_typ typ' d_chunk acc
   end;
