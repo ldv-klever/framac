@@ -65,6 +65,8 @@ object(self)
         DoChildren (* for Calls *)
       | Return _ ->
 	DoChildren
+      | AsmGoto _ ->
+        DoChildren (* for expressions in outs and ins *)
       | Goto _ | Break _ | Continue _ ->
         SkipChildren
       | TryExcept _ | TryFinally _ -> assert false

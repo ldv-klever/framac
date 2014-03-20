@@ -475,7 +475,8 @@ and print_statement fmt stat =
     | COMPGOTO (exp, _) ->
         fprintf fmt "goto@ @[*%a@];" print_expression exp
     | DEFINITION d -> print_def fmt d
-    | ASM (attrs, tlist, details, _) ->
+    | ASM (attrs, tlist, details, _)
+    | ASMGOTO (attrs, tlist, details, _) ->
         let print_asm_operand fmt (_identop,cnstr, e) =
           fprintf fmt "@[%s@ (@[%a@])@]" cnstr print_expression e
         in
@@ -484,14 +485,17 @@ and print_statement fmt stat =
             (pp_list ~sep:"@\n" pp_print_string) tlist
         end else begin
           let print_details
-              fmt { aoutputs = outs; ainputs = ins; aclobbers = clobs } =
+              fmt { aoutputs = outs; ainputs = ins; aclobbers = clobs; alabels = lbls } =
             pp_list ~sep:",@ " print_asm_operand fmt outs;
             pp_cond (ins<>[]||clobs<>[]) fmt ":@ ";
             pp_list ~sep:",@ " print_asm_operand fmt ins;
             pp_cond (clobs<>[]) fmt ":@ ";
-            pp_list ~sep:",@ " pp_print_string fmt clobs
+            pp_list ~sep:",@ " pp_print_string fmt clobs;
+            pp_cond (lbls<>[]) fmt ":@ ";
+            pp_list ~sep:",@ " pp_print_string fmt lbls
           in
-          fprintf fmt "@[__asm__%a@;(@[%a%a])@]"
+          fprintf fmt "@[__asm__%s%a@;(@[%a%a])@]"
+            (match details with Some { alabels = _ :: _ } -> " goto" | _ -> "")
             print_attributes attrs
             (pp_list ~sep:"@ " pp_print_string) tlist
             (pp_opt ~pre:":@ " print_details) details

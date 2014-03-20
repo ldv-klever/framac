@@ -1026,6 +1026,19 @@ and stmtkind =
       update the reference whenever you replace the target statement. The
       target statement MUST have at least a label. *)
 
+  | AsmGoto of
+      attributes (* Really only const and volatile can appear here *) 
+    * string list (* templates (CR-separated) *)
+    * (string option * string * lval) list
+      (* outputs must be lvals with optional names and constraints.  I would
+         like these to be actually variables, but I run into some trouble with
+         ASMs in the Linux sources *)
+    * (string option * string * exp) list
+      (* inputs with optional names and constraints *)
+    * string list (* register clobbers *)
+    * stmt ref list (* statements with the specified labels *)
+    * location
+
   | Break of location
   (** A break to the end of the nearest enclosing Loop or Switch *)
 
@@ -1250,6 +1263,8 @@ and term_node =
       (** term refers to a particular program point. *)
   | Tbase_addr of logic_label * term (** base address of a pointer. *)
   | Toffset of logic_label * term (** offset from the base address of a pointer. *)
+  | Toffset_min of logic_label * term (** minimal offset from the base address of a pointer. *)
+  | Toffset_max of logic_label * term (** maximal offset from the base address of a pointer. *)
   | Tblock_length of logic_label * term (** length of the block pointed to by the term. *)
   | Tnull (** the null pointer. *)
   | TLogic_coerce of logic_type * term

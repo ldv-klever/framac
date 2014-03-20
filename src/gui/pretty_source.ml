@@ -630,7 +630,7 @@ let display_source globals
 	       | PStmt (_,ki) ->
                  (try
                     let pb,pe = match ki with
-		      | {skind = Instr _ | Return _ | Goto _
+		      | {skind = Instr _ | Return _ | Goto _ | AsmGoto _
 			    | Break _ | Continue _} -> pb,pe
 		      | {skind = If _ | Loop _
 			    | Switch _ } ->

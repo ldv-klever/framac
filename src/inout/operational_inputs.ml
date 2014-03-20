@@ -392,7 +392,7 @@ end) = struct
       assert (s.succs == []); []
 
     | UnspecifiedSequence _ | Loop _ | Block _
-    | Goto _ | Break _ | Continue _
+    | Goto _ | AsmGoto _ | Break _ | Continue _
     | TryExcept _ | TryFinally _
       -> map_on_all_succs data
   ;;

@@ -241,7 +241,7 @@ and pp_raw_stmt fmt = function
     fprintf fmt "@[<hov 2>GOTO %s, loc(%a)@]" s pp_cabsloc loc
   |	COMPGOTO (exp, loc) ->  fprintf fmt "@[<hov 2>COMPGOTO exp(%a, loc(%a))@]" pp_exp exp pp_cabsloc loc
   |	DEFINITION def -> fprintf fmt "@[<hov 2>DEFINITION %a@]" pp_def def
-  |	ASM (_,_,_,_) -> fprintf fmt "ASM"
+  |	ASM (_,_,_,_) | ASMGOTO (_, _, _, _) -> fprintf fmt "ASM"
   |	TRY_EXCEPT (bl1, exp, bl2, loc) ->
     fprintf fmt "@[<hov 2>TRY_EXCEPT block(%a) exp(%a) block(%a) loc(%a)@]"
       pp_block bl1 pp_exp exp pp_block bl2 pp_cabsloc loc

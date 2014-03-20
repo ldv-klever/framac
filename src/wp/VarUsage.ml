@@ -591,6 +591,8 @@ let rec term (context:Context.t) (t:term) =
     | Tat(t,_) -> term context t
     | Tbase_addr (_,t) -> term Context.epsilon t
     | Toffset (_,t) -> term Context.epsilon t
+    | Toffset_max (_, t) -> term Context.epsilon t
+    | Toffset_min (_, t) -> term Context.epsilon t
     | Tblock_length (_,t) -> term Context.validity t
     | Tnull -> ()
     | TCoerce _ | TCoerceE _ -> WpMain.fatal "Jessie Coercions"

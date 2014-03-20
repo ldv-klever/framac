@@ -133,6 +133,9 @@ let pp_stmt kloc fmt stmt =
 	Format.fprintf fmt "%a%a" pp_code_annot ca (pp_kloc kloc) loc
     | Return(_,loc) -> Format.fprintf fmt "return%a" (pp_kloc kloc) loc
     | Goto(s,loc) -> Format.fprintf fmt "goto %s%a" (goto_stmt !s) (pp_kloc kloc) loc
+    | AsmGoto (_, _, _, _, _, lbls, loc) ->
+        let lbls = String.concat ", " (List.map (fun s -> goto_stmt !s) lbls) in
+        Format.fprintf fmt "asm-goto (%s)%a" lbls (pp_kloc kloc) loc
     | Break loc -> Format.fprintf fmt "break%a" (pp_kloc kloc) loc
     | Continue loc -> Format.fprintf fmt "continue%a" (pp_kloc kloc) loc
     | If(_,_,_,loc) -> Format.fprintf fmt "if-then-else%a" (pp_kloc kloc) loc

@@ -177,6 +177,9 @@ and cfgStmt (s: stmt) (next:stmt option) (break:stmt option) (cont:stmt option) 
         ()
   | Return _  -> ()
   | Goto (p,_) -> addSucc !p
+  | AsmGoto (_, _, _, _, _, ps, _) ->
+      List.iter (fun p -> addSucc !p) ps;
+      addOptionSucc next
   | Break _ -> addOptionSucc break
   | Continue _ -> addOptionSucc cont
   | If (_, blk1, blk2, _) ->
@@ -242,6 +245,7 @@ let d_cfgnodelabel fmt (s : stmt) =
 	| Break _ -> "break"
 	| Continue _ -> "continue"
 	| Goto _ -> "goto"
+        | AsmGoto _ -> "asm-goto"
 	| Instr _ -> "instr"
 	| Switch _ -> "switch"
 	| Block _ -> "block"
@@ -357,6 +361,9 @@ and succpred_stmt s fallthrough =
       Instr _ -> trylink s fallthrough
     | Return _ -> ()
     | Goto(dest,_) -> link s !dest
+    | AsmGoto (_, _, _, _, _, dests, _) ->
+        List.iter (fun d -> link s !d) dests;
+        trylink s fallthrough
     | Break _
     | Continue _
     | Switch _ ->
@@ -519,7 +526,7 @@ let xform_switch_block ?(keepSwitch=false) b =
               s::
                 xform_switch_stmt
                 rest break_dest cont_dest label_index (popstack+1)
-            | Instr _ | Return _ | Goto _  ->
+            | Instr _ | Return _ | Goto _  | AsmGoto _ ->
               popn popstack;
               s::
                 xform_switch_stmt

@@ -994,7 +994,7 @@ statement:
     }
 |   ASM GOTO asmattr LPAREN asmtemplate asmoutputs RPAREN SEMICOLON {
       let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
-      no_ghost [ASM ($3, $5, $6, loc)]
+      no_ghost [ASMGOTO ($3, $5, $6, loc)]
     }
 |   ASM asmattr LPAREN asmtemplate asmoutputs RPAREN SEMICOLON {
       let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
@@ -1744,10 +1744,12 @@ asmclobber:
 | COLON asmlabels                       { [],$2 }
 | COLON asmcloberlst_ne asmlabels       { $2,$3 }
 ;
+
 asmcloberlst_ne:
-   one_string_constant                  { [$1] }
+   one_string_constant                           { [$1] }
 |  one_string_constant COMMA asmcloberlst_ne     { $1 :: $3 }
 ;
+
 asmlabels:
 | /* empty */                          { [] }
 | COLON local_label_names              { $2 } 

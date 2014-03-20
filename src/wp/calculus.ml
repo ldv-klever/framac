@@ -493,6 +493,9 @@ module Cfg (W : Mcfg.S) = struct
           | Skip _ | Code_annot _ -> obj
         end
     | Break _ | Continue _ | Goto _ -> obj
+    | AsmGoto _ ->
+        Wp_parameters.warning "Unsupported inline assembler. Assuming no effects.@.";
+        obj
     | Loop _-> (* this is not a real loop (exit before looping)
                   just ignore it ! *) obj
     | If _ -> assert false

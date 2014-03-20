@@ -617,6 +617,8 @@ let rec is_same_term t1 t2 =
     | Tbase_addr (l1,t1), Tbase_addr (l2,t2)
     | Tblock_length (l1,t1), Tblock_length (l2,t2)
     | Toffset (l1,t1), Toffset (l2,t2)
+    | Toffset_max (l1,t1), Toffset_max (l2,t2)
+    | Toffset_min (l1,t1), Toffset_min (l2,t2)
     | Tat(t1,l1), Tat(t2,l2) -> is_same_logic_label l1 l2 && is_same_term t1 t2
     | Tnull, Tnull -> true
     | TCoerce(t1,typ1), TCoerce(t2,typ2) ->
@@ -650,7 +652,8 @@ let rec is_same_term t1 t2 =
     | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _
       | TAlignOf _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TCastE _
       | TAddrOf _ | TStartOf _ | Tapp _ | Tlambda _ | TDataCons _
-      | Tif _ | Tat _ | Tbase_addr _ | Tblock_length _ | Toffset _ | Tnull
+      | Tif _ | Tat _ | Tbase_addr _ | Tblock_length _
+      | Toffset _ | Toffset_max _ | Toffset_min _ | Tnull
       | TCoerce _ | TCoerceE _ | TUpdate _ | Ttypeof _ | Ttype _
       | Tcomprehension _ | Tempty_set | Tunion _ | Tinter _ | Trange _
       | Tlet _ | TLogic_coerce _
@@ -1045,6 +1048,7 @@ and is_same_lexpr l1 l2 =
     | PLvalid_read (l1,e1), PLvalid_read (l2,e2)
     | PLbase_addr (l1,e1), PLbase_addr (l2,e2)
     | PLoffset (l1,e1), PLoffset (l2,e2)
+    | PLoffset_max (l1,e1), PLoffset_min (l2,e2)
     | PLblock_length (l1,e1), PLblock_length (l2,e2)
     | PLinitialized (l1,e1), PLinitialized (l2,e2) ->
 	l1=l2 && is_same_lexpr e1 e2
@@ -1061,7 +1065,7 @@ and is_same_lexpr l1 l2 =
       is_same_list is_same_lexpr l1 l2
     | (PLvar _ | PLapp _ | PLlambda _ | PLlet _ | PLconstant _ | PLunop _
       | PLbinop _ | PLdot _ | PLarrow _ | PLarrget _ | PLold _ | PLat _
-      | PLbase_addr _ | PLblock_length _ | PLoffset _ 
+      | PLbase_addr _ | PLblock_length _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
       | PLresult | PLnull | PLcast _
       | PLrange _ | PLsizeof _ | PLsizeofE _ | PLtypeof _ | PLcoercion _
       | PLcoercionE _ | PLupdate _ | PLinitIndex _ | PLtype _ | PLfalse
@@ -1136,6 +1140,12 @@ let rec hash_term (acc,depth,tot) t =
         hash_term (hash,depth-1,tot-2) t
       | Toffset (l,t) -> 
         let hash = acc + 351 + hash_label l in
+        hash_term (hash,depth-1,tot-2) t
+      | Toffset_max (l,t) -> 
+        let hash = acc + 353 + hash_label l in
+        hash_term (hash,depth-1,tot-2) t
+      | Toffset_min (l,t) -> 
+        let hash = acc + 355 + hash_label l in
         hash_term (hash,depth-1,tot-2) t
       | Tnull -> acc+361, tot - 1
       | TCoerce(t,ty) ->
@@ -1296,8 +1306,8 @@ let rec compare_term t1 t2 =
   | _, Tbase_addr _ -> -1
   | Tblock_length _, _ -> 1
   | _, Tblock_length _ -> -1
-  | Toffset _, _ -> 1
-  | _, Toffset _ -> -1
+  | (Toffset _ | Toffset_min _ | Toffset_max _), _ -> 1
+  | _, (Toffset _ | Toffset_min _ | Toffset_max _) -> -1
   | Tat _, _ -> 1
   | _, Tat _ -> -1
   | Tnull, Tnull -> 0

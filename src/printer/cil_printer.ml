@@ -206,6 +206,7 @@ module Precedence = struct
    (* application and applications-like constructions *)
    | Tapp (_, _,_)|TDataCons _
    | Tblock_length _ | Tbase_addr _ | Toffset _ | Tat (_, _)
+   | Toffset_max _ | Toffset_min _
    | Tunion _ | Tinter _
    | TUpdate _ | Ttypeof _ | Ttype _ -> 10
    | TLval(TVar _, TNoOffset) -> 0        (* Plain variables *)
@@ -566,6 +567,62 @@ class cil_printer () = object (self)
     instr_terminator <- term
 
   method private get_instr_terminator () = instr_terminator
+
+  method private asm fmt (attrs, tmpls, outs, ins, clobs, lbls, l) =
+    self#line_directive fmt l;
+    if Cil.theMachine.Cil.msvcMode then
+      fprintf fmt "__asm {@[%a@]}%s"
+        (Pretty_utils.pp_list ~sep:"@\n"
+          (fun fmt s -> fprintf fmt "%s" s)) tmpls
+        instr_terminator
+    else begin
+      fprintf fmt "__asm__%a%s@ (@[%a"
+        self#attributes attrs
+        (match lbls with Some _ -> " goto" | None -> "")
+        (Pretty_utils.pp_list ~sep:"@\n"
+           (fun fmt x ->
+             (* [JS 2011/03/11] isn't equivalent to [fprintf fmt "%S" x]? *)
+             fprintf fmt "\"%s\"" (Escape.escape_string x)))
+        tmpls;
+
+      if outs = [] && ins = [] && clobs = [] && lbls = None then
+        fprintf fmt ":"
+      else
+        fprintf fmt ": %a"
+          (Pretty_utils.pp_list ~sep:",@ "
+             (fun fmt (idopt, c, lv) ->
+           fprintf fmt "%s\"%s\" (%a)"
+             (match idopt with
+               None -> ""
+             | Some id -> "[" ^ id ^ "] "
+             )
+             (Escape.escape_string c)
+             self#lval lv
+             )) outs;
+
+        if ins <> [] || clobs <> [] || lbls <> None then
+          fprintf fmt ": %a"
+            (Pretty_utils.pp_list ~sep:",@ "
+               (fun fmt (idopt, c, e) ->
+             fprintf fmt "%s\"%s\"(%a)"
+               (match idopt with
+                 None -> ""
+               | Some id -> "[" ^ id ^ "] "
+               )
+               (Escape.escape_string c)
+               self#exp e))
+            ins;
+
+        let print_string_list =
+          fprintf fmt ": %a" @@
+            Pretty_utils.pp_list ~sep:",@ "
+              (fun fmt c -> fprintf fmt "\"%s\"" (Escape.escape_string c))
+        in
+        if clobs <> [] || lbls <> None then print_string_list clobs;
+        begin match lbls with Some lbls -> print_string_list lbls | None -> () end;
+
+        fprintf fmt "@])%s" instr_terminator
+    end
 
   (*** INSTRUCTIONS ****)
   method instr fmt (i:instr) = (* imperative instruction *)
@@ -998,16 +1055,31 @@ the arguments."
       (fun fmt -> self#line_directive fmt) l
       self#exp e
 
-  | Goto (sref, l) -> begin
-    match pickLabel !sref.labels with
-    | Some lbl ->
-      fprintf fmt "@[%agoto %s;@]" 
-	(fun fmt -> self#line_directive fmt) l 
-	lbl
-    | None ->
-      Kernel.error "Cannot find label for target of goto: %a" 
-	(self#without_annot self#stmt) !sref;
-      fprintf fmt "@[goto@ __invalid_label;@]"
+  | Goto (_, l) 
+  | AsmGoto (_, _, _, _, _, _, l) as sk -> begin
+    match sk with
+      | Goto (sref, _) -> begin
+          (* Grab one of the labels *)
+          match pickLabel !sref.labels with
+            | Some lbl ->
+                fprintf fmt "@[%agoto %s;@]" 
+	          (fun fmt -> self#line_directive fmt) l 
+	          lbl
+            | None ->
+                Kernel.error "Cannot find label for target of goto: %a" 
+	          (self#without_annot self#stmt) !sref;
+                fprintf fmt "@[goto@ __invalid_label;@]"
+      end
+      | AsmGoto (attrs, tmpls, outs, ins, clobs, stmts, _) ->
+          let lbls = ListLabels.map stmts ~f:(fun sr -> match pickLabel !sr.labels with
+            | Some lbl -> lbl
+            | None ->
+                Kernel.error "Cannot find label for target of asm goto: %a" 
+                  (self#without_annot self#stmt) !sr;
+                "__invalid_label")
+          in
+          self#asm fmt (attrs, tmpls, outs, ins, clobs, Some lbls, l)
+      | _ -> Kernel.fatal "Unreachable case hit: neither Goto nor AsmGoto"
   end
 
   | Break l ->
@@ -1928,6 +2000,10 @@ the arguments."
 	
     | Toffset (l,t) -> 
       fprintf fmt "\\offset%a(%a)" self#labels [l] self#term t
+    | Toffset_max (l,t) -> 
+      fprintf fmt "\\offset_max%a(%a)" self#labels [l] self#term t
+    | Toffset_min (l,t) -> 
+      fprintf fmt "\\offset_min%a(%a)" self#labels [l] self#term t
     | Tbase_addr (l,t) -> 
       fprintf fmt "\\base_addr%a(%a)" self#labels [l] self#term t
     | Tblock_length (l,t) -> 

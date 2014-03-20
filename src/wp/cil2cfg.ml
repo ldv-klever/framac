@@ -784,7 +784,7 @@ let get_stmt_node env s = match s.skind with
         get_node env (VblkIn (Bstmt s,b))
   | If (e, _, _, _) -> get_node env (Vtest (true, s, e))
   | Loop _ ->  get_node env (Vloop (None, s))
-  | Break _ | Continue _ | Goto _
+  | Break _ | Continue _ | Goto _ | AsmGoto _
   | Instr _  | Return _ ->  get_node env (Vstmt s)
   | Switch (e, _, _, _) -> get_node env (Vswitch (s, e))
   | TryExcept _ | TryFinally _ ->
@@ -890,6 +890,7 @@ and cfg_stmt env s next =
       | [s'] -> add_edge env n Enone (get_stmt_node env s')
       | _ -> Wp_parameters.fatal "[cfg] jump with more than one successor ?"
       in n
+  | AsmGoto _ -> Wp_parameters.not_yet_implemented "[cfg] asm goto"
   | Switch (e, b, lstmts, _) ->
       cfg_switch env s e b lstmts next
   | TryExcept _ | TryFinally _ ->
@@ -1263,6 +1264,7 @@ module Printer (PE : sig val edge_txt : edge -> string end) = struct
        | If _ -> "invalid IF ?"
        | Return _ -> Format.sprintf "RETURN <%d>" s.sid
        | Goto _ -> Format.sprintf "%s <%d>" (pretty_raw_stmt s) s.sid
+       | AsmGoto _ -> Format.sprintf "ASM GOTO??? <%d>" s.sid
        | Break _ -> Format.sprintf "BREAK <%d>" s.sid
        | Continue _ -> Format.sprintf "CONTINUE <%d>" s.sid
        | Switch _ ->  Format.sprintf "SWITCH <%d>" s.sid

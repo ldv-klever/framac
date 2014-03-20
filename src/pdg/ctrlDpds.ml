@@ -114,7 +114,7 @@ end = struct
           in prev_list
 
       | Instr _
-      | Return _ | Goto _ | Break _ | Continue _
+      | Return _ | Goto _ | AsmGoto _ | Break _ | Continue _
       | TryFinally _ | TryExcept _
         -> let _ = add_links graph prev_list stmt in [stmt]
 

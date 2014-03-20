@@ -907,7 +907,8 @@ module Computer
 
       | Continue _
       | Break _
-      | Goto _ ->
+      | Goto _
+      | AsmGoto _ ->
           process_jump_stmt current_pdg ctrl_dpds_infos stmt;
 	map_on_all_succs state
 

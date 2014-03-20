@@ -27,7 +27,7 @@ open Visitor
 open Options
 
 let rec pp_stmt fmt s = match s.skind with
-  | Instr _ | Return _ | Goto _ | Break _ | Continue _ | TryFinally _
+  | Instr _ | Return _ | Goto _ | AsmGoto _ | Break _ | Continue _ | TryFinally _
   | TryExcept _ -> 
     Printer.without_annot Printer.pp_stmt fmt s
   | If (e, _, _, _) ->

@@ -644,7 +644,9 @@ let rec eval_term ~with_alarms env t =
         { etype = Cil.charPtrType;
           ldeps = r.ldeps;
           evalue = [V.inject_ival bl] }
-
+    (* TODO *)
+    | Toffset_max _ -> unsupported "\\offset_max function"
+    | Toffset_min _ -> unsupported "\\offset_min function"
     | Tapp _ | Tlambda _ -> unsupported "logic functions or predicates"
     | TDataCons _ -> unsupported "logic inductive types"
     | TUpdate _ -> unsupported "functional updates"

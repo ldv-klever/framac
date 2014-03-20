@@ -1476,7 +1476,7 @@ module BlockChunk =
           | TryFinally _ | TryExcept _
             ->
             raise (Failure "cannot duplicate: complex stmt")
-          | Instr _ | Goto _ | Return _ | Break _ | Continue _ ->
+          | Instr _ | Goto _ | AsmGoto _ | Return _ | Break _ | Continue _ ->
             incr pCount);
           if !pCount > 5 then raise
             (Failure ("cannot duplicate: too many instr"));
@@ -1489,7 +1489,7 @@ module BlockChunk =
           | Instr _ | TryExcept (_, _, _, _)| TryFinally (_, _, _)
           | UnspecifiedSequence _| Block _| Loop (_, _, _, _, _)
           | Switch (_, _, _, _)| If (_, _, _, _)| Continue _| Break _
-          | Goto (_, _)| Return (_, _) -> assert (c = []); []
+          | Goto (_, _) | AsmGoto (_, _, _, _, _, _, _) | Return (_, _) -> assert (c = []); []
           in
           (s',m,w,r,c)
         in
@@ -1716,7 +1716,7 @@ module BlockChunk =
             | _ -> assert false
           in Stack.push false unspecified_stack;
           ChangeDoChildrenPost(s,change_cases)
-        | Instr _ | Return _ | Goto _ | Break _
+        | Instr _ | Return _ | Goto _ | AsmGoto _ | Break _
         | Continue _ -> DoChildren
     end
 
@@ -3137,6 +3137,7 @@ let rec stmtFallsThrough (s: stmt) : bool =
         blockFallsThrough (block_from_unspecified_sequence seq)
     | Return _ | Break _ | Continue _ -> false
     | Goto _ -> false
+    | AsmGoto _ -> true
     | If (_, b1, b2, _) ->
         blockFallsThrough b1 || blockFallsThrough b2
     | Switch (_e, b, targets, _) ->
@@ -3178,7 +3179,7 @@ and stmtCanBreak (s: stmt) : bool =
   Kernel.debug ~level:4 "stmtCanBreak stmt %a"
     Cil_printer.pp_location (Stmt.loc s);
   match s.skind with
-      Instr _ | Return _ | Continue _ | Goto _ -> false
+      Instr _ | Return _ | Continue _ | Goto _ | AsmGoto _ -> false
     | Break _ -> true
     | UnspecifiedSequence seq ->
         blockCanBreak (block_from_unspecified_sequence seq)
@@ -3278,8 +3279,6 @@ let set_to_zero ~ghost vi off typ =
           (None,Cil.evar ~loc bzero,
            [zone; size], loc)))
 
-
-exception ChangeSize of Cil_types.exp
 
 (* Initialize the first cell of an array, and call Frama_C_copy_block to
    propagate this initialization to the rest of the array.
@@ -3855,10 +3854,17 @@ let rec doSpecList ghost (suggestedAnonName: string)
 
     | [A.TtypeofE e] ->
       let (_, _, e', t) = doExp (ghost_local_env ghost) false e AExpLeaveArrayFun in
+      let rec starts_with_addrof = function
+        | A.UNARY (A.ADDROF, _) -> true
+        | A.CAST (_, A.SINGLE_INIT e) -> starts_with_addrof e.expr_node (* Casts can be simplified away by doExpr *)
+        | _ -> false
+      in
       let t' =
-        match e'.enode with
+        match e'.enode, e.expr_node with
+        | AddrOf _, e when starts_with_addrof e -> t
+        | AddrOf(lv), _ -> typeOfLval lv (* Strip extra addrof added by doExp *)
         (* If this is a string literal, then we treat it as in sizeof*)
-        | Const (CStr s) -> begin
+        | Const (CStr s), _ -> begin
           match typeOf e' with
           | TPtr(bt, _) -> (* This is the type of array elements *)
             TArray(bt,
@@ -4179,47 +4185,45 @@ and doType (ghost:bool) isFuncArg
     | A.ARRAY (d, al, len) ->
       let lo =
         match len.expr_node with
-          | A.NOTHING -> None
-          | _ -> 
-	    try
-		   (* Check that len is a constant expression.
-		      We used to also cast the length to int here, but that's
-		      theoretically too restrictive on 64-bit machines. *)
-	      let len' = doPureExp (ghost_local_env ghost) len in
-	      if not (isIntegralType (typeOf len')) then
-		Kernel.error ~once:true ~current:true
-		  "Array length %a does not have an integral type."
-		  Cil_printer.pp_exp len';
-	      if not allowVarSizeArrays then begin
-		     (* Assert that len' is a constant *)
-		let cst = constFold true len' in
-		(match cst.enode with
-		  | Const(CInt64(i, _, _)) ->
-		    if Integer.lt i Integer.zero then
-                      Kernel.error ~once:true ~current:true 
-			"Length of array is negative"
-		    else if Integer.equal i Integer.zero then
-		      begin 
-			Kernel.warning ~once:true ~source:(fst len'.eloc)
-			  "Length of array is zero. This GCC extension is unsupported. Assuming length is 1.";
-			raise (ChangeSize (Cil.zero ~loc:len'.eloc))
-		      end
-		  | _ ->
-		    if isConstant cst then
+        | A.NOTHING -> None
+        | _ ->
+          (* Check that len is a constant expression.
+             We used to also cast the length to int here, but that's
+             theoretically too restrictive on 64-bit machines. *)
+          let len' = doPureExp (ghost_local_env ghost) len in
+          if not (isIntegralType (typeOf len')) then
+            Kernel.error ~once:true ~current:true
+              "Array length %a does not have an integral type."
+              Cil_printer.pp_exp len';
+          if not allowVarSizeArrays then begin
+            (* Assert that len' is a constant *)
+            let cst = constFold true len' in
+            (match cst.enode with
+            | Const(CInt64(i, _, _)) ->
+              if Integer.lt i Integer.zero then begin
+                Kernel.error ~once:true ~current:true "Length of array is negative";
+                Some len'
+              end else if Integer.equal i Integer.zero then begin
+                Kernel.warning ~once:true ~source:(fst len'.eloc)
+                  "Length of array is zero. Using this extension is discouraged in favour of C99 flexible arrays ([])";
+                None
+              end else
+                Some len'
+            | _ ->
+              if isConstant cst then begin
                 (* e.g., there may be a float constant involved.
                  * We'll leave it to the user to ensure the length is
                  * non-negative, etc.*)
-                      Kernel.warning ~current:true
-			"Unable to do constant-folding on array length %a. \
- Some CIL operations on this array may fail."
-			Cil_printer.pp_exp cst
-		    else
-                      Kernel.error ~once:true ~current:true
-			"Length of array is not a constant: %a"
-			Cil_printer.pp_exp cst)
-              end;
-              Some len'
-	    with ChangeSize fixed_len -> Some fixed_len
+                Kernel.warning ~current:true  ("Unable to do constant-folding on array length %a. " ^^
+                                               "Some CIL operations on this array may fail.")
+                                Cil_printer.pp_exp cst;
+                Some len'
+              end else begin
+                Kernel.error ~once:true ~current:true "Length of array is not a constant: %a" Cil_printer.pp_exp cst;
+                Some len'
+              end)
+          end else
+            Some len'
       in
       let al' = doAttributes ghost al in
       if not isFuncArg && hasAttribute "static" al' then
@@ -5922,8 +5926,7 @@ arguments"
                   | _ ->
                     Kernel.warning ~current:true
 		      "Invalid call to builtin_constant_p")
-	       end
-		 else if fv.vname = "__builtin_types_compatible_p" then begin
+	       end else if fv.vname = "__builtin_types_compatible_p" then begin
 		   (* Constant-fold the argument and see if it is a constant *)
 		   (match !pargs with 
 		       [ {enode = SizeOf t1}; {enode = SizeOf t2}] -> begin
@@ -5957,13 +5960,45 @@ arguments"
                         returning 0." 
 	    Cprint.print_expression f;
 		   end
-(*TODO: support those nice builtins.
+               end (*else if fv.vname = "__builtin_types_compatible_p" then begin
+                 (* Drop the side-effects *)
+                 prechunk := empty;
+
+                 (* This builtin has special representation of arguments through sizeof (to wrap the types as exprs) *)
+                 (match !pargs with
+                    [ { enode = SizeOf t1 }; { enode = SizeOf t2 } ] ->
+                      piscall := false;
+                      let enums_to_ints_visitor = object
+                        method vtype = function
+                          TEnum (ei, attrs) -> ChangeTo (TInt (ei.ekind, addAttributes ei.eattr attrs))
+                        | _ -> DoChildren
+                      end in
+                      let strip_array_length_visitor = object
+                        method vtype = function
+                          TArray (typ, _, _, attrs) ->
+                          ChangeDoChildrenPost (TArray (typ, None, { scache = Not_Computed }, attrs), fun x -> x)
+                        | t -> enums_to_ints_visitor#vtype t
+                      end in
+                      let canonize = visitCilType (object
+                                                     inherit genericCilVisitor (inplace_visit ())
+                                                     method! vtype = strip_array_length_visitor#vtype
+                                                   end)
+                      in
+                      let canonize t = typeDeepDropAllAttributes (canonize (unrollTypeDeep t)) in
+                      pres := integer ~loc:e.expr_loc (if need_cast (canonize t1) (canonize t2) then 0 else 1);
+                      prestype := intType
+                  | _ ->
+                    Kernel.warning ~current:true
+                      "Invalid call to __builtin_types_compatible_p")
+               end*)
+
+              (*TODO: support those nice builtins.
   One needs to translate the code below from 
   Cil to frama-C. 
   
   else if fv.vname = "__builtin_choose_expr" then begin
   
-	  (* Constant-fold the argument and see if it is a constant *)
+      (* Constant-fold the argument and see if it is a constant *)
   (match !pargs with 
   [ arg; e1; e2 ] -> begin 
   let constfolded = constFold true arg in
@@ -5975,7 +6010,7 @@ arguments"
   prechunk := (fun _ -> sf @@ (List.nth sargsl 2));
   pres := e2;
   prestype := typeOf e2
-	              end else begin
+                  end else begin
           (* Keep only 2nd arg side effects *)
   prechunk := (fun _ -> sf @@ (List.nth sargsl 1));
   pres := e1;
@@ -5987,8 +6022,7 @@ arguments"
   Kernel.warning "Invalid call to builtin_choose_expr")
   end
 *)
-          end
-	  | _ -> ());
+          | _ -> ());
 
         (* Now we must finish the call *)
         if !piscall then begin
@@ -6706,9 +6740,12 @@ and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
   Kernel.debug ~dkey:category_initializer
     "Collecting the initializer for %s@\n" vi.vname;
   let (init, typ'') = collectInitializer !topPreInit typ' in
+  (* Thie fallowing call to resolveGotos fixes errors produced by the printer for unresolved gotos introduced by *)
+  (* complex initializers. Even more complex cases e.g. loops with continue/breaks inside GNU blocks can still lead *)
+  (* to spurious errors! *)
   Kernel.debug ~dkey:category_initializer
     "Finished the initializer for %s@\n  init=%a@\n  typ=%a@\n  acc=%a@\n"
-    vi.vname Cil_printer.pp_init init Cil_printer.pp_typ typ' d_chunk acc;
+    vi.vname (resolveGotos (); Cil_printer.pp_init) init Cil_printer.pp_typ typ' d_chunk acc;
   empty @@ (acc, local_env.is_ghost), init, typ''
 
 and blockInitializer local_env vi inite =
@@ -8839,7 +8876,8 @@ and doStatement local_env (s : A.statement) : chunk =
     | A.DEFINITION d ->
         doDecl local_env false d
 
-    | A.ASM (asmattr, tmpls, details, loc) ->
+    | A.ASM (asmattr, tmpls, details, loc)
+    | A.ASMGOTO (asmattr, tmpls, details, loc) ->
         (* Make sure all the outs are variables *)
         let loc' = convLoc loc in
         let attr' = doAttributes local_env.is_ghost asmattr in
@@ -8897,10 +8935,15 @@ and doStatement local_env (s : A.statement) : chunk =
 	      in
 	      (tmpls, outs', ins', clobs, labels')
 	in
-        !stmts @@
-          (i2c(mkStmtOneInstr ~ghost:local_env.is_ghost
-                 (Asm(attr', tmpls', outs', ins', clobs', labels', loc')),[],[],[]),
-          ghost)
+        let stmt = match s.stmt_node with
+          | A.ASM _ ->
+              let instr = Asm (attr', tmpls', outs', ins', clobs', labels', loc') in
+              mkStmtOneInstr ~ghost:local_env.is_ghost instr
+          | A.ASMGOTO _ ->
+              mkStmt ~ghost:local_env.is_ghost (AsmGoto (attr', tmpls', outs', ins', clobs', labels', loc'))
+          | _ -> Kernel.fatal "Unreachable case hit: neither ASM nor ASMGOTO"
+        in
+        !stmts @@ (i2c (stmt, [], [], []), ghost)
 
     | TRY_FINALLY (b, h, loc) ->
         let loc' = convLoc loc in

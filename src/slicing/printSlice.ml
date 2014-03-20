@@ -33,7 +33,7 @@ let find_sub_stmts st = match st.skind with
 | TryFinally (bl1, bl2, _) -> bl1.bstmts@bl2.bstmts
 | Block bl | Loop (_,bl, _, _, _) | Switch (_, bl, _, _) ->  bl.bstmts
 | UnspecifiedSequence seq -> List.map (fun (x,_,_,_,_) -> x) seq
-| Continue _|Break _|Goto (_, _)|Return (_, _)|Instr _  -> []
+| Continue _|Break _|Goto (_, _)|AsmGoto _|Return (_, _)|Instr _  -> []
 
 let str_call_sig ff call fmt =
   try

@@ -365,7 +365,7 @@ module Forwards(T : ForwardsTransfer) = struct
                 do_succs after
 
             | UnspecifiedSequence _
-            | Goto _ | Break _ | Continue _
+            | Goto _ | AsmGoto _ | Break _ | Continue _
             | TryExcept _ | TryFinally _
             | Loop _ | Return _ | Block _ ->
                 do_succs curr

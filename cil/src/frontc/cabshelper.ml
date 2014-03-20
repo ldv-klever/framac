@@ -183,6 +183,7 @@ begin
   | DEFAULT(_,loc) -> loc
   | LABEL(_,_,loc) -> loc
   | GOTO(_,loc) -> loc
+  | ASMGOTO (_, _, _, loc) -> loc
   | COMPGOTO (_, loc) -> loc
   | DEFINITION d -> get_definitionloc d
   | ASM(_,_,_,loc) -> loc

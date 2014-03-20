@@ -2048,6 +2048,15 @@ and childrenTermNode vis tn =
         let s' = visitCilLogicLabel vis s in
         let t' = vTerm t in 
 	if t' != t || s' != s then Toffset (s',t') else tn
+    | Toffset_max (s,t) | Toffset_min (s,t) ->
+        let s' = visitCilLogicLabel vis s in
+        let t' = vTerm t in 
+	if t' != t || s' != s then
+          match tn with
+            | Toffset_max _ -> Toffset_max (s',t')
+            | Toffset_min _ -> Toffset_min (s',t')
+            | _ -> assert false
+        else tn
     | Tbase_addr (s,t) ->
         let s' = visitCilLogicLabel vis s in
         let t' = vTerm t in 
@@ -2902,6 +2911,7 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
 
  and childrenStmt (toPrepend: instr list ref) (vis:cilVisitor) (s:stmt): stmt =
    let fExp e = (visitCilExpr vis e) in
+   let fLval = visitCilLval vis in
    let fBlock b = visitCilBlock vis b in
    let fInst i = visitCilInstr vis i in
    let fLoopAnnot a = mapNoCopy (visitCilCodeAnnotation vis) a in
@@ -2939,6 +2949,24 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
 	 if vis#behavior.is_copy_behavior then
 	   Goto(ref (vis#behavior.memo_stmt !sr),l)
 	 else s.skind
+     | AsmGoto (attrs, tmpls, outs, ins, clobs, stmts, l) ->
+         let attrs' = visitCilAttributes vis attrs in
+         let outs' = mapNoCopy (fun (id,s,lv as triple) ->
+                                 let lv' = fLval lv in
+                                 if lv' != lv then (id,s,lv') else triple)
+                               outs
+         in
+         let ins' = mapNoCopy (fun ((id,s,e) as triple) ->
+                                let e' = fExp e in
+                                if e' != e then (id,s,e') else triple)
+                              ins
+         in
+         if vis#behavior.is_copy_behavior then
+           AsmGoto (attrs', tmpls, outs', ins', clobs, List.map (fun sr -> ref (vis#behavior.memo_stmt !sr)) stmts, l)
+         else if attrs' != attrs || outs' != outs || ins' != ins then
+           AsmGoto (attrs', tmpls, outs', ins', clobs, stmts, l)
+         else
+           s.skind
      | Return (Some e, l) ->
 	 let e' = fExp e in
 	 if e' != e then Return (Some e', l) else s.skind
@@ -6040,7 +6068,7 @@ let childrenFileSameGlobals vis f =
 	   peepHole1 doone b.bstmts;
 	   peepHole1 doone h.bstmts;
 	   s.skind <- TryExcept(b, (doInstrList il, e), h, l);
-       | Return _ | Goto _ | Break _ | Continue _ -> ())
+       | Return _ | Goto _ | AsmGoto _ | Break _ | Continue _ -> ())
      ss
 
  (* Process two statements and possibly replace them both *)
@@ -6100,7 +6128,7 @@ let childrenFileSameGlobals vis f =
 
        | UnspecifiedSequence seq ->
 	   s.skind <- UnspecifiedSequence (doUnspecifiedStmtList seq)
-       | Return _ | Goto _ | Break _ | Continue _ -> ()
+       | Return _ | Goto _ | AsmGoto _ | Break _ | Continue _ -> ()
    in
    if agressive then List.iter process ss;
    doStmtList [] ss
@@ -6942,6 +6970,7 @@ let rec free_vars_term bound_vars t = match t.term_node with
   | TCastE (_,t)
   | Tat (t,_)
   | Toffset (_,t)
+  | Toffset_max (_,t) | Toffset_min (_,t)
   | Tbase_addr (_,t)
   | Tblock_length (_,t)
   | TCoerce (t,_)

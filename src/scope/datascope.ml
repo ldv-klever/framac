@@ -315,7 +315,7 @@ module ForwardScope (X : sig val modified : stmt -> bool end ) = struct
     | Return _ -> []
 
     | UnspecifiedSequence _ | Loop _ | Block _
-    | Goto _ | Break _ | Continue _
+    | Goto _ | AsmGoto _ | Break _ | Continue _
     | TryExcept _ | TryFinally _
       -> map_on_all_succs state
   ;;
@@ -342,7 +342,7 @@ Error: Error-enabled warnings (1 occurrences) *)
 let add_s s acc =
   (* we add only 'simple' statements *)
   match s.skind with
-    | Instr _ | Return _ | Continue _ | Break _ | Goto _
+    | Instr _ | Return _ | Continue _ | Break _ | Goto _ | AsmGoto _
         -> Cil_datatype.Stmt.Hptset.add s acc
     | Block _ | Switch _ | If _ | UnspecifiedSequence _ | Loop _
     | TryExcept _ | TryFinally _

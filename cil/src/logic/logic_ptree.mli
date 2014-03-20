@@ -125,6 +125,8 @@ and lexpr_node =
   | PLexists of quantifiers * lexpr (** existential quantification. *)
   | PLbase_addr of string option * lexpr (** base address of a pointer. *)
   | PLoffset of string option * lexpr (** base address of a pointer. *)
+  | PLoffset_max of string option * lexpr (** Jessie maximal offset of a still valid pointer. *)
+  | PLoffset_min of string option * lexpr (** Jessie minimal offset of a still valid pointer. *)
   | PLblock_length of string option * lexpr (** length of the block pointed to by an
                                 expression. *)
   | PLvalid of string option * lexpr (** pointer is valid. *)

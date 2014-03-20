@@ -785,6 +785,7 @@ struct
         let rt = c_logic_type loc env rt in
         (match prms with
              [] -> Ctype (TFun(rt,None,false,[]))
+           | [ (_, TVoid _, _) ] -> Ctype (TFun (rt, Some [](* void *), false, []))
            | _ -> Ctype (TFun(rt,Some prms,false,[])))
     | LTnamed (id,[]) ->
         (try Lenv.find_type_var id env
@@ -862,7 +863,8 @@ struct
       match idx.term_node with
         | TConst _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _
         | TAlignOf _ | TAlignOfE _ | Tat _ | Ttypeof _ | Ttype _
-        | Tempty_set | Tbase_addr _ | Toffset _ | Tblock_length _ | Tnull
+        | Tempty_set | Tbase_addr _ | Toffset _ | Toffset_max _ | Toffset_min _
+        | Tblock_length _ | Tnull
           -> false
         | TLval _ -> true
         | TUnOp(_,t) -> needs_at t
@@ -1792,7 +1794,7 @@ struct
       | TConst _ | TLval _ | TSizeOf _ | TSizeOfE _
       | TSizeOfStr _ | TAlignOf _ | TAlignOfE _
       | TUnOp _ | TBinOp _ | TCastE _ | TAddrOf _ | TStartOf _
-      | Tapp _  | TDataCons _ | Tbase_addr _ | Toffset _
+      | Tapp _  | TDataCons _ | Tbase_addr _ | Toffset _ | Toffset_max _ | Toffset_min _
       | Tblock_length _ | Tnull | TCoerce _ | TCoerceE _
       | TUpdate _ | Ttypeof _ | Ttype _ | Tempty_set
         (* [VP] I suppose that an union of functions
@@ -2425,6 +2427,22 @@ struct
                 (mk_logic_pointer_or_StartOf t)
             in t.term_node, t.term_type
           else error loc "subscripted value is neither array nor pointer"
+      | PLoffset_max (l, t) | PLoffset_min (l, t) ->
+          (* offset_max and offset_min need a current label to have some semantics *)
+	  let l = find_current_logic_label loc env l in
+          let t = term env t in
+          if isLogicPointer t then
+            let t =
+              let cil_term t = match pl with
+                | PLoffset_max _ -> Toffset_max (l,t)
+                | PLoffset_min _ -> Toffset_min (l,t)
+                | _ -> assert false
+              in
+              lift_set (fun t -> Logic_const.term (cil_term t) Linteger)
+                       (mk_logic_pointer_or_StartOf t)
+            in
+            t.term_node, t.term_type
+          else error loc "subscripted value is neither array nor pointer"
       | PLblock_length (l, t) ->
           (* block_length need a current label to have some semantics *)
 	  let l = find_current_logic_label loc env l in
@@ -3014,7 +3032,7 @@ struct
           let tbody = predicate env body in
           { name = []; loc = p0.lexpr_loc;
             content = Plet(var,tbody) }
-      | PLcast _ | PLblock_length _ | PLbase_addr _ | PLoffset _
+      | PLcast _ | PLblock_length _ | PLbase_addr _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
       | PLarrget _ | PLarrow _
       | PLdot _ | PLbinop _ | PLunop _ | PLconstant _
       | PLnull | PLresult | PLcoercion _ | PLcoercionE _ | PLsizeof _
