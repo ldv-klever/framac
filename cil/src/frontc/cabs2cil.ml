@@ -6745,7 +6745,7 @@ and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
   (* to spurious errors! *)
   Kernel.debug ~dkey:category_initializer
     "Finished the initializer for %s@\n  init=%a@\n  typ=%a@\n  acc=%a@\n"
-    vi.vname (resolveGotos (); Cil_printer.pp_init) init Cil_printer.pp_typ typ' d_chunk acc;
+    vi.vname (fun fmt -> resolveGotos (); Cil_printer.pp_init fmt) init Cil_printer.pp_typ typ' d_chunk acc;
   empty @@ (acc, local_env.is_ghost), init, typ''
 
 and blockInitializer local_env vi inite =
