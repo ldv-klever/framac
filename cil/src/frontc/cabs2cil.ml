@@ -970,8 +970,9 @@ let rec is_boolean_result e =
     | AlignOfE _ | AddrOf _ | StartOf _ | Info _ -> false
 
 (* Specify whether the cast is from the source code *)
-let rec castTo ?(fromsource=false)
+let rec castTo ?loc
                 (ot : typ) (nt : typ) (e : exp) : (typ * exp ) =
+  let fromsource = Extlib.has_some loc in
   Kernel.debug ~dkey:category_cast "@[%t: castTo:%s %a->%a@\n@]"
     Cil.pp_thisloc (if fromsource then "(source)" else "")
     Cil_printer.pp_typ ot Cil_printer.pp_typ nt;
@@ -985,7 +986,7 @@ let rec castTo ?(fromsource=false)
   end else begin
     let nt' = if fromsource then nt' else !typeForInsertedCast e ot' nt' in
     let result = (nt', if theMachine.insertImplicitCasts || fromsource then
-                    Cil.mkCastT ~force:true ~e ~oldt:ot ~newt:nt' else e)
+                    Cil.mkCastTLoc ~force:true ~e ?loc ~oldt:ot ~newt:nt' else e)
     in
     let error s =
       (if fromsource then Kernel.abort else Kernel.fatal) ~current:true s
@@ -1088,12 +1089,32 @@ let rec castTo ?(fromsource=false)
 		  Cil_printer.pp_exp e
             in
             (* Continue casting *)
-            castTo ~fromsource:fromsource fstfield.ftype nt' e'
+            castTo ?loc fstfield.ftype nt' e'
         end
     end
     | _ -> 
       error "cannot cast from %a to %a@\n" Cil_printer.pp_typ ot Cil_printer.pp_typ nt'
   end
+
+
+let castToFromSource ?loc ot nt e =
+  let rec strip_inserted_casts e =
+    match e.enode with
+    | CastE (_, e') when Location.equal e.eloc Location.unknown || Location.equal e.eloc e'.eloc ->
+      strip_inserted_casts e'
+    | _ -> e
+  in
+  let (t', e') as r = castTo ?loc ot nt e in
+  let e = strip_inserted_casts e in
+  let rec contains_under_casts e_in e_out =
+    if Exp.equal e_in e_out then true
+    else
+      match e_out.enode with
+      | CastE (_, e) -> contains_under_casts e_in e
+      | _ -> false
+  in
+  if contains_under_casts e e' then r
+  else (t', new_exp ~loc:(Extlib.opt_conv e.eloc loc) (CastE (nt, e)))
 
 (* Like Cil.mkCastT, but it calls typeForInsertedCast *)
 let makeCastT ~(e: exp) ~(oldt: typ) ~(newt: typ) =
@@ -5090,7 +5111,7 @@ functions"
                 * need the check. *)
                let newtyp, newexp =
                  if needcast then
-                  castTo ~fromsource:true t' typ e'
+                  castTo ~loc:e.expr_loc t' typ e'
                  else
                    t', e'
                in
@@ -5727,7 +5748,7 @@ arguments"
                * as an argument *)
           let (sa, a', att) = force_right_to_left_evaluation
                 (doExp local_env false a (AExp None)) in
-          let (_, a'') = castTo att at a' in
+          let (_, a'') = castToFromSource ~loc:a.expr_loc att at a' in
           (ss @@ (sa, ghost), a'' :: args')
 	    
         | ([], args) -> (* No more types *)

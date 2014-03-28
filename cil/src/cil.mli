@@ -977,6 +977,10 @@ val need_cast: ?force:bool -> typ -> typ -> bool
  *)
 val mkCastT: ?force:bool -> e:exp -> oldt:typ -> newt:typ -> exp
 
+(** Like {!Cil.mkCastT}, but takes location to construct the expression with the cast.
+ *)
+val mkCastTLoc: ?force:bool -> e:exp -> ?loc:location -> oldt:typ -> newt:typ -> exp
+
 (** Like {!Cil.mkCastT} but uses typeOf to get [oldt] *)
 val mkCast: ?force:bool -> e:exp -> newt:typ -> exp
 

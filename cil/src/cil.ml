@@ -6337,8 +6337,7 @@ let isIntegerConstant e =
 let getCompField cinfo fieldName =
   List.find (fun fi -> fi.fname = fieldName) cinfo.cfields
 
-let mkCastT ?(force=false) ~(e: exp) ~(oldt: typ) ~(newt: typ) =
-  let loc = e.eloc in
+let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) =
 (* Issue #!1546
    let force = force || 
     (* see warning of need_cast function:
@@ -6368,6 +6367,8 @@ let mkCastT ?(force=false) ~(e: exp) ~(oldt: typ) ~(newt: typ) =
       mk_cast e
   end else
     e
+
+ let mkCastT ?force ~e ~oldt ~newt = mkCastTLoc ?force ~e ?loc:None ~oldt ~newt
 
  let mkCast ?force ~(e: exp) ~(newt: typ) =
    mkCastT ?force ~e ~oldt:(typeOf e) ~newt
