@@ -1231,6 +1231,7 @@ annotation:
                             "Only one code annotation is allowed per comment"))
       }
 | full_identifier_or_typename { Aattribute_annot (loc (), $1) }
+| identifier EQUAL { Aliteral_annot $1 }
 ;
 
 /*** loop annotations ***/

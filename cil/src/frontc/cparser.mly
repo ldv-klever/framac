@@ -281,6 +281,7 @@ let in_block l =
 %token <Logic_ptree.code_annot list * Cabs.cabsloc> LOOP_ANNOT
 %token <string * Cabs.cabsloc> ATTRIBUTE_ANNOT
 %token <Logic_ptree.custom_tree  * string * Cabs.cabsloc> CUSTOM_ANNOT
+%token <string> LITERAL_NAME
 
 %token <string> IDENT
 %token <int64 list * Cabs.cabsloc> CST_CHAR
@@ -719,14 +720,17 @@ expression:           /*(* 6.5.17 *)*/
                 assignment_expression { $1 }
 ;
 
+literal_name_opt:
+  /* empty */     {None}
+| LITERAL_NAME    {Some $1}
 
 constant:
     CST_INT				{CONST_INT (fst $1), snd $1}
 |   CST_FLOAT				{CONST_FLOAT (fst $1), snd $1}
 |   CST_CHAR				{CONST_CHAR (fst $1), snd $1}
 |   CST_WCHAR				{CONST_WCHAR (fst $1), snd $1}
-|   string_constant		        {CONST_STRING (fst $1), snd $1}
-|   wstring_list			{CONST_WSTRING (fst $1), snd $1}
+|   literal_name_opt string_constant	{CONST_STRING (fst $2, $1), snd $2}
+|   literal_name_opt wstring_list       {CONST_WSTRING (fst $2, $1), snd $2}
 ;
 
 string_constant:
@@ -1452,7 +1456,7 @@ attributes_with_asm:
 |   ASM LPAREN string_constant RPAREN attributes {
       let loc = Parsing.rhs_start_pos 3, Parsing.rhs_end_pos 3 in
       ("__asm__",
-       [{ expr_node = CONSTANT(CONST_STRING (fst $3)); expr_loc = loc}])
+       [{ expr_node = CONSTANT(CONST_STRING (fst $3, None)); expr_loc = loc}])
       :: $5
     }
 ;
@@ -1543,20 +1547,20 @@ basic_attr_list_ne:
 parameter_attr_list_ne:
     basic_attr_list_ne			{ $1 }
 |   basic_attr_list_ne string_constant	{
-      $1 @ [make_expr (CONSTANT(CONST_STRING (fst $2)))]
+      $1 @ [make_expr (CONSTANT(CONST_STRING (fst $2, None)))]
     }
 |   basic_attr_list_ne string_constant parameter_attr_list_ne {
-      $1 @ ([make_expr (CONSTANT(CONST_STRING (fst $2)))] @ $3)
+      $1 @ ([make_expr (CONSTANT(CONST_STRING (fst $2, None)))] @ $3)
     }
 ;
 param_attr_list_ne:
     parameter_attr_list_ne { $1 }
-|   string_constant { [make_expr (CONSTANT(CONST_STRING (fst $1)))] }
+|   string_constant { [make_expr (CONSTANT(CONST_STRING (fst $1, None)))] }
 ;
 primary_attr:
     basic_attr { $1 }
 |   LPAREN attr RPAREN { $2 }
-|   string_constant { make_expr (CONSTANT(CONST_STRING (fst $1))) }
+|   string_constant { make_expr (CONSTANT(CONST_STRING (fst $1, None))) }
 ;
 postfix_attr:
     primary_attr { $1 }

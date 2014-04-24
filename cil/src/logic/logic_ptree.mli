@@ -266,6 +266,7 @@ type annot =
   | Acode_annot of location * code_annot (** code annotation. *)
   | Aloop_annot of location * code_annot list (** loop annotation. *)
   | Aattribute_annot of location * string (** attribute annotation. *)
+  | Aliteral_annot of string (** named string literal annotation *)
   | Acustom of location * string * custom_tree
 
 (** ACSL extension for external spec file **)

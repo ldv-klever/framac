@@ -300,8 +300,8 @@ and constant =
   | CONST_FLOAT of string (* the textual representaton *)
   | CONST_CHAR of int64 list
   | CONST_WCHAR of int64 list
-  | CONST_STRING of string
-  | CONST_WSTRING of int64 list
+  | CONST_STRING of string * string option
+  | CONST_WSTRING of int64 list * string option
     (* ww: wstrings are stored as an int64 list at this point because
      * we might need to feed the wide characters piece-wise into an
      * array initializer (e.g., wchar_t foo[] = L"E\xabcd";). If that

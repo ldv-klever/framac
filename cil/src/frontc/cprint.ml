@@ -376,8 +376,10 @@ and print_expression_level (lvl: int) fmt (exp : expression) =
     | CONSTANT (CONST_FLOAT f) -> pp_print_string fmt f
     | CONSTANT (CONST_CHAR c) -> fprintf fmt "'%s'" (escape_wstring c)
     | CONSTANT (CONST_WCHAR c) -> fprintf fmt  "L'%s'" (escape_wstring c)
-    | CONSTANT (CONST_STRING s) -> print_string fmt s
-    | CONSTANT (CONST_WSTRING s) -> print_wstring fmt s
+    | CONSTANT (CONST_STRING (s, name_opt)) ->
+        fprintf fmt "%a%a" (pp_opt (fun fmt -> fprintf fmt "/*@@@ %s@ =@ */@ ")) name_opt print_string s
+    | CONSTANT (CONST_WSTRING (s, name_opt)) ->
+        fprintf fmt "%a%a" (pp_opt (fun fmt -> fprintf fmt "/*@@@ %s@ =@ */@ ")) name_opt print_wstring s
     | VARIABLE name -> pp_print_string fmt name
     | EXPR_SIZEOF exp ->
         fprintf fmt "sizeof%a" print_expression exp

@@ -571,6 +571,51 @@ let alphaTable : (string, location AL.alphaTableData ref) H.t = H.create 307
 let fresh_global lookupname =
   fst (AL.newAlphaName alphaTable lookupname (CurrentLoc.get ()))
 
+let add_string_literal, resolve_string_literals =
+  let module H =
+    MoreLabels.Hashtbl.Make
+      (struct
+        type t = fundec option * [`String of string | `Wstring of int64 list]
+        let hash =
+          function
+          | None, s -> Hashtbl.hash s
+          | Some f, s -> 89 * Fundec.hash f + Hashtbl.hash s
+        let equal a b =
+          let s_equal s1 s2 =
+            match s1, s2 with
+            | `String s1, `String s2 -> String.compare s1 s2 == 0
+            | `Wstring l1, `Wstring l2 -> List.for_all2 (fun a b -> Int64.compare a b == 0) l1 l2
+            | _ -> false
+          in
+          match a, b with
+          | (Some f1, s1), (Some f2, s2) -> Fundec.equal f1 f2 && s_equal s1 s2
+          | (None, s1), (None, s2) -> s_equal s1 s2
+          | _ -> false
+       end)
+  in
+  let table = H.create 10 in
+  (* add_string_literal *)
+  (fun fundec_opt ~loc s vi_opt ->
+    let key = fundec_opt, s in
+    let acc = List.flatten @@ H.find_all table key in
+    H.add table ~key ~data:((loc, vi_opt) :: acc)),
+  (* resolve_string_literals *)
+  (fun () ->
+    H.iter table
+     ~f:(fun ~key:_ ~data:acc ->
+           acc
+           |> List.sort (fun (loc1, _) (loc2, _) -> Location.compare loc1 loc2)
+           |> List.iteri
+                (fun i (_, vi_opt) ->
+                  match vi_opt with
+                  | Some vi ->
+                    vi.vattr <-
+                      (match vi.vattr with
+                       | [Attr ("literal" as lit, acc)] ->
+                         [Attr (lit, acc @ [AInt (Integer.of_int i)]); Attr ("invariant", [])]
+                       | _ -> Kernel.fatal ~current:true "Literal proxy variable introduction failed: %s" vi.vname)
+                  | None -> ())))
+
 (* To keep different name scopes different, we add prefixes to names
  * specifying the kind of name: the kind can be one of "" for variables or
  * enum tags, "struct" for structures and unions (they share the name space),
@@ -4030,7 +4075,7 @@ and doAttr ghost (a: A.attribute) : attribute list =
             | _ -> ACons (n', [])
           with Not_found -> ACons(n', [])
         end
-      | A.CONSTANT (A.CONST_STRING s) -> AStr s
+      | A.CONSTANT (A.CONST_STRING (s, _)) -> AStr s
       | A.CONSTANT (A.CONST_INT str) -> begin
         match (parseIntExp ~loc str).enode with
         | Const (CInt64 (v64,_,_)) ->
@@ -4863,20 +4908,51 @@ functions"
 	    let ls = String.length s in
 	    l >= ls && s = String.uppercase (String.sub str (l - ls) ls)
 	in
+        let add_literal s name_opt =
+          let fdec_opt = match !scopes with [] -> None | _ -> Some !currentFunctionFDEC in
+          match name_opt with
+          | Some name ->
+            let t =
+              let const = typeAddAttributes [Attr ("const", [])] in
+              match s with
+              | `String _ -> const charType
+              | `Wstring _ -> const theMachine.wcharType
+            in
+            let dt = A.PTR (["const", []], A.JUSTBASE) in
+            let attrs =
+              [("literal",
+                match fdec_opt with
+                | Some fdec -> [{ expr_loc = loc; expr_node = VARIABLE fdec.svar.vname}] | None -> [])]
+            in
+            let init =
+              let init c = A.SINGLE_INIT { e with expr_node = A.CONSTANT c } in
+              match s with
+              | `String s -> init (CONST_STRING (s, None))
+              | `Wstring ws -> init (CONST_WSTRING (ws, None))
+            in
+            (match fdec_opt with
+             | Some _ ->
+               ignore (createLocal true (t, Static, false, []) ((name, dt, attrs, loc), init))
+             | None ->
+               ignore (createGlobal true None (t, NoStorage, false, []) ((name, dt, attrs, loc), init)));
+            add_string_literal fdec_opt ~loc s (Some (fst (lookupVar name)))
+          | None -> add_string_literal fdec_opt ~loc s None
+        in
 	match ct with
 	  A.CONST_INT str -> begin
 	    let res = parseIntExp ~loc str in
 	    finishExp [] (unspecified_chunk empty) res (typeOf res)
 	  end
 
-	| A.CONST_WSTRING (ws: int64 list) ->
+	| A.CONST_WSTRING (ws, name_opt) ->
+          if not local_env.is_ghost then add_literal (`Wstring ws) name_opt;
 	  let res =
 	    new_exp ~loc
 	      (Const(CWStr ((* intlist_to_wstring *) ws)))
 	  in
 	  finishExp [] (unspecified_chunk empty) res (typeOf res)
 
-	| A.CONST_STRING s ->
+	| A.CONST_STRING (s, name_opt) ->
 		     (* Maybe we burried __FUNCTION__ in there *)
 	  let s' =
 	    try
@@ -4893,6 +4969,7 @@ functions"
 		s
 	    with Not_found -> s
 	  in
+          if not local_env.is_ghost then add_literal (`String s) name_opt;
 	  let res = new_exp ~loc (Const(CStr s')) in
 	  finishExp [] (unspecified_chunk empty) res (typeOf res)
 
@@ -6851,13 +6928,13 @@ and doInit
    * string into characters *)
   | TArray(bt, leno, _, _ ),
       (A.NEXT_INIT,
-       (A.SINGLE_INIT({ expr_node = A.CONSTANT (A.CONST_STRING s)} as e)|
+       (A.SINGLE_INIT({ expr_node = A.CONSTANT (A.CONST_STRING (s, _))} as e)|
                           A.COMPOUND_INIT
                             [(A.NEXT_INIT,
                               A.SINGLE_INIT(
                                 { expr_node =
                                     A.CONSTANT
-                                      (A.CONST_STRING s)} as e))]))
+                                      (A.CONST_STRING (s, _))} as e))]))
       :: restil
         when (match unrollType bt with
 	| TInt((IChar|IUChar|ISChar), _) -> true
@@ -6914,13 +6991,13 @@ and doInit
    * important. *)
   | TArray(bt, leno, _, _),
             (A.NEXT_INIT,
-             (A.SINGLE_INIT({expr_node = A.CONSTANT (A.CONST_WSTRING s)} as e)|
+             (A.SINGLE_INIT({expr_node = A.CONSTANT (A.CONST_WSTRING (s, _))} as e)|
                   A.COMPOUND_INIT
                     [(A.NEXT_INIT,
                       A.SINGLE_INIT(
                         {expr_node =
                             A.CONSTANT
-                              (A.CONST_WSTRING s)} as e))]))
+                              (A.CONST_WSTRING (s, _))} as e))]))
             :: restil
               when
                 (let bt' = unrollType bt in
@@ -9102,6 +9179,7 @@ let convFile (f : A.file) : Cil_types.file =
   List.iter doOneGlobal dl;
   let globals = ref (fileGlobals ()) in
 
+  resolve_string_literals ();
   List.iter rename_spec !globals;
   Logic_env.prepare_tables ();
   IH.clear noProtoFunctions;

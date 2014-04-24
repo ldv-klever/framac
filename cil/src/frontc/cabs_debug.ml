@@ -45,7 +45,12 @@ let pp_cvspec  fmt = function
   |	CV_RESTRICT -> fprintf fmt "CV_RESTRICT"
   |	CV_ATTRIBUTE_ANNOT s -> fprintf fmt "CV_ATTRIBUTE_ANNOT %s" s
 
-let pp_const fmt = function
+let pp_const fmt =
+  let pp_name_opt fmt = function
+    | Some name -> fprintf fmt " NAMED %s" name
+    | None -> ()
+  in
+  function
   |	CONST_INT s -> fprintf fmt "CONST_INT %s" s
   |	CONST_FLOAT s -> fprintf fmt "CONST_FLOAT %s" s
   |	CONST_CHAR l ->
@@ -56,11 +61,11 @@ let pp_const fmt = function
     fprintf fmt "CONST_WCHAR{";
     List.iter (fun i -> fprintf fmt ",@ %s" (Int64.to_string i)) l;
     fprintf fmt "}"
-  |	CONST_STRING s -> fprintf fmt "CONST_STRING %s" s
-  |	CONST_WSTRING l -> 
+  |	CONST_STRING (s, name_opt) -> fprintf fmt "CONST_STRING %s%a" s pp_name_opt name_opt
+  |	CONST_WSTRING (l, name_opt) ->
     fprintf fmt "CONST_WSTRING{";
     List.iter (fun i -> fprintf fmt ",@ %s" (Int64.to_string i)) l;
-    fprintf fmt "}"
+    fprintf fmt "}%a" pp_name_opt name_opt
 
 let pp_labels fmt lbls =
   fprintf fmt "%s" (String.concat " " lbls)
