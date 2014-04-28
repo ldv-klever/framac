@@ -612,7 +612,7 @@ let add_string_literal, resolve_string_literals =
                     vi.vattr <-
                       (match vi.vattr with
                        | [Attr ("literal" as lit, acc)] ->
-                         [Attr (lit, acc @ [AInt (Integer.of_int i)]); Attr ("invariant", [])]
+                         [Attr (lit, acc @ [AInt (Integer.of_int i)]); Attr ("invariant", []); Attr ("used", [])]
                        | _ -> Kernel.fatal ~current:true "Literal proxy variable introduction failed: %s" vi.vname)
                   | None -> ())))
 
@@ -6946,6 +6946,8 @@ and doInit
         | _ ->  false (* OK, this is probably an array of strings. Handle *)
         )              (* it with the other arrays below.*)
           ->
+    (* Handle possible named literals *)
+    let _ = doExp local_env true e ADrop in
     let charinits =
       let init c =
         A.NEXT_INIT,
@@ -7017,6 +7019,8 @@ and doInit
                           it with the other arrays below.*)
                 )
                 ->
+      (* Handle possible named literals *)
+      let _ = doExp local_env true e ADrop in
       let maxWChar =  (*  (2**(bitsSizeOf !wcharType)) - 1  *)
         Int64.sub (Int64.shift_left Int64.one (bitsSizeOf theMachine.wcharType))
           Int64.one in
