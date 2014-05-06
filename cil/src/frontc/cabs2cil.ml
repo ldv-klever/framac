@@ -8219,11 +8219,14 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
               (* Guard the [return] instructions we add with an
                  [\assert \false]*)
               let assert_false () =
-                let annot = Logic_const.new_code_annotation
-                  (AAssert ([], Logic_const.unamed ~loc:endloc Pfalse))
-                in
-                Cil.mkStmt ~ghost:local_env.is_ghost
-                  (Instr (Code_annot (annot, endloc)))
+                Cil.mkStmt
+                  ~ghost:local_env.is_ghost
+                  (Instr
+                    (Call
+                      (None,
+                       new_exp ~loc:endloc (Lval (Var (fst (lookupGlobalVar "__builtin_unreachable")), NoOffset)),
+                       [],
+                       endloc)))
               in
               match unrollType !currentReturnType with
                 | TVoid _ -> [], None

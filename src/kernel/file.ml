@@ -1666,6 +1666,26 @@ let prepare_cil_file file =
   Cfg.computeFileCFG file;
   let recompute = ref false in
   Globals.Functions.iter (synchronize_source_annot recompute);
+  Cil.visitCilFileSameGlobals
+    (object(self)
+      inherit Cil.nopCilVisitor
+      method! vinst =
+        function
+        | Call (None, { enode = Lval (Var { vname = "__builtin_unreachable" }, NoOffset) }, [], loc) ->
+          let annot = Logic_const.new_code_annotation (AAssert ([], Logic_const.unamed ~loc Pfalse)) in
+          Annotations.add_code_annot
+            Emitter.kernel
+            ~kf:(Globals.Functions.get (Extlib.the self#current_func).svar)
+            (Extlib.the self#current_stmt)
+            annot;
+          ChangeTo [Code_annot (annot, loc)]
+        | Call (_, { enode = Lval (Var { vname = "__builtin_unreachable" }, _) }, _, _) ->
+          Kernel.error "Wrong arguments to __builtin_unreachable";
+          SkipChildren
+        | _ -> SkipChildren
+     end)
+     file;
+  Kernel.feedback ~level:2 "replacing __builtin_unreachable with 'assert false' done";
   (* We might also introduce new blocks for synchronization. *)
   if !recompute then begin
     Cfg.clearFileCFG ~clear_id:false file;
