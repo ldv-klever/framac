@@ -598,7 +598,9 @@ let add_string_literal, resolve_string_literals =
   (fun fundec_opt ~loc s vi_opt ->
     let key = fundec_opt, s in
     let acc = List.flatten @@ H.find_all table key in
-    H.add table ~key ~data:((loc, vi_opt) :: acc)),
+    assert (let pos, _ = loc in pos.pos_fname <> "" && pos.pos_lnum > 0 && pos.pos_cnum > -1);
+    if not @@ List.exists (fun (loc', _) -> loc = loc') acc then
+      H.replace table ~key ~data:((loc, vi_opt) :: acc)),
   (* resolve_string_literals *)
   (fun () ->
     H.iter table
