@@ -313,6 +313,8 @@ opt:: bin/toplevel.opt$(EXE) \
 	$(MAKE) install-kernel-opt FRAMAC_LIBDIR=lib/fc
 
 dist: clean
+	$(QUIET_MAKE) OPTIM="-unsafe -noassert" DEBUG="" byte
+	$(QUIET_MAKE) OPTIM="-unsafe -noassert -inline 1000 -fno-PIC -compact" DEBUG="" opt
 	$(QUIET_MAKE) OPTIM="-unsafe -noassert" DEBUG="" all
 
 bdist: clean
