@@ -438,11 +438,16 @@ let print_impact_pragma fmt p =
     | IPexpr e -> fprintf fmt "expr@ %a" print_lexpr e
     | IPstmt -> pp_print_string fmt "stmt"
 
+let print_jessie_pragma fmt p =
+  match p with
+  | JPexpr e -> fprintf fmt "@ %a" print_lexpr e
+
 let print_pragma fmt p =
   match p with
       Loop_pragma p -> fprintf fmt "loop@ pragma@ %a;" print_loop_pragma p
     | Slice_pragma p -> fprintf fmt "slice@ pragma@ %a;" print_slice_pragma p
     | Impact_pragma p -> fprintf fmt "impact@ pragma@ %a;" print_impact_pragma p
+    | Jessie_pragma p -> fprintf fmt "jessie@ pragma@ %a;" print_jessie_pragma p
 
 let print_code_annot fmt ca =
   let print_behaviors fmt bhvs =

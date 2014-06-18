@@ -842,12 +842,17 @@ let is_same_impact_pragma p1 p2 =
     | IPstmt, IPstmt -> true
     | (IPexpr _ | IPstmt), _ -> false
 
+let is_same_jessie_pragma p1 p2 =
+  match p1, p2 with
+  | JPexpr t1, JPexpr t2 -> is_same_term t1 t2
+
 let is_same_pragma p1 p2 =
   match p1,p2 with
       | Loop_pragma p1, Loop_pragma p2 -> is_same_loop_pragma p1 p2
       | Slice_pragma p1, Slice_pragma p2 -> is_same_slice_pragma p1 p2
       | Impact_pragma p1, Impact_pragma p2 -> is_same_impact_pragma p1 p2
-      | (Loop_pragma _ | Slice_pragma _ | Impact_pragma _), _ -> false
+      | Jessie_pragma p1, Jessie_pragma p2 -> is_same_jessie_pragma p1 p2
+      | (Loop_pragma _ | Slice_pragma _ | Impact_pragma _ | Jessie_pragma _), _ -> false
 
 let is_same_code_annotation ca1 ca2 =
   match ca1.annot_content, ca2.annot_content with
@@ -1789,6 +1794,9 @@ let is_slice_pragma ca =
 let is_impact_pragma ca =
   match ca.annot_content with APragma (Impact_pragma _) -> true | _ -> false
 
+let is_jessie_pragma ca =
+  match ca.annot_content with APragma (Jessie_pragma _) -> true | _ -> false
+
 let is_loop_annot s =
   is_loop_invariant s || is_assigns s || is_allocation s || is_variant s || is_loop_pragma s
 
@@ -1803,6 +1811,7 @@ let is_property_pragma = function
   | Loop_pragma (Unroll_specs _ | Widen_hints _ | Widen_variables _)
   | Slice_pragma (SPexpr _ | SPctrl | SPstmt)
   | Impact_pragma (IPexpr _ | IPstmt) -> false
+  | Jessie_pragma (JPexpr _) -> true
 (* If at some time a pragma becomes something which should be proven,
    update the pragma-related code in gui/property_navigator.ml *)
 

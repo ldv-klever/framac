@@ -2462,6 +2462,9 @@ the arguments."
   | IPexpr t -> fprintf fmt "expr @[%a@]" self#term t
   | IPstmt -> pp_print_string fmt "stmt"
     
+  method private jessie_pragma fmt = function
+  | JPexpr t -> fprintf fmt "@[%a@]" self#term t
+
   (* TODO: add the annot ID in debug mode?*)
   method code_annotation fmt ca = 
     let pp_for_behavs fmt l =
@@ -2481,6 +2484,8 @@ the arguments."
       fprintf fmt "@[impact pragma@ %a;@]" self#impact_pragma sp
     | APragma (Loop_pragma lp) ->
       fprintf fmt "@[loop pragma@ %a;@]" self#loop_pragma lp
+    | APragma (Jessie_pragma jp) ->
+      fprintf fmt "@[jessie pragma@ %a;@]" self#jessie_pragma jp
     | AStmtSpec(for_bhv, spec) ->
       fprintf fmt "@[<hv 2>%a%a@]"
 	pp_for_behavs for_bhv

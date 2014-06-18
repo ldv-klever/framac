@@ -3377,6 +3377,9 @@ struct
       IPexpr t -> IPexpr (term env t)
     | IPstmt as ip -> ip
 
+  let jessie_pragma env = function
+    | JPexpr t -> JPexpr (term env t)
+
   let code_annot_env () =
     let env = append_here_label (append_pre_label (Lenv.empty())) in
     if C.is_loop () then append_loop_labels env else env
@@ -3395,6 +3398,8 @@ struct
 	  APragma (Slice_pragma (slice_pragma (code_annot_env()) sp))
       | APragma (Loop_pragma lp) ->
 	  APragma (Loop_pragma (loop_pragma (code_annot_env()) lp))
+      | APragma (Jessie_pragma jp) ->
+          APragma (Jessie_pragma (jessie_pragma (code_annot_env ()) jp))
       | AStmtSpec (behav,s) ->
           (* function behaviors and statement behaviors are not at the
              same level. Do not mix them in a complete or disjoint clause

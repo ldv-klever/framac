@@ -256,6 +256,9 @@ val is_same_slice_pragma :
 val is_same_impact_pragma :
   term impact_pragma ->
   term impact_pragma -> bool
+val is_same_jessie_pragma :
+  term jessie_pragma ->
+  term jessie_pragma -> bool
 val is_same_pragma :
   term pragma -> term pragma -> bool
 val is_same_code_annotation : code_annotation -> code_annotation -> bool
@@ -334,6 +337,7 @@ val is_pragma : code_annotation -> bool
 val is_loop_pragma : code_annotation -> bool
 val is_slice_pragma : code_annotation -> bool
 val is_impact_pragma : code_annotation -> bool
+val is_jessie_pragma : code_annotation -> bool
 val is_loop_annot : code_annotation -> bool
 
 val is_trivial_annotation : code_annotation -> bool

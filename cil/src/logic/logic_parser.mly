@@ -228,7 +228,7 @@
 %token ALLOCABLE FREEABLE FRESH
 %token DOLLAR QUESTION MINUS PLUS STAR AMP SLASH PERCENT LSQUARE RSQUARE EOF
 %token GLOBAL INVARIANT VARIANT DECREASES FOR LABEL ASSERT SEMICOLON NULL EMPTY
-%token REQUIRES ENSURES ALLOCATES FREES ASSIGNS LOOP NOTHING SLICE IMPACT PRAGMA FROM
+%token REQUIRES ENSURES ALLOCATES FREES ASSIGNS LOOP NOTHING SLICE IMPACT JESSIE PRAGMA FROM
 %token EXITS BREAKS CONTINUES RETURNS
 %token VOLATILE READS WRITES
 %token LOGIC PREDICATE INDUCTIVE AXIOMATIC AXIOM LEMMA LBRACE RBRACE
@@ -1358,6 +1358,7 @@ beg_code_annotation:
 code_annotation:
 | slice_pragma     { APragma (Slice_pragma $1) }
 | impact_pragma    { APragma (Impact_pragma $1) }
+| jessie_pragma    { APragma (Jessie_pragma $1) }
 | FOR ne_behavior_name_list COLON ASSERT full_lexpr SEMICOLON
       { AAssert ($2,$5) }
 | FOR ne_behavior_name_list COLON INVARIANT full_lexpr SEMICOLON
@@ -1383,6 +1384,11 @@ impact_pragma:
 | IMPACT PRAGMA any_identifier SEMICOLON
     { if $3 = "stmt" then IPstmt
       else raise (Not_well_formed (loc(), "Unknown impact pragma")) }
+;
+
+jessie_pragma:
+| JESSIE PRAGMA full_lexpr SEMICOLON
+    { JPexpr $3 }
 ;
 
 /*** declarations and logical definitions ***/

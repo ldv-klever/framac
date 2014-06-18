@@ -1720,6 +1720,7 @@ class type cilVisitor = object
   method vloop_pragma: term loop_pragma -> term loop_pragma visitAction
   method vslice_pragma: term slice_pragma -> term slice_pragma visitAction
   method vimpact_pragma: term impact_pragma -> term impact_pragma visitAction
+  method vjessie_pragma: term jessie_pragma -> term jessie_pragma visitAction
 
   method vdeps: identified_term deps -> identified_term deps visitAction
   method vfrom: identified_term from -> identified_term from visitAction

@@ -1546,11 +1546,16 @@ and 'term impact_pragma =
   | IPexpr of 'term
   | IPstmt
 
+(** Pragmas for the Jessie and WP plugins of Frama-C. Type shared with Logic_ptree.*)
+and 'term jessie_pragma =
+  | JPexpr of 'term
+
 (** The various kinds of pragmas. Type shared with Logic_ptree. *)
 and 'term pragma =
   | Loop_pragma of 'term loop_pragma
   | Slice_pragma of 'term slice_pragma
   | Impact_pragma of 'term impact_pragma
+  | Jessie_pragma of 'term jessie_pragma
 
 (** all annotations that can be found in the code.
     Type shared with Logic_ptree. *)
