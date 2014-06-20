@@ -3053,7 +3053,7 @@ struct
     | _ -> raise Not_found
   let find_enum_tag x = match H.find env x with
     | EnvEnum item,_ ->
-      dummy_exp (Const (CEnum item)), typeOf item.eival
+      dummy_exp (Const (CEnum item)), TEnum (item.eihost, [])
     | _ -> raise Not_found
   let find_comp_type ~kind s = findCompType kind s []
 
