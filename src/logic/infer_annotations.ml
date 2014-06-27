@@ -41,10 +41,10 @@ let assigns_from_prototype kf =
   let rtyp, _, _, _ = splitFunctionTypeVI vi in
   let pointer_args,basic_args =
     List.partition (fun vi -> isPointerType vi.vtype) formals in
-  (* Remove args of type pointer to pointer *)
+  (* Remove args of type pointer to pointer and pointer to function *)
   let pointer_args =
     List.filter
-      (fun vi -> not (isPointerType (typeOf_pointed vi.vtype))) pointer_args
+      (fun vi -> let t = typeOf_pointed vi.vtype in not (isPointerType t || isFunctionType t)) pointer_args
   in
   (* Convert void* pointers to char* *)
   let pointer_args =
