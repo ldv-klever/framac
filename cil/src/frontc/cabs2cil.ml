@@ -1980,7 +1980,7 @@ type expAction =
                                          * side-effect is interesting *)
   | AType                               (* Only the type of the result
                                            is interesting.  *)
-  | ASet of bool * lval * lval list * typ
+  | ASet of bool * lval * lval list * typ * location
       (* Put the result in a given lval,
        * provided it matches the type. The
        * type is the type of the lval.
@@ -4708,7 +4708,7 @@ and doExp local_env
        *)
       (reads, se, e', t')
 
-    | ASet (is_real_write,lv, r, lvt) -> begin
+    | ASet (is_real_write,lv, r, lvt, loc) -> begin
       (* See if the set was done already *)
       match e.enode with
         Lval(lv') when lv == lv' ->
@@ -4721,9 +4721,9 @@ and doExp local_env
         (*Kernel.debug "finishExp: e = %a\n  e'' = %a\n" Cil_printer.pp_exp e Cil_printer.pp_exp e'';*)
         let writes = if is_real_write then [lv] else [] in
         ([], (* the reads are incorporated in the chunk. *)
-         ((unspecified_chunk empty) @@ (remove_reads lv se, ghost)) 
+         ((unspecified_chunk empty) @@ (remove_reads lv se, ghost))
          +++
-           (mkStmtOneInstr ~ghost (Set(lv, e'', CurrentLoc.get ())),
+           (mkStmtOneInstr ~ghost (Set(lv, e'', loc)),
             writes,writes,
             List.filter (fun x -> not (Cil.compareLval x lv)) r @ reads),
          e'', t'')
@@ -5127,7 +5127,7 @@ functions"
             AExp (Some _) -> AExp (Some typ)
           | AExp None -> what
           | ADrop | AType | AExpLeaveArrayFun -> what
-          | ASet (_, _, _, lvt) ->
+          | ASet (_, _, _, lvt, _) ->
               (* If the cast from typ to lvt would be dropped, then we
                * continue with a Set *)
               if false && Cil_datatype.Typ.equal typ lvt then
@@ -5528,7 +5528,7 @@ arguments"
 		Lval.Set.add lv local_env.authorized_reads }
           in
           (*[BM]: is this useful?
-            let (_, _, _) = doExp ghost false e2 (ASet(lv, lvt)) in*)
+            let (_, _, _) = doExp ghost false e2 (ASet(lv, lvt, loc)) in*)
           (* Catch the case of an lval that might depend on itself,
              e.g. p[p[0]] when p[0] == 0.  We need to use a temporary
              here if the result of the expression will be used:
@@ -5558,7 +5558,7 @@ arguments"
               else r1',lv, empty
             in
             let (r2,se2, _, _) =
-              doExp local_env false e2 (ASet(not needsTemp,tmplv, r1, lvt))
+              doExp local_env false e2 (ASet(not needsTemp,tmplv, r1, lvt, loc))
             in
             let (@@) s1 s2 = s1 @@ (s2, ghost) in
             (* Format.eprintf "chunk for assigns is %a@." d_chunk se2; *)
@@ -5929,13 +5929,13 @@ arguments"
                    (* Make a variable of the desired type *)
                    let is_real, destlv, r, destlvtyp =
                      match !pwhat with
-                       ASet (is_real,lv, r, lvt) -> is_real, lv, r, lvt
+                       ASet (is_real,lv, r, lvt, _) -> is_real, lv, r, lvt
                      | _ ->
                          let v = newTempVar "vararg" true resTyp in
                          locals := v::!locals;
                          false, var v, [], resTyp
                    in
-                   pwhat := (ASet (is_real, destlv, r, destlvtyp));
+                   pwhat := (ASet (is_real, destlv, r, destlvtyp, loc));
                    pargs := [marker; size;
                              new_exp ~loc
                                (CastE(voidPtrType,
@@ -6144,7 +6144,7 @@ arguments"
           match !pwhat with
           | ADrop -> addCall None (zero ~loc:e.expr_loc) intType
           | AType -> prestype := resType'
-          | ASet(is_real_var, lv, _, vtype) when !pis__builtin_va_arg ->
+          | ASet(is_real_var, lv, _, vtype, _) when !pis__builtin_va_arg ->
               (* Make an exception here for __builtin_va_arg *)
               addCall
                 ~is_real_var
@@ -6152,7 +6152,7 @@ arguments"
                 (new_exp ~loc:e.expr_loc (Lval(lv)))
                 vtype
 
-          | ASet(is_real_var, lv, _, vtype)
+          | ASet(is_real_var, lv, _, vtype, _)
 	      when (allow_return_collapse ~tf:resType' ~tlv:vtype)
               ->
               (* We can assign the result directly to lv *)
@@ -6270,7 +6270,7 @@ arguments"
               let tmp_var = var tmp in
               let tmp_lval = new_exp ~loc:e.expr_loc (Lval (tmp_var)) in
               let (r1, se1, _, _) =
-                 doExp local_env asconst e1 (ASet(false, tmp_var, [], tresult))
+                 doExp local_env asconst e1 (ASet(false, tmp_var, [], tresult, loc))
               in
               let se1 = local_var_chunk se1 tmp in
               let dangerous =
@@ -6329,12 +6329,12 @@ arguments"
               let tmp_var = var tmp in
               let tmp_lval = new_exp ~loc:e.expr_loc (Lval (tmp_var)) in
               let (r1,se1, _, _) =
-                doExp local_env asconst e1 (ASet(false, tmp_var, [], tresult))
+                doExp local_env asconst e1 (ASet(false, tmp_var, [], tresult, loc))
               in
               let se1 = local_var_chunk se1 tmp in
               let r3,se3,_,_ =
                 finishExp
-                  ~newWhat:(ASet(false,tmp_var, [], tresult)) r3 se3 e3' t3
+                  ~newWhat:(ASet(false,tmp_var, [], tresult, loc)) r3 se3 e3' t3
               in
               finishExp
                 (r1@r3)
@@ -6345,7 +6345,7 @@ arguments"
             | Some e2' ->
                 let is_real, lv, r, lvt, scope_chunk =
                   match what with
-                  | ASet (is_real, lv, r, lvt) -> is_real, lv, r, lvt, empty
+                  | ASet (is_real, lv, r, lvt, _) -> is_real, lv, r, lvt, empty
                   | _ ->
                     let descr =
                       Pretty_utils.sfprintf "%a?%a:%a"
@@ -6358,11 +6358,11 @@ arguments"
                 in
                 (* Now do e2 and e3 for real *)
                 let (r2,se2, _, _) =
-                  finishExp ~newWhat:(ASet(is_real,lv,r,lvt))
+                  finishExp ~newWhat:(ASet(is_real,lv,r,lvt, loc))
                     r2 se2 e2' t2
                 in
                 let (r3, se3, _, _) =
-                  finishExp ~newWhat:(ASet(is_real,lv, r, lvt))
+                  finishExp ~newWhat:(ASet(is_real,lv, r, lvt, loc))
                     r3 se3 e3' t3
                 in
                 let cond = compileCondExp ~ghost false ce1 se2 se3 in
