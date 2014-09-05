@@ -1208,7 +1208,7 @@ enumerator:
 
 declarator:  /* (* ISO 6.7.5. Plus Microsoft declarators.*) */
    pointer_opt direct_decl attributes_with_asm {
-     let (n, decl) = $2 in (n, applyPointer (fst $1) decl, $3, (snd $1))
+     let (n, decl) = $2 in (n, applyPointer (fst $1) decl, $3, (Parsing.symbol_start_pos (), Parsing.symbol_end_pos()))
    }
 ;
 
