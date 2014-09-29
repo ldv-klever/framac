@@ -1000,6 +1000,10 @@ statement:
       let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
       no_ghost [ASMGOTO ($3, $5, $6, loc)]
     }
+|   ASM asmattr GOTO LPAREN asmtemplate asmoutputs RPAREN SEMICOLON {
+      let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
+      no_ghost [ASMGOTO ($2, $5, $6, loc)]
+    }
 |   ASM asmattr LPAREN asmtemplate asmoutputs RPAREN SEMICOLON {
       let loc = Parsing.symbol_start_pos (), Parsing.symbol_end_pos () in
       no_ghost [ASM ($2, $4, $5, loc)]
