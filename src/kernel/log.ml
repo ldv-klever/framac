@@ -129,7 +129,7 @@ let print_on_output job =
   let fmt = lock_terminal stdout in
   try job fmt ; unlock_terminal stdout fmt
   with error -> unlock_terminal stdout fmt ; raise error
-    
+
 (* -------------------------------------------------------------------------- *)
 (* --- Delayed Lock until first write                                     --- *)
 (* -------------------------------------------------------------------------- *)
@@ -293,8 +293,11 @@ let echo_source output = function
   | None -> ()
   | Some src ->
       let s =
-        Printf.sprintf "%s:%d:" 
-          (Filepath.pretty src.Lexing.pos_fname) src.Lexing.pos_lnum
+        let col =
+          let col = Lexing.(src.pos_cnum - src.pos_bol) in if col >= 0 then col else 0
+        in
+        Printf.sprintf "%s:%d,%d:"
+          (Filepath.pretty src.Lexing.pos_fname) src.Lexing.pos_lnum col
       in
       output s 0 (String.length s)
 
@@ -604,7 +607,7 @@ sig
   val verbose_atleast: int -> bool
   val debug_atleast: int -> bool
 
-  val printf : ?level:int -> ?dkey:category -> 
+  val printf : ?level:int -> ?dkey:category ->
     ?current:bool -> ?source:Lexing.position ->
     ?append:(Format.formatter -> unit) ->
     ?header:(Format.formatter -> unit) ->
@@ -701,18 +704,18 @@ struct
         add super;
         if String.contains super ':' then
           aux (String.sub super 0 (String.rindex super ':'))
-      in 
+      in
       add "";
       aux s
-    end; 
+    end;
     res
 
   let get_category s =
     let s = if s = "*" then "" else s in
-    try Hashtbl.find categories s 
-    with Not_found -> 
+    try Hashtbl.find categories s
+    with Not_found ->
       (* returning [s] itself is required to get indirect kernel categories
-	 (e.g. project) to work. *) 
+	 (e.g. project) to work. *)
       Category_set.singleton s
 
   let get_all_categories () = get_category ""
@@ -725,7 +728,7 @@ struct
 
   let is_debug_key_enabled s = Category_set.mem s !debug_keys
 
-   let has_debug_key = function 
+   let has_debug_key = function
     | None -> true (* No key means to be displayed each time *)
     | Some k -> Category_set.mem k !debug_keys
 
@@ -737,7 +740,7 @@ struct
   let prefix_failure = Label (Printf.sprintf "[%s] failure: " label)
   let prefix_dkey = function
     | None -> if debug_atleast 1 then prefix_all else prefix_first
-    | Some key -> 
+    | Some key ->
       let lab = (Printf.sprintf "[%s:%s] " label key) in
       if debug_atleast 1 then Prefix lab else Label lab
 
@@ -1085,7 +1088,7 @@ struct
       begin
 	(* Header is a regular message *)
 	let header = match header with None -> noprint | Some h -> h in
-	logtext channel ~kind:Result 
+	logtext channel ~kind:Result
 	  ~prefix:(prefix_dkey dkey) ~source:(get_source current source)
           ~emitwith:(Some noemit) ~echo:true ~append:None ~once:false
           "%t" header ;
@@ -1113,7 +1116,7 @@ struct
 	with error ->
 	  unlock_terminal stdout fmt ; raise error
       end
-    else 
+    else
       nullprintf text
 
 end
