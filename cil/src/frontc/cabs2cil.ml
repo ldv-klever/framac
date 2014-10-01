@@ -685,12 +685,16 @@ let newAlphaName (globalscope: bool) (* The name should have global scope *)
           then fst (H.find env lookupname)
           else raise Not_found
       in
-      Kernel.error ~current:true 
-        "redefinition of '%s'%s in the same scope. \
-         Previous declaration was at %a"
-        origname (if is_same_kind kind info then "" else " with different kind")
-        Cil_datatype.Location.pretty oldloc
-    with 
+      if kind <> "type" || not (is_same_kind kind info) then
+        (* GCC allows to redefine typedefs with the same type.
+           Here the current (new) definition is inaccessable, so
+           the check is implemented in doTypedef. *)
+        Kernel.error ~current:true
+          "redefinition of '%s'%s in the same scope. \
+           Previous declaration was at %a"
+          origname (if is_same_kind kind info then "" else " with different kind")
+          Cil_datatype.Location.pretty oldloc
+    with
       | Not_found -> () (* no clash of identifiers *)
       | Failure _ ->
         Kernel.fatal
@@ -8349,6 +8353,37 @@ and doTypedef ghost ((specs, nl): A.name_group) =
         let namedTyp = TNamed(ti, []) in
         (* Register the type. register it as local because we might be in a
          * local context  *)
+        (* Check for compatibility with possible earlier declaration
+           (i.e. also the definition in case of types).
+           newAlphaName doesn't fail with errors for type redeclarations.
+           Duplicate typedefs with the same (not just compatible) type are allowed by C1X. *)
+        let previous_definition_opt =
+          let lookupname = kindPlusName "type" n in
+          try
+            let envdata, loc =
+              try
+                H.find genv lookupname
+              with
+              | Not_found ->
+                H.find env lookupname
+            in
+            match envdata with
+            | EnvTyp (TNamed (ti, _)) -> Some (ti, loc)
+            | _ -> None
+          with
+          | Not_found -> None
+        in
+        begin match previous_definition_opt with
+        | None -> ()
+        | Some (old_ti, _) when Cil_datatype.Typ.equal old_ti.ttype ti.ttype -> ()
+        | Some (old_ti, old_loc) ->
+          Kernel.error ~current:true
+          "Type `%s' is redefined with different type in the same scope (here defined as `%a', earlier was `%a'). \
+           Previous declaration was at %a"
+          n
+          Cil_printer.pp_typ ti.ttype Cil_printer.pp_typ old_ti.ttype
+          Cil_datatype.Location.pretty old_loc
+        end;
         addLocalToEnv (kindPlusName "type" n) (EnvTyp namedTyp);
         cabsPushGlobal (GType (ti, CurrentLoc.get ()))
       with _ when Cilmsg.had_errors () && continueOnError -> begin
