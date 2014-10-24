@@ -1143,6 +1143,7 @@ let rec castTo ?loc
             castTo ?loc fstfield.ftype nt' e'
         end
       end
+    | ot', nt' when Typ.equal ot' nt' -> (nt', e) (* The types are equal modulo typedefs, no cast needed *)
     | _ -> 
       error "cannot cast from %a to %a@\n" Cil_printer.pp_typ ot Cil_printer.pp_typ nt'
   end
