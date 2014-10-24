@@ -1,0 +1,77 @@
+# OCaml old text annotation files
+*.annot
+
+# OCaml new binary annotation files
+# for module implementations
+*.cmt
+# for module interfaces
+*.cmti
+
+# OCaml compiled interfaces
+*.cmi
+
+# OCaml native-compiled module files
+*.cmx
+
+# OCaml bytecode-compiled module files
+*.cmo
+
+# C object file (also corresponding C object files for OCaml modules)
+*.o
+
+# OCamldep module dependency files (in Make-like format)
+*.depend
+
+# OCaml native executables (ELFs)
+*.opt
+
+# OCaml bytecode executables (ELFs with virtual machine included)
+*.byte
+
+# OCamlyacc output files
+*.output
+
+# Generated files and dirs
+autom4te.cache/
+cil/src/frontc/clexer.ml
+cil/src/frontc/cparser.ml
+cil/src/frontc/cparser.mli
+cil/src/logic/logic_lexer.ml
+cil/src/logic/logic_parser.ml
+cil/src/logic/logic_parser.mli
+cil/src/logic/logic_preprocess.ml
+config.log
+config.status
+configure
+doc/code/docgen.ml
+lib/
+ptests/ptests_config.ml
+share/Makefile.config
+share/Makefile.dynamic_config
+share/Makefile.kernel
+share/frama-c.rc
+src/aorai/Makefile
+src/aorai/autom4te.cache/
+src/aorai/configure
+src/kernel/config.ml
+src/lib/dynlink_common_interface.ml
+src/lib/integer.ml
+src/obfuscator/Makefile
+src/obfuscator/autom4te.cache/
+src/obfuscator/configure
+src/report/Makefile
+src/report/autom4te.cache/
+src/report/configure
+src/security_slicing/Makefile
+src/security_slicing/autom4te.cache/
+src/security_slicing/configure
+src/toplevel/toplevel_boot.ml
+src/wp/Makefile
+src/wp/autom4te.cache/
+src/wp/configure
+src/wp/qed/src/numbers.ml
+src/wp/share/instwp
+src/wp/share/why3/why3.conf
+
+# ? some dummy empty _DEP files
+*_DEP
