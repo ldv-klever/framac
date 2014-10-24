@@ -1280,9 +1280,9 @@ module Printer (PE : sig val edge_txt : edge -> string end) = struct
       | Vstart | Vend | Vexit -> [`Color 0x0000FF; `Shape `Doublecircle]
       | VfctIn | VfctOut -> [`Color 0x0000FF; `Shape `Box]
       | VblkIn _ | VblkOut _ -> [`Shape `Box]
-      | Vloop _ | Vloop2 _ -> [`Color 0xFF0000; `Style [`Filled]]
+      | Vloop _ | Vloop2 _ -> [`Color 0xFF0000; `Style `Filled]
       | Vtest _ | Vswitch _ ->
-        [`Color 0x00FF00; `Style [`Filled]; `Shape `Diamond]
+        [`Color 0x00FF00; `Style `Filled; `Shape `Diamond]
       | Vcall _ | Vstmt _ -> []
     in (`Label (String.escaped label))::attr
 
@@ -1292,15 +1292,15 @@ module Printer (PE : sig val edge_txt : edge -> string end) = struct
     let attr = [] in
     let attr = (`Label (String.escaped (PE.edge_txt e)))::attr in
     let attr =
-      if is_back_edge e then (`Constraint false)::(`Style [`Bold])::attr
+      if is_back_edge e then (`Constraint false)::(`Style `Bold)::attr
       else attr
     in
     let attr = match (edge_type e) with
       | Ethen | EbackThen -> (`Color 0x00FF00)::attr
       | Eelse | EbackElse -> (`Color 0xFF0000)::attr
-      | Ecase [] -> (`Color 0x0000FF)::(`Style [`Dashed])::attr
+      | Ecase [] -> (`Color 0x0000FF)::(`Style `Dashed)::attr
       | Ecase _ -> (`Color 0x0000FF)::attr
-      | Enext -> (`Style [`Dotted])::attr
+      | Enext -> (`Style `Dotted)::attr
       | Eback -> attr (* see is_back_edge above *)
       | Enone -> attr
     in
@@ -1310,7 +1310,7 @@ module Printer (PE : sig val edge_txt : edge -> string end) = struct
 
   let get_subgraph v =
      let mk_subgraph name attrib =
-      let attrib = (`Style [`Filled]) :: attrib in
+      let attrib = (`Style `Filled) :: attrib in
           Some { Graph.Graphviz.DotAttributes.sg_name= name;
                  sg_parent = None;
                  sg_attributes = attrib }

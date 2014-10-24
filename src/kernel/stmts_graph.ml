@@ -167,12 +167,12 @@ module TP = struct
 
   let vertex_attributes s =
     match s.skind with
-    | Loop _ -> [`Color 0xFF0000; `Style [`Filled]]
-    | If _ -> [`Color 0x00FF00; `Style [`Filled]; `Shape `Diamond]
-    | Return _ -> [`Color 0x0000FF; `Style [`Filled]]
+    | Loop _ -> [`Color 0xFF0000; `Style `Filled]
+    | If _ -> [`Color 0x00FF00; `Style `Filled; `Shape `Diamond]
+    | Return _ -> [`Color 0x0000FF; `Style `Filled]
     | Block _ -> [`Shape `Box; `Fontsize 8]
-    | Goto _ -> [`Shape `Diamond; `Color 0x00FFFF ; `Style [`Filled]]
-    | Instr (Skip _) -> [`Color 0x00FFFF ; `Style [`Filled]]
+    | Goto _ -> [`Shape `Diamond; `Color 0x00FFFF ; `Style `Filled]
+    | Instr (Skip _) -> [`Color 0x00FFFF ; `Style `Filled]
     | _ -> []
   let default_vertex_attributes _ = []
 

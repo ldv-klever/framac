@@ -63,7 +63,7 @@ module Printer = struct
 
   let graph_attributes (title, _) = [`Label title]
 
-  let default_vertex_attributes _g = [`Style [`Filled]]
+  let default_vertex_attributes _g = [`Style `Filled]
   let default_edge_attributes _g = []
 
   let vertex_attributes (s, has_postdom) =

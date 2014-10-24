@@ -1481,12 +1481,12 @@ module Consolidation_graph = struct
                 let s = get_status p in
 		let color = status_color p s in
                 let style = match s with
-                  | Never_tried -> [`Style [`Bold]; `Width 0.8 ]
-                  | _ -> [`Style [`Filled]]
+                  | Never_tried -> [`Style `Bold; `Width 0.8 ]
+                  | _ -> [`Style `Filled]
                 in
 		style @ [ label v; `Color color; `Shape `Box ]
               | Emitter _ as v -> 
-		[ label v; `Shape `Diamond; `Color 0xb0c4de; `Style [`Filled] ]
+		[ label v; `Shape `Diamond; `Color 0xb0c4de; `Style `Filled ]
               | Tuning_parameter _ as v ->
 		[ label v; (*`Style `Dotted;*) `Color 0xb0c4de;  ]
 	      (*| Correctness_parameter _ (*as v*) -> assert false (*[ label v; `Color 0xb0c4de ]*)*)
@@ -1495,7 +1495,7 @@ module Consolidation_graph = struct
 	      | None -> []
 	      | Some s ->
 		let c = emitted_status_color s in
-		[ `Color c; `Fontcolor c; `Style [`Bold] ]
+		[ `Color c; `Fontcolor c; `Style `Bold ]
 
         let default_vertex_attributes _ = []
         let default_edge_attributes _ = []

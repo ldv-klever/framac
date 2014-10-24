@@ -1142,7 +1142,7 @@ let rec castTo ?loc
             (* Continue casting *)
             castTo ?loc fstfield.ftype nt' e'
         end
-    end
+      end
     | _ -> 
       error "cannot cast from %a to %a@\n" Cil_printer.pp_typ ot Cil_printer.pp_typ nt'
   end

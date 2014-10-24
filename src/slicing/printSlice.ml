@@ -227,7 +227,7 @@ module PrintProject = struct
 
   let graph_attributes (name, _) = [`Label name]
 
-  let default_vertex_attributes _ = [`Style [`Filled]]
+  let default_vertex_attributes _ = [`Style `Filled]
 
   let vertex_name v = match v with
     | Src fi -> SlicingMacros.fi_name fi
@@ -280,16 +280,16 @@ module PrintProject = struct
 
   let edge_attributes (e, call) =
     let attrib = match e with
-    | (Src _, Src _) -> [`Style [`Invis]]
-    | (OptSliceCallers _, _) -> [`Style [`Invis]]
-    | (_, OptSliceCallers _) -> [`Style [`Invis]]
+    | (Src _, Src _) -> [`Style `Invis]
+    | (OptSliceCallers _, _) -> [`Style `Invis]
+    | (_, OptSliceCallers _) -> [`Style `Invis]
     | _ -> []
     in match call with None -> attrib
       | Some call -> (`Label (string_of_int call.sid)):: attrib
 
   let get_subgraph v =
     let mk_subgraph name attrib =
-      let attrib = (*(`Label name) ::*) (`Style [`Filled]) :: attrib in
+      let attrib = (*(`Label name) ::*) (`Style `Filled) :: attrib in
           Some { Graph.Graphviz.DotAttributes.sg_name= name;
                  sg_parent = None;
                  sg_attributes = attrib }

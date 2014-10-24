@@ -626,7 +626,7 @@ module Pdg = struct
 
     let graph_attributes _ = [`Rankdir `TopToBottom ]
 
-    let default_vertex_attributes _ = [`Style [`Filled]]
+    let default_vertex_attributes _ = [`Style `Filled]
     let vertex_name v = string_of_int (Node.id v)
 
     let vertex_attributes v =
@@ -711,13 +711,13 @@ module Pdg = struct
         if Dpd.is_ctrl d then (`Arrowtail `Odot)::attrib else attrib
       in
       let attrib =
-        if Dpd.is_addr d then (`Style [`Dotted])::attrib else attrib
+        if Dpd.is_addr d then (`Style `Dotted)::attrib else attrib
       in
         attrib
 
     let get_subgraph v =
       let mk_subgraph name attrib =
-        let attrib = (`Style [`Filled]) :: attrib in
+        let attrib = (`Style `Filled) :: attrib in
         Some { Graph.Graphviz.DotAttributes.sg_name= name;
                sg_parent = None;
                sg_attributes = attrib }

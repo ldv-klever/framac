@@ -102,8 +102,8 @@ module Service =
          let name = Kernel_function.get_name
          let attributes v =
            [ `Style
-               [if Kernel_function.is_definition v then `Bold
-                else `Dotted] ]
+               (if Kernel_function.is_definition v then `Bold
+                else `Dotted) ]
          let entry_point () =
            try Some (fst (Globals.entry_point ()))
            with Globals.No_such_entry_point _ -> None

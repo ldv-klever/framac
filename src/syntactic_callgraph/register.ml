@@ -37,8 +37,8 @@ module Service =
          let name v = nodeName v.cnInfo
          let attributes v =
            [ match v.cnInfo with
-             | NIVar (_,b) when not !b -> `Style [`Dotted]
-             | _ -> `Style [`Bold] ]
+             | NIVar (_,b) when not !b -> `Style `Dotted
+             | _ -> `Style `Bold ]
          let equal v1 v2 = id v1 = id v2
 	 let compare v1 v2 = 
 	   let i1 = id v1 in
