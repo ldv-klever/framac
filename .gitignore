@@ -33,6 +33,7 @@
 
 # Generated files and dirs
 .project
+.paths
 autom4te.cache/
 cil/src/frontc/clexer.ml
 cil/src/frontc/cparser.ml
