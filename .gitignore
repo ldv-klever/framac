@@ -31,9 +31,14 @@
 # OCamlyacc output files
 *.output
 
+# Coq compiled files
+*.vo
+*.glob
+
 # Generated files and dirs
 .project
 .paths
+.make-wp-coq
 autom4te.cache/
 cil/src/frontc/clexer.ml
 cil/src/frontc/cparser.ml

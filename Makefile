@@ -1343,7 +1343,10 @@ bin/toplevel.opt$(EXE): $(ALL_BATCH_CMX) $(GEN_OPT_LIBS) \
 	$(PRINT_LINKING) $@
 	$(OCAMLOPT) $(OLINKFLAGS) -o $@ $(OPT_LIBS) $(ALL_BATCH_CMX)
 
-share/Makefile.kernel: Makefile share/Makefile.config share/Makefile.common
+lib:
+	mkdir -p lib lib/gui lib/plugins
+
+share/Makefile.kernel: lib Makefile share/Makefile.config share/Makefile.common
 	$(PRINT_MAKING) $@
 	$(RM) $@
 	$(ECHO) "# This makefile was automatically generated." > $@
