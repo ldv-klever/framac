@@ -3378,7 +3378,17 @@ struct
     | IPstmt as ip -> ip
 
   let jessie_pragma env = function
-    | JPexpr t -> JPexpr (term env t)
+    | JPexpr t ->
+        let loc = t.lexpr_loc in
+        let t =
+          term env t |> function
+          | { term_node = TCoerce (t1, ty) } as t ->
+              check_non_void_ptr loc t1.term_type;
+              { t with
+                term_node = TCoerce (mk_logic_pointer_or_StartOf t1, ty) }
+          | _ -> error loc "coercion expected in Jessie pragma (e.g. jessie pragma p :> char *)"
+        in
+        JPexpr t
 
   let code_annot_env () =
     let env = append_here_label (append_pre_label (Lenv.empty())) in
