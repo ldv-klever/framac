@@ -36,6 +36,7 @@
 *.glob
 
 # Generated files and dirs
+.settings
 .project
 .paths
 .make-wp-coq
