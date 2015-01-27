@@ -127,6 +127,41 @@ module Model_info =
       let size = 17
      end)
 
+module Forward_decls =
+  State_builder.Hashtbl
+    (Datatype.String.Hashtbl)
+    (Datatype.Quadruple
+       (Logic_ctor_info.Datatype) (Logic_type_info.Datatype) (Logic_info.Datatype) (Model_info.Datatype))
+    (struct
+      let name = "forward logic declarations table"
+      let dependencies = []
+      let size = 2
+    end)
+
+let try_update_forward_logic_ctor,
+    try_update_forward_logic_type,
+    try_update_forward_logic_info,
+    try_update_forward_model_info =
+  let mk get name f =
+    let module H = Datatype.String.Hashtbl in
+    let tbls = Forward_decls.find "" in
+    f (H.find (get tbls) name);
+    H.remove (get tbls) name
+  in
+  mk (fun (ctors, _, _, _) -> ctors),
+  mk (fun (_, types, _, _) -> types),
+  mk (fun (_, _, infos, _) -> infos),
+  mk (fun (_, _, _, models) -> models)
+
+let check_forward_declarations () =
+  let ctors, types, infos, models = Forward_decls.find "" in
+  let error = error (CurrentLoc.get ()) "Unresolved forwardly declared %s `%s'" in
+  let module H = Datatype.String.Hashtbl in
+  H.iter (fun k _ -> error "logic type constructor" k) ctors;
+  H.iter (fun k _ -> error "logic type" k) types;
+  H.iter (fun k _ -> error "logic function or predicate" k) infos;
+  H.iter (fun k _ -> error "model variable or field" k) models
+
 (* We depend from ast, but it is initialized after Logic_typing... *)
 let init_dependencies from =
   State_dependency_graph.add_dependencies
@@ -136,6 +171,7 @@ let init_dependencies from =
       Logic_ctor_info.self;
       Lemmas.self;
       Model_info.self;
+      Forward_decls.self
     ]
 
 let builtin_to_logic b =
@@ -185,34 +221,55 @@ let add_logic_function_gen is_same_profile l =
   if is_builtin_logic_function l.l_var_info.lv_name then
     error (CurrentLoc.get())
       "logic function or predicate %s is built-in. You can not redefine it"
-      l.l_var_info.lv_name
-  ;
-  List.iter
-    (fun li ->
-       if is_same_profile li l then
-	 error (CurrentLoc.get ())
-	   "already declared logic function or predicate %s with same profile"
-	   l.l_var_info.lv_name)
-    (Logic_info.find_all l.l_var_info.lv_name);
-  Logic_info.add l.l_var_info.lv_name l
+      l.l_var_info.lv_name;
+  try
+    try_update_forward_logic_info l.l_var_info.lv_name @@
+    fun l' ->
+    l'.l_var_info <- l.l_var_info;
+    l'.l_labels <- l.l_labels;
+    l'.l_tparams <- l.l_tparams;
+    l'.l_type <- l.l_type;
+    l'.l_profile <- l.l_profile;
+    l'.l_body <- l.l_body
+  with
+  | Not_found ->
+    List.iter
+      (fun li ->
+         if is_same_profile li l then
+	   error (CurrentLoc.get ())
+             "already declared logic function or predicate %s with same profile"
+             l.l_var_info.lv_name)
+      (Logic_info.find_all l.l_var_info.lv_name);
+    Logic_info.add l.l_var_info.lv_name l
 
 let remove_logic_function = Logic_info.remove
 
 let is_logic_type = Logic_type_info.mem
 let find_logic_type = Logic_type_info.find
 let add_logic_type t infos =
-  if is_logic_type t
+  try
+    try_update_forward_logic_type t @@
+    fun t' ->
+    t'.lt_def <- infos.lt_def
+  with
+  | Not_found ->
+    if is_logic_type t
     (* type variables hide type definitions on their scope *)
-  then error (CurrentLoc.get ()) "logic type %s already declared" t
-  else Logic_type_info.add t infos
+    then error (CurrentLoc.get ()) "logic type %s already declared" t
+    else Logic_type_info.add t infos
 let remove_logic_type = Logic_type_info.remove
 
 let is_logic_ctor = Logic_ctor_info.mem
 let find_logic_ctor = Logic_ctor_info.find
 let add_logic_ctor c infos =
-  if is_logic_ctor c
-  then error (CurrentLoc.get ()) "logic constructor %s already declared" c
-  else Logic_ctor_info.add c infos
+  try
+    try_update_forward_logic_ctor infos.ctor_name @@
+    fun _ -> ()
+  with
+  | Not_found ->
+    if is_logic_ctor c
+    then error (CurrentLoc.get ()) "logic constructor %s already declared" c
+    else Logic_ctor_info.add c infos
 let remove_logic_ctor = Logic_ctor_info.remove
 
 let is_model_field = Model_info.mem
@@ -236,11 +293,15 @@ let find_model_field s typ =
 
 let add_model_field m = 
   try
-    ignore (find_model_field m.mi_name m.mi_base_type);
-    error (CurrentLoc.get())
-      "Cannot add model field %s to type %a: it already exists."
-      m.mi_name Cil_datatype.Typ.pretty m.mi_base_type
-  with Not_found -> Model_info.add m.mi_name m
+    try_update_forward_model_info m.mi_name @@
+    fun _ -> ()
+  with Not_found ->
+    try
+      ignore (find_model_field m.mi_name m.mi_base_type);
+      error (CurrentLoc.get())
+        "Cannot add model field %s to type %a: it already exists."
+        m.mi_name Cil_datatype.Typ.pretty m.mi_base_type
+    with Not_found -> Model_info.add m.mi_name m
 
 let remove_model_field = Model_info.remove
 
@@ -267,7 +328,25 @@ module Builtins= struct
     else begin Applied.set true; apply () end
 end
 
-let prepare_tables () =
+let save_tables filename =
+  if not (Forward_decls.mem filename) then
+    let module H = Datatype.String.Hashtbl in
+    let (ctors, types, infos, models) as tbls =
+      H.create (Logic_ctor_info.length ()),
+      H.create (Logic_type_info.length ()),
+      H.create (Logic_info.length ()),
+      H.create (Model_info.length ())
+    in
+    Logic_ctor_info.iter (H.add ctors);
+    Logic_type_info.iter (H.add types);
+    Logic_info.iter (H.add infos);
+    Model_info.iter (H.add models);
+    Forward_decls.add filename tbls
+  else
+    error (CurrentLoc.get ())
+      "The forward declarations from file `%s' have already been saved" filename
+
+let prepare_tables filename imports =
   Logic_ctor_info.clear ();
   Logic_type_info.clear ();
   Logic_info.clear ();
@@ -275,7 +354,51 @@ let prepare_tables () =
   Model_info.clear ();
   Logic_type_builtin.iter Logic_type_info.add;
   Logic_ctor_builtin.iter Logic_ctor_info.add;
-  Logic_builtin_used.iter (fun x -> Logic_info.add x.l_var_info.lv_name x)
+  Logic_builtin_used.iter (fun x -> Logic_info.add x.l_var_info.lv_name x);
+  begin try
+    Forward_decls.replace "" (Forward_decls.find filename)
+  with
+  | Not_found -> error (CurrentLoc.get ()) "The file `%s' has not been pre-parsed for imports" filename
+  end;
+  ListLabels.iter ((filename, []) :: imports)
+    ~f:(fun (filename', names) ->
+        try
+          let ctors, types, infos, models = Forward_decls.find filename' in
+          let module H = Datatype.String.Hashtbl in
+          let to_import = H.create (List.length names) in
+          List.iter (fun name -> H.add to_import name true) names;
+          let check () =
+            H.iter
+              (fun name flag ->
+                 if flag then
+                   error (CurrentLoc.get ())
+                     "The name `%s' requested for import from file `%s' \
+                      was not found"
+                     name filename')
+              to_import
+          in
+          let add (type data) (module T : State_builder.Hashtbl with type key = string and type data = data) k v =
+            let listed, imported = names = [] || H.mem to_import k, T.mem k in
+            if listed && not imported then begin
+              T.add k v;
+              H.replace to_import k false
+            end else if listed then
+              error (CurrentLoc.get ())
+                "The name `%s' requested for import from file `%s' \
+                 has already been imported or declared in file `%s'"
+                k filename' filename
+          in
+          H.iter (add (module Logic_ctor_info)) ctors;
+          H.iter (add (module Logic_type_info)) types;
+          H.iter (add (module Logic_info)) infos;
+          H.iter (add (module Model_info)) models;
+          check ()
+        with
+        | Not_found ->
+          error (CurrentLoc.get ())
+            "The file `%s' specified in import declaration of file `%s' was not provided \
+             to the Frama-C front-end"
+             filename' filename)
 
 (** C typedefs *)
 (**
