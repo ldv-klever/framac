@@ -956,11 +956,11 @@ let safe_remove_file f =
   if not (Kernel.Debug_category.exists (fun x -> x = "parser")) then
     Extlib.safe_remove f
 
-let parse = function
+let parse_to_cabs = function
   | NoCPP f ->
       if not (Sys.file_exists  f) then
         Kernel.abort "preprocessed file %S does not exist" f;
-      Frontc.parse f ()
+      Frontc.parse_to_cabs f
   | NeedCPP (f, cmdl) ->
       if not (Sys.file_exists  f) then
         Kernel.abort "source file %S does not exist" f;
@@ -1048,11 +1048,10 @@ preprocessor command or use the option \"-cpp-command\"."
           ppf'
         end else ppf
       in
-      let (cil,(_,defs)) = Frontc.parse ppf () in
-      cil.fileName <- f;
+      let _, decls = Frontc.parse_to_cabs ppf in
       safe_remove_file ppf;
-      (cil,(f,defs))
-  | External (f,suf) ->
+      f, decls
+  | External (f, suf) ->
       if not (Sys.file_exists f) then
         Kernel.abort "file %S does not exist." f;
       try Hashtbl.find check_suffixes suf f
@@ -1095,26 +1094,65 @@ let files_to_cil files =
      Otherwise the order of files on the command line will not be consistantly
      handled. *)
     Kernel.feedback ~level:2 "parsing";
-    let files,cabs =
-      List.fold_left
-        (fun (acca,accc) f ->
-           try
-             let a,c = parse f in
-	     Kernel.debug ~dkey:dkey_print_one "result of parsing %s:@\n%a"
-	       (get_name f) Cil_printer.pp_file a;
-	     if Cilmsg.had_errors () then raise Exit;
-             a::acca, c::accc
-           with exn when Cilmsg.had_errors () ->
+    let cabs_imports =
+      List.map
+        (fun f ->
+           let fname, decls =
+             try
+               parse_to_cabs f
+             with exn when Cilmsg.had_errors () ->
              if Kernel.Debug.get () >= 1 then raise exn
              else
-               Kernel.abort "skipping file %S that has errors." (get_name f))
-        ([],[])
+               Kernel.abort "skipping file %S that has parsing errors."
+                 (match f with NoCPP f | NeedCPP (f, _) | External (f, _) -> f)
+           in
+           let decls, imports =
+             List.fold_left
+               (fun (decls, imports) ->
+                  function
+                  | b, Cabs.GLOBANNOT l ->
+                    let l, imports =
+                      List.fold_left
+                        (fun (decls, imports) ->
+                           function
+                           | { Logic_ptree.decl_node = Logic_ptree.LDimport (fname, names) } ->
+                             decls, (fname, names) :: imports
+                           | decl -> decl :: decls, imports)
+                        ([], imports)
+                        l
+                    in
+                    begin match l with
+                    | [] -> decls, imports
+                    | _ :: _ -> (b, Cabs.GLOBANNOT l) :: decls, imports
+                    end
+                  | decl -> decl :: decls, imports)
+               ([], [])
+               decls
+           in
+           (fname, decls), imports)
         files
+    in
+    let files =
+      let parse ~stage cabs =
+        try
+          let file = Frontc.parse ~stage cabs in
+          file.fileName <- fst cabs;
+	  Kernel.debug ~dkey:dkey_print_one "result of parsing %s:@\n%a"
+            (fst cabs) Cil_printer.pp_file file;
+	  if Cilmsg.had_errors () then raise Exit;
+          file
+        with exn when Cilmsg.had_errors () ->
+          if Kernel.Debug.get () >= 1 then raise exn
+          else
+            Kernel.abort "skipping file %S that has errors." (fst cabs)
+      in
+      List.iter (fun (cabs, _) -> ignore @@ parse ~stage:`Names cabs) cabs_imports;
+      List.iter (fun (cabs, imports) -> ignore @@ parse ~stage:(`Types (fst cabs, imports)) cabs) cabs_imports;
+      List.map (fun (cabs, imports) -> parse ~stage:(`Bodies (fst cabs, imports)) cabs) cabs_imports
     in
     (* fold_left reverses the list order.
        This is an issue with pre-registered files. *)
-    let files = List.rev files in
-    let cabs = List.rev cabs in
+    let cabs = List.map fst cabs_imports in
     Ast.UntypedFiles.set cabs;
     debug_globals files;
   (* Clean up useless parts *)

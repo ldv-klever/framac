@@ -111,6 +111,7 @@
         "global",    GLOBAL, false;
         "if", IF, true;
 	"impact", IMPACT, false;
+        "import", IMPORT, false;
 	"inductive", INDUCTIVE, false;
 	"include", INCLUDE, false;(* ACSL extension for external spec file *)
         "int", INT, true;

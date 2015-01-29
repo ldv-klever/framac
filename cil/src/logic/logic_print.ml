@@ -356,6 +356,10 @@ let rec print_decl fmt d =
 	  (pp_list ~pre:"@[" ~sep:",@ " ~suf:"@]" print_lexpr) tsets
           (pp_opt ~pre:"@ reads@ " pp_print_string) read
           (pp_opt ~pre:"@ writes@ " pp_print_string) write
+    | LDimport (file, names) ->
+      fprintf fmt "@[<2>import@ \"%s\" %a;@]"
+        file
+        (pp_list ~pre:"(" ~sep:",@ " ~suf:")" pp_print_string) names
 
 let print_deps fmt deps =
   match deps with

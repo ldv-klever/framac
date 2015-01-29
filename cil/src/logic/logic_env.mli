@@ -50,7 +50,15 @@ val builtin_states: State.t list
 
 (** Prepare all internal tables before their uses:
     clear all tables except builtins. *)
-val prepare_tables : unit -> unit
+val prepare_tables :
+  ?stage:[ `Names
+         | `Types of string * (string * string list) list
+         | `Bodies of string * (string * string list) list  ] -> unit -> unit
+
+(** Save forward declaration tables after the first pass ([stage = `Names]) *)
+val save_tables : string -> unit
+
+val check_forward_declarations : unit -> unit
 
 (** {3 Add an user-defined object} *)
 

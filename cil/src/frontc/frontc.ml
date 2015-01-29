@@ -135,15 +135,15 @@ and parse_to_cabs_inner (fname : string) =
 module Syntactic_transformations = Hook.Fold(struct type t = Cabs.file end)
 let add_syntactic_transformation = Syntactic_transformations.extend
 
-let parse fname =
-  Kernel.feedback ~level:2 "Parsing %s to Cabs" fname ;
+let parse_to_cabs fname =
+  Kernel.feedback ~level:2 "Parsing %s to Cabs" fname;
   let cabs = parse_to_cabs fname in
   let cabs = Syntactic_transformations.apply cabs in
-  (*Cprint.printFile stdout cabs;*)
-  (* Now (return a function that will) convert to CIL *)
-  fun _ ->
-    Kernel.feedback ~level:2 "Converting %s from Cabs to CIL" fname ;
-    let cil = Cabs2cil.convFile cabs in
-    (*if !doPrintProtos then (printPrototypes cabs);*)
-    (*Cil.dumpFile Cil.defaultCilPrinter stdout "behue" cil;*)
-    cil,cabs
+  (*if !doPrintProtos then (printPrototypes cabs);*)
+  cabs
+
+let parse ~stage cabs =
+  Kernel.feedback ~level:2 "Converting %s from Cabs to CIL" (fst cabs);
+  let cil = Cabs2cil.convFile ~stage cabs in
+  (*Cil.dumpFile Cil.defaultCilPrinter stdout "behue" cil;*)
+  cil

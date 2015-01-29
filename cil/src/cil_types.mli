@@ -1301,10 +1301,10 @@ and term_lhost =
 
 (** model field. *)
 and model_info = {
-  mi_name: string; (** name *)
-  mi_field_type: logic_type; (** type of the field *)
-  mi_base_type: typ; (** type to which the field is associated. *)
-  mi_decl: location; (** where the field has been declared. *)
+          mi_name: string; (** name *)
+  mutable mi_field_type: logic_type; (** type of the field *)
+          mi_base_type: typ; (** type to which the field is associated. *)
+          mi_decl: location; (** where the field has been declared. *)
 }
 
 (** offset of an lvalue. *)

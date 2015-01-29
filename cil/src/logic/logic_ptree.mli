@@ -235,7 +235,8 @@ and decl_node =
   | LDtype_annot of type_annot    (** type invariant. *)
   | LDmodel_annot of model_annot    (** model field. *)
   | LDvolatile of lexpr list * (string option * string option)
-      (** volatile clause read/write. *)
+    (** volatile clause read/write. *)
+  | LDimport of string * string list (** import logic names from the specified file *)
 
 and deps = lexpr Cil_types.deps (** C locations. *)
 

@@ -130,7 +130,9 @@ val register_for_loop_body_hook: (Cabs.statement -> unit) -> unit
 val register_for_loop_incr_hook: (Cabs.expression -> unit) -> unit
 
 (** @plugin development guide *)
-val convFile: Cabs.file -> Cil_types.file
+val convFile: stage:[ `Names
+                    | `Types of string * (string * string list) list
+                    | `Bodies of string * (string * string list) list ] -> Cabs.file -> Cil_types.file
 
 
 (** Name of the attribute inserted by the elaboration to prevent user blocks

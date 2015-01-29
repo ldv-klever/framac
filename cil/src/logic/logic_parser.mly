@@ -243,6 +243,7 @@
 %token WITH CONST
 %token INITIALIZED
 %token CUSTOM
+%token IMPORT
 
 %nonassoc lowest
 %right prec_named
@@ -1405,6 +1406,7 @@ decl:
 | model_annot {LDmodel_annot $1}
 | logic_def  { $1 }
 | deprecated_logic_decl { $1 }
+| import { $1 }
 ;
 
 volatile_opt:
@@ -1535,6 +1537,21 @@ deprecated_logic_decl:
     }
 ;
 
+import:
+| IMPORT STRING_LITERAL imported_names_opt SEMICOLON
+    { LDimport (snd $2, $3) }
+
+imported_names_opt:
+| /* epsilon */
+    { [] }
+| LPAR imported_names
+    { $2 }
+
+imported_names:
+| IDENTIFIER RPAR
+    { [$1] }
+| IDENTIFIER COMMA imported_names
+    { $1 :: $3 }
 
 logic_decls:
 | /* epsilon */

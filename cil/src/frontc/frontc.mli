@@ -52,6 +52,9 @@ exception CabsOnly
       @plugin development guide *)
 val add_syntactic_transformation: (Cabs.file -> Cabs.file) -> unit
 
-(** the main command to parse a file. Return a thunk that can be used to
-   convert the AST to CIL. *)
-val parse: string -> (unit -> Cil_types.file*Cabs.file)
+val parse_to_cabs : string -> Cabs.file
+
+(** the main command to parse a file. *)
+val parse: stage:[ `Names
+                 | `Types of string * (string * string list) list
+                 | `Bodies of string * (string * string list) list ] -> Cabs.file -> Cil_types.file

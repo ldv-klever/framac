@@ -7733,8 +7733,9 @@ and doAliasFun vtype (thisname:string) (othername:string)
 
 
 (* Do one declaration *)
-and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
-  | A.DECDEF (logic_spec, (s, nl), loc) ->
+and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : chunk =
+  match def, stage with
+  | A.DECDEF (logic_spec, (s, nl), loc), `Bodies ->
       CurrentLoc.set (convLoc loc);
       (* Do the specifiers exactly once *)
       let sugg =
@@ -7795,17 +7796,17 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
 	       "Ignoring logic code specification" ;
            end
      end
-  | A.TYPEDEF (ng, loc) ->
+  | A.TYPEDEF (ng, loc), (`Names | `Types | `Bodies) ->
       CurrentLoc.set (convLoc loc); doTypedef local_env.is_ghost ng; empty
 
-  | A.ONLYTYPEDEF (s, loc) ->
+  | A.ONLYTYPEDEF (s, loc), (`Names | `Types | `Bodies) ->
       CurrentLoc.set (convLoc loc); doOnlyTypedef local_env.is_ghost s; empty
 
-  | A.GLOBASM (s,loc) when isglobal ->
+  | A.GLOBASM (s,loc), `Bodies ->
       CurrentLoc.set (convLoc loc);
       cabsPushGlobal (GAsm (s, CurrentLoc.get ())); empty
 
-  | A.PRAGMA (a, loc) when isglobal -> begin
+  | A.PRAGMA (a, loc), `Bodies when isglobal -> begin
       CurrentLoc.set (convLoc loc);
       match doAttr local_env.is_ghost ("dummy", [a]) with
         [Attr("dummy", [a'])] ->
@@ -7830,7 +7831,7 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
   (* If there are multiple definitions of extern inline, turn all but the
    * first into a prototype *)
   | A.FUNDEF (spec,((specs,(n,dt,a,loc')) : A.single_name),
-              (_body : A.block), loc, _)
+              (_body : A.block), loc, _), `Bodies
       when isglobal && isExtern specs && isInline specs
         && (H.mem genv (n ^ "__extinline")) ->
       CurrentLoc.set (convLoc loc);
@@ -7850,11 +7851,11 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
                ^^ " reserved for CIL.\n") n n n
           end;
           (* Treat it as a prototype *)
-          doDecl local_env isglobal
+          doDecl ~stage local_env isglobal
             (A.DECDEF (spec,(specs, [((n,dt,a,loc'), A.NO_INIT)]), loc))
 
   | A.FUNDEF (spec,((specs,(n,dt,a, _)) : A.single_name),
-              (body : A.block), loc1, loc2) when isglobal ->
+              (body : A.block), loc1, loc2), `Bodies when isglobal ->
       begin
         let ghost = local_env.is_ghost in
         let idloc = loc1 in
@@ -8275,7 +8276,7 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
         end
       end (* FUNDEF *)
 
-  | LINKAGE (n, loc, dl) ->
+  | LINKAGE (n, loc, dl), `Bodies ->
       CurrentLoc.set (convLoc loc);
       if n <> "C" then
         Kernel.warning ~current:true
@@ -8286,14 +8287,14 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
       (* For now drop the linkage on the floor !!! *)
       List.iter
         (fun d ->
-           let s = doDecl local_env isglobal d in
+           let s = doDecl ~stage local_env isglobal d in
            if isNotEmpty s then
              Kernel.abort ~current:true
 	       "doDecl returns non-empty statement for global")
         dl;
       empty
 
-  | A.GLOBANNOT (decl) when isglobal ->
+  | A.GLOBANNOT (decl), (`Names | `Types | `Bodies) when isglobal ->
       begin
         List.iter
           (fun decl  ->
@@ -8301,7 +8302,7 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
 	     CurrentLoc.set loc;
              Cabshelper.continue_annot loc
 	       (fun () ->
-		  let tdecl = Ltyping.annot decl in
+		  let tdecl = Ltyping.annot ~stage decl in
 		  cabsPushGlobal (GAnnot(tdecl,CurrentLoc.get ())))
 	       (fun () -> ())
 	       "Ignoring logic global annotation"
@@ -8309,7 +8310,7 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
       end;
       empty
 
-  | A.CUSTOM (custom, name, location) when isglobal ->
+  | A.CUSTOM (custom, name, location), `Bodies when isglobal ->
       begin
 	let loc = convLoc location in
 	CurrentLoc.set loc;
@@ -8322,7 +8323,9 @@ and doDecl local_env (isglobal: bool) : A.definition -> chunk = function
 	Kernel.warning ~current:true "cabs2cil : custom"
       end;
       empty
-  | A.CUSTOM _ | A.GLOBANNOT _ | A.PRAGMA _ | A.GLOBASM _ | A.FUNDEF _ ->
+  | (A.DECDEF _ | A.LINKAGE _), (`Names | `Types) -> empty
+  | (A.GLOBASM _ | A.PRAGMA _ | A.FUNDEF _), (`Names | `Types) -> empty
+  | (A.CUSTOM _ | A.GLOBANNOT _ | A.PRAGMA _ | A.FUNDEF _), (`Names | `Types | `Bodies) ->
      Kernel.fatal ~current:true "this form of declaration must be global"
 (* Fragile pattern matching are bad practice
   | _ -> Kernel.fatal ~current:true "unexpected form of declaration"
@@ -9174,7 +9177,7 @@ end
 let stripParenFile file = V.visitCabsFile (new stripParenClass) file
 
 (* Translate a file *)
-let convFile (f : A.file) : Cil_types.file =
+let convFile ~stage (f : A.file) : Cil_types.file =
 
   (* remove parentheses from the Cabs *)
   let fname,dl = stripParenFile f in
@@ -9196,7 +9199,7 @@ let convFile (f : A.file) : Cil_types.file =
   current_packing_pragma := None;
   H.clear pragma_align_by_struct;
   current_pragma_align := None;
-  Logic_env.prepare_tables ();
+  Logic_env.prepare_tables ~stage ();
   anonCompFieldNameId := 0;
   Kernel.debug ~level:2 "Converting CABS->CIL" ;
   (* Setup the built-ins, but do not add their prototypes to the file *)
@@ -9216,7 +9219,13 @@ let convFile (f : A.file) : Cil_types.file =
   let globalidx = ref 0 in
   let doOneGlobal (ghost,(d: A.definition)) =
     let local_env = ghost_local_env ghost in
-    let s = doDecl local_env true d in
+    let stage =
+      match stage with
+      | `Names -> `Names
+      | `Types _ -> `Types
+      | `Bodies _ -> `Bodies
+    in
+    let s = doDecl ~stage local_env true d in
     if isNotEmpty s then
       Kernel.abort ~current:true
 	"doDecl returns non-empty statement for global";
@@ -9226,6 +9235,10 @@ let convFile (f : A.file) : Cil_types.file =
 
   resolve_string_literals ();
   List.iter rename_spec !globals;
+  if stage = `Names then
+    Logic_env.save_tables fname
+  else
+    Logic_env.check_forward_declarations ();
   Logic_env.prepare_tables ();
   IH.clear noProtoFunctions;
   IH.clear mustTurnIntoDef;

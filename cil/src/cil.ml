@@ -5934,7 +5934,7 @@ let childrenFileSameGlobals vis f =
  (* Be careful with visiting the whole file because it might be huge. *)
  let visitCilFileCopy (vis : cilVisitor) (f : file) : file =
    if vis#behavior.is_copy_behavior then begin
-     Queue.add Logic_env.prepare_tables vis#get_filling_actions;
+     Queue.add (fun () -> Logic_env.prepare_tables ()) vis#get_filling_actions;
    end;
    doVisitCil vis vis#behavior.cfile (post_file vis) childrenFileCopy f
 

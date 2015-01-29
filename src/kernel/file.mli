@@ -37,7 +37,7 @@ type file =
 include Datatype.S with type t = file
 
 val new_file_type:
-  string -> (string -> Cil_types.file * Cabs.file) -> unit
+  string -> (string -> Cabs.file) -> unit
   (** [new_file_type suffix func funcname] registers a new type of files (with
       corresponding suffix) as recognized by Frama-C through [func]. 
       @plugin development guide

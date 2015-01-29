@@ -185,12 +185,12 @@ sig
     Cil_types.logic_type -> Logic_ptree.code_annot -> code_annotation
 
   val type_annot :
-    location -> Logic_ptree.type_annot -> logic_info
+    stage:[ `Names | `Types | `Bodies ] -> location -> Logic_ptree.type_annot -> logic_info
 
   val model_annot :
-    location -> Logic_ptree.model_annot -> model_info
+    stage:[ `Names | `Types | `Bodies ] -> location -> Logic_ptree.model_annot -> model_info
 
-  val annot : Logic_ptree.decl -> global_annotation
+  val annot : stage:[ `Names | `Types | `Bodies ] -> Logic_ptree.decl -> global_annotation
 
   val custom : Logic_ptree.custom_tree -> Cil_types.custom_tree
 

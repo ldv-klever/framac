@@ -667,13 +667,11 @@ struct
   }
 
   let has_field f ty =
-    try
-      ignore (Logic_env.find_model_field f ty); true
-    with Not_found ->
-      (match Cil.unrollType ty with
-        | TComp(comp,_,_) ->
-            List.exists (fun x -> x.fname = f) comp.cfields
-        | _ -> false)
+    (* Only check C fields, model fields are checked in Logic_env *)
+    (match Cil.unrollType ty with
+     | TComp(comp,_,_) ->
+       List.exists (fun x -> x.fname = f) comp.cfields
+     | _ -> false)
 
   let plain_type_of_c_field loc f ty =
     match Cil.unrollType ty with
@@ -3165,35 +3163,56 @@ struct
     | Widen_hints l -> (Widen_hints (List.map (term env) l))
     | Widen_variables l -> (Widen_variables (List.map (term env) l))
 
-  let type_annot loc ti =
-    let env = append_here_label (Lenv.empty()) in
-    let this_type = logic_type loc env ti.this_type in
-    let v = Cil_const.make_logic_var_formal ti.this_name this_type in
-    let env = Lenv.add_var ti.this_name v env in
-    let body = predicate env ti.inv in
+  let type_annot ~stage loc ti =
     let infos = Cil_const.make_logic_info ti.inv_name in
-    infos.l_profile <- [v];
-    infos.l_labels <- [Logic_const.here_label];
-    infos.l_body <- LBpred body;
-    C.add_logic_function infos; infos
+    match stage with
+    | `Names ->
+      C.add_logic_function infos;
+      infos
+    | `Types | `Bodies as stage ->
+      let env = append_here_label (Lenv.empty()) in
+      let this_type = logic_type loc env ti.this_type in
+      let v = Cil_const.make_logic_var_formal ti.this_name this_type in
+      let env = Lenv.add_var ti.this_name v env in
+      infos.l_profile <- [v];
+      infos.l_labels <- [Logic_const.here_label];
+      begin match stage with
+      | `Types -> ()
+      | `Bodies ->
+        let body = predicate env ti.inv in
+        infos.l_body <- LBpred body;
+      end;
+      C.add_logic_function infos;
+      infos
 
-  let model_annot loc ti =
-    let env = Lenv.empty() in
+  let model_annot ~stage loc ti =
+    let env = Lenv.empty () in
     let model_for_type = c_logic_type loc env ti.model_for_type in
     if has_field ti.model_name model_for_type then
       error loc "Cannot add model field %s for type %a: it already exists"
-        ti.model_name Cil_printer.pp_typ model_for_type
-    else begin
+        ti.model_name Cil_printer.pp_typ model_for_type;
+    match stage with
+    | `Names ->
+      let infos =
+        { mi_name = ti.model_name;
+          mi_base_type = model_for_type;
+          mi_field_type = Linteger;
+          mi_decl = loc
+        }
+      in
+      Logic_env.add_model_field infos;
+      infos
+    | `Types | `Bodies ->
       let model_type = logic_type loc env ti.model_type in
       let infos =
         { mi_name = ti.model_name;
           mi_base_type = model_for_type;
           mi_field_type = model_type;
-          mi_decl = loc;
+          mi_decl = loc
         }
       in
-      Logic_env.add_model_field infos; infos
-    end
+      Logic_env.add_model_field infos;
+      infos
 
   let check_behavior_names loc existing_behaviors names =
     List.iter
@@ -3516,40 +3535,43 @@ struct
     in
     labels,env
 
-  let logic_decl loc f labels poly ?return_type p =
-    let labels,env = annot_env loc labels poly in
-    let t = match return_type with
-      | None -> None;
-      | Some t -> Some (logic_type loc env t)
-    in
-    let p, env = formals loc env p in
-    check_polymorphism loc ?return_type:t p;
-    let info = Cil_const.make_logic_info f in
-    (* Should we add implicitely a default label for the declaration? *)
-    let labels = match !Lenv.default_label with
-        None -> labels
-      | Some lab -> [lab]
-    in
-    (* Quick fix for bug 428, but this is far from perfect
-       - Predicates still have a varinfo with Ctype Void
-       - Polymorphism is not reflected on the lvar level.
-       - However, such lvar should rarely if at all be seen under a Tvar.
-     *)
-    (match p,t with
+  let logic_decl ~stage loc f labels poly ?return_type p =
+    let env, info = Lenv.empty (), Cil_const.make_logic_info f in
+    match stage with
+    | `Names ->
+      C.add_logic_function info;
+      env, info
+    | `Types | `Bodies ->
+      let labels, env = annot_env loc labels poly in
+      let t = match return_type with
+        | None -> None;
+        | Some t -> Some (logic_type loc env t)
+      in
+      let p, env = formals loc env p in
+      check_polymorphism loc ?return_type:t p;
+      (* Should we add implicitely a default label for the declaration? *)
+      let labels = match !Lenv.default_label with
+          None -> labels
+        | Some lab -> [lab]
+      in
+      (* Quick fix for bug 428, but this is far from perfect
+         - Predicates still have a varinfo with Ctype Void
+         - Polymorphism is not reflected on the lvar level.
+         - However, such lvar should rarely if at all be seen under a Tvar.
+      *)
+      (match p,t with
          _,None -> ()
        | [], Some t ->
-           info.l_var_info.lv_type <- t
+          info.l_var_info.lv_type <- t
        | _,Some t ->
-           let typ = Larrow (List.map (fun x -> x.lv_type) p,t) in
-           info.l_var_info.lv_type <- typ);
-    info.l_tparams <- poly;
-    info.l_profile <- p;
-    info.l_type <- t;
-    info.l_labels <- labels;
-    begin
+          let typ = Larrow (List.map (fun x -> x.lv_type) p,t) in
+          info.l_var_info.lv_type <- typ);
+      info.l_tparams <- poly;
+      info.l_profile <- p;
+      info.l_type <- t;
+      info.l_labels <- labels;
       C.add_logic_function info;
-      env,info
-    end
+      env, info
 
   let type_datacons loc env type_info (name,params) =
     let tparams = List.map (logic_type loc env) params in
@@ -3566,103 +3588,132 @@ struct
     | TDsum cons -> LTsum (List.map (type_datacons loc env my_info) cons)
     | TDsyn typ -> LTsyn (logic_type loc env typ)
 
-  let rec annot a =
+  let rec annot ~stage a =
     let loc = a.decl_loc in
     Cil.CurrentLoc.set loc;
     match a.decl_node with
       | LDlogic_reads (f, labels, poly, t, p, l) ->
-	  let env,info = logic_decl loc f labels poly ~return_type:t p in
-          info.l_body <-
-            (match l with
+	  let env, info = logic_decl ~stage loc f labels poly ~return_type:t p in
+          begin match stage with
+          | `Names -> ()
+          | `Types ->
+            update_info_wrt_default_label info (* potential creation of label w.r.t. reads clause *)
+          | `Bodies ->
+             info.l_body <-
+               begin match l with
                | Some l ->
-	           let l =
-                     List.map (fun x ->
-		       new_identified_term (update_term_wrt_default_label (term env x))) l
-                   in
-	           LBreads l
-              | None -> LBnone);
-	  update_info_wrt_default_label info (* potential creation of label w.r.t. reads clause *) ;
-          Dfun_or_pred (info,loc)
+ 	         let l =
+                   List.map (fun x ->
+	             new_identified_term (update_term_wrt_default_label (term env x))) l
+                 in
+  	         LBreads l
+               | None -> LBnone
+               end;
+             update_info_wrt_default_label info (* potential creation of label w.r.t. reads clause *)
+          end;
+          Dfun_or_pred (info, loc)
       | LDpredicate_reads (f, labels, poly, p, l) ->
-	  let env,info = logic_decl loc f labels poly p in
-          info.l_body <-
-	    (match l with
+  	  let env, info = logic_decl ~stage loc f labels poly p in
+          begin match stage with
+          | `Names -> ()
+          | `Types ->
+       	    update_info_wrt_default_label info (* potential creation of label w.r.t. reads clause *)
+          | `Bodies ->
+             info.l_body <-
+	       begin match l with
                | Some l ->
-                   let l =
-                     List.map (fun x ->
-		       new_identified_term (update_term_wrt_default_label (term env x))) l
-                   in
-	           LBreads l
-               | None -> LBnone);
-	  update_info_wrt_default_label info (* potential creation of label w.r.t. reads clause *) ;
-          Dfun_or_pred (info,loc)
-      | LDlogic_def(f, labels, poly,t,p,e) ->
-	  let env,info = logic_decl loc f labels poly ~return_type:t p in
-	  let redefinition = false in
-	  let rt = match info.l_type with
-	    | None -> assert false
-	    | Some t -> t
-	  in
-          (try
-             let e = term env e in
-             let _,new_typ,new_term =
-               instantiate_app ~overloaded:false loc e rt env in
-             if is_same_type new_typ rt then begin
-               info.l_body <- LBterm (update_term_wrt_default_label new_term);
-	       update_info_wrt_default_label info (* potential creation of label w.r.t. def *) ;
-               Dfun_or_pred (info,loc)
-             end else
-               error loc
-                 "return type of logic function %s is %a but %a was expected"
-                 f
-		 Cil_printer.pp_logic_type new_typ
-		 Cil_printer.pp_logic_type rt
-           with e when not redefinition ->
-             C.remove_logic_function f; raise e)
+                 let l =
+                   List.map (fun x ->
+		     new_identified_term (update_term_wrt_default_label (term env x))) l
+                 in
+	         LBreads l
+               | None -> LBnone
+               end;
+             update_info_wrt_default_label info (* potential creation of label w.r.t. reads clause *)
+          end;
+          Dfun_or_pred (info, loc)
+      | LDlogic_def (f, labels, poly, t, p, e) ->
+	  let env, info = logic_decl ~stage loc f labels poly ~return_type:t p in
+          begin match stage with
+          | `Names ->
+            Dfun_or_pred (info, loc)
+          | `Types ->
+            update_info_wrt_default_label info;
+            Dfun_or_pred (info, loc)
+          | `Bodies ->
+	    let redefinition = false in
+	    let rt = match info.l_type with
+	      | None -> assert false
+	      | Some t -> t
+	    in
+            try
+              let e = term env e in
+              let _, new_typ, new_term =
+                instantiate_app ~overloaded:false loc e rt env in
+              if is_same_type new_typ rt then begin
+                info.l_body <- LBterm (update_term_wrt_default_label new_term);
+	        update_info_wrt_default_label info (* potential creation of label w.r.t. def *) ;
+                Dfun_or_pred (info,loc)
+              end else
+                error loc
+                  "return type of logic function %s is %a but %a was expected"
+                  f
+		  Cil_printer.pp_logic_type new_typ
+		  Cil_printer.pp_logic_type rt
+            with e when not redefinition ->
+              C.remove_logic_function f;
+              raise e
+          end
       | LDpredicate_def (f, labels, poly, p, e) ->
-	  let env,info = logic_decl loc f labels poly p in
-	  let e = update_predicate_wrt_default_label (predicate env e) in
-          (match !Lenv.default_label with
+	  let env, info = logic_decl ~stage loc f labels poly p in
+          begin match stage with
+          | `Names -> ()
+          | `Types ->
+            update_info_wrt_default_label info (* potential creation of label w.r.t. def *)
+          | `Bodies ->
+            let e = update_predicate_wrt_default_label (predicate env e) in
+            (match !Lenv.default_label with
                None -> ()
              | Some lab -> info.l_labels <- [lab]);
-          info.l_body <- LBpred e;
-	  update_info_wrt_default_label info;
-          (* potential creation of label w.r.t. def *)
-	  Dfun_or_pred (info,loc)
+            info.l_body <- LBpred e;
+            update_info_wrt_default_label info (* potential creation of label w.r.t. def *)
+          end;
+	  Dfun_or_pred (info, loc)
       | LDinductive_def (f, input_labels, poly, p, indcases) ->
-	let _env,info = logic_decl loc f input_labels poly p in
-	(* env is ignored: because params names are indeed useless...*)
-	let need_label = ref false in
-        let l =
-	  List.map
-	    (fun (id,labels,poly,e) ->
-              let labels,env = annot_env loc labels poly in
-              let p = predicate env e in
-              let labels, np = 
-                match !Lenv.default_label, env.Lenv.current_logic_label with
-                  | Some lab, None
-		  | None, Some lab ->
-		      need_label := true ;
-		      [ lab ], update_predicate_wrt_label p lab
-		  | _, _ -> labels, p
-              in (id, labels, poly, np))
-            indcases
-	in
-	if !need_label && input_labels = [] then
-	  error loc "inductive predicate %s needs a label" f
-	else (
-	  info.l_body <- LBinductive l;
-	  Dfun_or_pred (info,loc)
-	)
-      | LDaxiomatic(id,decls) ->
-          (*
-	    Format.eprintf "Typing axiomatic %s@." id;
-           *)
-	  let l = List.map annot decls in
-	  Daxiomatic(id,l,loc)
-
-      | LDtype(s,l,def) ->
-
+	  let _env, info = logic_decl ~stage loc f input_labels poly p in
+          begin match stage with
+          | `Names | `Types ->
+            Dfun_or_pred (info, loc)
+          | `Bodies ->
+  	    (* env is ignored: because params names are indeed useless...*)
+  	    let need_label = ref false in
+            let l =
+	      List.map
+	        (fun (id,labels,poly,e) ->
+                  let labels,env = annot_env loc labels poly in
+                  let p = predicate env e in
+                  let labels, np =
+                    match !Lenv.default_label, env.Lenv.current_logic_label with
+                      | Some lab, None
+		      | None, Some lab ->
+		          need_label := true ;
+		          [ lab ], update_predicate_wrt_label p lab
+		      | _, _ -> labels, p
+                  in
+                  (id, labels, poly, np))
+                indcases
+	    in
+	    if !need_label && input_labels = [] then
+	      error loc "inductive predicate %s needs a label" f
+	    else (
+	      info.l_body <- LBinductive l;
+	      Dfun_or_pred (info,loc)
+            )
+          end
+      | LDaxiomatic (id, decls) ->
+    	  let l = List.map (annot ~stage) decls in
+	  Daxiomatic (id, l, loc)
+      | LDtype (s, l, def) ->
           let env = init_type_variables loc l in
           let my_info =
             { lt_name = s;
@@ -3671,62 +3722,85 @@ struct
             }
           in
           C.add_logic_type s my_info;
-          (try
-             let tdef =
-               Extlib.opt_map (typedef loc env my_info) def
-             in
-             if is_cyclic_typedef s tdef then
-               error loc "Definition of %s is cyclic" s;
-             my_info.lt_def <- tdef;
-             Dtype (my_info,loc)
-           with e ->
-             (* clean up the env in case we are in continue mode *)
-             C.remove_logic_type s;
-             Extlib.may
-               (function
+          begin match stage with
+          | `Names -> Dtype (my_info, loc)
+          | `Types | `Bodies ->
+            try
+              let tdef =
+                Extlib.opt_map (typedef loc env my_info) def
+              in
+              if is_cyclic_typedef s tdef then
+                error loc "Definition of %s is cyclic" s;
+              my_info.lt_def <- tdef;
+              Dtype (my_info, loc)
+            with e ->
+              (* clean up the env in case we are in continue mode *)
+              C.remove_logic_type s;
+              Extlib.may
+                (function
                     TDsum cons ->
-                      List.iter
-                        (fun (name,_) -> C.remove_logic_ctor name) cons
+                    List.iter
+                      (fun (name,_) -> C.remove_logic_ctor name) cons
                   | TDsyn _ -> ())
-               def;
-             raise e)
-      | LDlemma (x,is_axiom, labels, poly, e) ->
-          if Logic_env.Lemmas.mem x then begin
-            let old_def = Logic_env.Lemmas.find x in
-            let old_loc = Cil_datatype.Global_annotation.loc old_def in
-            let is_axiom =
-              match old_def with
-                | Dlemma(_, is_axiom, _, _, _, _) -> is_axiom
+                def;
+              raise e
+          end
+      | LDlemma (x, is_axiom, labels, poly, e) ->
+          begin match stage with
+          | `Names ->
+            Dlemma (x, is_axiom, [], poly, Logic_const.unamed Ptrue, loc)
+          | `Types ->
+            let labels, _ = annot_env loc labels poly in
+            let labels = match !Lenv.default_label with
+              | None -> labels
+              | Some lab -> [lab]
+            in
+            let def = Dlemma (x,is_axiom, labels, poly, Logic_const.unamed Ptrue, loc) in
+            def
+          | `Bodies ->
+            if Logic_env.Lemmas.mem x then begin
+              let old_def = Logic_env.Lemmas.find x in
+              let old_loc = Cil_datatype.Global_annotation.loc old_def in
+              let is_axiom =
+                match old_def with
+                | Dlemma (_, is_axiom, _, _, _, _) -> is_axiom
                 | _ -> 
 		  Kernel.fatal ~current:true
 		    "Logic_env.get_lemma must return Dlemma"
+              in
+              error loc "%s is already registered as %s (%a)"
+                x (if is_axiom then "axiom" else "lemma")
+                Cil_datatype.Location.pretty old_loc
+            end;
+            let labels, env = annot_env loc labels poly in
+            let p = predicate env e in
+            let labels = match !Lenv.default_label with
+              | None -> labels
+              | Some lab -> [lab]
             in
-            error loc "%s is already registered as %s (%a)"
-              x (if is_axiom then "axiom" else "lemma")
-              Cil_datatype.Location.pretty old_loc
-          end;
-          let labels,env = annot_env loc labels poly in
-          let p = predicate env e in
-          let labels = match !Lenv.default_label with
-            | None -> labels
-            | Some lab -> [lab]
-          in
-          let def = Dlemma (x,is_axiom, labels, poly,  p, loc) in
-          Logic_env.Lemmas.add x def;
-          def
+            let def = Dlemma (x,is_axiom, labels, poly,  p, loc) in
+            Logic_env.Lemmas.add x def;
+            def
+          end
       | LDinvariant (s, e) ->
-        let env = append_here_label (Lenv.empty()) in
-        let p = predicate env e in
         let li = Cil_const.make_logic_info s in
-	li.l_labels <- [Logic_const.here_label];
-        li.l_body <- LBpred p;
-        C.add_logic_function li;
-	Dinvariant (li,loc)
+        begin match stage with
+        | `Names | `Types ->
+          C.add_logic_function li;
+          Dinvariant (li, loc)
+        | `Bodies ->
+          let env = append_here_label (Lenv.empty()) in
+          let p = predicate env e in
+	  li.l_labels <- [Logic_const.here_label];
+          li.l_body <- LBpred p;
+          C.add_logic_function li;
+          Dinvariant (li, loc)
+        end
       | LDtype_annot l ->
-          Dtype_annot (type_annot loc l,loc)
+          Dtype_annot (type_annot ~stage loc l,loc)
       | LDmodel_annot l ->
-          Dmodel_annot (model_annot loc l,loc);
-      | LDvolatile (tsets, (rd_opt, wr_opt)) ->
+          Dmodel_annot (model_annot ~stage loc l,loc);
+      | LDvolatile (tsets, (rd_opt, wr_opt)) when (match stage with `Bodies -> true | `Names | `Types -> false) ->
 	  let tsets =
             List.map
               (term_lval_assignable ~accept_formal:false (Lenv.empty ())) tsets
@@ -3820,6 +3894,10 @@ struct
 	  let rvi_opt = get_volatile_fct checks_reads_fct rd_opt in
 	  let wvi_opt = get_volatile_fct checks_writes_fct wr_opt in
           Dvolatile (tsets, rvi_opt, wvi_opt, loc)
+      | LDvolatile _ ->
+          Dvolatile ([], None, None, loc)
+      | LDimport _ ->
+          Kernel.fatal ~current:true "Logic import declarations should be handled before typing"
 
   let custom _c = CustomDummy
 

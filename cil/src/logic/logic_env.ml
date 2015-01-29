@@ -155,7 +155,7 @@ let try_update_forward_logic_ctor,
 
 let check_forward_declarations () =
   let ctors, types, infos, models = Forward_decls.find "" in
-  let error = error (CurrentLoc.get ()) "Unresolved forwardly declared %s `%s'" in
+  let error = Kernel.fatal ~current:true "Unresolved forwardly declared %s `%s'" in
   let module H = Datatype.String.Hashtbl in
   H.iter (fun k _ -> error "logic type constructor" k) ctors;
   H.iter (fun k _ -> error "logic type" k) types;
@@ -235,7 +235,7 @@ let add_logic_function_gen is_same_profile l =
   | Not_found ->
     List.iter
       (fun li ->
-         if is_same_profile li l then
+         if is_same_profile li l && Forward_decls.mem "" then (* Don't report error on the first pass *)
 	   error (CurrentLoc.get ())
              "already declared logic function or predicate %s with same profile"
              l.l_var_info.lv_name)
@@ -337,16 +337,16 @@ let save_tables filename =
       H.create (Logic_info.length ()),
       H.create (Model_info.length ())
     in
-    Logic_ctor_info.iter (H.add ctors);
-    Logic_type_info.iter (H.add types);
-    Logic_info.iter (H.add infos);
+    Logic_ctor_info.iter (fun k v -> if not (Logic_ctor_builtin.mem k) then H.add ctors k v);
+    Logic_type_info.iter (fun k v -> if not (Logic_type_builtin.mem k) then H.add types k v);
+    Logic_info.iter (fun k v -> if not (Logic_builtin_used.mem v) then H.add infos k v);
     Model_info.iter (H.add models);
     Forward_decls.add filename tbls
   else
-    error (CurrentLoc.get ())
+    Kernel.fatal ~current:true
       "The forward declarations from file `%s' have already been saved" filename
 
-let prepare_tables filename imports =
+let prepare_tables ?(stage=`Names) () =
   Logic_ctor_info.clear ();
   Logic_type_info.clear ();
   Logic_info.clear ();
@@ -355,50 +355,56 @@ let prepare_tables filename imports =
   Logic_type_builtin.iter Logic_type_info.add;
   Logic_ctor_builtin.iter Logic_ctor_info.add;
   Logic_builtin_used.iter (fun x -> Logic_info.add x.l_var_info.lv_name x);
-  begin try
-    Forward_decls.replace "" (Forward_decls.find filename)
-  with
-  | Not_found -> error (CurrentLoc.get ()) "The file `%s' has not been pre-parsed for imports" filename
-  end;
-  ListLabels.iter ((filename, []) :: imports)
-    ~f:(fun (filename', names) ->
-        try
-          let ctors, types, infos, models = Forward_decls.find filename' in
-          let module H = Datatype.String.Hashtbl in
-          let to_import = H.create (List.length names) in
-          List.iter (fun name -> H.add to_import name true) names;
-          let check () =
-            H.iter
-              (fun name flag ->
-                 if flag then
-                   error (CurrentLoc.get ())
-                     "The name `%s' requested for import from file `%s' \
-                      was not found"
-                     name filename')
-              to_import
-          in
-          let add (type data) (module T : State_builder.Hashtbl with type key = string and type data = data) k v =
-            let listed, imported = names = [] || H.mem to_import k, T.mem k in
-            if listed && not imported then begin
-              T.add k v;
-              H.replace to_import k false
-            end else if listed then
-              error (CurrentLoc.get ())
-                "The name `%s' requested for import from file `%s' \
-                 has already been imported or declared in file `%s'"
-                k filename' filename
-          in
-          H.iter (add (module Logic_ctor_info)) ctors;
-          H.iter (add (module Logic_type_info)) types;
-          H.iter (add (module Logic_info)) infos;
-          H.iter (add (module Model_info)) models;
-          check ()
-        with
-        | Not_found ->
-          error (CurrentLoc.get ())
-            "The file `%s' specified in import declaration of file `%s' was not provided \
-             to the Frama-C front-end"
-             filename' filename)
+  match stage with
+  | `Names -> ()
+  | `Types (filename, imports) | `Bodies (filename, imports) ->
+    let module H = Datatype.String.Hashtbl in
+    begin try
+      let ctors, types, infos, models = Forward_decls.find filename in
+      let ctors, types, infos, models = H.copy ctors, H.copy types, H.copy infos, H.copy models in
+      Forward_decls.replace "" (ctors, types, infos, models)
+    with
+    | Not_found -> Kernel.fatal ~current:true "The file `%s' has not been pre-parsed for imports" filename
+    end;
+    ListLabels.iter
+      ((filename, []) :: imports)
+      ~f:(fun (filename', names) ->
+          try
+            let ctors, types, infos, models = Forward_decls.find filename' in
+            let to_import = H.create (List.length names) in
+            List.iter (fun name -> H.add to_import name true) names;
+            let check () =
+              H.iter
+                (fun name flag ->
+                   if flag then
+                     error (CurrentLoc.get ())
+                       "The name `%s' requested for import from file `%s' \
+                        was not found"
+                       name filename')
+                to_import
+            in
+            let add (type data) (module T : State_builder.Hashtbl with type key = string and type data = data) k v =
+              let listed, imported = names = [] || H.mem to_import k, T.mem k in
+              if listed && (not imported || filename' = filename) then begin
+                T.add k v;
+                H.replace to_import k false
+              end else if listed then
+                error (CurrentLoc.get ())
+                  "The name `%s' requested for import from file `%s' \
+                   has already been imported or declared in file `%s'"
+                  k filename' filename
+            in
+            H.iter (add (module Logic_ctor_info)) ctors;
+            H.iter (add (module Logic_type_info)) types;
+            H.iter (add (module Logic_info)) infos;
+            H.iter (add (module Model_info)) models;
+            check ()
+          with
+          | Not_found ->
+            error (CurrentLoc.get ())
+              "The file `%s' specified in import declaration of file `%s' was not provided \
+               to the Frama-C front-end"
+              filename' filename)
 
 (** C typedefs *)
 (**
