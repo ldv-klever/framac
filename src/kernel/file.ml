@@ -1123,13 +1123,13 @@ let files_to_cil files =
                     in
                     begin match l with
                     | [] -> decls, imports
-                    | _ :: _ -> (b, Cabs.GLOBANNOT l) :: decls, imports
+                    | _ :: _ -> (b, Cabs.GLOBANNOT (List.rev l)) :: decls, imports
                     end
                   | decl -> decl :: decls, imports)
                ([], [])
                decls
            in
-           (fname, decls), imports)
+           (fname, List.rev decls), imports)
         files
     in
     let files =
