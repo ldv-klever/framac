@@ -630,6 +630,7 @@ module Make
       val add_logic_type: string -> logic_type_info -> unit
       val add_logic_ctor: string -> logic_ctor_info -> unit
       val find_all_logic_functions: string -> logic_info list
+      val find_first_logic_function : string -> logic_info
       val find_logic_type: string -> logic_type_info
       val find_logic_ctor: string -> logic_ctor_info
       val integral_cast: Cil_types.typ -> Cil_types.term -> Cil_types.term
@@ -3164,35 +3165,44 @@ struct
     | Widen_variables l -> (Widen_variables (List.map (term env) l))
 
   let type_annot ~stage loc ti =
-    let infos = Cil_const.make_logic_info ti.inv_name in
-    match stage with
-    | `Names ->
+    let finish_with infos =
       C.add_logic_function infos;
       infos
-    | `Types | `Bodies as stage ->
-      let env = append_here_label (Lenv.empty()) in
+    in
+    match stage with
+    | `Names ->
+      let infos = Cil_const.make_logic_info ti.inv_name in
+      finish_with infos
+    | `Types ->
+      let infos = C.find_first_logic_function ti.inv_name in
+      let env = append_here_label (Lenv.empty ()) in
       let this_type = logic_type loc env ti.this_type in
       let v = Cil_const.make_logic_var_formal ti.this_name this_type in
-      let env = Lenv.add_var ti.this_name v env in
       infos.l_profile <- [v];
       infos.l_labels <- [Logic_const.here_label];
-      begin match stage with
-      | `Types -> ()
-      | `Bodies ->
-        let body = predicate env ti.inv in
-        infos.l_body <- LBpred body;
-      end;
-      C.add_logic_function infos;
-      infos
+      finish_with infos
+    | `Bodies ->
+      let infos = C.find_first_logic_function ti.inv_name in
+      let env =
+        Lenv.empty () |>
+        append_here_label |>
+        Lenv.add_var ti.this_name (List.hd infos.l_profile)
+      in
+      let body = predicate env ti.inv in
+      infos.l_body <- LBpred body;
+      finish_with infos
 
   let model_annot ~stage loc ti =
-    let env = Lenv.empty () in
-    let model_for_type = c_logic_type loc env ti.model_for_type in
-    if has_field ti.model_name model_for_type then
-      error loc "Cannot add model field %s for type %a: it already exists"
-        ti.model_name Cil_printer.pp_typ model_for_type;
+    let finish_with infos =
+      Logic_env.add_model_field infos;
+      infos
+    in
+    let model_for_type = c_logic_type loc (Lenv.empty ()) ti.model_for_type in
     match stage with
     | `Names ->
+      if has_field ti.model_name model_for_type then
+        error loc "Cannot add model field %s for type %a: it already exists"
+          ti.model_name Cil_printer.pp_typ model_for_type;
       let infos =
         { mi_name = ti.model_name;
           mi_base_type = model_for_type;
@@ -3200,19 +3210,14 @@ struct
           mi_decl = loc
         }
       in
-      Logic_env.add_model_field infos;
-      infos
-    | `Types | `Bodies ->
-      let model_type = logic_type loc env ti.model_type in
-      let infos =
-        { mi_name = ti.model_name;
-          mi_base_type = model_for_type;
-          mi_field_type = model_type;
-          mi_decl = loc
-        }
-      in
-      Logic_env.add_model_field infos;
-      infos
+      finish_with infos
+    | `Types ->
+      let infos = Logic_env.find_model_field ti.model_name model_for_type in
+      infos.mi_field_type <- logic_type loc (Lenv.empty ()) ti.model_type;
+      finish_with infos
+    | `Bodies ->
+      let infos = Logic_env.find_model_field ti.model_name model_for_type in
+      finish_with infos
 
   let check_behavior_names loc existing_behaviors names =
     List.iter
@@ -3536,12 +3541,15 @@ struct
     labels,env
 
   let logic_decl ~stage loc f labels poly ?return_type p =
-    let env, info = Lenv.empty (), Cil_const.make_logic_info f in
-    match stage with
-    | `Names ->
+    let finish_with env info =
       C.add_logic_function info;
       env, info
-    | `Types | `Bodies ->
+    in
+    match stage with
+    | `Names ->
+      finish_with (Lenv.empty ()) (Cil_const.make_logic_info f)
+    | `Types ->
+      let info = C.find_first_logic_function f in
       let labels, env = annot_env loc labels poly in
       let t = match return_type with
         | None -> None;
@@ -3559,19 +3567,23 @@ struct
          - Polymorphism is not reflected on the lvar level.
          - However, such lvar should rarely if at all be seen under a Tvar.
       *)
-      (match p,t with
+      (match p, t with
          _,None -> ()
        | [], Some t ->
-          info.l_var_info.lv_type <- t
+           info.l_var_info.lv_type <- t
        | _,Some t ->
-          let typ = Larrow (List.map (fun x -> x.lv_type) p,t) in
-          info.l_var_info.lv_type <- typ);
+           let typ = Larrow (List.map (fun x -> x.lv_type) p,t) in
+           info.l_var_info.lv_type <- typ);
       info.l_tparams <- poly;
       info.l_profile <- p;
       info.l_type <- t;
       info.l_labels <- labels;
-      C.add_logic_function info;
-      env, info
+      finish_with env info
+    | `Bodies ->
+      let info = C.find_first_logic_function f in
+      let _, env = annot_env loc labels poly in
+      let env = List.fold_left (fun env lv -> Lenv.add_var lv.lv_name lv env) env info.l_profile in
+      finish_with env info
 
   let type_datacons loc env type_info (name,params) =
     let tparams = List.map (logic_type loc env) params in
@@ -3714,25 +3726,30 @@ struct
     	  let l = List.map (annot ~stage) decls in
 	  Daxiomatic (id, l, loc)
       | LDtype (s, l, def) ->
-          let env = init_type_variables loc l in
-          let my_info =
-            { lt_name = s;
-              lt_params = l;
-              lt_def = None; (* will be updated later *)
-            }
+          let finish_with my_info =
+            C.add_logic_type s my_info;
+            Dtype (my_info, loc)
           in
-          C.add_logic_type s my_info;
           begin match stage with
-          | `Names -> Dtype (my_info, loc)
-          | `Types | `Bodies ->
-            try
+          | `Names ->
+            let my_info =
+              { lt_name = s;
+                lt_params = l;
+                lt_def = None; (* will be updated later *)
+              }
+            in
+            finish_with my_info
+          | `Types ->
+            let my_info = C.find_logic_type s in
+            let env = init_type_variables loc l in
+            begin try
               let tdef =
                 Extlib.opt_map (typedef loc env my_info) def
               in
               if is_cyclic_typedef s tdef then
                 error loc "Definition of %s is cyclic" s;
               my_info.lt_def <- tdef;
-              Dtype (my_info, loc)
+              finish_with my_info
             with e ->
               (* clean up the env in case we are in continue mode *)
               C.remove_logic_type s;
@@ -3744,6 +3761,9 @@ struct
                   | TDsyn _ -> ())
                 def;
               raise e
+            end
+          | `Bodies ->
+            finish_with (C.find_logic_type s)
           end
       | LDlemma (x, is_axiom, labels, poly, e) ->
           begin match stage with
@@ -3755,7 +3775,7 @@ struct
               | None -> labels
               | Some lab -> [lab]
             in
-            let def = Dlemma (x,is_axiom, labels, poly, Logic_const.unamed Ptrue, loc) in
+            let def = Dlemma (x, is_axiom, labels, poly, Logic_const.unamed Ptrue, loc) in
             def
           | `Bodies ->
             if Logic_env.Lemmas.mem x then begin
@@ -3783,19 +3803,24 @@ struct
             def
           end
       | LDinvariant (s, e) ->
-        let li = Cil_const.make_logic_info s in
-        begin match stage with
-        | `Names | `Types ->
-          C.add_logic_function li;
-          Dinvariant (li, loc)
-        | `Bodies ->
-          let env = append_here_label (Lenv.empty()) in
-          let p = predicate env e in
-	  li.l_labels <- [Logic_const.here_label];
-          li.l_body <- LBpred p;
-          C.add_logic_function li;
-          Dinvariant (li, loc)
-        end
+          let finish_with li =
+            C.add_logic_function li;
+            Dinvariant (li, loc)
+          in
+          begin match stage with
+          | `Names ->
+            let li = Cil_const.make_logic_info s in
+            finish_with li
+          | `Types ->
+            finish_with (C.find_first_logic_function s)
+          | `Bodies ->
+            let li = C.find_first_logic_function s in
+            let env = append_here_label (Lenv.empty ()) in
+            let p = predicate env e in
+            li.l_labels <- [Logic_const.here_label];
+            li.l_body <- LBpred p;
+            finish_with li
+          end
       | LDtype_annot l ->
           Dtype_annot (type_annot ~stage loc l,loc)
       | LDmodel_annot l ->

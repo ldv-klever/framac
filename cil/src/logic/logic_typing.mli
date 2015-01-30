@@ -149,6 +149,7 @@ module Make
       val add_logic_ctor: string -> logic_ctor_info -> unit
 
       val find_all_logic_functions : string -> Cil_types.logic_info list
+      val find_first_logic_function : string -> Cil_types.logic_info
       val find_logic_type: string -> logic_type_info
       val find_logic_ctor: string -> logic_ctor_info
 

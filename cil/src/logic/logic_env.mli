@@ -118,6 +118,8 @@ val iter_builtin_logic_ctor: (logic_ctor_info -> unit) -> unit
 
 val find_all_logic_functions : string -> logic_info list
 
+val find_first_logic_function : string -> logic_info
+
 (** returns all model fields of the same name.
    @since Oxygen-20120901 
 *)

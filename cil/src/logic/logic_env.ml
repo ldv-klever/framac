@@ -138,35 +138,40 @@ module Forward_decls =
       let size = 2
     end)
 
-let try_update_forward_logic_ctor,
-    try_update_forward_logic_type,
-    try_update_forward_logic_info,
-    try_update_forward_model_info =
-  let mk get name f =
+let check_and_pass_forward_logic_ctor,
+    check_and_pass_forward_logic_type,
+    check_and_pass_forward_logic_info,
+    check_and_pass_forward_model_info =
+  let mk ~type_name ~entity_name get name oldinfo =
     let module H = Datatype.String.Hashtbl in
     let tbls = Forward_decls.find "" in
-    f (H.find (get tbls) name);
+    if oldinfo != H.find (get tbls) name then
+      Kernel.fatal
+        ~current:true
+        "An attempt to add a new %s for the existing %s `%s' \
+         instead of updating the existing one"
+        type_name entity_name name;
     H.remove (get tbls) name
   in
-  mk (fun (ctors, _, _, _) -> ctors),
-  mk (fun (_, types, _, _) -> types),
-  mk (fun (_, _, infos, _) -> infos),
-  mk (fun (_, _, _, models) -> models)
+  mk ~type_name:"logic_ctor_info" ~entity_name:"logic type constructor"   (fun (ctors, _, _, _) -> ctors),
+  mk ~type_name:"logic_type_info" ~entity_name:"logic type"               (fun (_, types, _, _) -> types),
+  mk ~type_name:"logic_info"      ~entity_name:"logic function/predicate" (fun (_, _, infos, _) -> infos),
+  mk ~type_name:"model_info"      ~entity_name:"model variable/field"     (fun (_, _, _, models) -> models)
 
 let check_forward_declarations () =
   let ctors, types, infos, models = Forward_decls.find "" in
-  let error = Kernel.fatal ~current:true "Unresolved forwardly declared %s `%s'" in
+  let error kind name _ = Kernel.fatal ~current:true "Unresolved forwardly declared %s `%s'" kind name in
   let module H = Datatype.String.Hashtbl in
-  H.iter (fun k _ -> error "logic type constructor" k) ctors;
-  H.iter (fun k _ -> error "logic type" k) types;
-  H.iter (fun k _ -> error "logic function or predicate" k) infos;
-  H.iter (fun k _ -> error "model variable or field" k) models
+  H.iter (error "logic type constructor") ctors;
+  H.iter (error "logic type") types;
+  H.iter (error "logic function or predicate") infos;
+  H.iter (error "model variable or field") models
 
 (* We depend from ast, but it is initialized after Logic_typing... *)
 let init_dependencies from =
   State_dependency_graph.add_dependencies
     ~from
-    [ Logic_info.self; 
+    [ Logic_info.self;
       Logic_type_info.self;
       Logic_ctor_info.self;
       Lemmas.self;
@@ -205,6 +210,17 @@ let find_all_logic_functions s =
 		  List.iter (fun x -> Format.printf "%s#%d@." x.l_var_info.lv_name x.l_var_info.lv_id) l; *)
     l
 
+let find_first_logic_function s =
+    try
+      let li =
+        let _, _, infos, _ = Forward_decls.find "" in
+        Datatype.String.Hashtbl.find infos s
+      in
+      List.find ((==) li) (find_all_logic_functions s)
+    with
+    | Not_found ->
+      Kernel.fatal "Logic functions/predicates table consistency violation: `%s' is not found" s
+
 let find_logic_cons vi =
   List.find
     (fun x -> Cil_datatype.Logic_var.equal x.l_var_info vi)
@@ -223,14 +239,7 @@ let add_logic_function_gen is_same_profile l =
       "logic function or predicate %s is built-in. You can not redefine it"
       l.l_var_info.lv_name;
   try
-    try_update_forward_logic_info l.l_var_info.lv_name @@
-    fun l' ->
-    l'.l_var_info <- l.l_var_info;
-    l'.l_labels <- l.l_labels;
-    l'.l_tparams <- l.l_tparams;
-    l'.l_type <- l.l_type;
-    l'.l_profile <- l.l_profile;
-    l'.l_body <- l.l_body
+    check_and_pass_forward_logic_info l.l_var_info.lv_name l
   with
   | Not_found ->
     List.iter
@@ -248,9 +257,7 @@ let is_logic_type = Logic_type_info.mem
 let find_logic_type = Logic_type_info.find
 let add_logic_type t infos =
   try
-    try_update_forward_logic_type t @@
-    fun t' ->
-    t'.lt_def <- infos.lt_def
+    check_and_pass_forward_logic_type t infos
   with
   | Not_found ->
     if is_logic_type t
@@ -263,8 +270,7 @@ let is_logic_ctor = Logic_ctor_info.mem
 let find_logic_ctor = Logic_ctor_info.find
 let add_logic_ctor c infos =
   try
-    try_update_forward_logic_ctor infos.ctor_name @@
-    fun _ -> ()
+    check_and_pass_forward_logic_ctor infos.ctor_name infos
   with
   | Not_found ->
     if is_logic_ctor c
@@ -291,10 +297,9 @@ let find_model_field s typ =
         | _ -> raise e)
   in find_cons typ
 
-let add_model_field m = 
+let add_model_field m =
   try
-    try_update_forward_model_info m.mi_name @@
-    fun _ -> ()
+    check_and_pass_forward_model_info m.mi_name m
   with Not_found ->
     try
       ignore (find_model_field m.mi_name m.mi_base_type);
@@ -372,11 +377,11 @@ let prepare_tables ?(stage=`Names) () =
           try
             let ctors, types, infos, models = Forward_decls.find filename' in
             let to_import = H.create (List.length names) in
-            List.iter (fun name -> H.add to_import name true) names;
+            List.iter (fun name -> H.add to_import name None) names;
             let check () =
               H.iter
-                (fun name flag ->
-                   if flag then
+                (fun name source_file ->
+                   if source_file = None then
                      error (CurrentLoc.get ())
                        "The name `%s' requested for import from file `%s' \
                         was not found"
@@ -385,14 +390,33 @@ let prepare_tables ?(stage=`Names) () =
             in
             let add (type data) (module T : State_builder.Hashtbl with type key = string and type data = data) k v =
               let listed, imported = names = [] || H.mem to_import k, T.mem k in
-              if listed && (not imported || filename' = filename) then begin
+              (* Re-importing is only allowed either from the file itself of from the same file
+                 (for overloaded names) *)
+              if listed && (not imported || H.find to_import k = Some filename') then begin
                 T.add k v;
-                H.replace to_import k false
+                H.replace to_import k (Some filename')
               end else if listed then
-                error (CurrentLoc.get ())
-                  "The name `%s' requested for import from file `%s' \
-                   has already been imported or declared in file `%s'"
-                  k filename' filename
+                let error fmt =
+                  let b, e = Cil_datatype.Location.unknown in
+                  let b = { b with Lexing.pos_fname = filename } in
+                  error (b, e) fmt
+                in
+                try
+                  match H.find to_import k with
+                  | Some filename'' when filename' <> filename && filename'' <> filename ->
+                    error
+                      "The name `%s' requested for import from file `%s' \
+                       has already been imported from another file `%s'. \
+                       Cross-file overloading is not supported"
+                      k filename' filename''
+                  | Some _ | None -> raise Not_found
+                with
+                | Not_found ->
+                  error
+                    "The name `%s' requested for import from file `%s' \
+                     has already been declared in the importing file. \
+                     Imported names overloading is not supported"
+                     k filename'
             in
             H.iter (add (module Logic_ctor_info)) ctors;
             H.iter (add (module Logic_type_info)) types;
