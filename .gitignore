@@ -61,6 +61,10 @@ share/frama-c.rc
 src/aorai/Makefile
 src/aorai/autom4te.cache/
 src/aorai/configure
+src/aorai/ltllexer.ml
+src/aorai/promelalexer.ml
+src/aorai/promelalexer_withexps.ml
+src/aorai/yalexer.ml
 src/kernel/config.ml
 src/lib/dynlink_common_interface.ml
 src/lib/integer.ml
@@ -80,6 +84,8 @@ src/wp/configure
 src/wp/qed/src/numbers.ml
 src/wp/share/instwp
 src/wp/share/why3/why3.conf
+src/wp/rformat.ml
+src/wp/why3_xml.ml
 
 # ? some dummy empty _DEP files
 *_DEP
