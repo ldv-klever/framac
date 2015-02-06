@@ -649,6 +649,7 @@ module C_logic_env =
 struct
   let anonCompFieldName = Cabs2cil.anonCompFieldName
   let conditionalConversion = Cabs2cil.logicConditionalConversion
+  let compatibleTypesp = Cabs2cil.compatibleTypesp
   let is_loop () = false
   let find_macro _ = raise Not_found
   let find_var _ = raise Not_found

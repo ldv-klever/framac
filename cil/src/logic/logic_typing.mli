@@ -132,6 +132,7 @@ module Make
       (** whether the annotation we want to type is contained in a loop. *)
       val anonCompFieldName : string
       val conditionalConversion : typ -> typ -> typ
+      val compatibleTypesp : typ -> typ -> bool
       val find_macro : string -> Logic_ptree.lexpr
       val find_var : string -> logic_var
       val find_enum_tag : string -> exp * typ

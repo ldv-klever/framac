@@ -616,6 +616,7 @@ module Make
       val is_loop: unit -> bool
       val anonCompFieldName : string
       val conditionalConversion : typ -> typ -> typ
+      val compatibleTypesp : typ -> typ -> bool
       val find_macro : string -> lexpr
       val find_var : string -> logic_var
       val find_enum_tag : string -> exp * typ
@@ -926,7 +927,17 @@ struct
   (* Compare the two types as logic types, ie by dismissing some irrelevant
      qualifiers and attributes *)
   let is_same_c_type ctyp1 ctyp2 =
-    Cil_datatype.Logic_type.equal (Ctype ctyp1) (Ctype ctyp2)
+    let is_compatible_struct_type ctyp1 ctyp2 =
+      let ctyp1, ctyp2 =
+        if isPointerType ctyp1 && isPointerType ctyp2 then typeOf_pointed ctyp1, typeOf_pointed ctyp2
+        else if isArrayType ctyp1 && isArrayType ctyp2 then typeOf_array_elem ctyp1, typeOf_array_elem ctyp2
+        else ctyp1, ctyp2
+      in
+      isStructOrUnionType ctyp1 && isStructOrUnionType ctyp2 &&
+      C.compatibleTypesp ctyp1 ctyp2
+    in
+    Cil_datatype.Logic_type.equal (Ctype ctyp1) (Ctype ctyp2) ||
+    is_compatible_struct_type ctyp1 ctyp2
 
   let rec c_mk_cast e oldt newt =
     if is_same_c_type oldt newt then e

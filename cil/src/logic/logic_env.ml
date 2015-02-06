@@ -371,11 +371,12 @@ let prepare_tables ?(stage=`Names) () =
     with
     | Not_found -> Kernel.fatal ~current:true "The file `%s' has not been pre-parsed for imports" filename
     end;
+    let ctors, types, infos, models = Forward_decls.find "" in
     ListLabels.iter
       ((filename, []) :: imports)
       ~f:(fun (filename', names) ->
           try
-            let ctors, types, infos, models = Forward_decls.find filename' in
+            let ctors', types', infos', models' = Forward_decls.find filename' in
             let to_import = H.create (List.length names) in
             List.iter (fun name -> H.add to_import name None) names;
             let check () =
@@ -388,40 +389,50 @@ let prepare_tables ?(stage=`Names) () =
                        name filename')
                 to_import
             in
-            let add (type data) (module T : State_builder.Hashtbl with type key = string and type data = data) k v =
-              let listed, imported = names = [] || H.mem to_import k, T.mem k in
+            let add
+                  (type data)
+                  (module T : State_builder.Hashtbl with type key = string and type data = data)
+                  (forwards : data H.t)
+                  k v =
+              let listed, imported =
+                names = [] && (filename' = filename || not (H.mem forwards k)) || H.mem to_import k,
+                T.mem k
+              in
               (* Re-importing is only allowed either from the file itself of from the same file
                  (for overloaded names) *)
-              if listed && (not imported || H.find to_import k = Some filename') then begin
+              if listed && (not imported || try H.find to_import k = Some filename' with Not_found -> false) then begin
                 T.add k v;
                 H.replace to_import k (Some filename')
               end else if listed then
-                let error fmt =
+                let error =
                   let b, e = Cil_datatype.Location.unknown in
                   let b = { b with Lexing.pos_fname = filename } in
-                  error (b, e) fmt
-                in
-                try
-                  match H.find to_import k with
-                  | Some filename'' when filename' <> filename && filename'' <> filename ->
+                  function
+                  | `Cross_file_overloading filename'' ->
                     error
+                      (b, e)
                       "The name `%s' requested for import from file `%s' \
                        has already been imported from another file `%s'. \
                        Cross-file overloading is not supported"
                       k filename' filename''
-                  | Some _ | None -> raise Not_found
-                with
-                | Not_found ->
-                  error
-                    "The name `%s' requested for import from file `%s' \
-                     has already been declared in the importing file. \
-                     Imported names overloading is not supported"
-                     k filename'
+                  | `Already_declared ->
+                    error
+                      (b, e)
+                      "The name `%s' requested for import from file `%s' \
+                       has already been declared in the importing file. \
+                       Imported names overloading is not supported"
+                      k filename'
+                in
+                match H.find to_import k with
+                | Some filename'' when filename' <> filename && filename'' <> filename ->
+                  error (`Cross_file_overloading filename'')
+                | Some _ | None -> error `Already_declared
+                | exception Not_found -> error `Already_declared
             in
-            H.iter (add (module Logic_ctor_info)) ctors;
-            H.iter (add (module Logic_type_info)) types;
-            H.iter (add (module Logic_info)) infos;
-            H.iter (add (module Model_info)) models;
+            H.iter (add (module Logic_ctor_info) ctors) ctors';
+            H.iter (add (module Logic_type_info) types) types';
+            H.iter (add (module Logic_info) infos) infos';
+            H.iter (add (module Model_info) models) models';
             check ()
           with
           | Not_found ->

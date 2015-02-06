@@ -903,6 +903,10 @@ let compInfoNameEnv : (string, compinfo) H.t = H.create 113
 let enumInfoNameEnv : (string, enuminfo) H.t = H.create 113
 
 
+(* Keep a set of self compinfo for composite types *)
+let compInfoCache : (string, (string, compinfo) H.t) H.t = H.create 113
+let enumInfoCache : (string, (string, enuminfo) H.t) H.t = H.create 113
+
 let lookupTypeNoError (kind: string)
                       (n: string) : typ * location =
   let kn = kindPlusName kind n in
@@ -3052,6 +3056,7 @@ struct
   let is_loop () = !nb_loop > 0
   let anonCompFieldName = anonCompFieldName
   let conditionalConversion = logicConditionalConversion
+  let compatibleTypesp = compatibleTypesp
   let find_macro _ = raise Not_found
   let find_var x = match H.find env x with
     | EnvVar vi, _ -> cvar_to_lvar vi
@@ -7796,10 +7801,10 @@ and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : ch
 	       "Ignoring logic code specification" ;
            end
      end
-  | A.TYPEDEF (ng, loc), (`Names | `Types | `Bodies) ->
+  | A.TYPEDEF (ng, loc), (`Types | `Bodies) ->
       CurrentLoc.set (convLoc loc); doTypedef local_env.is_ghost ng; empty
 
-  | A.ONLYTYPEDEF (s, loc), (`Names | `Types | `Bodies) ->
+  | A.ONLYTYPEDEF (s, loc), (`Types | `Bodies) ->
       CurrentLoc.set (convLoc loc); doOnlyTypedef local_env.is_ghost s; empty
 
   | A.GLOBASM (s,loc), `Bodies ->
@@ -8323,8 +8328,8 @@ and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : ch
 	Kernel.warning ~current:true "cabs2cil : custom"
       end;
       empty
-  | (A.DECDEF _ | A.LINKAGE _), (`Names | `Types) -> empty
-  | (A.GLOBASM _ | A.PRAGMA _ | A.FUNDEF _), (`Names | `Types) -> empty
+  | (A.TYPEDEF _ | A.ONLYTYPEDEF _), `Names -> empty
+  | (A.DECDEF _ | A.LINKAGE _ | A.GLOBASM _ | A.PRAGMA _ | A.FUNDEF _), (`Names | `Types) -> empty
   | (A.CUSTOM _ | A.GLOBANNOT _ | A.PRAGMA _ | A.FUNDEF _), (`Names | `Types | `Bodies) ->
      Kernel.fatal ~current:true "this form of declaration must be global"
 (* Fragile pattern matching are bad practice
@@ -9189,6 +9194,12 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   IH.clear noProtoFunctions;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
+  begin match stage with
+  | `Names | `Types _ -> ()
+  | `Bodies (fname, _) ->
+    H.iter (H.add compInfoNameEnv) (H.find compInfoCache fname);
+    H.iter (H.add enumInfoNameEnv) (H.find enumInfoCache fname)
+  end;
   IH.clear mustTurnIntoDef;
   H.clear alreadyDefined;
   H.clear staticLocals;
@@ -9243,6 +9254,12 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   IH.clear noProtoFunctions;
   IH.clear mustTurnIntoDef;
   H.clear alreadyDefined;
+  begin match stage with
+  | `Names | `Bodies _ -> ()
+  | `Types (fname, _) ->
+    H.add compInfoCache fname (H.copy compInfoNameEnv);
+    H.add enumInfoCache fname (H.copy enumInfoNameEnv)
+  end;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
   cleanup_isomorphicStructs ();

@@ -1542,7 +1542,7 @@ import:
     { LDimport (snd $2, $3) }
 
 imported_names_opt:
-| /* epsilon */
+| LPAR STAR RPAR
     { [] }
 | LPAR imported_names
     { $2 }

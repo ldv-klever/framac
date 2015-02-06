@@ -55,6 +55,7 @@ end) =
       (struct
          let anonCompFieldName = Cabs2cil.anonCompFieldName
          let conditionalConversion = Cabs2cil.logicConditionalConversion
+         let compatibleTypesp = Cabs2cil.compatibleTypesp
 
          let is_loop () = Kernel_function.stmt_in_loop X.kf X.stmt
 

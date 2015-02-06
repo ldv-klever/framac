@@ -1070,6 +1070,77 @@ let keep_entry_point ?(specs=Kernel.Keep_unused_specified_functions.get ()) g =
       || (specs && not (is_empty_funspec spec))
     | _ -> false
 
+let propagate_logic_info_default_labels =
+  let module H = Logic_info.Hashtbl in
+  let sorted = ref [] in
+  let inplace_visit = inplace_visit () in
+  let logic_info_decl_visitor =
+    let finished = H.create 200 in
+    let rec logic_info_use_visitor path =
+      object
+        inherit genericCilVisitor inplace_visit
+
+        method! vlogic_info_use li =
+          if List.(memq li (tl path)) then
+            Kernel.abort
+              ~current:true
+              "Cyclic dependency detected between the following logic functions and/or predicates:\n +    @[%a@]"
+              (pp_list ~sep:"@]\n `--> @[" Printer.pp_global_annotation)
+              (List.rev_map (fun li -> Dfun_or_pred (li, Location.unknown)) path);
+          if not (H.mem finished li) then logic_info_decl_handler path li
+          else SkipChildren
+      end
+    and logic_info_decl_handler path li =
+      ignore @@ visitCilLogicInfo (logic_info_use_visitor (li :: path)) li;
+      sorted := li :: !sorted;
+      H.add finished li ();
+      SkipChildren
+    in
+    object
+      inherit genericCilVisitor inplace_visit
+
+      method! vfile _ =
+        H.clear finished;
+        sorted := [];
+        DoChildren
+
+      method! vlogic_info_decl = logic_info_decl_handler []
+    end
+  in
+  let logic_info_use_visitor li =
+    object
+      inherit genericCilVisitor inplace_visit
+
+      method! vlogic_info_use =
+        function
+        | { l_labels = [_] } ->
+          li.l_labels <- [LogicLabel (None, "L")];
+          SkipChildren
+        | { l_labels = _ :: _; l_type; l_var_info } ->
+          let pp_kind fmt ty =
+            Format.fprintf fmt @@
+              match ty with
+              | Some _ -> "function"
+              | None -> "predicate"
+          in
+          Kernel.abort
+            ~current:true
+            "Detected multi-label logic %a `%a' usage in an unlabeled logic %a `%a'"
+            pp_kind l_type
+            Printer.pp_logic_var l_var_info
+            pp_kind li.l_type
+            Printer.pp_logic_var li.l_var_info
+        | _ -> SkipChildren
+    end
+  in
+  fun file ->
+    visitCilFile logic_info_decl_visitor file;
+    List.iter
+      (fun li ->
+         if li.l_labels = [] then
+           ignore @@ visitCilLogicInfo (logic_info_use_visitor li) li)
+      (List.rev !sorted)
+
 let files_to_cil files =
   (* BY 2011-05-10 Deactivated this mark_as_computed. Does not seem to
      do anything useful anymore, and causes problem with the self-recovering
@@ -1174,6 +1245,7 @@ let files_to_cil files =
   debug_globals [merged_file];
 
   Logic_utils.complete_types merged_file;
+  propagate_logic_info_default_labels merged_file;
 
   Rmtmps.removeUnusedTemps ~isRoot:keep_entry_point merged_file;
   if Kernel.UnspecifiedAccess.get()
