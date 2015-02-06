@@ -1072,8 +1072,21 @@ let keep_entry_point ?(specs=Kernel.Keep_unused_specified_functions.get ()) g =
 
 let propagate_logic_info_default_labels =
   let module H = Logic_info.Hashtbl in
-  let sorted = ref [] in
   let inplace_visit = inplace_visit () in
+  let locations = H.create 200 in
+  let glob_annot_visitor =
+    object
+      inherit genericCilVisitor inplace_visit
+
+      method! vannotation =
+        function
+        | Dfun_or_pred (li, loc) ->
+          H.add locations li loc;
+          SkipChildren
+        | _ -> SkipChildren
+    end
+  in
+  let sorted = ref [] in
   let logic_info_decl_visitor =
     let finished = H.create 200 in
     let rec logic_info_use_visitor path =
@@ -1084,9 +1097,15 @@ let propagate_logic_info_default_labels =
           if List.(memq li (tl path)) then
             Kernel.abort
               ~current:true
-              "Cyclic dependency detected between the following logic functions and/or predicates:\n +    @[%a@]"
-              (pp_list ~sep:"@]\n `--> @[" Printer.pp_global_annotation)
-              (List.rev_map (fun li -> Dfun_or_pred (li, Location.unknown)) path);
+              "Cyclic dependency detected between the following logic functions and/or predicates: @[+    %a@]"
+              (pp_list
+                 ~sep:"@]@.@[`--> "
+                 (fun fmt li ->
+                    let loc = H.find locations li in
+                    Format.fprintf fmt "%a:@.     %a"
+                      Printer.pp_location loc
+                      Printer.pp_global_annotation (Dfun_or_pred (li, loc))))
+              (List.rev path);
           if not (H.mem finished li) then logic_info_decl_handler path li
           else SkipChildren
       end
@@ -1134,6 +1153,7 @@ let propagate_logic_info_default_labels =
     end
   in
   fun file ->
+    visitCilFile glob_annot_visitor file;
     visitCilFile logic_info_decl_visitor file;
     List.iter
       (fun li ->
