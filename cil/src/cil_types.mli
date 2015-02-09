@@ -1387,12 +1387,12 @@ and logic_var = {
 
 (** Description of a constructor of a logic sum-type.
     @plugin development guide *)
-and logic_ctor_info =
- { ctor_name: string; (** name of the constructor. *)
-   ctor_type: logic_type_info; (** type to which the constructor belongs. *)
-   ctor_params: logic_type list 
+and logic_ctor_info = {
+          ctor_name: string; (** name of the constructor. *)
+          ctor_type: logic_type_info; (** type to which the constructor belongs. *)
+  mutable ctor_params: logic_type list 
  (** types of the parameters of the constructor. *)
- }
+}
 
 (* ************************************************************************* *)
 (** {2 Predicates} *)

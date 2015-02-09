@@ -3596,20 +3596,33 @@ struct
       let env = List.fold_left (fun env lv -> Lenv.add_var lv.lv_name lv env) env info.l_profile in
       finish_with env info
 
-  let type_datacons loc env type_info (name,params) =
-    let tparams = List.map (logic_type loc env) params in
-    let my_info =
-      { ctor_name = name;
-        ctor_type = type_info;
-        ctor_params = tparams
-      }
+  let type_datacons ~stage loc env type_info (name, params) =
+    let finish_with ctor_info =
+      C.add_logic_ctor name ctor_info;
+      ctor_info
     in
-    C.add_logic_ctor name my_info;
-    my_info
+    match stage with
+    | `Names ->
+      let my_info =
+        { ctor_name = name;
+          ctor_type = type_info;
+          ctor_params = []
+        }
+      in
+      finish_with my_info
+    | `Types ->
+      let my_info = C.find_logic_ctor name in
+      let tparams = List.map (logic_type loc env) params in
+      my_info.ctor_params <- tparams;
+      finish_with my_info
+    | `Bodies ->
+      finish_with (C.find_logic_ctor name)
 
-  let typedef loc env my_info = function
-    | TDsum cons -> LTsum (List.map (type_datacons loc env my_info) cons)
-    | TDsyn typ -> LTsyn (logic_type loc env typ)
+  let typedef ~stage loc env my_info = function
+    | TDsum cons -> LTsum (List.map (type_datacons ~stage loc env my_info) cons)
+    | TDsyn _ when stage = `Names -> LTsyn Linteger
+    | TDsyn typ when stage = `Types -> LTsyn (logic_type loc env typ)
+    | TDsyn _ (* `Bodies *) -> Extlib.the my_info.lt_def
 
   let rec annot ~stage a =
     let loc = a.decl_loc in
@@ -3749,13 +3762,15 @@ struct
                 lt_def = None; (* will be updated later *)
               }
             in
+            (* Just to scan the names of the type constructors *)
+            ignore @@ Extlib.opt_map (typedef ~stage loc (Lenv.empty ()) my_info) def;
             finish_with my_info
           | `Types ->
             let my_info = C.find_logic_type s in
             let env = init_type_variables loc l in
             begin try
               let tdef =
-                Extlib.opt_map (typedef loc env my_info) def
+                Extlib.opt_map (typedef ~stage loc env my_info) def
               in
               if is_cyclic_typedef s tdef then
                 error loc "Definition of %s is cyclic" s;
@@ -3774,7 +3789,10 @@ struct
               raise e
             end
           | `Bodies ->
-            finish_with (C.find_logic_type s)
+            let my_info = C.find_logic_type s in
+            (* Just to re-register the names of the type constructors *)
+            ignore @@ Extlib.opt_map (typedef ~stage loc (Lenv.empty ()) my_info) def;
+            finish_with my_info
           end
       | LDlemma (x, is_axiom, labels, poly, e) ->
           begin match stage with

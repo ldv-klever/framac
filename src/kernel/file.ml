@@ -1075,13 +1075,18 @@ let propagate_logic_info_default_labels =
   let inplace_visit = inplace_visit () in
   let locations = H.create 200 in
   let glob_annot_visitor =
-    object
+    object(self)
       inherit genericCilVisitor inplace_visit
 
       method! vannotation =
         function
-        | Dfun_or_pred (li, loc) ->
+        | Dfun_or_pred (li, loc)
+        | Dinvariant (li, loc)
+        | Dtype_annot (li, loc) ->
           H.add locations li loc;
+          SkipChildren
+        | Daxiomatic (_, annots, _) ->
+          List.iter (fun annot -> ignore @@ self#vannotation annot) annots;
           SkipChildren
         | _ -> SkipChildren
     end
@@ -1106,7 +1111,7 @@ let propagate_logic_info_default_labels =
                       Printer.pp_location loc
                       Printer.pp_global_annotation (Dfun_or_pred (li, loc))))
               (List.rev path);
-          if not (H.mem finished li) then logic_info_decl_handler path li
+          if not (H.mem finished li) && li != List.hd path then logic_info_decl_handler path li
           else SkipChildren
       end
     and logic_info_decl_handler path li =
