@@ -759,7 +759,8 @@ let _docEnv () =
      Format.std_formatter
      !acc
 
-
+(* Used for typeinfo caching between successive parser passes (types are scanned twice) *)
+let typeInfoNameEnv : (string, typeinfo) H.t = H.create 113
 
 (* Add a new variable. Do alpha-conversion if necessary *)
 let alphaConvertVarAndAddToEnv (addtoenv: bool) (vi: varinfo) : varinfo =
@@ -791,7 +792,9 @@ let alphaConvertVarAndAddToEnv (addtoenv: bool) (vi: varinfo) : varinfo =
             let typedef_ti = H.find typedefs vi.vname in
             H.remove typedefs vi.vname;
             (* Use the new name for the typedef instead *)
+            H.remove typeInfoNameEnv vi.vname;
             typedef_ti.tname <- newname;
+            H.add typeInfoNameEnv newname typedef_ti;
             (* And continue using the last name *)
             vi
           with Not_found ->
@@ -899,13 +902,14 @@ let mkStartOfAndMark loc ((_b, _off) as lval) : exp =
   res
 
 (* Keep a set of self compinfo for composite types *)
-let compInfoNameEnv : (string, compinfo) H.t = H.create 113
-let enumInfoNameEnv : (string, enuminfo) H.t = H.create 113
-
+let compInfoNameEnv : (string, compinfo * bool) H.t = H.create 113
+let enumInfoNameEnv : (string, enuminfo * bool) H.t = H.create 113
 
 (* Keep a set of self compinfo for composite types *)
-let compInfoCache : (string, (string, compinfo) H.t) H.t = H.create 113
-let enumInfoCache : (string, (string, enuminfo) H.t) H.t = H.create 113
+let compInfoCache : (string, (string, compinfo * bool) H.t) H.t = H.create 113
+let enumInfoCache : (string, (string, enuminfo * bool) H.t) H.t = H.create 113
+
+let typeInfoCache : (string, (string, typeinfo) H.t) H.t = H.create 113
 
 let lookupTypeNoError (kind: string)
                       (n: string) : typ * location =
@@ -927,11 +931,15 @@ let createCompInfo (iss: bool) (n: string) ~(norig: string) : compinfo * bool =
   (* Add to the self cell set *)
   let key = (if iss then "struct " else "union ") ^ n in
   try
-    H.find compInfoNameEnv key, false (* Only if not already in *)
+    let ci, is_new as res = H.find compInfoNameEnv key in
+    (* Only if not already in *)
+    if is_new then
+      H.replace compInfoNameEnv key (ci, false);
+    res
   with Not_found -> begin
     (* Create a compinfo. This will have "cdefined" false. *)
     let res = mkCompInfo iss n ~norig (fun _ -> []) [] in
-    H.add compInfoNameEnv key res;
+    H.add compInfoNameEnv key (res, false);
     res, true
   end
 
@@ -940,13 +948,17 @@ let createCompInfo (iss: bool) (n: string) ~(norig: string) : compinfo * bool =
 let createEnumInfo (n: string) ~(norig:string) : enuminfo * bool =
   (* Add to the self cell set *)
   try
-    H.find enumInfoNameEnv n, false (* Only if not already in *)
+    let ei, is_new as res = H.find enumInfoNameEnv n in
+    (* Only if not already in *)
+    if is_new then
+      H.replace enumInfoNameEnv n (ei, false);
+    res
   with Not_found -> begin
     (* Create a enuminfo *)
     let enum = { eorig_name = norig; ename = n; eitems = [];
                  eattr = []; ereferenced = false; ekind = IInt ; }
     in
-    H.add enumInfoNameEnv n enum;
+    H.add enumInfoNameEnv n (enum, false);
     enum, true
   end
 
@@ -8351,8 +8363,16 @@ and doTypedef ghost ((specs, nl): A.name_group) =
         let newTyp' = cabsTypeAddAttributes tattr newTyp in
         let n', _  = newAlphaName true "type" n in
         let ti =
-          { torig_name = n; tname = n';
-            ttype = newTyp'; treferenced = false }
+          try
+            H.find typeInfoNameEnv n'
+          with
+          | Not_found ->
+            let ti =
+              { torig_name = n; tname = n';
+                ttype = newTyp'; treferenced = false }
+            in
+            H.add typeInfoNameEnv n' ti;
+            ti
         in
         (* Since we use the same name space, we might later hit a global with
          * the same name and we would want to change the name of the global.
@@ -9197,8 +9217,9 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   begin match stage with
   | `Names | `Types _ -> ()
   | `Bodies (fname, _) ->
-    H.iter (H.add compInfoNameEnv) (H.find compInfoCache fname);
-    H.iter (H.add enumInfoNameEnv) (H.find enumInfoCache fname)
+    H.iter (fun k (ci, _) -> H.add compInfoNameEnv k (ci, true)) (H.find compInfoCache fname);
+    H.iter (fun k (ci, _) -> H.add enumInfoNameEnv k (ci, true)) (H.find enumInfoCache fname);
+    H.iter (H.add typeInfoNameEnv) (H.find typeInfoCache fname)
   end;
   IH.clear mustTurnIntoDef;
   H.clear alreadyDefined;
@@ -9258,7 +9279,8 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   | `Names | `Bodies _ -> ()
   | `Types (fname, _) ->
     H.add compInfoCache fname (H.copy compInfoNameEnv);
-    H.add enumInfoCache fname (H.copy enumInfoNameEnv)
+    H.add enumInfoCache fname (H.copy enumInfoNameEnv);
+    H.add typeInfoCache fname (H.copy typeInfoNameEnv)
   end;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
