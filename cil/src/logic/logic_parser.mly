@@ -798,8 +798,8 @@ type_spec:
 | STRUCT exit_rt_type identifier_or_typename { LTstruct $3 }
 | ENUM   exit_rt_type identifier_or_typename { LTenum $3 }
 | UNION  exit_rt_type identifier_or_typename  { LTunion $3 }
-| TYPENAME          { LTnamed ($1,[]) }
-| TYPENAME LT enter_rt_type  ne_logic_type_list GT exit_rt_type
+| typename          { LTnamed ($1,[]) }
+| typename LT enter_rt_type  ne_logic_type_list GT exit_rt_type
       { LTnamed($1,$4) }
 ;
 
@@ -1689,11 +1689,16 @@ any_identifier_non_logic:
 
 identifier_or_typename:
 | IDENTIFIER { $1 }
-| TYPENAME { $1 }
+| typename { $1 }
 ;
 
 identifier:
 | IDENTIFIER { $1 }
+;
+
+typename:
+| TYPENAME { $1 }
+| TYPE IDENTIFIER { $2 }
 ;
 
 bounded_var:

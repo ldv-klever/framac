@@ -3499,9 +3499,9 @@ struct
     | Some (LTsum _) -> false
     | Some (LTsyn typ) -> is_cyclic_typedef_aux s typ
   and is_cyclic_typedef_aux s = function
-    | Ltype ({ lt_name = s'; lt_def = d },_) ->
-      s = s' || is_cyclic_typedef s d
-    | Larrow  (prm,rt) ->
+    | Ltype ({ lt_name = s'; lt_def = d }, _) ->
+      Datatype.String.Set.mem s' s || is_cyclic_typedef (Datatype.String.Set.add s' s) d
+    | Larrow  (prm, rt) ->
       List.exists (is_cyclic_typedef_aux s) prm ||
         is_cyclic_typedef_aux s rt
     | _ -> false
@@ -3772,7 +3772,7 @@ struct
               let tdef =
                 Extlib.opt_map (typedef ~stage loc env my_info) def
               in
-              if is_cyclic_typedef s tdef then
+              if is_cyclic_typedef (Datatype.String.Set.singleton s) tdef then
                 error loc "Definition of %s is cyclic" s;
               my_info.lt_def <- tdef;
               finish_with my_info
@@ -3792,6 +3792,8 @@ struct
             let my_info = C.find_logic_type s in
             (* Just to re-register the names of the type constructors *)
             ignore @@ Extlib.opt_map (typedef ~stage loc (Lenv.empty ()) my_info) def;
+            if is_cyclic_typedef (Datatype.String.Set.singleton s) my_info.lt_def then
+              error loc "Definition of %s is cyclic" s;
             finish_with my_info
           end
       | LDlemma (x, is_axiom, labels, poly, e) ->
