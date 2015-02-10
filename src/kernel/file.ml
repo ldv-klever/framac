@@ -1070,6 +1070,10 @@ let keep_entry_point ?(specs=Kernel.Keep_unused_specified_functions.get ()) g =
       || (specs && not (is_empty_funspec spec))
     | _ -> false
 
+type 'a what =
+  | Term_node : term_node what
+  | Predicate : predicate what
+
 let propagate_logic_info_default_labels =
   let module H = Logic_info.Hashtbl in
   let inplace_visit = inplace_visit () in
@@ -1077,6 +1081,10 @@ let propagate_logic_info_default_labels =
   let glob_annot_visitor =
     object(self)
       inherit genericCilVisitor inplace_visit
+
+      method! vfile _ =
+        H.clear locations;
+        DoChildren
 
       method! vannotation =
         function
@@ -1157,6 +1165,61 @@ let propagate_logic_info_default_labels =
         | _ -> SkipChildren
     end
   in
+  let default_label_assoc_visitor =
+    object(self)
+      inherit genericCilVisitor inplace_visit
+
+      val mutable labels = Stack.create ()
+
+      initializer
+        Stack.push (Some Logic_const.here_label) labels
+
+      method private do_with_label_opt : 'a. logic_label option -> 'a visitAction =
+        fun lab ->
+        Stack.push lab labels;
+        DoChildrenPost (fun x -> ignore @@ Stack.pop labels; x)
+
+      method private do_with_label : 'a. logic_label -> 'a visitAction = fun lab -> self#do_with_label_opt (Some lab)
+      method private do_without_label : 'a visitAction = self#do_with_label_opt None
+
+      method private do_app : 'a. 'a what -> _ -> _ -> 'a visitAction =
+        fun (type a) what li args ->
+        try
+          ChangeDoChildrenPost ((let labs = [List.hd li.l_labels, Extlib.the (Stack.top labels)] in
+                                 match (what : a what) with
+                                 | Term_node -> (Tapp (li, labs, args) : a) | Predicate -> Papp (li, labs, args)),
+                                Extlib.id)
+        with
+        | Stack.Empty
+        | Invalid_argument "Extlib.the" ->
+          Kernel.abort
+            ~current:true
+            "No default label in context of labeled logic %s application: %a"
+            (match what with Term_node -> "function" | Predicate -> "function/predicate")
+            Printer.pp_logic_var li.l_var_info
+
+      method! vterm_node =
+        function
+        | Tapp ({ l_labels = [_] } as li, [], args) -> self#do_app Term_node li args
+        | Tat (_, lab) -> self#do_with_label lab
+        | _ -> DoChildren
+
+      method! vpredicate =
+        function
+        | Papp ({ l_labels = [_] } as li, [], args) -> self#do_app Predicate li args
+        | Pat (_, lab) -> self#do_with_label lab
+        | _ -> DoChildren
+
+      method! vassigns _ = self#do_with_label Logic_const.old_label
+
+      method! vallocates _ = self#do_with_label Logic_const.old_label
+
+      method! vlogic_info_decl =
+        function
+        | { l_labels = [lab] } -> self#do_with_label lab
+        | _ -> self#do_without_label
+    end
+  in
   fun file ->
     visitCilFile glob_annot_visitor file;
     visitCilFile logic_info_decl_visitor file;
@@ -1164,7 +1227,8 @@ let propagate_logic_info_default_labels =
       (fun li ->
          if li.l_labels = [] then
            ignore @@ visitCilLogicInfo (logic_info_use_visitor li) li)
-      (List.rev !sorted)
+      (List.rev !sorted);
+    visitCilFile default_label_assoc_visitor file
 
 let files_to_cil files =
   (* BY 2011-05-10 Deactivated this mark_as_computed. Does not seem to

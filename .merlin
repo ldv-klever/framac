@@ -1,3 +1,4 @@
+PKG ocamlgraph
 FLG -short-paths -strict-formats -safe-string
 
 S src/scope
