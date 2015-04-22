@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2014                                               *)
+(*  Copyright (C) 2007-2015                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,7 +41,7 @@ let on_out file job = try_finally ~finally:close_out job (open_out file)
 
 let hardcopy inc out =
   begin
-    let buffer = String.create 1024 in
+    let buffer = Bytes.create 1024 in
     let n = ref 0 in
     while (n := Pervasives.input inc buffer 0 1024 ; !n > 0) do
       Pervasives.output out buffer 0 !n 

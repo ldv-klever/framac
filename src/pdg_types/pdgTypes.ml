@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2014                                               *)
+(*  Copyright (C) 2007-2015                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -109,8 +109,7 @@ let () = Ast.add_monotonic_state NodeSet.self
 (** set of nodes of the graph *)
 module NodeSetLattice = struct
   include Abstract_interp.Make_Lattice_Set(Node)
-  let default _v _a _b : t = empty
-  let defaultall _v : t = empty
+  let default : t = empty
 end
 
 module LocInfo = Lmap_bitwise.Make_bitwise (NodeSetLattice)
@@ -222,10 +221,13 @@ module DpdZone : sig
   val dpd_zone : t -> Locations.Zone.t option
 
   val pretty : Format.formatter -> t -> unit
+  val pretty_debug: Format.formatter -> t -> unit
 end = struct
 
   include Datatype.Pair(Dpd)(Datatype.Option(Locations.Zone))
     (* None == Locations.Zone.Top *)
+
+  let pretty_debug = pretty
 
   let dpd_kind dpd = fst dpd
   let dpd_zone dpd = snd dpd

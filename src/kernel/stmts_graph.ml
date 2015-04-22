@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2014                                               *)
+(*  Copyright (C) 2007-2015                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,7 +34,7 @@ struct
   module HV = Hashtbl.Make(Stmt)
   module HptmapStmtBool = Hptmap.Make
     (Cil_datatype.Stmt_Id)
-    (Datatype.Bool)
+    (struct include Datatype.Bool let pretty_debug = pretty end)
     (Hptmap.Comp_unused)
     (struct let v = [ [] ] end)
     (struct let l = [ Ast.self ] end)
@@ -142,6 +142,7 @@ module TP = struct
       (match s.skind with
        | Instr _ -> Format.sprintf "INSTR <%d>\n%s" s.sid (pretty_raw_stmt s)
        | Return _ -> Format.sprintf "RETURN <%d>" s.sid
+       | Throw _ -> Format.sprintf "THROW <%d>" s.sid
        | Goto _ -> Format.sprintf "%s <%d>\n" (pretty_raw_stmt s) s.sid
        | AsmGoto (_, _, _, _, _, srefs, _) ->
          let lbls =
@@ -162,6 +163,7 @@ module TP = struct
        | Block _ ->  Format.sprintf "BLOCK <%d>" s.sid
        | TryExcept _ ->  Format.sprintf "TRY EXCEPT <%d>" s.sid
        | TryFinally _ ->  Format.sprintf "TRY FINALLY <%d>" s.sid
+       | TryCatch _ -> Format.sprintf "TRY CATCH <%d>" s.sid
        | UnspecifiedSequence _ ->
          Format.sprintf "UnspecifiedSequence <%d>" s.sid)
 
@@ -284,7 +286,7 @@ let rec get_block_stmts blk =
 
 and get_stmt_stmts s =
   let compute_stmt_stmts s = match s.skind with
-    | Instr _ | Return _ -> Stmt.Set.singleton s
+    | Instr _ | Return _ | Throw _ -> Stmt.Set.singleton s
     | Continue _ | Break _ | Goto _ | AsmGoto _ -> Stmt.Set.singleton s
     | Block b | Switch (_, b, _, _) | Loop (_, b, _, _, _) ->
         Stmt.Set.add s (get_block_stmts b)
@@ -295,6 +297,10 @@ and get_stmt_stmts s =
         let stmts =
           Stmt.Set.union (get_block_stmts b1)(get_block_stmts b2)
         in Stmt.Set.add s stmts
+    | TryCatch(t,c,_) ->
+      List.fold_left 
+        (fun acc (_,b) -> Stmt.Set.union acc (get_block_stmts b))
+        (get_block_stmts t) c
     | TryExcept (_, _, _, _) | TryFinally (_, _, _) ->
         Kernel.not_yet_implemented "exception handling"
   in
