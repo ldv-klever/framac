@@ -953,13 +953,13 @@ let help_by_array_reference_pattern e =
 
 let by_array_reference_pattern = function
   | StartOf (Var x,off) -> Ok (x,true,brackets_typ (Cil.typeOfLval (Var x,off)))
-  | CastE(ty,{enode = StartOf (Var x,off)}) when Cil.isPointerType ty -> 
+  | CastE(ty, _, {enode = StartOf (Var x,off)}) when Cil.isPointerType ty -> 
       Ok (x,true,brackets_typ (Cil.typeOfLval (Var x,off)))
   | AddrOf (Mem e, _) -> 
       (match delta_ptr (Cil.stripInfo e).enode with 
        | None -> Any
        | Some (x,n) -> Ok (x,true,n)) 
-  | CastE (t,e) -> 
+  | CastE (t, _, e) -> 
       debug "[by_array_reference_pattern] cast case";
       if Cil.isPointerType t then 
         ( debug "is a pointer type";
@@ -1004,7 +1004,7 @@ let by_array_reference_pattern_term t =
       debug "%s %a " s Printer.pp_logic_var lvar; 
       Ok(lvar,true,brackets_lv_typ (Cil.typeOfTermLval (TVar lvar,off)))
 
-  |TCastE(ty,{term_node = ( TStartOf (TVar lvar,off) 
+  |TCastE(ty, _, {term_node = ( TStartOf (TVar lvar,off) 
                           | Tat ({term_node = TStartOf (TVar lvar,off) },_))}) when 
       Cil.isPointerType ty ->
       debug "%s %a " s Printer.pp_logic_var lvar; 
@@ -1018,7 +1018,7 @@ let by_array_reference_pattern_term t =
            debug "%s %a in delta_ptr term" s Printer.pp_logic_var x;
            Ok (x,true,n)) 
   | Tat({term_node = t},_)-> help_array_reference_pattern_term s t
-  | TCastE(ty,{term_node = t}) when (Cil.isPointerType ty)->
+  | TCastE(ty, _, {term_node = t}) when (Cil.isPointerType ty)->
       help_array_reference_pattern_term s t
   | t ->help_array_reference_pattern_term s t
 

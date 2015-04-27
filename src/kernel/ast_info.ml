@@ -58,13 +58,13 @@ let constant_expr ~loc i = new_exp ~loc (Const(CInt64(i,IInt,None)))
 let rec is_null_expr e = match (stripInfo e).enode with
   | Const c when is_integral_const c ->
       Integer.equal (value_of_integral_const c) Integer.zero
-  | CastE(_,e) -> is_null_expr e
+  | CastE(_, _, e) -> is_null_expr e
   | _ -> false
 
 let rec is_non_null_expr e = match (stripInfo e).enode with
   | Const c when is_integral_const c ->
       not (Integer.equal (value_of_integral_const c) Integer.zero)
-  | CastE(_,e) -> is_non_null_expr e
+  | CastE(_, _, e) -> is_non_null_expr e
   | _ -> false
 
 (* ************************************************************************** *)
@@ -292,7 +292,7 @@ let constant_term loc i =
 let rec is_null_term t = match t.term_node with
   | TConst c when is_integral_logic_const c ->
       Integer.equal (value_of_integral_logic_const c) Integer.zero
-  | TCastE(_,t) -> is_null_term t
+  | TCastE(_, _, t) -> is_null_term t
   | _ -> false
 
 (* ************************************************************************** *)

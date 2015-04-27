@@ -750,10 +750,11 @@ let type_expr env ?tr ?current e =
                 Printer.pp_term e2)
         in
         env, t, cond
-      | PUnop(Logic_ptree.Uminus,e) ->
+      | PUnop(Logic_ptree.Uminus | Logic_ptree.Uminus_mod as op,e) ->
         let env,t,cond = aux env cond e in
         if Logic_typing.is_arithmetic_type t.term_type then
-          env,Logic_const.term (TUnOp (Neg,t)) Linteger,cond
+          let oft = match op with Logic_ptree.Uminus -> Check | _ -> Modulo in
+          env,Logic_const.term (TUnOp (Neg oft,t)) Linteger,cond
         else Aorai_option.abort
           "Invalid operand for unary -: unexpected %a" Printer.pp_term t
       | PUnop(Logic_ptree.Ubw_not,e) ->

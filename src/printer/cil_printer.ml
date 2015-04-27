@@ -181,16 +181,16 @@ module Precedence = struct
        comparativeLevel (* 70 *)
    (* Additive. Shifts can have higher level than + or - but I want parentheses
       around them *)
-   | BinOp((MinusA|MinusPP|MinusPI|PlusA|
-       PlusPI|IndexPI|Shiftlt|Shiftrt),_,_,_)
+   | BinOp((MinusA _|MinusPP|MinusPI|PlusA _|
+       PlusPI|IndexPI|Shiftlt _|Shiftrt),_,_,_)
      -> additiveLevel (* 60 *)
    (* Multiplicative *)
-   | BinOp((Div|Mod|Mult),_,_,_) -> 40
+   | BinOp((Div _|Mod|Mult _),_,_,_) -> 40
    (* Unary *)
-   | CastE(_,_) -> 30
+   | CastE(_, _, _) -> 30
    | AddrOf(_) -> 30
    | StartOf(_) -> 30
-   | UnOp((Neg|BNot|LNot),_,_) -> 30
+   | UnOp((Neg _|BNot|LNot),_,_) -> 30
    (* Lvals *)
    | Lval(Mem _ , _) -> derefStarLevel (* 20 *)
    | Lval(Var _, (Field _|Index _)) -> indexLevel (* 20 *)
@@ -209,16 +209,16 @@ module Precedence = struct
      comparativeLevel (* 70 *)
    (* Additive. Shifts can have higher level than + or - but I want parentheses
       around them *)
-   | TBinOp((MinusA|MinusPP|MinusPI|PlusA|
-       PlusPI|IndexPI|Shiftlt|Shiftrt),_,_)
+   | TBinOp((MinusA _|MinusPP|MinusPI|PlusA _|
+       PlusPI|IndexPI|Shiftlt _|Shiftrt),_,_)
      -> additiveLevel (* 60 *)
    (* Multiplicative *)
-   | TBinOp((Div|Mod|Mult),_,_) -> 40
+   | TBinOp((Div _|Mod|Mult _),_,_) -> 40
    (* Unary *)
-   | TCastE(_,_) -> 30
+   | TCastE(_, _, _) -> 30
    | TAddrOf(_) -> addrOfLevel
    | TStartOf(_) -> 30
-   | TUnOp((Neg|BNot|LNot),_) -> 30
+   | TUnOp((Neg _|BNot|LNot),_) -> 30
    (* Unary post *)
    | TCoerce _ | TCoerceE _ -> 25
    (* Lvals *)
@@ -533,6 +533,11 @@ class cil_printer () = object (self)
 
   (*** EXPRESSIONS ***)
   method exp fmt (e: exp) =
+    let overflow fmt =
+      function
+      | Check -> ()
+      | Modulo -> fprintf fmt "/*@%%*/"
+    in
     let non_decay = parent_non_decay in
     parent_non_decay <- false;
     let level = Precedence.getParenthLevel e in
@@ -543,9 +548,9 @@ class cil_printer () = object (self)
 
     | UnOp(u,e1,_) ->
       (match u, e1 with
-      | Neg, {enode = Const (CInt64 (v, _, _))}
+      | Neg oft, {enode = Const (CInt64 (v, _, _))}
         when Integer.ge v Integer.zero ->
-	fprintf fmt "-%a" (self#exp_prec level) e1
+	fprintf fmt "-%a%a" overflow oft (self#exp_prec level) e1
       | _ ->
 	fprintf fmt "%a %a" self#unop u (self#exp_prec level) e1)
 
@@ -555,8 +560,8 @@ class cil_printer () = object (self)
 	self#binop b
 	(self#exp_prec level) e2
 
-    | CastE(t,e) ->
-      fprintf fmt "(%a)%a" (self#typ None) t (self#exp_prec level) e
+    | CastE(t, oft, e) ->
+      fprintf fmt "(%a)%a%a" (self#typ None) t overflow oft (self#exp_prec level) e
     | SizeOf t -> fprintf fmt "sizeof(%a)" (self#typ None) t
     | SizeOfE e -> fprintf fmt "sizeof(%a)" self#exp_non_decay e
     | SizeOfStr s -> fprintf fmt "sizeof(%a)" self#constant (CStr s)
@@ -573,19 +578,25 @@ class cil_printer () = object (self)
   method unop fmt u =
     fprintf fmt "%s"
       (match u with
-      | Neg -> "-"
+      | Neg Check -> "-"
+      | Neg Modulo -> "-/*@%*/"
       | BNot -> "~"
       | LNot -> "!")
 
   method binop fmt b =
     fprintf fmt "%s"
       (match b with
-      | PlusA | PlusPI | IndexPI -> "+"
-      | MinusA | MinusPP | MinusPI -> "-"
-      | Mult -> "*"
-      | Div -> "/"
+      | PlusA Check | PlusPI | IndexPI -> "+"
+      | PlusA Modulo -> "+/*%*/"
+      | MinusA Check | MinusPP | MinusPI -> "-"
+      | MinusA Modulo -> "-/*@%*/"
+      | Mult Check -> "*"
+      | Mult Modulo -> "*/*@%*/"
+      | Div Check -> "/"
+      | Div Modulo -> "//@*%*/"
       | Mod -> "%"
-      | Shiftlt -> "<<"
+      | Shiftlt Check -> "<<"
+      | Shiftlt Modulo -> "<</*@%*/"
       | Shiftrt -> ">>"
       | Lt -> "<"
       | Gt -> ">"
@@ -738,7 +749,7 @@ class cil_printer () = object (self)
     | Set(lv,e,_) -> begin
       (* Be nice to some special cases *)
       match e.enode with
-	BinOp((PlusA|PlusPI|IndexPI),
+	BinOp((PlusA Check|PlusPI|IndexPI),
 	      {enode = Lval(lv')},
 	      {enode=Const(CInt64(one,_,_))},_)
 	  when Cil.compareLval lv lv' && Integer.equal one Integer.one
@@ -746,7 +757,7 @@ class cil_printer () = object (self)
 	      fprintf fmt "%a ++%s"
 		(self#lval_prec Precedence.indexLevel) lv
 		instr_terminator
-      | BinOp((MinusA|MinusPI),
+      | BinOp((MinusA Check|MinusPI),
 	      {enode = Lval(lv')},
 	      {enode=Const(CInt64(one,_,_))}, _)
 	  when Cil.compareLval lv lv' && Integer.equal one Integer.one
@@ -755,7 +766,7 @@ class cil_printer () = object (self)
 	  (self#lval_prec Precedence.indexLevel) lv
 	  instr_terminator
 
-      | BinOp((PlusA|PlusPI|IndexPI),
+      | BinOp((PlusA Check|PlusPI|IndexPI),
 	      {enode = Lval(lv')},
 	      {enode = Const(CInt64(mone,_,_))},_)
 	  when Cil.compareLval lv lv' && Integer.equal mone Integer.minus_one
@@ -764,8 +775,8 @@ class cil_printer () = object (self)
 	  (self#lval_prec Precedence.indexLevel) lv
 	  instr_terminator
 
-      | BinOp((PlusA|PlusPI|IndexPI|MinusA|MinusPP|MinusPI|BAnd|BOr|BXor|
-	  Mult|Div|Mod|Shiftlt|Shiftrt) as bop,
+      | BinOp((PlusA _|PlusPI|IndexPI|MinusA _|MinusPP|MinusPI|BAnd|BOr|BXor|
+	  Mult _|Div _|Mod|Shiftlt _|Shiftrt) as bop,
 	      {enode = Lval(lv')},e,_) when Cil.compareLval lv lv' ->
 	fprintf fmt "%a %a= %a%s"
 	  self#lval  lv
@@ -2014,12 +2025,17 @@ the arguments."
   method term_binop fmt b =
     fprintf fmt "%s"
       (match b with
-      | PlusA | PlusPI | IndexPI -> "+"
-      | MinusA | MinusPP | MinusPI -> "-"
-      | Mult -> "*"
-      | Div -> "/"
+      | PlusA Check | PlusPI | IndexPI -> "+"
+      | PlusA Modulo -> "+%"
+      | MinusA Check | MinusPP | MinusPI -> "-"
+      | MinusA Modulo -> "-%"
+      | Mult Check -> "*"
+      | Mult Modulo -> "*%"
+      | Div Check -> "/"
+      | Div Modulo -> "/%"
       | Mod -> "%"
-      | Shiftlt -> "<<"
+      | Shiftlt Check -> "<<"
+      | Shiftlt Modulo -> "<<%"
       | Shiftrt -> ">>"
       | Lt -> "<"
       | Gt -> ">"
@@ -2081,6 +2097,11 @@ the arguments."
           self#tand_list l
 
   method term_node fmt t =
+    let term_overflow fmt =
+      function
+      | Check -> ()
+      | Modulo -> fprintf fmt " %%"
+    in
     let current_level = Precedence.getParenthLevelLogic t.term_node in
     match t.term_node with
     | TConst s -> fprintf fmt "%a" self#logic_constant s
@@ -2103,8 +2124,8 @@ the arguments."
 	(self#term_prec current_level) l
 	self#term_binop op
 	(self#term_prec current_level) r
-    | TCastE (ty,e) ->
-      fprintf fmt "(%a)%a" (self#typ None) ty
+    | TCastE (ty, oft, e) ->
+      fprintf fmt "(%a%a)%a" term_overflow oft (self#typ None) ty
 	(self#term_prec current_level) e
     | TAddrOf lv -> 
       fprintf fmt "&%a" (self#term_lval_prec Precedence.addrOfLevel) lv

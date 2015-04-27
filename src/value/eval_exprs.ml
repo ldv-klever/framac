@@ -192,7 +192,7 @@ and pass_cast state exn typ e =
 and find_lv state ee =
   match ee.enode with
   | Lval lv -> lv
-  | CastE (typ,e) ->
+  | CastE (typ, _, e) ->
       pass_cast state cannot_find_lv typ e;
       find_lv state e
   | _ -> raise cannot_find_lv
@@ -286,7 +286,7 @@ and get_influential_vars state exp =
         get_vars (get_vars acc v1) v2
     | UnOp(_,v1,_) ->
         get_vars acc v1
-    | CastE (_typ,exp) ->
+    | CastE (_typ, _, exp) ->
         get_vars acc exp
     | _ -> acc
   and get_vars_offset acc offset =
@@ -325,10 +325,10 @@ and eval_binop ~with_alarms e deps state =
 	      Valarms.set_syntactic_context (Valarms.SyBinOp(e, op, e1, e2));
               (* Implicit preconditions of [op] *)
               let state, ev1, ev2 = match op with
-                | Mod | Div ->
+                | Mod | Div _ ->
                   Warn.maybe_warn_div ~with_alarms ev2;
                   state, ev1, ev2 (* TODO: we could reduce ev2 *)
-                | Shiftlt ->
+                | Shiftlt _ ->
                   warn_reduce_shift_left ~with_alarms state te1 e1 ev1 e2 ev2
                 | Shiftrt ->
                   let state, ev2 =
@@ -342,9 +342,9 @@ and eval_binop ~with_alarms e deps state =
               in
 	      (* Warn if overflow during a non-bitwise operation *)
 	      let v = match op with
-                | Shiftlt | Mult | MinusPP | MinusPI | IndexPI | PlusPI
-                | PlusA | Div | Mod | MinusA ->
-                  let warn_unsigned = op <> Shiftlt in
+                | Shiftlt _ | Mult _ | MinusPP | MinusPI | IndexPI | PlusPI
+                | PlusA _ | Div _ | Mod | MinusA _ ->
+                  let warn_unsigned = op <> Shiftlt Check && op <> Shiftlt Modulo in
                   Eval_op.handle_overflow ~with_alarms ~warn_unsigned typ v
                 | _ -> v
 	      in
@@ -387,7 +387,7 @@ and eval_expr_with_deps_state ~with_alarms deps state e =
         in
         state, deps, loc_to_loc_without_size r
 
-    | CastE (typ, e) ->
+    | CastE (typ, _, e) ->
         let state, deps, evaled_expr =
           eval_expr_with_deps_state ~with_alarms deps state e
         in
@@ -412,7 +412,7 @@ and eval_expr_with_deps_state ~with_alarms deps state e =
         let state, deps, expr =
           eval_expr_with_deps_state ~with_alarms deps state e in
         let syntactic_context = match op with
-        | Neg -> Valarms.SyUnOp orig_expr (* Can overflow *)
+        | Neg _ -> Valarms.SyUnOp orig_expr (* Can overflow *)
         | BNot -> Valarms.SyUnOp orig_expr(* does in fact never raise an alarm*)
         | LNot -> Valarms.SyUnOp e
 	(* Can raise a pointer comparison. Valarms needs [e] there *)
@@ -769,7 +769,7 @@ and reduce_by_accessed_loc ~for_writing state lv loc =
 		  end
 		else state
 
-	    | CastE(typ,e) ->
+	    | CastE(typ, _, e) ->
 		pass_cast state cannot_find_lv typ e;
 		aux e
 	    | _ -> state)
@@ -1074,14 +1074,14 @@ let reduce_by_left_comparison_abstract pos expl binop expr state =
 	      | _ -> raise not_an_exact_loc)
 	  in
 	  ( match expl.enode with
-	  | CastE (typ_larger, { enode = CastE(typ_loc,e1) } )
+	  | CastE (typ_larger, _, { enode = CastE(typ_loc, _, e1) } )
 	      when isIntegralType typ_loc && isIntegralType typ_larger &&
 (		bitsSizeOf typ_larger > bitsSizeOf typ_loc &&
 		isSignedInteger typ_loc ) (* TODOBY: this should be
                                                   implemented using pass_cast *)
 		->
 	      invert_cast e1 typ_loc
-	  | CastE (typ_loc, e1) when isIntegralType typ_loc ->
+	  | CastE (typ_loc, _, e1) when isIntegralType typ_loc ->
 	      invert_cast e1 typ_loc
 	  | _ -> raise not_an_exact_loc)
 	    
@@ -1271,7 +1271,7 @@ let reduce_by_cond state cond =
       | _, UnOp(LNot,exp,_) ->
           aux { positive = not cond.positive; exp = exp; } state
 
-      | _, CastE (typ, e) ->
+      | _, CastE (typ, _, e) ->
         (try
            pass_cast state Exit typ e;
            aux { cond with exp = e} state

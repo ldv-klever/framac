@@ -140,9 +140,9 @@ let isCrossableAtInit tr func =
           | TUnOp(op,t1) ->
             let t1 = aux t1 in
             (match op,t1.term_node with
-               | Neg, TConst(Integer(i,_)) ->
+               | Neg _, TConst(Integer(i,_)) ->
                    { t with term_node = TConst(Integer(Integer.neg i,None)) }
-               | Neg, TConst(LReal r) ->
+               | Neg _, TConst(LReal r) ->
 		   let f = ~-. (r.r_nearest) in
 		   let r = { 
 		     r_literal = string_of_float f ;
@@ -164,23 +164,23 @@ let isCrossableAtInit tr func =
                   bool_res (comp (Char.compare c1 c2))
                 | TConst(LReal r1), TConst (LReal r2) ->
                   bool_res (comp (compare r1.r_nearest r2.r_nearest))
-                | TCastE(ty1,t1), TCastE(ty2,t2)
+                | TCastE(ty1, _, t1), TCastE(ty2, _, t2)
                   when Cil_datatype.Typ.equal ty1 ty2 ->
                   comparison comp t1 t2
                 | _ -> t
             in
             (match op, t1.term_node, t2.term_node with
 
-              | PlusA, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
+              | PlusA _, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
                 { t with term_node =
                     TConst(Integer(Integer.add i1 i2,None))}
-              | MinusA, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
+              | MinusA _, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
                 { t with term_node =
                     TConst(Integer(Integer.sub i1 i2,None)) }
-              | Mult, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
+              | Mult _, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
                 { t with term_node =
                     TConst(Integer(Integer.mul i1 i2,None)) }
-              | Div, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
+              | Div _, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
                 (try
                    { t with term_node =
                        TConst(Integer(Integer.c_div i1 i2,None)) }
@@ -190,7 +190,7 @@ let isCrossableAtInit tr func =
                    { t with term_node =
                        TConst(Integer(Integer.c_rem i1 i2,None)) }
                  with Division_by_zero -> t)
-              | Shiftlt, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
+              | Shiftlt _, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
                 { t with term_node =
                     TConst(Integer(Integer.shift_left i1 i2,None)) }
               | Shiftrt, TConst(Integer(i1,_)), TConst(Integer(i2,_)) ->
@@ -207,11 +207,11 @@ let isCrossableAtInit tr func =
               | LOr, t1, t2 ->
                 bool3_res t (Bool3.bool3or (is_true t1) (is_true t2))
               | _ -> t)
-          | TCastE(ty,t1) ->
+          | TCastE(ty, oft, t1) ->
             let t1 = aux t1 in
             (match t1.term_type with
                 Ctype ty1 when Cil_datatype.Typ.equal ty ty1 -> t1
-              | _ -> { t with term_node = TCastE(ty,t1) })
+              | _ -> { t with term_node = TCastE(ty, oft, t1) })
           | _ -> t
       and aux_lv (base,off) =
         match base with
@@ -282,7 +282,7 @@ let isCrossableAtInit tr func =
           Bool3.bool3_of_bool (comp (Char.compare c1 c2))
         | TConst(LReal r1), TConst (LReal r2) ->
           Bool3.bool3_of_bool (comp (compare r1.r_nearest r2.r_nearest))
-        | TCastE(ty1,t1), TCastE(ty2,t2) when Cil_datatype.Typ.equal ty1 ty2 ->
+        | TCastE(ty1, _, t1), TCastE(ty2, _, t2) when Cil_datatype.Typ.equal ty1 ty2 ->
           comparison t1 t2
         | _ -> Bool3.Undefined
     in
@@ -1264,7 +1264,7 @@ let mk_action ~loc a =
       [Logic_const.prel ~loc
           (Req, term_lval lv,
            Logic_const.term ~loc
-             (TBinOp (PlusA,
+             (TBinOp (PlusA Check,
                       Logic_const.told ~loc (term_lval lv),
                       Logic_const.tinteger ~loc 1))
              (Cil.typeOfTermLval lv))]
@@ -1606,7 +1606,7 @@ let treat_val loc base range pred =
   let add term =
     if Cil.isLogicZero base then term
     else Logic_const.term
-      (TBinOp (PlusA, Logic_const.tat (base,Logic_const.pre_label), term))
+      (TBinOp (PlusA Check, Logic_const.tat (base,Logic_const.pre_label), term))
       Linteger
   in
   let add_cst i = add (Logic_const.tinteger i) in

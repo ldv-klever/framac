@@ -209,17 +209,17 @@ let need_logic_cast oldt newt =
   not (Cil_datatype.Logic_type.equal (Ctype oldt) (Ctype newt))
 
 (* Does the same kind of optimization than [Cil.mkCastT] for [Ctype]. *)
-let mk_cast ?(loc=Cil_datatype.Location.unknown) newt t =
+let mk_cast ?(loc=Cil_datatype.Location.unknown) ?(overflow=Check) newt t =
   let mk_cast t = (* to new type [newt] *)
     let typ = Cil.type_remove_attributes_for_logic_type newt 
-    in term ~loc (TCastE (typ, t)) (Ctype typ)
+    in term ~loc (TCastE (typ, overflow, t)) (Ctype typ)
   in
   match t.term_type with
   | Ctype oldt ->
       if not (need_logic_cast oldt newt) then t
       else begin
       match Cil.unrollType newt, t.term_node with
-      | TPtr _, TCastE (_, t') ->
+      | TPtr _, TCastE (_, _, t') ->
 	  (match t'.term_type with
 	   | Ctype typ' ->
 	       (match unrollType typ' with
@@ -300,7 +300,7 @@ let rec expr_to_term ~cast e =
     | SizeOfStr s -> TSizeOfStr s
     | StartOf lv -> TStartOf (lval_to_term_lval ~cast lv)
     | AddrOf lv -> TAddrOf (lval_to_term_lval ~cast lv)
-    | CastE (ty,e) -> (mk_cast (unrollType ty) (expr_to_term ~cast e)).term_node
+    | CastE (ty, overflow, e) -> (mk_cast ~overflow (unrollType ty) (expr_to_term ~cast e)).term_node
     | BinOp (op, l, r, _) ->
       let is_arith_cmp = match op with
 	| Cil_types.Lt | Cil_types.Gt 
@@ -363,7 +363,7 @@ let array_with_range arr size =
     else mk_cast ~loc Cil.charPtrType arr
   and range_end =
     Logic_const.term ~loc:size.term_loc
-      (TBinOp (MinusA, size, Cil.lconstant Integer.one))
+      (TBinOp (MinusA Check, size, Cil.lconstant Integer.one))
       size.term_type
   in
   let range = Logic_const.trange (Some (Cil.lconstant Integer.zero),
@@ -545,15 +545,20 @@ let is_same_pconstant c1 c2 =
 
 let is_same_binop o1 o2 =
   match o1,o2 with
-    | PlusA, PlusA
+    | PlusA Check, PlusA Check
+    | PlusA Modulo, PlusA Modulo
     | (PlusPI | IndexPI), (PlusPI | IndexPI) (* Semantically equivalent *)
-    | MinusA, MinusA
+    | MinusA Check, MinusA Check
+    | MinusA Modulo, MinusA Modulo
     | MinusPI, MinusPI
     | MinusPP, MinusPP
-    | Mult, Mult
-    | Div, Div
+    | Mult Check, Mult Check
+    | Mult Modulo, Mult Modulo
+    | Div Check, Div Check
+    | Div Modulo, Div Modulo
     | Mod, Mod
-    | Shiftlt, Shiftlt
+    | Shiftlt Check, Shiftlt Check
+    | Shiftlt Modulo, Shiftlt Modulo
     | Shiftrt, Shiftrt
     | Cil_types.Lt, Cil_types.Lt
     | Cil_types.Gt, Cil_types.Gt
@@ -567,8 +572,8 @@ let is_same_binop o1 o2 =
     | LAnd, LAnd
     | LOr, LOr ->
         true
-    | (PlusA | PlusPI | IndexPI | MinusA | MinusPI | MinusPP | Mult | Div
-      | Mod | Shiftlt | Shiftrt | Cil_types.Lt | Cil_types.Gt | Cil_types.Le 
+    | (PlusA _ | PlusPI | IndexPI | MinusA _ | MinusPI | MinusPP | Mult _ | Div _
+      | Mod | Shiftlt _ | Shiftrt | Cil_types.Lt | Cil_types.Gt | Cil_types.Le 
       | Cil_types.Ge | Cil_types.Eq | Cil_types.Ne 
       | BAnd | BXor | BOr | LAnd | LOr), _ ->
         false
@@ -602,8 +607,8 @@ let rec is_same_term t1 t2 =
     | TUnOp (o1,t1), TUnOp(o2,t2) -> o1 = o2 && is_same_term t1 t2
     | TBinOp(o1,l1,r1), TBinOp(o2,l2,r2) ->
         is_same_binop o1 o2 && is_same_term l1 l2 && is_same_term r1 r2
-    | TCastE(typ1,t1), TCastE(typ2,t2) ->
-        Cil_datatype.TypByName.equal typ1 typ2 && is_same_term t1 t2
+    | TCastE(typ1, oft1, t1), TCastE(typ2, oft2, t2) ->
+        Cil_datatype.TypByName.equal typ1 typ2 && is_same_term t1 t2 && oft1 = oft2
     | TAddrOf l1, TAddrOf l2 -> is_same_tlval l1 l2
     | TStartOf l1, TStartOf l2 -> is_same_tlval l1 l2
     | Tapp(f1,labels1, args1), Tapp(f2, labels2, args2) ->
@@ -961,18 +966,22 @@ let is_same_quantifiers =
 let is_same_unop op1 op2 =
   match op1,op2 with
     | Uminus, Uminus
+    | Uminus_mod, Uminus_mod
     | Ubw_not, Ubw_not
     | Ustar, Ustar
     | Uamp, Uamp -> true
-    | (Uminus | Ustar | Uamp | Ubw_not), _ -> false
+    | (Uminus | Uminus_mod | Ustar | Uamp | Ubw_not), _ -> false
 
 let is_same_binop op1 op2 =
   match op1, op2 with
     | Badd, Badd | Bsub, Bsub | Bmul, Bmul | Bdiv, Bdiv | Bmod, Bmod
     | Bbw_and, Bbw_and | Bbw_or, Bbw_or | Bbw_xor, Bbw_xor
-    | Blshift, Blshift | Brshift, Brshift -> true
+    | Blshift, Blshift | Brshift, Brshift
+    | Badd_mod, Badd_mod | Bsub_mod, Bsub_mod | Bmul_mod, Bmul_mod | Bdiv_mod, Bdiv_mod
+    | Blshift_mod, Blshift_mod -> true
     | (Badd | Bsub | Bmul | Bdiv | Bmod | Bbw_and | Bbw_or
-      | Bbw_xor | Blshift | Brshift),_ -> false
+    |  Badd_mod | Bsub_mod | Bmul_mod | Bdiv_mod | Blshift_mod
+    | Bbw_xor | Blshift | Brshift),_ -> false
 
 let is_same_relation r1 r2 =
   match r1, r2 with
@@ -1020,6 +1029,8 @@ and is_same_lexpr l1 l2 =
     | PLfalse, PLfalse | PLtrue, PLtrue | PLempty, PLempty ->
       true
     | PLcast(t1,e1), PLcast(t2,e2) | PLcoercion(e1,t1), PLcoercion (e2,t2)->
+      is_same_pl_type t1 t2 && is_same_lexpr e1 e2
+    | PLcast_mod(t1, e1), PLcast_mod(t2, e2) ->
       is_same_pl_type t1 t2 && is_same_lexpr e1 e2
     | PLrange(l1,h1), PLrange(l2,h2) ->
       is_same_opt is_same_lexpr l1 l2 && is_same_opt is_same_lexpr h1 h2
@@ -1075,7 +1086,7 @@ and is_same_lexpr l1 l2 =
     | (PLvar _ | PLapp _ | PLlambda _ | PLlet _ | PLconstant _ | PLunop _
       | PLbinop _ | PLdot _ | PLarrow _ | PLarrget _ | PLold _ | PLat _
       | PLbase_addr _ | PLblock_length _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
-      | PLresult | PLnull | PLcast _
+      | PLresult | PLnull | PLcast _ | PLcast_mod _
       | PLrange _ | PLsizeof _ | PLsizeofE _ | PLtypeof _ | PLcoercion _
       | PLcoercionE _ | PLupdate _ | PLinitIndex _ | PLtype _ | PLfalse
       | PLtrue | PLinitField _ | PLrel _ | PLand _ | PLor _ | PLxor _
@@ -1110,9 +1121,9 @@ let rec hash_term (acc,depth,tot) t =
           hash_term (acc+152+Hashtbl.hash bop,depth-1,tot-2) t1 
         in
         hash_term (hash1,depth-1,tot1) t2
-      | TCastE(ty,t) ->
+      | TCastE(ty, oft, t) ->
         let hash1 = Cil_datatype.TypByName.hash ty in
-        hash_term (acc+171+hash1,depth-1,tot-2) t
+        hash_term (acc+171+hash1+Hashtbl.hash oft,depth-1,tot-2) t
       | TAddrOf lv -> hash_term_lval (acc+190,depth-1,tot-1) lv
       | TStartOf lv -> hash_term_lval (acc+209,depth-1,tot-1) lv
       | Tapp (li,labs,apps) ->
@@ -1275,7 +1286,8 @@ let rec compare_term t1 t2 =
     else res
   | TBinOp _, _ -> 1
   | _, TBinOp _ -> -1
-  | TCastE(typ1,t1), TCastE(typ2,t2) ->
+  | TCastE(typ1, Check, t1), TCastE(typ2, Check, t2)
+  | TCastE(typ1, Modulo, t1), TCastE(typ2, Modulo, t2) ->
     let res = Cil_datatype.TypByName.compare typ1 typ2 in
     if res = 0 then compare_term t1 t2 else res
   | TCastE _, _ -> 1
@@ -1911,14 +1923,14 @@ let pointer_comparable ?loc t1 t2 =
       | Ctype ty ->
           (match Cil.unrollType ty with
              | TPtr(TFun _,_) ->
-                 Logic_const.term ~loc (TCastE(cfct_ptr,t)) fct_ptr, fct_ptr
+                 Logic_const.term ~loc (TCastE(cfct_ptr, Check, t)) fct_ptr, fct_ptr
              | TPtr _  -> t, obj_ptr
              | TVoid _ | TInt _ | TFloat _ | TFun _ | TNamed _
              | TComp _ | TEnum _ | TBuiltin_va_list _
              | TArray _ ->
-                 Logic_const.term ~loc (TCastE(voidPtrType,t)) obj_ptr, obj_ptr
+                 Logic_const.term ~loc (TCastE(voidPtrType, Check, t)) obj_ptr, obj_ptr
           )
-      | _ -> Logic_const.term ~loc (TCastE(voidPtrType,t)) obj_ptr, obj_ptr
+      | _ -> Logic_const.term ~loc (TCastE(voidPtrType, Check, t)) obj_ptr, obj_ptr
   in
   let t1, ty1 = discriminate t1 in
   let t2, ty2 = discriminate t2 in
@@ -1971,7 +1983,7 @@ let rec constFoldTermToInt ?(machdep=true) (e: term) : Integer.t option =
     with Cil.SizeOfError _ -> None
   end
   | TAlignOfE _ -> None (* exp case is very complex, and possibly incorrect *)
-  | TCastE (typ, e) -> constFoldCastToInt ~machdep typ e
+  | TCastE (typ, _, e) -> constFoldCastToInt ~machdep typ e
   | Toffset (_, t) -> if machdep then constFoldToffset t else None
   | Tif (c, e1, e2) -> begin
     match constFoldTermToInt ~machdep c with
@@ -2022,7 +2034,7 @@ and constFoldUnOpToInt ~machdep unop e =
   | None -> None
   | Some i ->
     match unop with
-    | Neg -> Some (Integer.neg i)
+    | Neg _ -> Some (Integer.neg i)
     | BNot -> Some (Integer.lognot i)
     | LNot ->
       Some (if Integer.equal i Integer.zero then Integer.one else Integer.zero)
@@ -2036,11 +2048,11 @@ and constFoldBinOpToInt ~machdep bop e1 e2 =
       Some (if op b1 b2 then Integer.one else Integer.zero)
     in
     match bop with
-    | PlusA -> Some (Integer.add i1 i2)
-    | MinusA -> Some (Integer.sub i1 i2)
+    | PlusA _ -> Some (Integer.add i1 i2)
+    | MinusA _ -> Some (Integer.sub i1 i2)
     | PlusPI | IndexPI | MinusPI | MinusPP -> None
-    | Mult -> Some (Integer.mul i1 i2)
-    | Div ->
+    | Mult _ -> Some (Integer.mul i1 i2)
+    | Div _ ->
       if Integer.(equal zero i2) && Integer.(is_zero (rem i1 i2)) then None
       else Some (Integer.div i1 i2)
     | Mod -> if Integer.(equal zero i2) then None else Some (Integer.rem i1 i2)
@@ -2048,9 +2060,9 @@ and constFoldBinOpToInt ~machdep bop e1 e2 =
     | BOr -> Some (Integer.logor i1 i2)
     | BXor -> Some (Integer.logxor i1 i2)
 
-    | Shiftlt when Integer.(ge i2 zero) -> Some (Integer.shift_left i1 i2)
+    | Shiftlt _ when Integer.(ge i2 zero) -> Some (Integer.shift_left i1 i2)
     | Shiftrt when Integer.(ge i2 zero) -> Some (Integer.shift_right i1 i2)
-    | Shiftlt | Shiftrt -> None
+    | Shiftlt _ | Shiftrt -> None
 
     | Cil_types.Eq -> comp Integer.equal
     | Cil_types.Ne -> comp (fun i1 i2 -> not (Integer.equal i1 i2))

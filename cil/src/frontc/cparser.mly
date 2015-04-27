@@ -249,7 +249,7 @@ let transformOffsetOf (speclist, dtype) member =
     | PROTO (dtype, names, variadic) ->
 	PROTO (addPointer dtype, names, variadic)
   in
-  let nullType = (speclist, addPointer dtype) in
+  let nullType = (speclist, addPointer dtype, CHECK) in
   let nullExpr = mk_expr (CONSTANT (CONST_INT "0")) in
   let castExpr = mk_expr (CAST (nullType, SINGLE_INIT nullExpr)) in
 
@@ -267,7 +267,7 @@ let transformOffsetOf (speclist, dtype) member =
   in
   let memberExpr = replaceBase member in
   let addrExpr = { memberExpr with expr_node = UNARY (ADDROF, memberExpr)} in
-  let sizeofType = sizeofType(), JUSTBASE in
+  let sizeofType = sizeofType(), JUSTBASE, CHECK in
   { addrExpr with expr_node = CAST (sizeofType, SINGLE_INIT addrExpr)}
 
 let no_ghost_stmt s = {stmt_ghost = false ; stmt_node = s}
@@ -303,6 +303,7 @@ let in_block l =
 %token <string * Cabs.cabsloc> ATTRIBUTE_ANNOT
 %token <Logic_ptree.custom_tree  * string * Cabs.cabsloc> CUSTOM_ANNOT
 %token <string> LITERAL_NAME
+%token MODULO_OP
 
 %token <string> IDENT
 %token <int64 list * Cabs.cabsloc> CST_CHAR
@@ -503,7 +504,7 @@ global:
       let pardecl, isva = doOldParDecl $3 $5 in
       (* Make the function declarator *)
       doDeclaration None loc []
-        [(($1, PROTO(JUSTBASE, pardecl,isva), 
+        [(($1, PROTO(JUSTBASE, pardecl,isva),
            ["FC_OLDSTYLEPROTO",[]], loc), NO_INIT)]
     }
 /* (* Old style function prototype, but without any arguments *) */
@@ -540,6 +541,11 @@ primary_expression:                     /*(* 6.5.1. *)*/
 |		LPAREN block RPAREN { make_expr (GNU_BODY (fst3 $2)) }
 ;
 
+modulo_op_opt:
+  /* empty */                           { CHECK }
+| MODULO_OP                             { MODULO }
+;
+
 postfix_expression:                     /*(* 6.5.2 *)*/
 | primary_expression { $1 }
 | postfix_expression bracket_comma_expression
@@ -573,11 +579,11 @@ postfix_expression:                     /*(* 6.5.2 *)*/
       { transformOffsetOf $3 $5 }
 | postfix_expression DOT id_or_typename { make_expr (MEMBEROF ($1, $3))}
 | postfix_expression ARROW id_or_typename { make_expr (MEMBEROFPTR ($1, $3)) }
-| postfix_expression PLUS_PLUS { make_expr (UNARY (POSINCR, $1)) }
-| postfix_expression MINUS_MINUS { make_expr (UNARY (POSDECR, $1)) }
+| postfix_expression PLUS_PLUS modulo_op_opt { make_expr (UNARY (POSINCR $3, $1)) }
+| postfix_expression MINUS_MINUS modulo_op_opt { make_expr (UNARY (POSDECR $3, $1)) }
 /* (* We handle GCC constructor expressions *) */
-| LPAREN type_name RPAREN LBRACE initializer_list_opt RBRACE
-      { make_expr (CAST($2, COMPOUND_INIT $5)) }
+| LPAREN type_name RPAREN LBRACE modulo_op_opt initializer_list_opt RBRACE
+      { let s, t = $2 in make_expr (CAST((s, t, $5), COMPOUND_INIT $6)) }
 ;
 
 offsetof_member_designator:	/* GCC extension for __builtin_offsetof */
@@ -591,10 +597,10 @@ offsetof_member_designator:	/* GCC extension for __builtin_offsetof */
 unary_expression:   /*(* 6.5.3 *)*/
 |               postfix_expression
                         { $1 }
-|		PLUS_PLUS unary_expression
-		        {make_expr (UNARY (PREINCR, $2))}
-|		MINUS_MINUS unary_expression
-		        {make_expr (UNARY (PREDECR, $2))}
+|		PLUS_PLUS modulo_op_opt unary_expression
+		        {make_expr (UNARY (PREINCR $2, $3))}
+|		MINUS_MINUS modulo_op_opt unary_expression
+		        {make_expr (UNARY (PREDECR $2, $3))}
 |		SIZEOF unary_expression
 		        {make_expr (EXPR_SIZEOF $2)}
 |	 	SIZEOF LPAREN type_name RPAREN
@@ -605,8 +611,8 @@ unary_expression:   /*(* 6.5.3 *)*/
 		        {let b, d = $3 in make_expr (TYPE_ALIGNOF (b, d)) }
 |		PLUS cast_expression
 		        { make_expr (UNARY (PLUS, $2)) }
-|		MINUS cast_expression
-		        { make_expr (UNARY (MINUS, $2)) }
+|		MINUS modulo_op_opt cast_expression
+		        { make_expr (UNARY (MINUS $2, $3)) }
 |		STAR cast_expression
 		        {make_expr (UNARY (MEMOF, $2)) }
 |		AND cast_expression
@@ -621,32 +627,32 @@ unary_expression:   /*(* 6.5.3 *)*/
 
 cast_expression:   /*(* 6.5.4 *)*/
 | unary_expression { $1 }
-| LPAREN type_name RPAREN cast_expression
-      { make_expr (CAST($2, SINGLE_INIT $4)) }
+| LPAREN type_name RPAREN modulo_op_opt cast_expression
+      { let s, t = $2 in make_expr (CAST((s, t, $4), SINGLE_INIT $5)) }
 ;
 
 multiplicative_expression:  /*(* 6.5.5 *)*/
 | cast_expression { $1 }
-| multiplicative_expression STAR cast_expression
-      { make_expr (BINARY(MUL, $1, $3)) }
-| multiplicative_expression SLASH cast_expression
-      { make_expr (BINARY(DIV, $1, $3)) }
+| multiplicative_expression STAR modulo_op_opt cast_expression
+      { make_expr (BINARY(MUL $3, $1, $4)) }
+| multiplicative_expression SLASH modulo_op_opt cast_expression
+      { make_expr (BINARY(DIV $3, $1, $4)) }
 | multiplicative_expression PERCENT cast_expression
       { make_expr (BINARY(MOD, $1, $3)) }
 ;
 
 additive_expression:  /*(* 6.5.6 *)*/
 |               multiplicative_expression { $1 }
-|		additive_expression PLUS multiplicative_expression
-			{ make_expr (BINARY(ADD, $1, $3)) }
-|		additive_expression MINUS multiplicative_expression
-			{ make_expr (BINARY(SUB, $1, $3)) }
+|		additive_expression PLUS modulo_op_opt multiplicative_expression
+			{ make_expr (BINARY(ADD $3, $1, $4)) }
+|		additive_expression MINUS modulo_op_opt multiplicative_expression
+			{ make_expr (BINARY(SUB $3, $1, $4)) }
 ;
 
 shift_expression:      /*(* 6.5.7 *)*/
 |               additive_expression { $1 }
-|		shift_expression  INF_INF additive_expression
-			{make_expr (BINARY(SHL, $1, $3)) }
+|		shift_expression  INF_INF modulo_op_opt additive_expression
+			{make_expr (BINARY(SHL $3, $1, $4)) }
 |		shift_expression  SUP_SUP additive_expression
 			{ make_expr (BINARY(SHR, $1, $3)) }
 ;
@@ -715,14 +721,14 @@ assignment_expression:     /*(* 6.5.16 *)*/
 |               conditional_expression { $1 }
 |		cast_expression EQ assignment_expression
 			{ make_expr (BINARY(ASSIGN, $1, $3)) }
-|		cast_expression PLUS_EQ assignment_expression
-			{ make_expr (BINARY(ADD_ASSIGN, $1, $3)) }
-|		cast_expression MINUS_EQ assignment_expression
-			{ make_expr (BINARY(SUB_ASSIGN, $1, $3)) }
-|		cast_expression STAR_EQ assignment_expression
-			{ make_expr (BINARY(MUL_ASSIGN, $1, $3)) }
-|		cast_expression SLASH_EQ assignment_expression
-			{ make_expr (BINARY(DIV_ASSIGN, $1, $3)) }
+|		cast_expression PLUS_EQ modulo_op_opt assignment_expression
+			{ make_expr (BINARY(ADD_ASSIGN $3, $1, $4)) }
+|		cast_expression MINUS_EQ modulo_op_opt assignment_expression
+			{ make_expr (BINARY(SUB_ASSIGN $3, $1, $4)) }
+|		cast_expression STAR_EQ modulo_op_opt assignment_expression
+			{ make_expr (BINARY(MUL_ASSIGN $3, $1, $4)) }
+|		cast_expression SLASH_EQ modulo_op_opt assignment_expression
+			{ make_expr (BINARY(DIV_ASSIGN $3, $1, $4)) }
 |		cast_expression PERCENT_EQ assignment_expression
 			{ make_expr (BINARY(MOD_ASSIGN, $1, $3)) }
 |		cast_expression AND_EQ assignment_expression
@@ -731,8 +737,8 @@ assignment_expression:     /*(* 6.5.16 *)*/
 			{ make_expr (BINARY(BOR_ASSIGN, $1, $3)) }
 |		cast_expression CIRC_EQ assignment_expression
 			{ make_expr (BINARY(XOR_ASSIGN, $1, $3)) }
-|		cast_expression INF_INF_EQ assignment_expression
-			{ make_expr (BINARY(SHL_ASSIGN, $1, $3)) }
+|		cast_expression INF_INF_EQ modulo_op_opt assignment_expression
+			{ make_expr (BINARY(SHL_ASSIGN $3, $1, $4)) }
 |		cast_expression SUP_SUP_EQ assignment_expression
 			{ make_expr (BINARY(SHR_ASSIGN, $1, $3))}
 ;
@@ -904,7 +910,7 @@ block_element_list:
             { $1 @ $2 @ $3 }
 |   annot_list_opt pragma block_element_list            { $1 @ $3 }
 /*(* GCC accepts a label at the end of a block *)*/
-|   annot_list_opt id_or_typename_as_id COLON 
+|   annot_list_opt id_or_typename_as_id COLON
     { let loc = Parsing.rhs_start_pos 2, Parsing.rhs_end_pos 3 in
       $1 @ no_ghost [LABEL ($2, no_ghost_stmt (NOP loc), loc)] }
 ;
@@ -1625,7 +1631,7 @@ unary_attr:
 |   ALIGNOF LPAREN type_name RPAREN     {let b, d = $3 in
                                          make_expr (TYPE_ALIGNOF (b, d)) }
 |   PLUS cast_attr                      {make_expr (UNARY (PLUS, $2))}
-|   MINUS cast_attr                     {make_expr (UNARY (MINUS, $2)) }
+|   MINUS cast_attr                     {make_expr (UNARY (MINUS CHECK, $2)) }
 |   STAR cast_attr		        {make_expr (UNARY (MEMOF, $2)) }
 |   AND cast_attr
 	                                { make_expr (UNARY (ADDROF, $2)) }
@@ -1639,21 +1645,21 @@ cast_attr:
 
 multiplicative_attr:
     cast_attr                           { $1 }
-|   multiplicative_attr STAR cast_attr  {make_expr (BINARY(MUL ,$1 , $3))}
-|   multiplicative_attr SLASH cast_attr	{make_expr (BINARY(DIV ,$1 , $3))}
-|   multiplicative_attr PERCENT cast_attr {make_expr (BINARY(MOD ,$1 , $3))}
+|   multiplicative_attr STAR cast_attr  {make_expr (BINARY(MUL CHECK, $1 , $3))}
+|   multiplicative_attr SLASH cast_attr	{make_expr (BINARY(DIV CHECK, $1 , $3))}
+|   multiplicative_attr PERCENT cast_attr {make_expr (BINARY(MOD, $1 , $3))}
 ;
 
 
 additive_attr:
     multiplicative_attr                 { $1 }
-|   additive_attr PLUS multiplicative_attr  {make_expr (BINARY(ADD ,$1 , $3))}
-|   additive_attr MINUS multiplicative_attr {make_expr (BINARY(SUB ,$1 , $3))}
+|   additive_attr PLUS multiplicative_attr  {make_expr (BINARY(ADD CHECK, $1 , $3))}
+|   additive_attr MINUS multiplicative_attr {make_expr (BINARY(SUB CHECK, $1 , $3))}
 ;
 
 shift_attr:
     additive_attr                       { $1 }
-|   shift_attr INF_INF additive_attr	{make_expr (BINARY(SHL ,$1 , $3))}
+|   shift_attr INF_INF additive_attr	{make_expr (BINARY(SHL CHECK, $1 , $3))}
 |   shift_attr SUP_SUP additive_attr	{make_expr (BINARY(SHR ,$1 , $3))}
 ;
 
@@ -1781,5 +1787,5 @@ asmcloberlst_ne:
 
 asmlabels:
 | /* empty */                          { [] }
-| COLON local_label_names              { $2 } 
+| COLON local_label_names              { $2 }
 %%

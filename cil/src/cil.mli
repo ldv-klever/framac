@@ -969,14 +969,14 @@ val need_cast: ?force:bool -> typ -> typ -> bool
     is [true] (default is [false])
     @modify Fluorine-20130401 add [force] argument
  *)
-val mkCastT: ?force:bool -> e:exp -> oldt:typ -> newt:typ -> exp
+val mkCastT: ?force:bool -> ?overflow:overflow_treatment -> e:exp -> oldt:typ -> newt:typ -> exp
 
 (** Like {!Cil.mkCastT}, but takes location to construct the expression with the cast.
  *)
-val mkCastTLoc: ?force:bool -> e:exp -> ?loc:location -> oldt:typ -> newt:typ -> exp
+val mkCastTLoc: ?force:bool -> ?overflow:overflow_treatment -> e:exp -> ?loc:location -> oldt:typ -> newt:typ -> exp
 
 (** Like {!Cil.mkCastT} but uses typeOf to get [oldt] *)
-val mkCast: ?force:bool -> e:exp -> newt:typ -> exp
+val mkCast: ?force:bool -> ?overflow:overflow_treatment -> e:exp -> newt:typ -> exp
 
 (** Equivalent to [stripCasts] for terms. *)
 val stripTermCasts: term -> term

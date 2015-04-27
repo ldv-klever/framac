@@ -225,9 +225,9 @@ and loc_to_exp ~result {term_node = lnode ; term_type = ltype; term_loc = loc} =
     (* TODO: Very likely to fail on large integer and incorrect on reals not
        representable as floats *)
     [new_exp ~loc (Const (Logic_utils.lconstant_to_constant constant))]
-  | TCastE (typ, lexp) ->
+  | TCastE (typ, oft, lexp) ->
       List.map
-        (fun x -> new_exp ~loc (CastE (typ, x))) (loc_to_exp ~result lexp)
+        (fun x -> new_exp ~loc (CastE (typ, oft, x))) (loc_to_exp ~result lexp)
   | TAlignOf typ -> [new_exp ~loc (AlignOf typ)]
   | TSizeOf typ -> [new_exp ~loc (SizeOf typ)]
   | Trange (Some low, Some high) ->
@@ -243,7 +243,7 @@ and loc_to_exp ~result {term_node = lnode ; term_type = ltype; term_loc = loc} =
     loc_to_exp ~result t
   | TLogic_coerce(Lreal, t) when Logic_typing.is_integral_type t.term_type ->
     List.map
-      (fun x -> new_exp ~loc (CastE (logic_type_to_typ Lreal, x)))
+      (fun x -> new_exp ~loc (CastE (logic_type_to_typ Lreal, Check, x)))
       (loc_to_exp ~result t)
   | TLogic_coerce(Lreal, t) when Logic_typing.is_arithmetic_type t.term_type ->
     loc_to_exp ~result t

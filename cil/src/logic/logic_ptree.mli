@@ -55,11 +55,12 @@ type quantifiers = (logic_type * string) list
 type relation = Lt | Gt | Le | Ge | Eq | Neq
 
 (** arithmetic and logic binary operators. *)
-type binop = Badd | Bsub | Bmul | Bdiv | Bmod | Bbw_and | Bbw_or | Bbw_xor |
-             Blshift | Brshift
+type binop = Badd | Badd_mod | Bsub | Bsub_mod | Bmul | Bmul_mod | Bdiv | Bdiv_mod | Bmod
+           | Bbw_and | Bbw_or | Bbw_xor |
+             Blshift | Blshift_mod | Brshift
 
 (** unary operators. *)
-type unop = Uminus | Ustar | Uamp | Ubw_not
+type unop = Uminus | Uminus_mod | Ustar | Uamp | Ubw_not
 
 (** logical expression. The distinction between locations, terms and
     predicate is done during typing.
@@ -97,6 +98,7 @@ and lexpr_node =
   | PLresult (** value returned by a function. *)
   | PLnull (** null pointer. *)
   | PLcast of logic_type * lexpr (** cast. *)
+  | PLcast_mod of logic_type * lexpr (** modulo cast. *)
   | PLrange of lexpr option * lexpr option (** interval of integers. *)
   | PLsizeof of logic_type (** sizeof a type. *)
   | PLsizeofE of lexpr (** sizeof the type of an expression. *)
@@ -270,7 +272,8 @@ type annot =
   | Acode_annot of location * code_annot (** code annotation. *)
   | Aloop_annot of location * code_annot list (** loop annotation. *)
   | Aattribute_annot of location * string (** attribute annotation. *)
-  | Aliteral_annot of string (** named string literal annotation *)
+  | Aliteral_annot of string (** named string literal annotation. *)
+  | Amodulo_op_annot (** annotation on integral modulo arithmetic operations. *)
   | Acustom of location * string * custom_tree
 
 (** ACSL extension for external spec file **)

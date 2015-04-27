@@ -276,21 +276,26 @@ and for_clause =
    FC_EXP of expression
  | FC_DECL of definition
 
+and overflow_treatment =
+  | CHECK
+  | MODULO
 (*
 ** Expressions
 *)
 and binary_operator =
-    ADD | SUB | MUL | DIV | MOD
+    ADD of overflow_treatment | SUB of overflow_treatment | MUL of overflow_treatment | DIV of overflow_treatment | MOD
   | AND | OR
-  | BAND | BOR | XOR | SHL | SHR
+  | BAND | BOR | XOR | SHL of overflow_treatment | SHR
   | EQ | NE | LT | GT | LE | GE
   | ASSIGN
-  | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN | DIV_ASSIGN | MOD_ASSIGN
-  | BAND_ASSIGN | BOR_ASSIGN | XOR_ASSIGN | SHL_ASSIGN | SHR_ASSIGN
+  | ADD_ASSIGN of overflow_treatment | SUB_ASSIGN of overflow_treatment
+  | MUL_ASSIGN of overflow_treatment | DIV_ASSIGN of overflow_treatment | MOD_ASSIGN
+  | BAND_ASSIGN | BOR_ASSIGN | XOR_ASSIGN | SHL_ASSIGN of overflow_treatment | SHR_ASSIGN
 
 and unary_operator =
-    MINUS | PLUS | NOT | BNOT | MEMOF | ADDROF
-  | PREINCR | PREDECR | POSINCR | POSDECR
+    MINUS of overflow_treatment | PLUS | NOT | BNOT | MEMOF | ADDROF
+  | PREINCR of overflow_treatment | PREDECR of overflow_treatment
+  | POSINCR of overflow_treatment | POSDECR of overflow_treatment
 
 and expression = { expr_loc : cabsloc; expr_node: cabsexp }
 
@@ -303,7 +308,7 @@ and cabsexp =
   | QUESTION of expression * expression * expression
 
    (* A CAST can actually be a constructor expression *)
-  | CAST of (specifier * decl_type) * init_expression
+  | CAST of (specifier * decl_type * overflow_treatment) * init_expression
 
     (* There is a special form of CALL in which the function called is
        __builtin_va_arg and the second argument is sizeof(T). This

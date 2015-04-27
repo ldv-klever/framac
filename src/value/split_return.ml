@@ -74,7 +74,7 @@ module ReturnUsage = struct
      that are stored inside values of a slightly different type *)
   let add_alias (uf: return_usage_per_fun) lv_dest e =
     match e.enode with
-      | CastE (typ, { enode = Lval lve })
+      | CastE (typ, _, { enode = Lval lve })
           when Cil.isIntegralOrPointerType typ &&
             Cil.isIntegralOrPointerType (Cil.typeOfLval lve)
         ->
@@ -108,8 +108,8 @@ module ReturnUsage = struct
       | BinOp ((Eq | Ne), {enode = Lval lv}, ct, _)
       | BinOp ((Eq | Ne), ct, {enode = Lval lv}, _) -> add ct lv
 
-      | BinOp ((Eq | Ne), {enode = CastE (typ, {enode = Lval lv})}, ct, _)
-      | BinOp ((Eq | Ne), ct, {enode = CastE (typ, {enode = Lval lv})}, _)
+      | BinOp ((Eq | Ne), {enode = CastE (typ, _, {enode = Lval lv})}, ct, _)
+      | BinOp ((Eq | Ne), ct, {enode = CastE (typ, _, {enode = Lval lv})}, _)
         when Cil.isIntegralOrPointerType typ &&
           Cil.isIntegralOrPointerType (Cil.typeOfLval lv) ->
         add ct lv
@@ -117,7 +117,7 @@ module ReturnUsage = struct
       | UnOp (LNot, {enode = Lval lv}, _) ->
           add_compare_ct uf Int.zero lv
 
-      | UnOp (LNot, {enode = CastE (typ, {enode = Lval lv})}, _)
+      | UnOp (LNot, {enode = CastE (typ, _, {enode = Lval lv})}, _)
         when Cil.isIntegralOrPointerType typ &&
           Cil.isIntegralOrPointerType (Cil.typeOfLval lv) ->
         add_compare_ct uf Int.zero lv
@@ -134,7 +134,7 @@ module ReturnUsage = struct
     | Lval lv ->
       add_compare_ct uf Int.zero lv
 
-    | CastE (typ, {enode = Lval lv})
+    | CastE (typ, _, {enode = Lval lv})
         when Cil.isIntegralOrPointerType typ &&
           Cil.isIntegralOrPointerType (Cil.typeOfLval lv) ->
       add_compare_ct uf Int.zero lv

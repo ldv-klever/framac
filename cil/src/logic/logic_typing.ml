@@ -290,15 +290,20 @@ let type_rel = function
   | Ge -> Cil_types.Rge
 
 let type_binop = function
-  | Badd -> PlusA
-  | Bsub -> MinusA
-  | Bmul -> Mult
-  | Bdiv -> Div
+  | Badd -> PlusA Check
+  | Badd_mod -> PlusA Modulo
+  | Bsub -> MinusA Check
+  | Bsub_mod -> MinusA Modulo
+  | Bmul -> Mult Check
+  | Bmul_mod -> Mult Modulo
+  | Bdiv -> Div Check
+  | Bdiv_mod -> Div Modulo
   | Bmod -> Mod
   | Bbw_and -> BAnd
   | Bbw_or -> BOr
   | Bbw_xor -> BXor
-  | Blshift -> Shiftlt
+  | Blshift -> Shiftlt Check
+  | Blshift_mod -> Shiftlt Modulo
   | Brshift -> Shiftrt
 
 let binop_of_rel = function
@@ -892,7 +897,7 @@ struct
         | TLval _ -> true
         | TUnOp(_,t) -> needs_at t
         | TBinOp(_,t1,t2) -> needs_at t1 || needs_at t2
-        | TCastE(_,t) -> needs_at t
+        | TCastE(_, _, t) -> needs_at t
         | TAddrOf (_,o) -> needs_at_offset o
         | TStartOf (_,o) -> needs_at_offset o
         | Tapp(_,_,l) | TDataCons(_,l) -> List.exists needs_at l
@@ -962,7 +967,7 @@ struct
     Cil_datatype.Logic_type.equal (Ctype ctyp1) (Ctype ctyp2) ||
     is_compatible_struct_type ctyp1 ctyp2
 
-  let rec c_mk_cast e oldt newt =
+  let rec c_mk_cast ?overflow e oldt newt =
     if is_same_c_type oldt newt then e
     else begin
       (* Watch out for constants *)
@@ -978,7 +983,7 @@ struct
           | TEnum (ei,[]), TConst (LEnum { eihost = ei'})
             when ei.ename = ei'.ename -> e
           | _ ->
-              { e with term_node = (Logic_utils.mk_cast newt e).term_node;
+              { e with term_node = (Logic_utils.mk_cast ?overflow newt e).term_node;
                        term_type = Ctype newt }
       end
     end
@@ -1056,7 +1061,7 @@ struct
         let range = trange ~loc (Some (lzero ~loc ()), Some sizeof) in
         let converted_type = set_conversion (Ctype Cil.charPtrType) t.term_type
         in
-        let cast = term ~loc (TCastE(Cil.charPtrType, t)) converted_type in
+        let cast = term ~loc (TCastE(Cil.charPtrType, Check, t)) converted_type in
         term ~loc (TBinOp(PlusPI,cast,range)) (make_set_type converted_type)
     in
     lift_set convert_one_location t
@@ -1242,7 +1247,7 @@ struct
           (* Integer 0 is also a valid pointer. *)
       | Linteger, Ctype ty when Cil.isPointerType ty && isLogicNull oterm ->
           nt, { oterm with
-                  term_node = TCastE(ty,oterm);
+                  term_node = TCastE(ty, Check, oterm);
                   term_type = nt }
       | Linteger, Ctype ty when Cil.isIntegralType ty ->
         (try
@@ -2279,9 +2284,17 @@ struct
       | PLunop (Ubw_not, t) ->
           let t = type_int_term env t in
           TUnOp (BNot, t), logic_arithmetic_promotion t.term_type
-      | PLunop (Uminus, t) ->
+      | PLunop (Uminus | Uminus_mod as op, t) ->
           let t = type_num_term env t in
-          TUnOp (Neg, t), logic_arithmetic_promotion t.term_type
+          let oft =
+            match op with
+            | Uminus_mod when is_integral_type t.term_type -> Modulo
+            | Uminus_mod ->
+              error loc "modulo arithmetic is applicable to integral types only, got type %a"
+                Cil_printer.pp_logic_type t.term_type
+            | _ -> Check
+          in
+          TUnOp (Neg oft, t), logic_arithmetic_promotion t.term_type
       | PLunop (Ustar, t) ->
           check_current_label loc env;
           (* memory access need a current label to have some semantics *)
@@ -2300,8 +2313,8 @@ struct
           (* &x need a current label to have some semantics *)
           let t = term_lval (mkAddrOfAndMark loc) (term env t) in
           t.term_node, t.term_type
-      | PLbinop (t1, (Badd | Bsub | Bmul | Bdiv | Bmod
-	         | Bbw_and | Bbw_or | Bbw_xor | Blshift | Brshift as op), t2) ->
+      | PLbinop (t1, (Badd | Badd_mod | Bsub | Bsub_mod | Bmul | Bmul_mod | Bdiv | Bdiv_mod | Bmod
+	         | Bbw_and | Bbw_or | Bbw_xor | Blshift | Blshift_mod | Brshift as op), t2) ->
           let t1 = term env t1 in
           let ty1 = t1.term_type in
           let t2 = term env t2 in
@@ -2318,10 +2331,13 @@ struct
             | Badd | Bsub
                 when is_arithmetic_type ty1 && is_arithmetic_type ty2 ->
 	        binop (type_binop op) (arithmetic_conversion ty1 ty2)
+            | Badd_mod | Bsub_mod | Bmul_mod | Bdiv_mod
+                  when is_integral_type ty1 && is_integral_type ty2 ->
+                binop (type_binop op) (arithmetic_conversion ty1 ty2)
             | Bbw_and | Bbw_or | Bbw_xor
 	          when is_integral_type ty1 && is_integral_type ty2 ->
 	        binop (type_binop op) (arithmetic_conversion ty1 ty2)
-            | Blshift | Brshift
+            | Blshift | Blshift_mod | Brshift
                   when is_integral_type ty1 && is_integral_type ty2 ->
                 binop (type_binop op) (arithmetic_conversion ty1 ty2)
             | Badd when isLogicPointer t1 && is_integral_type ty2 ->
@@ -2356,8 +2372,8 @@ struct
             | _ ->
 	        error loc
                   "invalid operands to binary %a; unexpected %a and %a"
-                  Cil_printer.pp_binop (type_binop op) 
-		  Cil_printer.pp_logic_type ty1 
+                  Cil_printer.pp_binop (type_binop op)
+		  Cil_printer.pp_logic_type ty1
 		  Cil_printer.pp_logic_type ty2
           end
       | PLdot (t, f) ->
@@ -2502,7 +2518,7 @@ struct
                     It has always a C type *)
            with Not_found -> error loc "\\result meaningless")
       | PLnull -> Tnull, c_void_star
-      | PLcast (ty, t) ->
+      | PLcast (ty, t) | PLcast_mod (ty, t) ->
           let t = term env t in
           (* no casts of tsets in grammar *)
           (match unroll_type ~unroll_typedef:false (logic_type loc env ty) with
@@ -2514,7 +2530,16 @@ struct
 		    error loc
                       "cannot cast logic array to pointer type";
 		  (c_mk_cast t told tnew).term_node , ctnew
-		| _ -> (Logic_utils.mk_cast tnew t).term_node, ctnew)
+                | _ ->
+                  let overflow =
+                    match pl with
+                    | PLcast_mod _ when is_integral_type t.term_type && is_integral_type ctnew -> Modulo
+                    | PLcast_mod _ ->
+                      error loc "modulo casts are applicable to integral types only, got types `%a' and `%a'"
+                        Cil_printer.pp_logic_type t.term_type Cil_printer.pp_logic_type ctnew
+                    | _ -> Check
+                  in
+                  (Logic_utils.mk_cast ~overflow tnew t).term_node, ctnew)
             | Linteger | Lreal | Ltype _ | Lvar _ | Larrow _ ->
               error loc "cannot cast to logic type")
       | PLcoercion (t,ty) ->
@@ -2720,10 +2745,10 @@ struct
   and term_lval f t =
     let check_lval t =
         match t.term_node with
-            TLval lv | TCastE (_,{term_node = TLval lv})
+            TLval lv | TCastE (_, _, {term_node = TLval lv})
           | TLogic_coerce(_,{term_node = TLval lv })
           | Tat({term_node = TLval lv},_) -> f lv t
-          | TStartOf lv | TCastE(_,{term_node = TStartOf lv})
+          | TStartOf lv | TCastE(_, _, {term_node = TStartOf lv})
           | Tat ({term_node = TStartOf lv}, _) ->
               f lv t
           | TAddrOf lv when is_fun_ptr t.term_type ->
@@ -3072,7 +3097,7 @@ struct
           let tbody = predicate env body in
           { name = []; loc = p0.lexpr_loc;
             content = Plet(var,tbody) }
-      | PLcast _ | PLblock_length _ | PLbase_addr _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
+      | PLcast _ | PLcast_mod _ | PLblock_length _ | PLbase_addr _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
       | PLarrget _ | PLarrow _
       | PLdot _ | PLbinop _ | PLunop _ | PLconstant _
       | PLnull | PLresult | PLcoercion _ | PLcoercionE _ | PLsizeof _
@@ -3129,7 +3154,7 @@ struct
               term_lval
                 (fun _ t ->
                    match t.term_node with
-                       TStartOf lv | TCastE(_,{ term_node = TStartOf lv}) ->
+                       TStartOf lv | TCastE(_, _, { term_node = TStartOf lv}) ->
                          error t.term_loc "not an assignable left value: %a"
                            Cil_printer.pp_term_lval lv
                      | TLval (TVar v, o) when not accept_formal ->

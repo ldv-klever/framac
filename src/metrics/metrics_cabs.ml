@@ -118,11 +118,11 @@ class metricsCabsVisitor = object(self)
       | UNARY (unop, _) ->
         begin
           match unop with
-            | PREINCR
-            | POSINCR
-            | PREDECR
-            | POSDECR -> self#incr_both_metrics incr_assigns
-            | MINUS
+            | PREINCR _
+            | POSINCR _
+            | PREDECR _
+            | POSDECR _ -> self#incr_both_metrics incr_assigns
+            | MINUS _
             | PLUS
             | NOT
             | BNOT -> ()
@@ -133,15 +133,15 @@ class metricsCabsVisitor = object(self)
       | BINARY (bop, _, _) ->
         begin
           match bop with
-            | ADD | SUB | MUL | DIV | MOD
+            | ADD _ | SUB _ | MUL _ | DIV _ | MOD
             | BAND | BOR | XOR
-            | SHL | SHR | EQ | NE | LT
+            | SHL _ | SHR | EQ | NE | LT
             | GT | LE | GE -> ()
             | AND | OR -> self#incr_both_metrics incr_dpoints
             | ASSIGN
-            | ADD_ASSIGN | SUB_ASSIGN | MUL_ASSIGN
-            | DIV_ASSIGN | BOR_ASSIGN | XOR_ASSIGN
-            | SHL_ASSIGN | SHR_ASSIGN | BAND_ASSIGN
+            | ADD_ASSIGN _ | SUB_ASSIGN _ | MUL_ASSIGN _
+            | DIV_ASSIGN _ | BOR_ASSIGN | XOR_ASSIGN
+            | SHL_ASSIGN _ | SHR_ASSIGN | BAND_ASSIGN
             | MOD_ASSIGN ->
               self#incr_both_metrics incr_assigns;
         end

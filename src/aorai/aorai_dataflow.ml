@@ -53,7 +53,7 @@ let compose_range loc b r1 r2 =
     | Fixed c, Bounded(min,max) | Bounded(min,max), Fixed c ->
       let max = 
         Logic_const.term
-          (TBinOp(PlusA,max, Logic_const.tinteger c))
+          (TBinOp(PlusA Check,max, Logic_const.tinteger c))
           Linteger
       in
       Bounded(c+min,max)

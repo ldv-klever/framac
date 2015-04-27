@@ -110,25 +110,35 @@ let get_operator exp =
   | PAREN _ -> ("", 16)
   | UNARY (op, _) ->
       (match op with
-	MINUS -> ("-", 13)
+        MINUS CHECK -> ("-", 13)
+      | MINUS MODULO -> ("-/*@%*/", 13)
       | PLUS -> ("+", 13)
       | NOT -> ("!", 13)
       | BNOT -> ("~", 13)
       | MEMOF -> ("*", 13)
       | ADDROF -> ("&", 13)
-      | PREINCR -> ("++", 13)
-      | PREDECR -> ("--", 13)
-      | POSINCR -> ("++", 14)
-      | POSDECR -> ("--", 14))
+      | PREINCR CHECK -> ("++", 13)
+      | PREINCR MODULO -> ("++/*@%*/", 13)
+      | PREDECR CHECK -> ("--", 13)
+      | PREDECR MODULO -> ("--/*@%*/", 13)
+      | POSINCR CHECK -> ("++", 14)
+      | POSINCR MODULO -> ("++/*@%*/", 14)
+      | POSDECR CHECK -> ("--", 14)
+      | POSDECR MODULO -> ("--/*@%*/", 14))
   | LABELADDR _ -> ("", 16)  (* Like a constant *)
   | BINARY (op, _, _) ->
       (match op with
-	MUL -> ("*", 12)
-      | DIV -> ("/", 12)
+	MUL CHECK -> ("*", 12)
+      | MUL MODULO -> ("*/*@%*/", 12)
+      | DIV CHECK -> ("/", 12)
+      | DIV MODULO -> ("//*@%*/", 12)
       | MOD -> ("%", 12)
-      | ADD -> ("+", 11)
-      | SUB -> ("-", 11)
-      | SHL -> ("<<", 10)
+      | ADD CHECK -> ("+", 11)
+      | ADD MODULO -> ("+/*@%*/", 11)
+      | SUB CHECK -> ("-", 11)
+      | SUB MODULO -> ("-/*@%*/", 11)
+      | SHL CHECK -> ("<<", 10)
+      | SHL MODULO -> ("<</*@%*/", 10)
       | SHR -> (">>", 10)
       | LT -> ("<", 9)
       | LE -> ("<=", 9)
@@ -142,15 +152,20 @@ let get_operator exp =
       | AND -> ("&&", 4)
       | OR -> ("||", 3)
       | ASSIGN -> ("=", 1)
-      | ADD_ASSIGN -> ("+=", 1)
-      | SUB_ASSIGN -> ("-=", 1)
-      | MUL_ASSIGN -> ("*=", 1)
-      | DIV_ASSIGN -> ("/=", 1)
+      | ADD_ASSIGN CHECK -> ("+=", 1)
+      | ADD_ASSIGN MODULO -> ("+=/*@%*/", 1)
+      | SUB_ASSIGN CHECK -> ("-=", 1)
+      | SUB_ASSIGN MODULO -> ("-=/*@%*/", 1)
+      | MUL_ASSIGN CHECK -> ("*=", 1)
+      | MUL_ASSIGN MODULO -> ("*=/*@%*/", 1)
+      | DIV_ASSIGN CHECK -> ("/=", 1)
+      | DIV_ASSIGN MODULO -> ("/=/*@%*/", 1)
       | MOD_ASSIGN -> ("%=", 1)
       | BAND_ASSIGN -> ("&=", 1)
       | BOR_ASSIGN -> ("|=", 1)
       | XOR_ASSIGN -> ("^=", 1)
-      | SHL_ASSIGN -> ("<<=", 1)
+      | SHL_ASSIGN CHECK -> ("<<=", 1)
+      | SHL_ASSIGN MODULO -> ("<<=/*@%*/", 1)
       | SHR_ASSIGN -> (">>=", 1))
   | QUESTION _ -> ("", 2)
   | CAST _ -> ("", cast_level)
@@ -352,7 +367,7 @@ and print_expression_level (lvl: int) fmt (exp : expression) =
       NOTHING -> ()
     | PAREN exp -> print_expression fmt exp
         (* parentheses are added by the level matching. *)
-    | UNARY ((POSINCR|POSDECR), exp') ->
+    | UNARY ((POSINCR _|POSDECR _), exp') ->
 	fprintf fmt "%a%s" print_expression exp' txt
     | UNARY (_,exp') -> fprintf fmt "%s%a" txt print_expression exp'
     | LABELADDR l -> fprintf fmt "&&%s" l
@@ -362,9 +377,9 @@ and print_expression_level (lvl: int) fmt (exp : expression) =
     | QUESTION (exp1, exp2, exp3) ->
         fprintf fmt "%a@ ?@ %a@ :@ %a"
           print_expression exp1 print_expression exp2 print_expression exp3
-    | CAST (typ, iexp) ->
+    | CAST ((spec, decl_type, _), iexp) ->
         fprintf fmt "(@[%a@])@;%a"
-          print_onlytype typ print_cast_expression iexp
+          print_onlytype (spec, decl_type) print_cast_expression iexp
     | CALL ({ expr_node = VARIABLE "__builtin_va_arg"},
             [arg; { expr_node = TYPE_SIZEOF (bt, dt) } ]) ->
         fprintf fmt "__builtin_va_arg(@[%a,@ %a@])"

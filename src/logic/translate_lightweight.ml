@@ -38,7 +38,7 @@ class annotateFunFromDeclspec =
       | AInt i ->
         Ast_info.constant_term 
 	  Cil_datatype.Location.unknown i
-      | AUnOp(Neg,AInt i) ->
+      | AUnOp(Neg _,AInt i) ->
         Ast_info.constant_term
 	  Cil_datatype.Location.unknown (Integer.neg i)
       | AStr s

@@ -50,7 +50,7 @@ let rec find_deps_no_transitivity state expr =
           lv
         in
         Function_Froms.Deps.from_data_deps deps
-    | CastE (_, e)|UnOp (_, e, _) ->
+    | CastE (_, _, e)|UnOp (_, e, _) ->
         find_deps_no_transitivity state e
     | BinOp (_, e1, e2, _) ->
         Function_Froms.Deps.join

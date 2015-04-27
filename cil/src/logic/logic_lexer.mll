@@ -325,14 +325,18 @@ rule token = parse
   | ".."                    { DOTDOT }
   | "..."                   { DOTDOTDOT }
   | "-"                     { MINUS }
+  | "-%"                    { MINUS_MOD }
   | "+"                     { PLUS }
+  | "+%"                    { PLUS_MOD }
   | "*"                     { STAR }
+  | "*%"                    { STAR_MOD }
   | "&"                     { AMP }
   | "^^"                    { HATHAT }
   | "^"                     { HAT }
   | "|"                     { PIPE }
   | "~"                     { TILDE }
   | "/"                     { SLASH }
+  | "/%"                    { SLASH_MOD }
   | "%"                     { PERCENT }
   | "<"                     { LT }
   | ">"                     { GT }
@@ -350,6 +354,7 @@ rule token = parse
   | "<:"                    { LTCOLON }
   | ":>"                    { COLONGT }
   | "<<"                    { LTLT }
+  | "<<%"                   { LTLT_MOD }
   | ">>"                    { GTGT }
   | utf8_char as c          { find_utf8 c }
   | eof                     { EOF }

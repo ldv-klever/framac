@@ -2220,10 +2220,10 @@ and childrenTermNode vis tn =
         let t1' = vTerm t1 in
         let t2' = vTerm t2 in
         if t1' != t1 || t2' != t2 then TBinOp(op,t1',t2') else tn
-    | TCastE(ty,te) ->
+    | TCastE(ty, oft, te) ->
         let ty' = vTyp ty in
         let te' = vTerm te in
-          if ty' != ty || te' != te then TCastE(ty',te') else tn
+          if ty' != ty || te' != te then TCastE(ty', oft, te') else tn
     | TAddrOf tl ->
         let tl' = vTermLval tl in
           if tl' != tl then TAddrOf tl' else tn
@@ -2995,9 +2995,9 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
        if e1' != e1 || e2' != e2 || t' != t then
 	 new_exp (BinOp(bo, e1',e2',t'))
        else e
-   | CastE (t, e1) ->
+   | CastE (t, oft, e1) ->
        let t' = vTyp t in let e1' = vExp e1 in
-       if t' != t || e1' != e1 then new_exp (CastE(t', e1')) else e
+       if t' != t || e1' != e1 then new_exp (CastE(t', oft, e1')) else e
    | AddrOf lv ->
        let lv' = vLval lv in
        if lv' != lv then new_exp (AddrOf lv') else e
@@ -3858,7 +3858,7 @@ let rec isInteger e = match e.enode with
 | Const(CInt64 (n,_,_)) -> Some n
 | Const(CChr c) -> Some (charConstToInt c)
 | Const(CEnum {eival = v}) -> isInteger v
-| CastE(_, e) -> isInteger e (* BY: This is really strange... *)
+| CastE(_, _, e) -> isInteger e (* BY: This is really strange... *)
 | _ -> None
 
 let isZero (e: exp) : bool = 
@@ -3869,14 +3869,14 @@ let isZero (e: exp) : bool =
 let rec isLogicZero t = match t.term_node with
 | TConst (Integer (n,_)) -> Integer.equal n Integer.zero
 | TConst (LChr c) -> Char.code c = 0
-| TCastE(_, t) -> isLogicZero t
+| TCastE(_, _, t) -> isLogicZero t
 | _ -> false
 
 let isLogicNull t =
   isLogicZero t ||
     (let rec aux t = match t.term_node with
     | Tnull -> true
-    | TCastE(_, t) -> aux t
+    | TCastE(_, _, t) -> aux t
     | _ -> false
      in aux t)
 
@@ -4099,7 +4099,7 @@ let parseIntExp ~loc repr =
   (* See what kind of operator we need *)
    let nextop = match unrollTypeSkel iter.vtype with
      | TPtr _ -> PlusPI
-     | _ -> PlusA
+     | _ -> PlusA Check
    in
    mkFor
      [ mkStmtOneInstr ~valid_sid:true (Set (var iter, first, first.eloc)) ]
@@ -4116,20 +4116,20 @@ let parseIntExp ~loc repr =
    { battrs = []; bstmts = List.map (fun (x,_,_,_,_) ->x) us; blocals = [] }
 
  let rec stripCasts (e: exp) =
-   match e.enode with CastE(_, e') -> stripCasts e' | _ -> e
+   match e.enode with CastE(_, _, e') -> stripCasts e' | _ -> e
 
  let rec stripCastsAndInfo (e: exp) =
-   match e.enode with Info(e',_) | CastE(_,e') -> stripCastsAndInfo e' | _ -> e
+   match e.enode with Info(e',_) | CastE(_, _, e') -> stripCastsAndInfo e' | _ -> e
 
  let rec stripCastsButLastInfo (e: exp) =
    match e.enode with
        Info({enode = (Info _ | CastE _)} as e',_)
-     | CastE(_,e') ->
+     | CastE(_, _, e') ->
 	 stripCastsButLastInfo e'
      | _ -> e
 
  let rec stripTermCasts (t: term) =
-   match t.term_node with TCastE(_, t') -> stripTermCasts t' | _ -> t
+   match t.term_node with TCastE(_, _, t') -> stripTermCasts t' | _ -> t
 
 let exp_info_of_term t = { exp_type = t.term_type; exp_name = t.term_name;}
 
@@ -4319,7 +4319,7 @@ let isCharPtrType t =
    | AlignOf _ | AlignOfE _ -> theMachine.typeOfSizeOf
    | UnOp (_, _, t) -> t
    | BinOp (_, _, _, t) -> t
-   | CastE (t, _) -> t
+   | CastE (t, _, _) -> t
    | AddrOf (lv) -> TPtr(typeOfLval lv, [])
    | StartOf (lv) ->
      match unrollType (typeOfLval lv) with
@@ -4662,8 +4662,8 @@ and intOfAttrparam (a:attrparam) : int option =
   let rec doit a : int =
     match a with
     |  AInt(n) -> Integer.to_int n
-    | ABinOp(Shiftlt, a1, a2) -> (doit a1) lsl (doit a2)
-    | ABinOp(Div, a1, a2) -> (doit a1) / (doit a2)
+    | ABinOp(Shiftlt _, a1, a2) -> (doit a1) lsl (doit a2)
+    | ABinOp(Div _, a1, a2) -> (doit a1) / (doit a2)
     | ASizeOf(t) ->
       let bs = bitsSizeOf t in
       bs / 8
@@ -5057,7 +5057,7 @@ and constFold (machdep: bool) (e: exp) : exp =
         match e1c.enode with
           Const(CInt64(i,_ik,repr)) -> begin
             match unop with
-              Neg ->
+              Neg _ ->
                 let repr = Extlib.opt_map (fun s -> "-" ^ s) repr in
                 kinteger64 ~loc ?repr ~kind:tk (Integer.neg i)
             | BNot -> kinteger64 ~loc ~kind:tk (Integer.lognot i)
@@ -5099,18 +5099,19 @@ and constFold (machdep: bool) (e: exp) : exp =
 
    (* Special case to handle the C macro 'offsetof' *)
    | CastE(it,
-	   { enode = AddrOf (Mem ({enode = CastE(TPtr(bt, _), z)}), off)})
+           oft,
+	   { enode = AddrOf (Mem ({enode = CastE(TPtr(bt, _), _, z)}), off)})
        when machdep && isZero z -> begin
 	 try
 	   let start, _width = bitsOffset bt off in
 	   if start mod 8 <> 0 then 
 	     Kernel.error ~current:true "Using offset of bitfield" ;
 	   constFold machdep 
-             (new_exp ~loc (CastE(it, (integer ~loc (start / 8)))))
+             (new_exp ~loc (CastE(it, oft, (integer ~loc (start / 8)))))
 	 with SizeOfError _ -> e
        end
 
-  | CastE (t, e) -> begin
+  | CastE (t, oft, e) -> begin
     if debugConstFold then 
       Kernel.debug "ConstFold CAST to to %a@." !pp_typ_ref t ;
     let e = constFold machdep e in
@@ -5124,7 +5125,7 @@ and constFold (machdep: bool) (e: exp) : exp =
 	      Kernel.debug "ConstFold to %a : %a@." 
 		!pp_ikind_ref nk Datatype.Integer.pretty i;
             kinteger64 ~loc ~kind:nk i
-      | _, _ -> new_exp ~loc (CastE (t, e))
+      | _, _ -> new_exp ~loc (CastE (t, oft, e))
     end
   | Lval lv -> new_exp ~loc (Lval (constFoldLval machdep lv))
   | AddrOf lv -> new_exp ~loc (AddrOf (constFoldLval machdep lv))
@@ -5155,12 +5156,12 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
         match e.enode with
           | Const(CChr c) -> new_exp ~loc (Const(charConstToIntConstant c))
           | Const(CEnum {eival = v}) -> mkInt v
-          | CastE(TInt (ik, ta), e) -> begin
+          | CastE(TInt (ik, ta), oft, e) -> begin
               let exp = mkInt e in
               match exp.enode with
                   Const(CInt64(i, _, _)) ->
                     kinteger64 ~loc ~kind:ik i
-                | _ -> {exp with enode = CastE(TInt(ik, ta), exp)}
+                | _ -> {exp with enode = CastE(TInt(ik, ta), oft, exp)}
             end
           | _ -> e
       in
@@ -5188,9 +5189,9 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
       let e1'' = mkInt e1' in
       let e2'' = mkInt e2' in
       match bop, e1''.enode, e2''.enode with
-      | PlusA, Const(CInt64(z,_,_)), _ 
+      | PlusA _, Const(CInt64(z,_,_)), _ 
         when Integer.equal z Integer.zero -> e2''
-      | PlusA, _, Const(CInt64(z,_,_)) 
+      | PlusA _, _, Const(CInt64(z,_,_)) 
         when Integer.equal z Integer.zero -> e1''
       | PlusPI, _, Const(CInt64(z,_,_)) 
         when Integer.equal z Integer.zero -> e1''
@@ -5198,32 +5199,32 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
         when Integer.equal z Integer.zero -> e1''
       | MinusPI, _, Const(CInt64(z,_,_)) 
         when Integer.equal z Integer.zero -> e1''
-      | PlusA, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
+      | PlusA _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           kinteger64 ~loc ~kind:tk (Integer.add i1 i2)
-      | MinusA, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_))
+      | MinusA _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_))
           when ik1 = ik2 ->
           kinteger64 ~loc ~kind:tk (Integer.sub i1 i2)
-      | Mult, Const(CInt64(i1,ik1,_)), Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
+      | Mult _, Const(CInt64(i1,ik1,_)), Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           kinteger64 ~loc ~kind:tk (Integer.mul i1 i2)
-      | Mult, Const(CInt64(z,_,_)), _
+      | Mult _, Const(CInt64(z,_,_)), _
         when Integer.equal z Integer.zero -> zero ~loc
-      | Mult, Const(CInt64(one,_,_)), _ 
+      | Mult _, Const(CInt64(one,_,_)), _ 
         when Integer.equal one Integer.one -> e2''
-      | Mult, _,    Const(CInt64(z,_,_)) 
+      | Mult _, _,    Const(CInt64(z,_,_)) 
         when Integer.equal z Integer.zero -> zero ~loc
-      | Mult, _, Const(CInt64(one,_,_)) 
+      | Mult _, _, Const(CInt64(one,_,_)) 
         when Integer.equal one Integer.one -> e1''
-      | Div, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
+      | Div _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           begin
             try kinteger64 ~loc ~kind:tk (Integer.div i1 i2)
             with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
-      | Div, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_))
+      | Div _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_))
           when bytesSizeOfInt ik1 = bytesSizeOfInt ik2 -> begin
             try kinteger64 ~loc ~kind:tk (Integer.div i1 i2)
             with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
-      | Div, _, Const(CInt64(one,_,_)) 
+      | Div _, _, Const(CInt64(one,_,_)) 
          when Integer.equal one Integer.one -> e1''
       | Mod, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           begin
@@ -5242,12 +5243,12 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
       | BOr, _, _ when isZero e2' -> e1'
       | BXor, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           kinteger64 ~loc ~kind:tk (Integer.logxor i1 i2)
-      | Shiftlt, Const(CInt64(i1,_ik1,_)),Const(CInt64(i2,_,_))
+      | Shiftlt _, Const(CInt64(i1,_ik1,_)),Const(CInt64(i2,_,_))
           when shiftInBounds i2 ->
           kinteger64 ~loc ~kind:tk (Integer.shift_left i1 i2)
-      | Shiftlt, Const(CInt64(z,_,_)), _ 
+      | Shiftlt _, Const(CInt64(z,_,_)), _ 
         when Integer.equal z Integer.zero -> zero ~loc
-      | Shiftlt, _, Const(CInt64(z,_,_)) 
+      | Shiftlt _, _, Const(CInt64(z,_,_)) 
         when Integer.equal z Integer.zero -> e1''
       | Shiftrt, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,_,_))
           when shiftInBounds i2 ->
@@ -5302,7 +5303,7 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
 and constFoldToInt ?(machdep=true) e =
   match (constFold machdep e).enode with
   | Const(CInt64(c,_,_)) -> Some c
-  | CastE (typ, e) when machdep && isPointerType typ -> begin
+  | CastE (typ, _, e) when machdep && isPointerType typ -> begin
     (* Those casts are left left by constFold *)
     match constFoldToInt ~machdep e with
     | None -> None
@@ -6653,8 +6654,8 @@ let rec isConstantGen f e = match (stripInfo e).enode with
   | Lval _ -> false
   | SizeOf _ | SizeOfE _ | SizeOfStr _ | AlignOf _ | AlignOfE _ -> true
   (* see ISO 6.6.6 *)
-  | CastE(t,{ enode = Const(CReal _)}) when isIntegralType t -> true
-  | CastE (_, e) -> isConstantGen f e
+  | CastE(t, _, { enode = Const(CReal _)}) when isIntegralType t -> true
+  | CastE (_, _, e) -> isConstantGen f e
   | AddrOf (Var vi, off) | StartOf (Var vi, off)
     -> vi.vglob && isConstantOffsetGen f off
   | AddrOf (Mem e, off) | StartOf(Mem e, off)
@@ -6678,7 +6679,7 @@ let isIntegerConstant e =
 let getCompField cinfo fieldName =
   List.find (fun fi -> fi.fname = fieldName) cinfo.cfields
 
-let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) =
+let mkCastTLoc ?(force=false) ?(overflow=Check) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) =
 (* Issue #!1546
    let force = force || 
     (* see warning of need_cast function:
@@ -6689,7 +6690,7 @@ let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) 
     let mk_cast exp = (* to new type [newt] *)
       new_exp
         ~loc
-        (CastE((type_remove_attributes_for_c_cast newt),exp))
+        (CastE((type_remove_attributes_for_c_cast newt), overflow, exp))
     in
     (* Watch out for constants and cast of cast to pointer *)
     match unrollType newt, e.enode with
@@ -6697,7 +6698,7 @@ let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) 
        explicitly add the cast. *)
     | TInt(newik, []), Const(CInt64(i, _, None)) -> 
       kinteger64 ~loc ~kind:newik i
-    | TPtr _, CastE (_, e') ->
+    | TPtr _, CastE (_, _, e') ->
       (match unrollType (typeOf e') with
       | (TPtr _ as typ'') ->
 	  (* Old cast can be removed...*)
@@ -6710,10 +6711,10 @@ let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) 
   end else
     e
 
- let mkCastT ?force ~e ~oldt ~newt = mkCastTLoc ?force ~e ?loc:None ~oldt ~newt
+ let mkCastT ?force ?overflow ~e ~oldt ~newt = mkCastTLoc ?force ?overflow ~e ?loc:None ~oldt ~newt
 
- let mkCast ?force ~(e: exp) ~(newt: typ) =
-   mkCastT ?force ~e ~oldt:(typeOf e) ~newt
+ let mkCast ?force ?overflow ~(e: exp) ~(newt: typ) =
+   mkCastT ?force ?overflow ~e ~oldt:(typeOf e) ~newt
 
 (* TODO: unify this with doBinOp in Cabs2cil. *)
  let mkBinOp ~loc op e1 e2 =
@@ -6742,9 +6743,9 @@ let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) 
        Kernel.fatal ~current:true "mkBinOp: %a" !pp_exp_ref (dummy_exp(BinOp(op,e1,e2,intType)))
    in
    match op with
-       (Mult|Div) -> doArithmetic ()
+       (Mult _|Div _) -> doArithmetic ()
      | (Mod|BAnd|BOr|BXor|LAnd|LOr) -> doIntegralArithmetic ()
-     | (Shiftlt|Shiftrt) -> (* ISO 6.5.7. Only integral promotions. The result
+     | (Shiftlt _|Shiftrt) -> (* ISO 6.5.7. Only integral promotions. The result
                              * has the same type as the left hand side *)
        if msvcMode () then
         (* MSVC has a bug. We duplicate it here *)
@@ -6754,7 +6755,7 @@ let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) 
 	 let t2' = integralPromotion t2 in
 	 constFoldBinOp ~loc machdep op
            (mkCastT e1 t1 t1') (mkCastT e2 t2 t2') t1'
-     | (PlusA|MinusA)
+     | (PlusA _|MinusA _)
          when isArithmeticType t1 && isArithmeticType t2 -> doArithmetic ()
      | (PlusPI|MinusPI|IndexPI) when isPointerType t1 && isIntegralType t2 ->
        constFoldBinOp ~loc machdep op e1 e2 t1
@@ -6826,7 +6827,7 @@ let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) 
  let increm (e: exp) (i: int) =
    let e' = constFold false e in
    let et = typeOf e' in
-   let bop = if isPointerType et then PlusPI else PlusA in
+   let bop = if isPointerType et then PlusPI else PlusA Check in
    let i = match et with
      | TInt (k, _) | TEnum ({ekind = k },_) -> kinteger k ~loc:e.eloc i
      | _ -> integer ~loc:e.eloc i
@@ -6836,7 +6837,7 @@ let mkCastTLoc ?(force=false) ~(e: exp) ?(loc=e.eloc) ~(oldt: typ) ~(newt: typ) 
  (* Try to do an increment, with constant folding *)
  let increm64 (e: exp) i =
    let et = typeOf e in
-   let bop = if isPointerType et then PlusPI else PlusA in
+   let bop = if isPointerType et then PlusPI else PlusA Check in
    constFold
      false
      (new_exp ~loc:e.eloc (BinOp(bop, e, kinteger64 ~loc:e.eloc i, et)))
@@ -7297,7 +7298,7 @@ let rec free_vars_term bound_vars t = match t.term_node with
   | TSizeOfE t
   | TAlignOfE t
   | TUnOp (_,t)
-  | TCastE (_,t)
+  | TCastE (_, _, t)
   | Tat (t,_)
   | Toffset (_,t)
   | Toffset_max (_,t) | Toffset_min (_,t)

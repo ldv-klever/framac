@@ -874,7 +874,7 @@ module StructEq =
             else res
         | BinOp _, _ -> 1
         | _, BinOp _ -> -1
-        | CastE(t1,e1), CastE(t2, e2) ->
+        | CastE(t1, _, e1), CastE(t2, _, e2) ->
             let res = Typ.compare t1 t2 in
             if res = 0 then compare_exp e1 e2 else res
         | CastE _, _ -> 1
@@ -931,7 +931,7 @@ module StructEq =
             let res = hash_exp ((prime*acc) lxor Hashtbl.hash op) e1 in
             let res = hash_exp ((prime*res) lxor 257) e2 in
             (prime * res) lxor Typ.hash ty
-        | CastE(ty,e) -> hash_exp ((prime*acc) lxor Typ.hash ty) e
+        | CastE(ty, _, e) -> hash_exp ((prime*acc) lxor Typ.hash ty) e
         | AddrOf lv -> hash_lval (prime*acc lxor 329) lv
         | StartOf lv -> hash_lval (prime*acc lxor 431) lv
         | Info _ ->
@@ -1395,7 +1395,7 @@ let rec compare_term t1 t2 =
       if c <> 0 then c else
 	let cx = compare_term x1 x2 in
 	if cx <> 0 then cx else compare_term y1 y2
-    | TCastE(ty1,t1) , TCastE(ty2,t2) ->
+    | TCastE(ty1, _, t1) , TCastE(ty2, _, t2) ->
       let c = Typ.compare ty1 ty2 in
       if c <> 0 then c else compare_term t1 t2
     | Tapp(f1,labs1,ts1) , Tapp(f2,labs2,ts2) ->
@@ -1549,7 +1549,7 @@ let rec hash_term (acc,depth,tot) t =
           hash_term (acc+152+Hashtbl.hash bop,depth-1,tot-2) t1
         in
         hash_term (hash1,depth-1,tot1) t2
-      | TCastE(ty,t) ->
+      | TCastE(ty, _, t) ->
         let hash1 = Typ.hash ty in
         hash_term (acc+171+hash1,depth-1,tot-2) t
       | TAddrOf lv -> hash_tlval (acc+190,depth-1,tot-1) lv

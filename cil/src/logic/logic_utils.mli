@@ -104,7 +104,7 @@ val mk_logic_pointer_or_StartOf : term -> term
 
 (** creates a logic cast if required, with some automatic simplifications being
     performed automatically *)
-val mk_cast: ?loc:location -> typ -> term -> term
+val mk_cast: ?loc:location -> ?overflow:overflow_treatment -> typ -> term -> term
 
 
 (** [array_with_range arr size] returns the logic term [array'+{0..(size-1)}],

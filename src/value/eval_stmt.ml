@@ -311,7 +311,7 @@ let need_cast t1 t2 =
       | Lval (Var vi, NoOffset) ->
          if not vi.vaddrof && not (Cil.typeHasQualifier "volatile" vi.vtype)
          then Some vi else None
-      | CastE (typ, e') -> begin
+      | CastE (typ, _, e') -> begin
         match find_actual_varinfo e' with
         | None -> None
         | Some vi as ovi ->

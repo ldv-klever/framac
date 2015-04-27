@@ -430,12 +430,12 @@ and childrenExpression vis e =
       let e3' = ve e3 in
       if e1' != e1 || e2' != e2 || e3' != e3 then
         { e with expr_node = QUESTION (e1', e2', e3')} else e
-  | CAST ((s, dt), ie) ->
+  | CAST ((s, dt, oft), ie) ->
       let s' = visitCabsSpecifier vis s in
       let dt' = visitCabsDeclType vis false dt in
       let ie' = visitCabsInitExpression vis ie in
       if s' != s || dt' != dt || ie' != ie then
-        { e with expr_node = CAST ((s', dt'), ie')} else e
+        { e with expr_node = CAST ((s', dt', oft), ie')} else e
   | CALL (f, el) ->
       let f' = ve f in
       let el' = mapNoCopy ve el in

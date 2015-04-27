@@ -494,17 +494,17 @@ let fixpoint () =
 let rec expr (context:Context.t) (e:Cil_types.exp) =
   match e.enode with
   | Const _ | SizeOf _ | SizeOfE _ | SizeOfStr _ | AlignOf _ | AlignOfE _ -> ()
-  | UnOp((Neg|BNot|LNot),e,_) -> expr Context.epsilon e
+  | UnOp((Neg _|BNot|LNot),e,_) -> expr Context.epsilon e
   | BinOp((PlusPI|IndexPI|MinusPI),a,b,_) -> 
       let ty = Cil.typeOf_pointed (Cil.typeOf a) in
       expr (Context.shift ty context) a ; 
       expr Context.epsilon b
-  | BinOp( (MinusPP|PlusA|MinusA|Mult|Div|Mod
-           |Shiftlt|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
+  | BinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod
+           |Shiftlt _|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
            |Lt|Gt|Le|Ge|Eq|Ne), a,b,_ ) ->
       expr Context.epsilon a ; 
       expr Context.epsilon b
-  | CastE(ty_tgt,e) -> 
+  | CastE(ty_tgt, _, e) -> 
       let ty_src = Cil.typeOf e in
       expr (Context.cast ty_src ty_tgt context) e
   | AddrOf lval -> lvalue context lval
@@ -558,18 +558,18 @@ let rec term (context:Context.t) (t:term) =
   | TConst _ 
   | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ 
   | TAlignOf _ | TAlignOfE _ -> ()
-  | TUnOp((Neg|BNot|LNot),t) -> 
+  | TUnOp((Neg _|BNot|LNot),t) -> 
       term Context.epsilon t
   | TBinOp((PlusPI|IndexPI|MinusPI),a,b) -> 
       let ty = Logic_typing.ctype_of_pointed a.term_type in
       term (Context.shift ty context) a ; 
       term Context.epsilon b
-  | TBinOp( (MinusPP|PlusA|MinusA|Mult|Div|Mod
-            |Shiftlt|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
+  | TBinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod
+            |Shiftlt _|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
             |Lt|Gt|Le|Ge|Eq|Ne), a,b ) ->
       term Context.epsilon a ; 
       term Context.epsilon b
-  | TCastE(ty_tgt,t) ->
+  | TCastE(ty_tgt, _, t) ->
       begin
         match Logic_utils.unroll_type t.term_type with
         | Ctype ty_src -> term (Context.cast ty_src ty_tgt context) t

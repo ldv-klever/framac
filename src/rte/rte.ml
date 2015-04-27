@@ -187,9 +187,9 @@ let mult_sub_add_assertion
       | Some a64, None | None, Some a64 ->  
 	(* one operand is constant *)
 	(match op with
-	  | MinusA -> ignore (assertion false)
-	  | PlusA -> ignore (assertion true)
-	  | Mult ->
+	  | MinusA _ -> ignore (assertion false)
+	  | PlusA _ -> ignore (assertion true)
+	  | Mult _ ->
           (* multiplying by 1 or 0 is not dangerous *)
             if not (Integer.equal a64 Integer.zero ||
 		      Integer.equal a64 Integer.one)
@@ -211,13 +211,13 @@ let mult_sub_add_assertion
 	in
 	(* both operands are constant *)
         (match op with
-	  | MinusA ->
+	  | MinusA _ ->
             let big_diff = Integer.sub big_a64 big_b64 in
 	    if Integer.lt big_diff min_ty then warn false
-	  | PlusA ->
+	  | PlusA _ ->
             let big_add = Integer.add big_a64 big_b64 in
 	    if Integer.gt big_add max_ty then warn true
-	  | Mult ->
+	  | Mult _ ->
             let big_mult = Integer.mul big_a64 big_b64 in
             if Integer.gt big_mult max_ty then warn true
             else if Integer.lt big_mult min_ty then warn false
@@ -330,7 +330,7 @@ let signed_shift_assertion
     (* size of result type should be size of left (promoted) operand *)
     Options.warn "problem with bitsSize of %a: not treated" Printer.pp_exp exp;
   shift_alarm remove_trivial warning kf kinstr (lexp, None);
-  if op = Shiftlt then
+  if op = Shiftlt Check || op = Shiftlt Modulo then
     (* compute greatest representable "size bits" (signed) integer *)
     let maxValResult = Cil.max_signed_number size in
     let overflow_alarm ?status () =
@@ -496,7 +496,7 @@ let float_to_int_assertion ~remove_trivial ~warning kf kinstr (ty, exp) =
     in
     let f = match exp.enode with
       | Const (CReal (f, _, _)) -> Some f
-      | UnOp (Neg, { enode = Const (CReal (f, _, _))}, _) -> Some (-. f)
+      | UnOp (Neg _, { enode = Const (CReal (f, _, _))}, _) -> Some (-. f)
       | _ -> None
     in
     (match remove_trivial, f with

@@ -32,6 +32,7 @@ open Format
 
 let string_of_unop = function
   | Uminus -> "-"
+  | Uminus_mod -> "-"
   | Ustar -> "*"
   | Uamp -> "&"
   | Ubw_not -> "~"

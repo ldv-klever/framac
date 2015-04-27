@@ -269,10 +269,10 @@ let eval_binop_float ~with_alarms round flkind ev1 op ev2 =
           V.bottom
   in
   match op with
-    | PlusA ->   binary_float_floats "+." Ival.Float_abstract.add
-    | MinusA ->  binary_float_floats "-." Ival.Float_abstract.sub
-    | Mult ->    binary_float_floats "*." Ival.Float_abstract.mul
-    | Div ->     binary_float_floats "/." Ival.Float_abstract.div
+    | PlusA _ ->   binary_float_floats "+." Ival.Float_abstract.add
+    | MinusA _ ->  binary_float_floats "-." Ival.Float_abstract.sub
+    | Mult _ ->    binary_float_floats "*." Ival.Float_abstract.mul
+    | Div _ ->     binary_float_floats "/." Ival.Float_abstract.div
     | Eq ->
         let contains_zero, contains_non_zero =
           Ival.Float_abstract.equal_float_ieee f1 f2
@@ -339,12 +339,12 @@ let eval_binop_int ~with_alarms ~te1 ev1 op ev2 =
     | PlusPI | IndexPI -> V.add_untyped (Bit_utils.osizeof_pointed te1) ev1 ev2
     | MinusPI ->
         V.add_untyped (Int_Base.neg (Bit_utils.osizeof_pointed te1)) ev1 ev2
-    | PlusA ->  V.add_untyped (Int_Base.one) ev1 ev2
-    | MinusA -> V.add_untyped Int_Base.minus_one ev1 ev2
+    | PlusA _ ->  V.add_untyped (Int_Base.one) ev1 ev2
+    | MinusA _ -> V.add_untyped Int_Base.minus_one ev1 ev2
     | MinusPP -> eval_minus_pp ~with_alarms ~te1 ev1 ev2
     | Mod -> V.c_rem ev1 ev2
-    | Div -> V.div ev1 ev2
-    | Mult -> V.mul ev1 ev2
+    | Div _ -> V.div ev1 ev2
+    | Mult _ -> V.mul ev1 ev2
     | BXor -> V.bitwise_xor ev1 ev2
     | BOr -> V.bitwise_or ev1 ev2
     | BAnd ->
@@ -360,7 +360,7 @@ let eval_binop_int ~with_alarms ~te1 ev1 op ev2 =
         let signed = Bit_utils.is_signed_int_enum_pointer(Cil.unrollType te1) in
         V.eval_comp ~signed op ev1 ev2
     | Shiftrt -> V.shift_right ev1 ev2
-    | Shiftlt -> V.shift_left ev1 ev2
+    | Shiftlt _ -> V.shift_left ev1 ev2
     (* Strict evaluation. The caller of this function is supposed to take
        into account the lazyness of those operators itself *)
     | LOr -> V.interp_boolean
@@ -408,7 +408,7 @@ and eval_uneg ~with_alarms v t =
 
 let eval_unop ~check_overflow ~with_alarms v t op =
   match op with
-  | Neg ->
+  | Neg _ ->
       let r = eval_uneg ~with_alarms v t in
       if check_overflow
       then handle_overflow ~with_alarms ~warn_unsigned:true t r

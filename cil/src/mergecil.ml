@@ -1745,7 +1745,7 @@ object (self)
         (* Maybe the cast is no longer necessary if an enum has been replaced
            by an integer type. *)
         let post_action e = match e.enode with
-        | CastE(typ,exp) when
+        | CastE(typ, _, exp) when
             Cil_datatype.TypByName.equal (typeOf exp) typ ->
           exp
         | _ -> e
@@ -2148,7 +2148,8 @@ begin
       (equalExps xe1 ye1) &&
       (equalExps xe2 ye2) &&
       true  (*INC: xt == yt*)
-  | CastE(_xt,xe), CastE(_yt,ye) ->
+  | CastE(_xt,xoft,xe), CastE(_yt,yoft,ye) ->
+      xoft = yoft &&
       (*INC: xt == yt &&*)
       (equalExps xe ye)
   | AddrOf(xl), AddrOf(yl) ->      (equalLvals xl yl)
@@ -2156,9 +2157,9 @@ begin
 
   (* initializers that go through CIL multiple times sometimes lose casts they
    * had the first time; so allow a different of a cast *)
-  | CastE(_xt,xe),_ ->
+  | CastE(_xt,_,xe),_ ->
       (equalExps xe y)
-  | _, CastE(_yt,ye) ->
+  | _, CastE(_yt,_,ye) ->
       (equalExps x ye)
 
   | _,_ -> false

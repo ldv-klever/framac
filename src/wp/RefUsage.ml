@@ -261,11 +261,11 @@ and expr (e:Cil_types.exp) : model = match e.enode with
   | Const _ | SizeOf _ | SizeOfE _ | SizeOfStr _ | AlignOf _ | AlignOfE _ -> L
 
   (* Unary *)
-  | UnOp((Neg|BNot|LNot),e,_) | Info(e,_) -> expr e
+  | UnOp((Neg _|BNot|LNot),e,_) | Info(e,_) -> expr e
 
   (* Binary *)
-  | BinOp( (MinusPP|PlusA|MinusA|Mult|Div|Mod
-           |Shiftlt|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
+  | BinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod
+           |Shiftlt _|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
            |Lt|Gt|Le|Ge|Eq|Ne), a,b,_ ) 
     -> vcup (vexpr a) (vexpr b)
 
@@ -273,7 +273,7 @@ and expr (e:Cil_types.exp) : model = match e.enode with
   | BinOp((PlusPI|IndexPI|MinusPI),a,b,_) -> shift (expr a) (vexpr b)
 
   (* Casts *)
-  | CastE(ty_tgt,e) -> cast (cast_ctyp ty_tgt (Cil.typeOf e)) (expr e)
+  | CastE(ty_tgt, _, e) -> cast (cast_ctyp ty_tgt (Cil.typeOf e)) (expr e)
 
   (* Address *)
   | AddrOf lval | StartOf lval -> lvalue lval
@@ -307,11 +307,11 @@ and term (env:context) (t:term) : model = match t.term_node with
   | Ttypeof _ | Ttype _ -> L
 
   (* Unary *)
-  | TUnOp((Neg|BNot|LNot),t) -> term env t
+  | TUnOp((Neg _|BNot|LNot),t) -> term env t
 
   (* Binary *)
-  | TBinOp( (MinusPP|PlusA|MinusA|Mult|Div|Mod
-            |Shiftlt|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
+  | TBinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod
+            |Shiftlt _|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
             |Lt|Gt|Le|Ge|Eq|Ne), a,b ) 
     -> vcup (vterm env a) (vterm env b)
 
@@ -319,7 +319,7 @@ and term (env:context) (t:term) : model = match t.term_node with
   | TBinOp((PlusPI|IndexPI|MinusPI),a,b) -> shift (term env a) (vterm env b)
 
   (* Casts *)
-  | TCastE(ty_tgt,t) -> cast (cast_ltyp ty_tgt t.term_type) (term env t)
+  | TCastE(ty_tgt, _, t) -> cast (cast_ltyp ty_tgt t.term_type) (term env t)
 
   (* Term L-Values *)
   | TLval tlv -> term_lval env tlv

@@ -666,7 +666,7 @@ and exp_node =
       conversions are made explicit for the arguments.
       @plugin development guide *)
 
-  | CastE      of typ * exp
+  | CastE      of typ * overflow_treatment * exp
   (** Use {!Cil.mkCast} to make casts.  *)
 
   | AddrOf     of lval
@@ -730,15 +730,19 @@ and constant =
 (** An enumeration constant. Use [Cillower.lowerEnumVisitor] to replace these
     with integer constants. *)
 
+and overflow_treatment =
+  | Check
+  | Modulo
+
 (** Unary operators *)
 and unop =
-    Neg   (** Unary minus *)
+    Neg of overflow_treatment  (** Unary minus *)
   | BNot  (** Bitwise complement (~) *)
   | LNot  (** Logical Not (!) *)
 
 (** Binary operations *)
 and binop =
-    PlusA    (** arithmetic + *)
+    PlusA of overflow_treatment    (** arithmetic + *)
   | PlusPI   (** pointer + integer *)
   | IndexPI  (** pointer + integer but only when it arises from an expression
                  [e\[i\]] when [e] is a pointer and
@@ -746,15 +750,15 @@ and binop =
                  the same as PlusPI but CCured uses
                  this as a hint that the integer is
                  probably positive. *)
-  | MinusA   (** arithmetic - *)
+  | MinusA of overflow_treatment   (** arithmetic - *)
   | MinusPI  (** pointer - integer *)
   | MinusPP  (** pointer - pointer *)
-  | Mult     (** * *)
-  | Div      (** /      
+  | Mult of overflow_treatment     (** * *)
+  | Div of overflow_treatment      (** /
 		 @plugin development guide *)
-  | Mod      (** % 
+  | Mod      (** %
 		 @plugin development guide *)
-  | Shiftlt  (** shift left *)
+  | Shiftlt  of overflow_treatment (** shift left *)
   | Shiftrt  (** shift right *)
 
   | Lt       (** <  (arithmetic comparison) *)
@@ -1034,7 +1038,7 @@ and stmtkind =
       @plugin development guide *)
 
   | AsmGoto of
-      attributes (* Really only const and volatile can appear here *) 
+      attributes (* Really only const and volatile can appear here *)
     * string list (* templates (CR-separated) *)
     * (string option * string * lval) list
       (* outputs must be lvals with optional names and constraints.  I would
@@ -1286,7 +1290,7 @@ and term_node =
   | TAlignOfE of term (** alignment of the type of an expression. *)
   | TUnOp of unop * term (** unary operator. *)
   | TBinOp of binop * term * term (** binary operators. *)
-  | TCastE of typ * term (** cast to a C type. *)
+  | TCastE of typ * overflow_treatment * term (** cast to a C type. *)
   | TAddrOf of term_lval (** address of a term. *)
   | TStartOf of term_lval (** beginning of an array. *)
 

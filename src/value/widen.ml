@@ -130,7 +130,7 @@ class widen_visitor kf init_widen_hints init_enclosing_loops = object(self)
     and default_visit _e = Cil.DoChildren
     and unop_visit e =
       match e with
-      | {enode=(CastE(_, { enode=Lval (Var varinfo, _)})
+      | {enode=(CastE(_, _, { enode=Lval (Var varinfo, _)})
 		   | Lval (Var varinfo, _))} ->
         let hints = Ival.Widen_Hints.singleton Integer.zero in
         let base = Base.of_varinfo varinfo in
@@ -146,10 +146,10 @@ class widen_visitor kf init_widen_hints init_enclosing_loops = object(self)
       in
       let i1, i2 = Cil.constFoldToInt e1, Cil.constFoldToInt e2 in begin
       match i1, i2, e1, e2 with
-      | Some int64, _, _, {enode=(CastE(_, { enode=Lval (Var varinfo, _)})
+      | Some int64, _, _, {enode=(CastE(_, _, { enode=Lval (Var varinfo, _)})
 		                     | Lval (Var varinfo, _))}->
         add (Base.of_varinfo varinfo) (add1 int64)
-      | _, Some int64, {enode=(CastE(_, { enode=Lval (Var varinfo, _)})
+      | _, Some int64, {enode=(CastE(_, _, { enode=Lval (Var varinfo, _)})
 		                  | Lval (Var varinfo, _))}, _ ->
         add (Base.of_varinfo varinfo) (add2 int64)
       | _ -> ()
@@ -165,7 +165,7 @@ class widen_visitor kf init_widen_hints init_enclosing_loops = object(self)
     | BinOp (Eq, e1, e2, _)
     | BinOp (Ne, e1, e2, _) ->
         comparison_visit with_s_p_ with_s_p_ e1 e2
-    | UnOp (Neg, e, _) ->
+    | UnOp (Neg _, e, _) ->
         unop_visit e
     | Lval _ ->
         unop_visit e
@@ -188,14 +188,14 @@ class widen_visitor kf init_widen_hints init_enclosing_loops = object(self)
     let rec aux_idx idx shift =
       match idx.enode with
       | Lval (Var vidx, _) -> add_hint vidx size shift
-      | CastE (typ, e') when Cil.isIntegralType typ ->
+      | CastE (typ, _, e') when Cil.isIntegralType typ ->
         (* It is safe to ignore casts: hints do not need to be sound. *)
         aux_idx e' shift
-      | BinOp ((PlusA | MinusA as op), e1, e2, _) -> begin
+      | BinOp ((PlusA _ | MinusA _ as op), e1, e2, _) -> begin
         (* See if either [e1] or [e2] is constant. If so, find a variable in
            the other expression and add a hint for this variable, shifted. *)
         let shift' s =
-          if op = PlusA then Integer.add shift s else Integer.sub shift s
+          if op = PlusA Check || op = PlusA Modulo then Integer.add shift s else Integer.sub shift s
         in
         match Cil.constFoldToInt e1 with
         | Some shift1 -> aux_idx e2 (shift' shift1)

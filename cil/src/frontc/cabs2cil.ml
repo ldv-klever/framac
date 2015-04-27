@@ -155,7 +155,7 @@ let rec is_dangerous_offset t = function
 
 let rec is_dangerous e = match e.enode with
     | Lval lv | AddrOf lv | StartOf lv -> is_dangerous_lval lv
-    | UnOp (_,e,_) | CastE(_,e) | Info(e,_) -> is_dangerous e
+    | UnOp (_,e,_) | CastE(_, _, e) | Info(e,_) -> is_dangerous e
     | BinOp(_,e1,e2,_) -> is_dangerous e1 || is_dangerous e2
     | Const _ | SizeOf _ | SizeOfE _ | SizeOfStr _ | AlignOf _ | AlignOfE _ ->
       false
@@ -1030,17 +1030,17 @@ let rec is_boolean_result e =
         | Some i ->
           Integer.equal i Integer.zero || Integer.equal i Integer.one
         | None -> false)
-    | CastE (_,e) -> is_boolean_result e
+    | CastE (_, _, e) -> is_boolean_result e
     | BinOp((Lt | Gt | Le | Ge | Eq | Ne | LAnd | LOr),_,_,_) -> true
-    | BinOp((PlusA | PlusPI | IndexPI | MinusA | MinusPI | MinusPP | Mult
-            | Div | Mod | Shiftlt | Shiftrt | BAnd | BXor | BOr),_,_,_) -> false
+    | BinOp((PlusA _ | PlusPI | IndexPI | MinusA _ | MinusPI | MinusPP | Mult _
+            | Div _ | Mod | Shiftlt _ | Shiftrt | BAnd | BXor | BOr),_,_,_) -> false
     | UnOp(LNot,_,_) -> true
-    | UnOp ((Neg | BNot),_,_) -> false
+    | UnOp ((Neg _ | BNot),_,_) -> false
     | Lval _ | SizeOf _ | SizeOfE _ | SizeOfStr _ | AlignOf _
     | AlignOfE _ | AddrOf _ | StartOf _ | Info _ -> false
 
 (* Specify whether the cast is from the source code *)
-let rec castTo ?loc
+let rec castTo ?loc ?overflow
                 (ot : typ) (nt : typ) (e : exp) : (typ * exp ) =
   let fromsource = Extlib.has_some loc in
   Kernel.debug ~dkey:category_cast "@[%t: castTo:%s %a->%a@\n@]"
@@ -1056,7 +1056,7 @@ let rec castTo ?loc
   end else begin
     let nt' = if fromsource then nt' else !typeForInsertedCast e ot' nt' in
     let result = (nt', if theMachine.insertImplicitCasts || fromsource then
-                    Cil.mkCastTLoc ~force:true ~e ?loc ~oldt:ot ~newt:nt' else e)
+                    Cil.mkCastTLoc ~force:true ?overflow ~e ?loc ~oldt:ot ~newt:nt' else e)
     in
     let error s =
       (if fromsource then Kernel.abort else Kernel.fatal) ~current:true s
@@ -1168,10 +1168,10 @@ let rec castTo ?loc
   end
 
 
-let castToFromSource ?loc ot nt e =
+let castToFromSource ?loc ?(overflow=Check) ot nt e =
   let rec strip_inserted_casts e =
     match e.enode with
-    | CastE (_, e') when Location.equal e.eloc Location.unknown || Location.equal e.eloc e'.eloc ->
+    | CastE (_, _, e') when Location.equal e.eloc Location.unknown || Location.equal e.eloc e'.eloc ->
       strip_inserted_casts e'
     | _ -> e
   in
@@ -1181,11 +1181,11 @@ let castToFromSource ?loc ot nt e =
     if Exp.equal e_in e_out then true
     else
       match e_out.enode with
-      | CastE (_, e) -> contains_under_casts e_in e
+      | CastE (_, _, e) -> contains_under_casts e_in e
       | _ -> false
   in
   if contains_under_casts e e' then r
-  else (t', new_exp ~loc:(Extlib.opt_conv e.eloc loc) (CastE (nt, e)))
+  else (t', new_exp ~loc:(Extlib.opt_conv e.eloc loc) (CastE (nt, overflow, e)))
 
 (* Like Cil.mkCastT, but it calls typeForInsertedCast *)
 let makeCastT ~(e: exp) ~(oldt: typ) ~(newt: typ) =
@@ -1214,7 +1214,7 @@ let rec isConstTrue (e:exp): bool =
   | Const(CChr c) -> 0 <> Char.code c
   | Const(CStr _ | CWStr _) -> true
   | Const(CReal(f, _, _)) -> f <> 0.0;
-  | CastE(_, e) -> isConstTrue e
+  | CastE(_, _, e) -> isConstTrue e
   | _ -> false
 
 (* Given an expression that is being coerced to bool, is it zero?
@@ -1225,7 +1225,7 @@ let rec isConstFalse (e:exp): bool =
   | Const(CInt64 (n,_,_)) -> Integer.equal n Integer.zero
   | Const(CChr c) -> 0 = Char.code c
   | Const(CReal(f, _, _)) -> f = 0.0;
-  | CastE(_, e) -> isConstFalse e
+  | CastE(_, _, e) -> isConstFalse e
   | _ -> false
 
 let rec isCabsZeroExp e = match e.expr_node with
@@ -2950,15 +2950,20 @@ let rec replaceLastInList
 
 let convBinOp (bop: A.binary_operator) : binop =
   match bop with
-    A.ADD -> PlusA
-  | A.SUB -> MinusA
-  | A.MUL -> Mult
-  | A.DIV -> Div
+    A.ADD CHECK -> PlusA Check
+  | A.ADD MODULO -> PlusA Modulo
+  | A.SUB CHECK -> MinusA Check
+  | A.SUB MODULO -> MinusA Modulo
+  | A.MUL CHECK -> Mult Check
+  | A.MUL MODULO -> Mult Modulo
+  | A.DIV CHECK -> Div Check
+  | A.DIV MODULO -> Div Modulo
   | A.MOD -> Mod
   | A.BAND -> BAnd
   | A.BOR -> BOr
   | A.XOR -> BXor
-  | A.SHL -> Shiftlt
+  | A.SHL CHECK -> Shiftlt Check
+  | A.SHL MODULO -> Shiftlt Modulo
   | A.SHR -> Shiftrt
   | A.EQ -> Eq
   | A.NE -> Ne
@@ -3003,6 +3008,7 @@ let afterConversion ~ghost (c: chunk) : chunk =
     | Instr (Call(Some(Var vi, NoOffset), f, args, l)),
       Instr (Set(destlv,
                  {enode = CastE (newt,
+                                 _,
                                  {enode = Lval(Var vi', NoOffset)})}, _)) ->
         if (not vi.vglob &&
               vi' == vi &&
@@ -3379,11 +3385,13 @@ let set_to_zero ~ghost vi off typ =
   let zone =
     Cil.new_exp ~loc
       (CastE(TPtr(TInt (IUChar,[]),[]),
+             Check,
              Cil.new_exp ~loc (StartOf(Var vi,off))))
   in
   let size =
     Cil.new_exp ~loc
       (CastE (TInt(IULong,[]),
+              Check,
               Cil.new_exp ~loc (SizeOf typ)))
   in
   Cil.mkStmt ~ghost
@@ -3409,11 +3417,13 @@ let rec zero_init ~ghost vi off len base_typ =
   let zone =
     Cil.new_exp ~loc
       (CastE(TPtr(TInt (IUChar,[]),[]),
+             Check,
              Cil.new_exp ~loc (StartOf(Var vi,off))))
   in
   let size =
      Cil.new_exp ~loc
-      (CastE (TInt(IULong,[]),
+       (CastE (TInt(IULong,[]),
+               Check,
               Cil.new_exp ~loc (SizeOf base_typ)))
   in
   let len = Cil.kinteger ~loc IULong len in
@@ -3441,7 +3451,7 @@ and zero_init_cell ~ghost vi off typ =
 
     | TPtr _ ->
       let lv = (Var vi,off) in
-      let exp = Cil.new_exp ~loc (CastE(typ,Cil.zero ~loc)) in
+      let exp = Cil.new_exp ~loc (CastE(typ, Check, Cil.zero ~loc)) in
       s2c (Cil.mkStmt ~ghost (Instr (Set (lv, exp,loc))))
 
     | TArray(_,None,_,_) ->
@@ -4146,7 +4156,8 @@ and doAttr ghost (a: A.attribute) : attribute list =
       | A.BINARY(abop, aa1, aa2) ->
         ABinOp (convBinOp abop, ae aa1, ae aa2)
       | A.UNARY(A.PLUS, aa) -> ae aa
-      | A.UNARY(A.MINUS, aa) -> AUnOp (Neg, ae aa)
+      | A.UNARY(A.MINUS CHECK, aa) -> AUnOp (Neg Check, ae aa)
+      | A.UNARY(A.MINUS MODULO, aa) -> AUnOp (Neg Modulo, ae aa)
       | A.UNARY(A.BNOT, aa) -> AUnOp(BNot, ae aa)
       | A.UNARY(A.NOT, aa) -> AUnOp(LNot, ae aa)
       | A.MEMBEROF (e, s) -> ADot (ae e, s)
@@ -4716,9 +4727,9 @@ and doExp local_env
   let processArrayFun e t =
     let loc = e.eloc in
     match e.enode, unrollType t with
-    | (Lval(lv) | CastE(_, {enode = Lval lv})), TArray(tbase, _, _, a) ->
+    | (Lval(lv) | CastE(_, _, {enode = Lval lv})), TArray(tbase, _, _, a) ->
       mkStartOfAndMark loc lv, TPtr(tbase, a)
-    | (Lval(lv) | CastE(_, {enode = Lval lv})), TFun _  ->
+    | (Lval(lv) | CastE(_, _, {enode = Lval lv})), TFun _  ->
       mkAddrOfAndMark loc lv, TPtr(t, [])
     | _, (TArray _ | TFun _) ->
       Kernel.fatal ~current:true
@@ -4893,7 +4904,7 @@ functions"
 	let lv =
 	  match e'.enode with
 	    Lval x -> x
-	  | CastE(_, { enode = Lval x}) -> x
+	  | CastE(_, _, { enode = Lval x}) -> x
 	  | _ ->
 	    Kernel.fatal ~current:true
 	      "Expected an lval in MEMBEROF (field %s)"
@@ -5155,7 +5166,7 @@ functions"
         finishExp [] (unspecified_chunk empty) (new_exp ~loc (AlignOfE(e'')))
 	  theMachine.typeOfSizeOf
 
-    | A.CAST ((specs, dt), ie) ->
+    | A.CAST ((specs, dt, overflow), ie) ->
         let s', dt', ie' = preprocessCast local_env.is_ghost specs dt ie in
         (* We know now that we can do s' and dt' many times *)
         let typ = doOnlyType local_env.is_ghost s' dt' in
@@ -5227,7 +5238,17 @@ functions"
                 * need the check. *)
                let newtyp, newexp =
                  if needcast then
-                  castTo ~loc:e.expr_loc t' typ e'
+                  let overflow =
+                    match overflow with
+                    | MODULO when isIntegralType typ && isIntegralType t' -> Modulo
+                    | MODULO ->
+                      Kernel.error ~current:true
+                        "modulo casts are applicable to integral types only, got types `%a' and `%a'"
+                        Cil_printer.pp_typ typ Cil_printer.pp_typ t';
+                      Check
+                    | _ -> Check
+                  in
+                  castTo ~overflow ~loc:e.expr_loc t' typ e'
                  else
                    t', e'
                in
@@ -5235,15 +5256,16 @@ functions"
         in
         finishExp r se e'' t''
 
-    | A.UNARY(A.MINUS, e) ->
+    | A.UNARY(A.MINUS oft, e) ->
         let (r, se, e', t) = doExp local_env asconst e (AExp None) in
         if isIntegralType t then
           let tres = integralPromotion t in
-          let e'' = new_exp ~loc (UnOp(Neg, makeCastT e' t tres, tres)) in
+          let oft = match oft with CHECK -> Check | MODULO -> Modulo in
+          let e'' = new_exp ~loc (UnOp(Neg oft, makeCastT e' t tres, tres)) in
           finishExp r se e'' tres
         else
           if isArithmeticType t then
-            finishExp r se (new_exp ~loc:e'.eloc (UnOp(Neg,e',t))) t
+            finishExp r se (new_exp ~loc:e'.eloc (UnOp(Neg Check,e',t))) t
           else
             Kernel.fatal ~current:true "Unary - on a non-arithmetic type"
 
@@ -5306,7 +5328,7 @@ arguments"
               in
               let res'' =
                 new_exp ~loc
-                  (BinOp(PlusA, res', kinteger ~loc IULong sizeOfLast, tres'))
+                  (BinOp(PlusA Check, res', kinteger ~loc IULong sizeOfLast, tres'))
               in
               let lv = var last in
               let reads =
@@ -5336,7 +5358,7 @@ arguments"
             (* ignore (E.log "ADDROF on %a : %a\n" Cil_printer.pp_exp e'
                Cil_printer.pp_typ t); *)
             match e'.enode with
-            | (Lval x | CastE(_, {enode = Lval x})) ->
+            | (Lval x | CastE(_, _, {enode = Lval x})) ->
                 let reads =
                   match x with
                   | Mem _ ,_ -> r (* we're not really reading the
@@ -5382,7 +5404,7 @@ arguments"
           end
         | _ -> Kernel.fatal ~current:true "Unexpected operand for addrof"
       end
-    | A.UNARY((A.PREINCR|A.PREDECR) as uop, e) -> begin
+    | A.UNARY((A.PREINCR _|A.PREDECR _) as uop, e) -> begin
         match e.expr_node with
           A.COMMA el -> (* GCC extension *)
             doExp local_env asconst
@@ -5404,14 +5426,20 @@ arguments"
         | (A.VARIABLE _ | A.UNARY (A.MEMOF, _) | (* Regular lvalues *)
                A.INDEX _ | A.MEMBEROF _ | A.MEMBEROFPTR _ |
                    A.CAST _ (* A GCC extension *)) -> begin
-            let uop' = if uop = A.PREINCR then PlusA else MinusA in
+            let uop' =
+              match uop with
+              | A.PREINCR CHECK -> PlusA Check
+              | A.PREINCR MODULO -> PlusA Modulo
+              | A.PREDECR MODULO -> MinusA Modulo
+              | _ -> MinusA Check
+            in
             if asconst then
               Kernel.warning ~current:true "PREINCR or PREDECR in constant";
             let (r, se, e', t) = doExp local_env false e (AExp None) in
             let lv =
               match e'.enode with
                 Lval x -> x
-              | CastE (_, {enode = Lval x}) -> x
+              | CastE (_, _, {enode = Lval x}) -> x
                   (* A GCC extension. The operation is
                    * done at the cast type. The result
                    * is also of the cast type *)
@@ -5436,7 +5464,7 @@ arguments"
 	  Kernel.fatal ~current:true "Unexpected operand for prefix -- or ++"
       end
 
-    | A.UNARY((A.POSINCR|A.POSDECR) as uop, e) -> begin
+    | A.UNARY((A.POSINCR _|A.POSDECR _) as uop, e) -> begin
         match e.expr_node with
           A.COMMA el -> (* GCC extension *)
             doExp local_env asconst
@@ -5462,12 +5490,18 @@ arguments"
             if asconst then
               Kernel.warning ~current:true "POSTINCR or POSTDECR in constant";
             (* If we do not drop the result then we must save the value *)
-            let uop' = if uop = A.POSINCR then PlusA else MinusA in
+            let uop' =
+              match uop with
+              | A.POSINCR CHECK -> PlusA Check
+              | A.POSINCR MODULO -> PlusA Modulo
+              | A.POSDECR MODULO -> MinusA Modulo
+              | _ -> MinusA Check
+            in
             let (r,se, e', t) = doExp local_env false e (AExp None) in
             let lv =
               match e'.enode with
                 Lval x -> x
-              | CastE (_, {enode = Lval x}) -> x
+              | CastE (_, _, {enode = Lval x}) -> x
                   (* GCC extension. The addition must
                    * be be done at the cast type. The
                    * result of this is also of the cast
@@ -5487,7 +5521,7 @@ arguments"
                 let descr =
                   Pretty_utils.sfprintf "%a%s"
                     Cil_descriptive_printer.pp_exp  e'
-                    (if uop = A.POSINCR then "++" else "--") in
+                    (if uop = A.POSINCR CHECK || uop = A.POSINCR MODULO then "++" else "--") in
                 let tmp = newTempVar descr true t in
                 ([var tmp],
                  local_var_chunk se' tmp +++
@@ -5611,8 +5645,8 @@ arguments"
           end
         | _ -> Kernel.fatal ~current:true "Invalid left operand for ASSIGN"
       end
-    | A.BINARY((A.ADD|A.SUB|A.MUL|A.DIV|A.MOD|A.BAND|A.BOR|A.XOR|
-                    A.SHL|A.SHR|A.EQ|A.NE|A.LT|A.GT|A.GE|A.LE) as bop,
+    | A.BINARY((A.ADD _|A.SUB _|A.MUL _|A.DIV _|A.MOD|A.BAND|A.BOR|A.XOR|
+                    A.SHL _|A.SHR|A.EQ|A.NE|A.LT|A.GT|A.GE|A.LE) as bop,
                e1, e2) ->
         let se0 = unspecified_chunk empty in
         let bop' = convBinOp bop in
@@ -5625,8 +5659,8 @@ arguments"
         finishExp (r1 @ r2) ((se0 @@ se1) @@ se2) result tresult
 
     (* assignment operators *)
-    | A.BINARY((A.ADD_ASSIGN|A.SUB_ASSIGN|A.MUL_ASSIGN|A.DIV_ASSIGN|
-                    A.MOD_ASSIGN|A.BAND_ASSIGN|A.BOR_ASSIGN|A.SHL_ASSIGN|
+    | A.BINARY((A.ADD_ASSIGN _|A.SUB_ASSIGN _|A.MUL_ASSIGN _|A.DIV_ASSIGN _|
+                    A.MOD_ASSIGN|A.BAND_ASSIGN|A.BOR_ASSIGN|A.SHL_ASSIGN _|
                         A.SHR_ASSIGN|A.XOR_ASSIGN) as bop, e1, e2) -> begin
         let se0 = unspecified_chunk empty in
         match e1.expr_node with
@@ -5653,15 +5687,20 @@ arguments"
             if asconst then
 	      Kernel.warning ~current:true "op_ASSIGN in constant";
             let bop' = match bop with
-              A.ADD_ASSIGN -> PlusA
-            | A.SUB_ASSIGN -> MinusA
-            | A.MUL_ASSIGN -> Mult
-            | A.DIV_ASSIGN -> Div
+              A.ADD_ASSIGN CHECK -> PlusA Check
+            | A.ADD_ASSIGN MODULO -> PlusA Modulo
+            | A.SUB_ASSIGN CHECK -> MinusA Check
+            | A.SUB_ASSIGN MODULO -> MinusA Modulo
+            | A.MUL_ASSIGN CHECK -> Mult Check
+            | A.MUL_ASSIGN MODULO -> Mult Modulo
+            | A.DIV_ASSIGN CHECK -> Div Check
+            | A.DIV_ASSIGN MODULO -> Div Modulo
             | A.MOD_ASSIGN -> Mod
             | A.BAND_ASSIGN -> BAnd
             | A.BOR_ASSIGN -> BOr
             | A.XOR_ASSIGN -> BXor
-            | A.SHL_ASSIGN -> Shiftlt
+            | A.SHL_ASSIGN CHECK -> Shiftlt Check
+            | A.SHL_ASSIGN MODULO -> Shiftlt Modulo
             | A.SHR_ASSIGN -> Shiftrt
             | _ -> Kernel.fatal ~current:true "binary +="
             in
@@ -5669,7 +5708,7 @@ arguments"
             let lv1 =
               match e1'.enode with
                 Lval x -> x
-              | CastE (_, {enode = Lval x}) -> x
+              | CastE (_, _, {enode = Lval x}) -> x
                   (* GCC extension. The operation and
                    * the result are at the cast type  *)
               | _ ->
@@ -5983,7 +6022,7 @@ arguments"
         let prestype: typ ref = ref intType in
 
         let rec dropCasts e = match e.enode with
-          CastE (_, e) -> dropCasts e
+          CastE (_, _, e) -> dropCasts e
         | _ -> e
         in
         (* Get the name of the last formal *)
@@ -6017,6 +6056,7 @@ arguments"
                   pargs := [marker; size;
                             new_exp ~loc
                               (CastE(voidPtrType,
+                                     Check,
                                      new_exp ~loc (AddrOf destlv)))];
                   pis__builtin_va_arg := true;
                 end
@@ -6344,7 +6384,7 @@ arguments"
         | _ when what = ADrop ->
           (* We are not interested by the result, but might want to evaluate
              e2 and e3 if they are dangerous expressions. *)
-          let res = Cil.new_exp ~loc (CastE(Cil.voidType,Cil.zero ~loc)) in
+          let res = Cil.new_exp ~loc (CastE(Cil.voidType, Check, Cil.zero ~loc)) in
           (match e2'o with
             | None when is_dangerous e3' || not (isEmpty se3) ->
               let descr =
@@ -6607,9 +6647,9 @@ and doBinOp loc (bop: binop) (e1: exp) (t1: typ) (e2: exp) (t2: typ) =
           (makeCastT e2 t2 (integralPromotion t2)) t1
   in
   match bop with
-    (Mult|Div) -> doArithmetic ()
+    (Mult _|Div _) -> doArithmetic ()
   | (Mod|BAnd|BOr|BXor) -> doIntegralArithmetic ()
-  | (Shiftlt|Shiftrt) -> (* ISO 6.5.7. Only integral promotions. The result
+  | (Shiftlt _|Shiftrt) -> (* ISO 6.5.7. Only integral promotions. The result
                           * has the same type as the left hand side *)
       if Cil.msvcMode () then
         (* MSVC has a bug. We duplicate it here *)
@@ -6620,20 +6660,20 @@ and doBinOp loc (bop: binop) (e1: exp) (t1: typ) (e2: exp) (t2: typ) =
           t1',
 	 optConstFoldBinOp loc false bop
            (makeCastT e1 t1 t1') (makeCastT e2 t2 t2') t1'
-  | (PlusA|MinusA)
+  | (PlusA _|MinusA _)
       when isArithmeticType t1 && isArithmeticType t2 -> doArithmetic ()
   | (Eq|Ne|Lt|Le|Ge|Gt)
       when isArithmeticType t1 && isArithmeticType t2 ->
       doArithmeticComp ()
-  | PlusA when isPointerType t1 && isIntegralType t2 ->
+  | PlusA _ when isPointerType t1 && isIntegralType t2 ->
       t1, do_shift e1 t1 e2 t2
-  | PlusA when isIntegralType t1 && isPointerType t2 ->
+  | PlusA _ when isIntegralType t1 && isPointerType t2 ->
       t2, do_shift e2 t2 e1 t1
-  | MinusA when isPointerType t1 && isIntegralType t2 ->
+  | MinusA _ when isPointerType t1 && isIntegralType t2 ->
       t1,
       optConstFoldBinOp loc false MinusPI e1
         (makeCastT e2 t2 (integralPromotion t2)) t1
-  | MinusA when isPointerType t1 && isPointerType t2 ->
+  | MinusA _ when isPointerType t1 && isPointerType t2 ->
       let commontype = t1 in
       intType,
       optConstFoldBinOp loc false MinusPP (makeCastT e1 t1 commontype)
@@ -6953,11 +6993,11 @@ and doInit
   let initl1 =
     match initl with
     | (A.NEXT_INIT,
-       A.SINGLE_INIT ({ expr_node = A.CAST ((s, dt), ie)} as e)) :: rest ->
+       A.SINGLE_INIT ({ expr_node = A.CAST ((s, dt, CHECK), ie)} as e)) :: rest ->
         let s', dt', ie' = preprocessCast local_env.is_ghost s dt ie in
         (A.NEXT_INIT,
          A.SINGLE_INIT
-           ({expr_node = A.CAST ((s', dt'), ie'); expr_loc = e.expr_loc}))
+           ({expr_node = A.CAST ((s', dt', CHECK), ie'); expr_loc = e.expr_loc}))
         :: rest
     | _ -> initl
   in
@@ -6967,7 +7007,7 @@ and doInit
     match initl1 with
       (what,
        A.SINGLE_INIT
-         ({expr_node = A.CAST ((specs, dt), A.COMPOUND_INIT ci)})) :: rest ->
+         ({expr_node = A.CAST ((specs, dt, CHECK), A.COMPOUND_INIT ci)})) :: rest ->
         let s', dt', _ie' =
           preprocessCast local_env.is_ghost specs dt (A.COMPOUND_INIT ci) in
         let typ = doOnlyType local_env.is_ghost s' dt' in
@@ -7696,7 +7736,7 @@ and createLocal ghost ((_, sto, _, _) as specs)
           (* Compute the sizeof *)
           let sizeof =
             new_exp ~loc
-              (BinOp(Mult,
+              (BinOp(Mult Check,
                      new_exp ~loc
                        (SizeOfE
                           (new_exp ~loc
@@ -8651,7 +8691,7 @@ and assignInit ~ghost (lv: lval)
                         Extlib.opt_map
                           (fun tlen ->
                             Logic_const.term ~loc
-                              (TBinOp(MinusA,tlen,Logic_const.tinteger ~loc 1))
+                              (TBinOp(MinusA Check,tlen,Logic_const.tinteger ~loc 1))
                               Linteger)
                           tlen
                       in

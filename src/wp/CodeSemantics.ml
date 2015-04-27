@@ -129,9 +129,9 @@ struct
   let exp_unop env typ unop e =
     let v = 
       match Ctypes.object_of typ , unop with
-      | C_int i , Neg -> Cint.iopp i (val_of_exp env e)
+      | C_int i , Neg _ -> Cint.iopp i (val_of_exp env e)
       | C_int i , BNot -> Cint.bnot i (val_of_exp env e)
-      | C_float f , Neg -> Cfloat.fopp f (val_of_exp env e)
+      | C_float f , Neg _ -> Cfloat.fopp f (val_of_exp env e)
       | C_int _ , LNot -> Cvalues.bool_eq (val_of_exp env e) e_zero
       | C_float _ , LNot -> Cvalues.bool_eq (val_of_exp env e) e_zero_real
       | C_pointer _ , LNot -> Cvalues.is_true (M.is_null (loc_of_exp env e))
@@ -170,12 +170,12 @@ struct
     | _ -> assert false
 
   let exp_binop env tr binop e1 e2 = match binop with
-    | PlusA   -> arith env tr Cint.iadd Cfloat.fadd e1 e2
-    | MinusA  -> arith env tr Cint.isub Cfloat.fsub e1 e2
-    | Mult    -> arith env tr Cint.imul Cfloat.fmul e1 e2
-    | Div     -> arith env tr Cint.idiv Cfloat.fdiv e1 e2
+    | PlusA _   -> arith env tr Cint.iadd Cfloat.fadd e1 e2
+    | MinusA _  -> arith env tr Cint.isub Cfloat.fsub e1 e2
+    | Mult _    -> arith env tr Cint.imul Cfloat.fmul e1 e2
+    | Div _     -> arith env tr Cint.idiv Cfloat.fdiv e1 e2
     | Mod     -> arith_int env tr Cint.imod e1 e2
-    | Shiftlt -> arith_int env tr Cint.blsl e1 e2
+    | Shiftlt _ -> arith_int env tr Cint.blsl e1 e2
     | Shiftrt -> arith_int env tr Cint.blsr e1 e2
     | BAnd    -> arith_int env tr Cint.band e1 e2
     | BOr     -> arith_int env tr Cint.bor  e1 e2
@@ -269,11 +269,11 @@ struct
     | AlignOfE _ | AlignOf _
     | SizeOfE _ | SizeOf _ | SizeOfStr _ -> Val (Cvalues.constant_exp e)
 
-    | CastE(tr,e) -> cast tr (Cil.typeOf e) (!s_exp env e)
+    | CastE(tr, _, e) -> cast tr (Cil.typeOf e) (!s_exp env e)
 
   let rec call_node env e = 
     match e.enode with
-    | CastE(_,e) -> call_node env e
+    | CastE(_, _, e) -> call_node env e
     | AddrOf lv | StartOf lv | Lval lv -> lval env lv
     | _ -> Warning.error ~source:"call" "Unsupported function pointer"
 

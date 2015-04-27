@@ -311,11 +311,11 @@ let real_mode = Ival.Float_abstract.Any
 
 let infer_binop_res_type op targ =
   match op with
-    | PlusA | MinusA | Mult | Div -> targ
+    | PlusA _ | MinusA _ | Mult _ | Div _ -> targ
     | PlusPI | MinusPI | IndexPI ->
         assert (Cil.isPointerType targ); targ
     | MinusPP -> Cil.intType
-    | Mod | Shiftlt | Shiftrt | BAnd | BXor | BOr ->
+    | Mod | Shiftlt _ | Shiftrt | BAnd | BXor | BOr ->
         (* can only be applied on integral arguments *)
         assert (Cil.isIntegralType targ); Cil.intType
     | Lt | Gt | Le | Ge | Eq | Ne | LAnd | LOr ->
@@ -475,7 +475,7 @@ let rec eval_term ~with_alarms env t =
     | TUnOp (op, t) ->
         let r = eval_term ~with_alarms env t in
         let typ' = match op with
-          | Neg -> r.etype
+          | Neg _ -> r.etype
           | BNot -> r.etype (* can only be used on an integer type *)
           | LNot -> Cil.intType
         in
@@ -551,7 +551,7 @@ let rec eval_term ~with_alarms env t =
 	etype = Cil.intType;
 	eunder; eover }
 
-    | TCastE (typ, t) ->
+    | TCastE (typ, _, t) ->
         let r = eval_term ~with_alarms env t in
         let conv v =
           let msg fmt =
@@ -751,8 +751,8 @@ and eval_binop ~with_alarms env op t1 t2 =
         | Int_Base.Top -> fun _ _ -> V.bottom
         | Int_Base.Value _ as size -> add_untyped_op size
       end
-      | PlusA -> add_untyped_op (Int_Base.one)
-      | MinusA -> add_untyped_op (Int_Base.minus_one)
+      | PlusA _ -> add_untyped_op (Int_Base.one)
+      | MinusA _ -> add_untyped_op (Int_Base.minus_one)
       | _ -> default
     in
     let eunder = eunder_op r1.eunder r2.eunder in
@@ -957,7 +957,7 @@ let rec eval_term_as_exact_loc ~with_alarms env t =
            type is always a supertype *)
         eval_term_as_exact_loc ~with_alarms env t
 
-    | { term_node = TCastE (ctype, t') } ->
+    | { term_node = TCastE (ctype, _, t') } ->
         pass_logic_cast Not_an_exact_loc (Ctype ctype) t';
         eval_term_as_exact_loc ~with_alarms env t'
 

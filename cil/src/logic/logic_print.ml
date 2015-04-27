@@ -88,18 +88,23 @@ let get_relation_string = function
 
 let get_binop_string = function
     Badd -> "+"
+  | Badd_mod -> "+%"
   | Bsub -> "-"
+  | Bsub_mod -> "-%"
   | Bmul -> "*"
+  | Bmul_mod -> "*%"
   | Bdiv -> "/"
+  | Bdiv_mod -> "/%"
   | Bmod -> "%"
   | Bbw_and -> "&"
   | Bbw_or -> "|"
   | Bbw_xor -> "^"
   | Blshift -> "<<"
+  | Blshift_mod -> "<<%"
   | Brshift -> ">>"
 
 let get_unop_string = function
-    Uminus -> "-" | Ustar -> "*" | Uamp -> "&" | Ubw_not -> "~"
+    Uminus -> "-" | Uminus_mod -> "-%" | Ustar -> "*" | Uamp -> "&" | Ubw_not -> "~"
 
 let getParenthLevel e =
   match e.lexpr_node with
@@ -111,9 +116,9 @@ let getParenthLevel e =
     | PLif _ -> 77
     | PLbinop (_,(Bbw_and | Bbw_or | Bbw_xor),_) -> 75
     | PLrel _ -> 70
-    | PLbinop (_,(Badd|Bsub|Blshift|Brshift),_) -> 60
-    | PLbinop (_,(Bmul|Bdiv|Bmod),_) -> 40
-    | PLunop ((Uamp|Uminus|Ubw_not),_) | PLcast _ | PLnot _ -> 30
+    | PLbinop (_,(Badd|Badd_mod|Bsub|Bsub_mod|Blshift|Blshift_mod|Brshift),_) -> 60
+    | PLbinop (_,(Bmul|Bmul_mod|Bdiv|Bdiv_mod|Bmod),_) -> 40
+    | PLunop ((Uamp|Uminus|Uminus_mod|Ubw_not),_) | PLcast _ | PLcast_mod _ | PLnot _ -> 30
     | PLcoercion _ | PLcoercionE _ -> 25
     | PLunop (Ustar,_) | PLdot _ | PLarrow _ | PLarrget _
     | PLsizeof _ | PLsizeofE _ -> 20
@@ -197,8 +202,8 @@ and print_lexpr_level n fmt e =
           fprintf fmt "\\offset_min%a(@;@[%a@])" print_label_1 l print_lexpr_plain e
       | PLresult -> pp_print_string fmt "\\result"
       | PLnull -> pp_print_string fmt "\\null"
-      | PLcast (t,e) -> fprintf fmt "(@[%a@])@;%a"
-          (print_logic_type None) t print_lexpr e
+      | PLcast (t,e) | PLcast_mod (t, e) as node -> fprintf fmt "(@[%a@]%s)@;%a"
+          (print_logic_type None) t (match node with PLcast_mod _ -> "%" | _ -> "") print_lexpr e
       | PLrange(e1,e2) ->
           fprintf fmt "%a@;..@;%a"
             (pp_opt print_lexpr) e1 (pp_opt print_lexpr) e2

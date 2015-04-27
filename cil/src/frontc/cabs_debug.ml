@@ -277,19 +277,25 @@ and pp_stmt fmt stmt =
 and pp_for_clause fmt = function
     |	FC_EXP exp -> fprintf fmt "@[<hov 2>FC_EXP %a@]" pp_exp exp
     |	FC_DECL def -> fprintf fmt "@[<hov 2>FC_DECL %a@]" pp_def def
-	
-and pp_bin_op fmt = function
-  |	ADD -> fprintf fmt "ADD"
-  |	SUB -> fprintf fmt "SUB"
-  |	MUL -> fprintf fmt "MUL"
-  |	DIV -> fprintf fmt "DIV"
+
+and pp_oft fmt oft =
+  fprintf fmt "%s" @@ match oft with
+  |     CHECK -> "CHECK"
+  |     MODULO -> "MODULO"
+
+and pp_bin_op fmt =
+  function
+  |	ADD oft -> fprintf fmt "ADD %a" pp_oft oft
+  |	SUB oft -> fprintf fmt "SUB %a" pp_oft oft
+  |	MUL oft -> fprintf fmt "MUL %a" pp_oft oft
+  |	DIV oft -> fprintf fmt "DIV %a" pp_oft oft
   |	MOD -> fprintf fmt "MOD"
   |	AND -> fprintf fmt "AND"
   |	OR -> fprintf fmt "OR"
   |	BAND -> fprintf fmt "BAND"
   |	BOR -> fprintf fmt "BOR"
   |	XOR -> fprintf fmt "XOR"
-  |	SHL -> fprintf fmt "SHL"
+  |	SHL oft -> fprintf fmt "SHL %a" pp_oft oft
   |	SHR -> fprintf fmt "SHR"
   |	EQ -> fprintf fmt "EQ"
   |	NE -> fprintf fmt "NE"
@@ -298,28 +304,28 @@ and pp_bin_op fmt = function
   |	LE -> fprintf fmt "LE"
   |	GE -> fprintf fmt "GE"
   |	ASSIGN -> fprintf fmt "ASSIGN"
-  |	ADD_ASSIGN -> fprintf fmt "ADD_ASSIGN"
-  |	SUB_ASSIGN -> fprintf fmt "SUB_ASSIGN"
-  |	MUL_ASSIGN -> fprintf fmt "MUL_ASSIGN"
-  |	DIV_ASSIGN -> fprintf fmt "DIV_ASSIGN"
+  |	ADD_ASSIGN oft -> fprintf fmt "ADD_ASSIGN %a" pp_oft oft
+  |	SUB_ASSIGN oft -> fprintf fmt "SUB_ASSIGN %a" pp_oft oft
+  |	MUL_ASSIGN oft -> fprintf fmt "MUL_ASSIGN %a" pp_oft oft
+  |	DIV_ASSIGN oft -> fprintf fmt "DIV_ASSIGN %a" pp_oft oft
   |	MOD_ASSIGN -> fprintf fmt "MOD_ASSIGN"
   |	BAND_ASSIGN -> fprintf fmt "BAND_ASSIGN"
   |	BOR_ASSIGN -> fprintf fmt "BOR_ASSIGN"
   |	XOR_ASSIGN -> fprintf fmt "XOR_ASSIGN"
-  |	SHL_ASSIGN -> fprintf fmt "SHL_ASSIGN"
+  |	SHL_ASSIGN oft -> fprintf fmt "SHL_ASSIGN %a" pp_oft oft
   |	SHR_ASSIGN -> fprintf fmt "SHR_ASSIGN"
 
 and pp_un_op fmt = function
-  |	MINUS -> fprintf fmt "MINUS"
+  |	MINUS oft -> fprintf fmt "MINUS %a" pp_oft oft
   |	PLUS -> fprintf fmt "PLUS"
   |	NOT -> fprintf fmt "NOT"
   |	BNOT -> fprintf fmt "BNOT"
   |	MEMOF -> fprintf fmt "MEMOF"
   |	ADDROF -> fprintf fmt "ADDROF"
-  |	PREINCR -> fprintf fmt "PREINCR"
-  |	PREDECR -> fprintf fmt "PREDECR"
-  |	POSINCR -> fprintf fmt "POSINCR"
-  |	POSDECR -> fprintf fmt "POSDECR"
+  |	PREINCR oft -> fprintf fmt "PREINCR %a" pp_oft oft
+  |	PREDECR oft -> fprintf fmt "PREDECR %a" pp_oft oft
+  |	POSINCR oft -> fprintf fmt "POSINCR %a" pp_oft oft
+  |	POSDECR oft -> fprintf fmt "POSDECR %a" pp_oft oft
 
 and pp_exp fmt exp =
   fprintf fmt "exp(%a)" pp_exp_node exp.expr_node
@@ -332,8 +338,8 @@ and pp_exp_node fmt = function
       fprintf fmt "@[<hov 2>%a %a %a@]" pp_exp exp1 pp_bin_op bin_op pp_exp exp2
     |	QUESTION (exp1, exp2, exp3) ->
       fprintf fmt "@[<hov 2>QUESTION(%a, %a, %a)@]" pp_exp exp1 pp_exp exp2 pp_exp exp3
-    |	CAST ((spec, decl_type), init_exp) ->
-      fprintf fmt "@[<hov 2>CAST (%a, %a) %a@]" pp_spec spec pp_decl_type decl_type pp_init_exp init_exp
+    |	CAST ((spec, decl_type, oft), init_exp) ->
+      fprintf fmt "@[<hov 2>CAST (%a, %a, %a) %a@]" pp_spec spec pp_decl_type decl_type pp_oft oft pp_init_exp init_exp
     |	CALL (exp1, exps) ->
       fprintf fmt "@[<hov 2>CALL %a {" pp_exp exp1;
       List.iter

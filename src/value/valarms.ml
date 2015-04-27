@@ -142,7 +142,7 @@ let warn_div warn_mode ~addresses =
 	| _,SyNone -> ()
 	| _,(SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
-	| _, (SyBinOp (_, (Div|Mod), _, e) as old_sc) ->
+	| _, (SyBinOp (_, (Div _|Mod), _, e) as old_sc) ->
           (* Extract the relevant part of the syntactic context *)
           set_syntactic_context (SyUnOp e);
           warn_pointer_comparison warn_mode;
@@ -158,7 +158,7 @@ let warn_div warn_mode ~addresses =
 	| _,SyNone -> ()
 	| _,(SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
-	| ki, (SyBinOp (_, (Div|Mod), _, e)) ->
+	| ki, (SyBinOp (_, (Div _|Mod), _, e)) ->
 	  let annot, is_new = 
 	    register_alarm emitter ki (Alarms.Division_by_zero e) 
 	  in
@@ -242,7 +242,7 @@ let warn_shift warn_mode size =
 	| _,SyNone -> ()
 	| _,(SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
-	| ki,SyBinOp (_, (Shiftrt | Shiftlt),_,exp_d) ->
+	| ki,SyBinOp (_, (Shiftrt | Shiftlt _),_,exp_d) ->
 	  let annot, is_new =
 	    register_alarm emitter ki (Alarms.Invalid_shift(exp_d, Some size))
 	  in
@@ -260,7 +260,7 @@ let warn_shift_left_positive warn_mode =
 	| _,SyNone -> ()
 	| _, (SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
-	| ki, SyBinOp (_, (Shiftrt | Shiftlt),exp_l,_) ->
+	| ki, SyBinOp (_, (Shiftrt | Shiftlt _),exp_l,_) ->
 	  let annot, is_new =
 	    register_alarm emitter ki (Alarms.Invalid_shift(exp_l, None))
 	  in

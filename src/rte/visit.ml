@@ -100,12 +100,12 @@ let treat_tlval fa_terms ret_opt origin tlval =
           | AddrOfOrig -> TAddrOf lv
         in
         Cil.ChangeDoChildrenPost(t, fun x -> x)
-      | TCastE(ty,{ term_node = TLval lv | TStartOf lv }) ->
+      | TCastE(ty, _, { term_node = TLval lv | TStartOf lv }) ->
         (match origin with
 	| LvalOrig -> tlet_or_ident()
         | AddrOfOrig when t_offset = TNoOffset ->
           let t = Logic_const.taddrof lv (Cil.typeOfTermLval lv) in
-          Cil.ChangeTo (TCastE(TPtr(ty,[]), t))
+          Cil.ChangeTo (TCastE(TPtr(ty,[]), Check, t))
         | AddrOfOrig  ->
           let lh = TMem nt in
           Cil.ChangeDoChildrenPost (TAddrOf (lh,t_offset),fun x -> x))
@@ -306,7 +306,7 @@ class annot_visitor kf = object (self)
 	let rec keep_it t = match t.term_node with
 	  | TLval _ -> true
 	  | Tat (loc,_) -> keep_it loc
-	  | TCastE (_,te) -> keep_it te
+	  | TCastE (_, _, te) -> keep_it te
           | TLogic_coerce (_,te) -> keep_it te
 	  | Tinter locs
 	  | Tunion locs -> 
@@ -320,7 +320,7 @@ class annot_visitor kf = object (self)
 	in 
 	(* also, discard casts in froms *)
 	let rec transform_term t = match t.term_node with
-	  | TCastE (_,te) -> transform_term te
+	  | TCastE (_, _, te) -> transform_term te
 	  | _ -> t
 	in
 	let nterm =
@@ -643,20 +643,20 @@ class annot_visitor kf = object (self)
   method! vexpr exp =
     Options.debug "considering exp %a\n" Printer.pp_exp exp;
     match exp.enode with
-    | BinOp((Div | Mod) as op, lexp, rexp, ty) ->
+    | BinOp((Div _ | Mod) as op, lexp, rexp, ty) ->
       (match Cil.unrollType ty with 
       | TInt(kind,_) -> 
 	(* add assertion "divisor not zero" *)
 	if self#do_div_mod () then
 	  self#generate_assertion Rte.divmod_assertion rexp;
-	if self#do_signed_overflow () && op = Div && Cil.isSigned kind then 
+	if self#do_signed_overflow () && op = Div Check || op = Div Modulo && Cil.isSigned kind then 
 	  (* treat the special case of signed division overflow
 	     (no signed modulo overflow) *)
 	  self#generate_assertion Rte.signed_div_assertion (exp, lexp, rexp);
 	Cil.DoChildren
       | _ -> Cil.DoChildren)
 
-    | BinOp((Shiftlt | Shiftrt) as op, lexp, rexp,ttype ) ->
+    | BinOp((Shiftlt _ | Shiftrt) as op, lexp, rexp,ttype ) ->
       (match Cil.unrollType ttype with 
       | TInt(kind,_) -> 
 	if self#do_shift () then begin
@@ -671,7 +671,7 @@ class annot_visitor kf = object (self)
 	Cil.DoChildren
       | _ -> Cil.DoChildren)
 
-    | BinOp((PlusA |MinusA | Mult) as op, lexp, rexp, ttype) ->
+    | BinOp((PlusA _ | MinusA _ | Mult _) as op, lexp, rexp, ttype) ->
       (* may be skipped if the enclosing expression is a downcast to a signed
 	 type *)
       (match Cil.unrollType ttype with 
@@ -687,7 +687,7 @@ class annot_visitor kf = object (self)
 	Cil.DoChildren
       | _ -> Cil.DoChildren)
 
-    | UnOp(Neg, exp, ty) ->
+    | UnOp(Neg _, exp, ty) ->
       (* Note: if unary minus on unsigned integer is to be understood as
 	 "subtracting the promoted value from the largest value
 	 of the promoted type and adding one",
@@ -714,7 +714,7 @@ class annot_visitor kf = object (self)
 	  end;
           new_e)
 
-    | CastE (ty, e) ->
+    | CastE (ty, _, e) ->
       (match Cil.unrollType ty, Cil.unrollType (Cil.typeOf e) with 
       | TInt(kind,_), TInt (_, _) ->
         if Cil.isSigned kind then begin

@@ -261,7 +261,7 @@ struct
 
   (* Only integral *)
   let term_unop = function
-    | Neg -> L.map_opp
+    | Neg _ -> L.map_opp
     | BNot -> L.map Cint.l_not
     | LNot -> L.map e_not
 
@@ -384,10 +384,10 @@ struct
 
   let term_binop env binop a b =
     match binop with
-    | PlusA -> arith env L.apply_add (L.apply F.e_add) a b
-    | MinusA -> arith env L.apply_sub (L.apply F.e_sub) a b
-    | Mult -> arith env (L.apply e_mul) (L.apply F.e_mul) a b
-    | Div -> arith env (L.apply e_div) (L.apply F.e_div) a b
+    | PlusA _ -> arith env L.apply_add (L.apply F.e_add) a b
+    | MinusA _ -> arith env L.apply_sub (L.apply F.e_sub) a b
+    | Mult _ -> arith env (L.apply e_mul) (L.apply F.e_mul) a b
+    | Div _ -> arith env (L.apply e_div) (L.apply F.e_div) a b
     | Mod -> L.apply e_mod (C.logic env a) (C.logic env b)
     | PlusPI | IndexPI ->
         let va = C.logic env a in
@@ -404,7 +404,7 @@ struct
         let la = loc_of_term env a in
         let lb = loc_of_term env b in
         Vexp(M.loc_diff (Ctypes.object_of te) la lb)
-    | Shiftlt -> L.apply Cint.l_lsl (C.logic env a) (C.logic env b)
+    | Shiftlt _ -> L.apply Cint.l_lsl (C.logic env a) (C.logic env b)
     | Shiftrt -> L.apply Cint.l_lsr (C.logic env a) (C.logic env b)
     | BAnd -> L.apply Cint.l_and (C.logic env a) (C.logic env b)
     | BXor -> L.apply Cint.l_xor (C.logic env a) (C.logic env b)
@@ -509,12 +509,12 @@ struct
     | TLval lval -> term_lval env lval
     | TAddrOf lval | TStartOf lval -> addr_lval env lval
 
-    | TUnOp(Neg,t) when not (Logic_typing.is_integral_type t.term_type) ->
+    | TUnOp(Neg _,t) when not (Logic_typing.is_integral_type t.term_type) ->
         L.map F.e_opp (C.logic env t)
     | TUnOp(unop,t) -> term_unop unop (C.logic env t)
     | TBinOp(binop,a,b) -> term_binop env binop a b
 
-    | TCastE(ty,t) -> term_cast env ty t
+    | TCastE(ty, _, t) -> term_cast env ty t
 
     | Tapp(f,ls,ts) ->
         begin
@@ -756,7 +756,7 @@ struct
         Warning.error "Complex let-binding not implemented yet (%a)"
           Printer.pp_term t
 
-    | TCastE(_,t) -> C.region env t
+    | TCastE(_, _, t) -> C.region env t
     | TLogic_coerce(_,t) -> C.region env t
 
     | TBinOp _ | TUnOp _ | Trange _ | TUpdate _ | Tapp _ | Tif _
