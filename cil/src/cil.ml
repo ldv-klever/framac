@@ -6696,7 +6696,7 @@ let mkCastTLoc ?(force=false) ?(overflow=Check) ~(e: exp) ?(loc=e.eloc) ~(oldt: 
     match unrollType newt, e.enode with
     (* In the case were we have a representation for the literal,
        explicitly add the cast. *)
-    | TInt(newik, []), Const(CInt64(i, _, None)) -> 
+    | TInt(newik, []), Const(CInt64(i, _, None)) when overflow = Check -> 
       kinteger64 ~loc ~kind:newik i
     | TPtr _, CastE (_, _, e') ->
       (match unrollType (typeOf e') with
