@@ -448,9 +448,7 @@ and endline = parse
 {
   let copy_lexbuf dest_lexbuf src_loc =
     update_file_loc dest_lexbuf src_loc.pos_fname;
-    update_line_loc dest_lexbuf src_loc.pos_lnum true 0;
-    let bol = src_loc.Lexing.pos_cnum - src_loc.Lexing.pos_bol in
-    update_bol_loc dest_lexbuf (-bol)
+    update_line_loc dest_lexbuf src_loc.pos_lnum true 0
 
   let start_pos lexbuf =
     let pos = lexeme_start_p lexbuf in
