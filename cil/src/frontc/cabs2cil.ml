@@ -4327,10 +4327,6 @@ and doType (ghost:bool) isFuncArg
               if Integer.lt i Integer.zero then begin
                 Kernel.error ~once:true ~current:true "Length of array is negative";
                 Some len'
-              end else if Integer.equal i Integer.zero then begin
-                Kernel.warning ~once:true ~source:(fst len'.eloc)
-                  "Length of array is zero. Using this extension is discouraged in favour of C99 flexible arrays ([])";
-                None
               end else
                 Some len'
             | _ ->
