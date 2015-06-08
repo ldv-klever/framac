@@ -125,6 +125,7 @@
         "loop", LOOP, false;
         "model", MODEL, false;(* ACSL extension for model fields *)
         "module", MODULE, false;(* ACSL extension for external spec file *)
+        "offsetof", OFFSETOF, true;
         "pragma", PRAGMA, false;
         "predicate", PREDICATE, false;
         "reads", READS, false;

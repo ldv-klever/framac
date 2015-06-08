@@ -102,6 +102,7 @@ and lexpr_node =
   | PLrange of lexpr option * lexpr option (** interval of integers. *)
   | PLsizeof of logic_type (** sizeof a type. *)
   | PLsizeofE of lexpr (** sizeof the type of an expression. *)
+  | PLoffsetof of logic_type * string (** offset of a composite type member. *)
   | PLcoercion of lexpr * logic_type
       (** coercion of an expression in a given type. *)
   | PLcoercionE of lexpr * lexpr

@@ -254,7 +254,7 @@
 %token LTCOLON COLONGT TYPE BEHAVIOR BEHAVIORS ASSUMES COMPLETE DISJOINT
 %token TERMINATES
 %token BIFF BIMPLIES HAT HATHAT PIPE TILDE GTGT LTLT LTLT_MOD
-%token SIZEOF LAMBDA LET
+%token SIZEOF OFFSETOF LAMBDA LET
 %token TYPEOF BSTYPE
 %token WITH CONST
 %token INITIALIZED DANGLING
@@ -510,6 +510,7 @@ lexpr_inner:
 | AMP   lexpr_inner %prec prec_unary_op { info (PLunop (Uamp, $2)) }
 | SIZEOF LPAR lexpr RPAR { info (PLsizeofE $3) }
 | SIZEOF LPAR logic_type RPAR { info (PLsizeof $3) }
+| OFFSETOF LPAR type_spec COMMA identifier RPAR { info (PLoffsetof ($3, $5)) }
 | OLD LPAR lexpr RPAR { info (PLold $3) }
 | AT LPAR lexpr COMMA label_name RPAR { info (PLat ($3, $5)) }
 | RESULT { info PLresult }
@@ -1778,6 +1779,7 @@ c_keyword:
 | SHORT { "short" }
 | SIGNED { "signed" }
 | SIZEOF { "sizeof" }
+| OFFSETOF { "offsetof" }
 | STATIC { "static" }
 | STRUCT { "struct" }
 | UNION { "union" }

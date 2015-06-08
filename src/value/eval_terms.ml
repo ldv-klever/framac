@@ -598,7 +598,7 @@ let rec eval_term ~with_alarms env t =
               assert false (* a logic alarm would have been raised*)
         )
 
-    | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TAlignOf _ | TAlignOfE _ ->
+    | TSizeOf _ | TOffsetOf _ | TSizeOfE _ | TSizeOfStr _ | TAlignOf _ | TAlignOfE _ ->
         let e = Cil.constFoldTerm true t in
         let v = match e.term_node with
           | TConst (Integer (v, _)) -> Cvalue.V.inject_int v

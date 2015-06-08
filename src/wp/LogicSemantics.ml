@@ -503,7 +503,7 @@ struct
   let rec term_node (env:env) t =
     match t.term_node with
     | TConst c -> Vexp (Cvalues.logic_constant c)
-    | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TAlignOf _ | TAlignOfE _ ->
+    | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TOffsetOf _ | TAlignOf _ | TAlignOfE _ ->
         Vexp (Cvalues.constant_term t)
 
     | TLval lval -> term_lval env lval
@@ -762,7 +762,7 @@ struct
     | TBinOp _ | TUnOp _ | Trange _ | TUpdate _ | Tapp _ | Tif _
     | TConst _ | Tnull | TDataCons _ | Tlambda _
     | Ttype _ | Ttypeof _
-    | TAlignOfE _ | TAlignOf _ | TSizeOfStr _ | TSizeOfE _ | TSizeOf _
+    | TAlignOfE _ | TAlignOf _ | TSizeOfStr _ | TSizeOfE _ | TSizeOf _ | TOffsetOf _
     | Tblock_length _ | Tbase_addr _ | Toffset _ | TAddrOf _ 
       -> Wp_parameters.abort ~current:true 
            "Non-assignable term (%a)" Printer.pp_term t

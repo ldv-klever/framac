@@ -889,7 +889,7 @@ struct
   let mk_at_here idx =
     let rec needs_at idx =
       match idx.term_node with
-        | TConst _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _
+        | TConst _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TOffsetOf _
         | TAlignOf _ | TAlignOfE _ | Tat _ | Ttypeof _ | Ttype _
         | Tempty_set | Tbase_addr _ | Toffset _ | Toffset_max _ | Toffset_min _
         | Tblock_length _ | Tnull
@@ -1831,7 +1831,7 @@ struct
       | TLval(TVar v, TNoOffset) ->
         known_vars, kont (eta_expand term.term_loc term.term_name env v)
       | TConst _ | TLval _ | TSizeOf _ | TSizeOfE _
-      | TSizeOfStr _ | TAlignOf _ | TAlignOfE _
+      | TSizeOfStr _ | TOffsetOf _ | TAlignOf _ | TAlignOfE _
       | TUnOp _ | TBinOp _ | TCastE _ | TAddrOf _ | TStartOf _
       | Tapp _  | TDataCons _ | Tbase_addr _ | Toffset _ | Toffset_max _ | Toffset_min _
       | Tblock_length _ | Tnull | TCoerce _ | TCoerceE _
@@ -2121,6 +2121,24 @@ struct
           (match typ with
             | Ctype _ -> TSizeOfE t, Linteger
             | _ -> error loc "sizeof can only handle C types")
+      | PLoffsetof (lt, member) ->
+	  (match
+              Logic_utils.unroll_type ~unroll_typedef:false
+                (logic_type loc env lt)
+           with
+             | Ctype ct when isStructOrUnionType ct ->
+               (match unrollType ct with
+                  | TComp (ci, _, _) ->
+                    (try
+                       let fi = getCompField ci member in
+                       TOffsetOf fi, Linteger
+                     with
+                       | Not_found ->
+                         error loc "there is no member `%s' in %s" member (compFullName ci))
+                  | t ->
+                    error loc "%a is not a structure or union type (but %a)"
+                      Cil_printer.pp_typ ct Cil_printer.pp_typ t)
+             | _ -> error loc "offsetof can only handle C types")
       | PLnamed _ -> assert false (* should be captured by term *)
       | PLconstant (IntConstant s) ->
           begin match (parseInt loc s).term_node with
@@ -3100,7 +3118,7 @@ struct
       | PLcast _ | PLcast_mod _ | PLblock_length _ | PLbase_addr _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
       | PLarrget _ | PLarrow _
       | PLdot _ | PLbinop _ | PLunop _ | PLconstant _
-      | PLnull | PLresult | PLcoercion _ | PLcoercionE _ | PLsizeof _
+      | PLnull | PLresult | PLcoercion _ | PLcoercionE _ | PLsizeof _ | PLoffsetof _
       | PLsizeofE _ | PLlambda _
       | PLupdate _ | PLinitIndex _ | PLinitField _
       | PLtypeof _ | PLtype _ -> boolean_to_predicate env p0

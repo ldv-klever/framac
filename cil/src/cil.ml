@@ -2210,6 +2210,9 @@ and childrenTermNode vis tn =
     | TSizeOfE t ->
         let t' = vTerm t in if  t' != t then TSizeOfE t' else tn
     | TSizeOfStr _ -> tn
+    | TOffsetOf fi ->
+       let fi' = vis#behavior.get_fieldinfo fi in
+         if fi != fi' then TOffsetOf fi' else tn
     | TAlignOf t ->
         let t' = vTyp t in if t' != t then TAlignOf t' else tn
     | TAlignOfE t ->
@@ -7289,7 +7292,7 @@ let extract_varinfos_from_lval vlval =
 
 let rec free_vars_term bound_vars t = match t.term_node with
   | TConst _   | TSizeOf _
-  | TSizeOfStr _ | TAlignOf _
+  | TSizeOfStr _ | TOffsetOf _ | TAlignOf _
   | Tnull
   | Ttype _ -> Logic_var.Set.empty
   | TLval lv

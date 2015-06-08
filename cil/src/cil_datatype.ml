@@ -82,36 +82,37 @@ let rank_term = function
   | TSizeOf _ -> 2
   | TSizeOfE _ -> 3
   | TSizeOfStr _ -> 4
-  | TAlignOf _ -> 5
-  | TAlignOfE _ -> 6
-  | TUnOp _ -> 7
-  | TBinOp _ -> 8
-  | TCastE _ -> 9
-  | TAddrOf _ -> 10
-  | TStartOf _ -> 11
-  | Tapp _ -> 12
-  | Tlambda _ -> 13
-  | TDataCons _ -> 14
-  | Tif _ -> 15
-  | Tat _ -> 16
-  | Tbase_addr _ -> 17
-  | Tblock_length _ -> 18
-  | Tnull -> 19
-  | TCoerce _ -> 20
-  | TCoerceE _ -> 21
-  | TUpdate _ -> 22
-  | Ttypeof _ -> 23
-  | Ttype _ -> 24
-  | Tempty_set -> 25
-  | Tunion _ -> 26
-  | Tinter _ -> 27
-  | Trange _ -> 28
-  | Tlet _ -> 29
-  | Tcomprehension _ -> 30
-  | Toffset _ -> 31
-  | Toffset_max _ -> 32
-  | Toffset_min _ -> 33
-  | TLogic_coerce _ -> 34
+  | TOffsetOf _ -> 5
+  | TAlignOf _ -> 6
+  | TAlignOfE _ -> 7
+  | TUnOp _ -> 8
+  | TBinOp _ -> 9
+  | TCastE _ -> 10
+  | TAddrOf _ -> 11
+  | TStartOf _ -> 12
+  | Tapp _ -> 13
+  | Tlambda _ -> 14
+  | TDataCons _ -> 15
+  | Tif _ -> 16
+  | Tat _ -> 17
+  | Tbase_addr _ -> 18
+  | Tblock_length _ -> 19
+  | Tnull -> 20
+  | TCoerce _ -> 21
+  | TCoerceE _ -> 22
+  | TUpdate _ -> 23
+  | Ttypeof _ -> 24
+  | Ttype _ -> 25
+  | Tempty_set -> 26
+  | Tunion _ -> 27
+  | Tinter _ -> 28
+  | Trange _ -> 29
+  | Tlet _ -> 30
+  | Tcomprehension _ -> 31
+  | Toffset _ -> 32
+  | Toffset_max _ -> 33
+  | Toffset_min _ -> 34
+  | TLogic_coerce _ -> 35
 
 
 (**************************************************************************)
@@ -1384,6 +1385,7 @@ let rec compare_term t1 t2 =
     | TStartOf lv1 , TStartOf lv2 -> compare_tlval lv1 lv2
     | TSizeOf ty1 , TSizeOf ty2
     | TAlignOf ty1 , TAlignOf ty2 -> Typ.compare ty1 ty2
+    | TOffsetOf fi1, TOffsetOf fi2 -> Fieldinfo.compare fi1 fi2
     | TSizeOfE t1 , TSizeOfE t2
     | TAlignOfE t1 , TAlignOfE t2 -> compare_term t1 t2
     | TSizeOfStr s1 , TSizeOfStr s2 -> String.compare s1 s2
@@ -1452,7 +1454,7 @@ let rec compare_term t1 t2 =
         let ct = Logic_type.compare ty1 ty2 in
         if ct <> 0 then ct
         else compare_term e1 e2
-    | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TAlignOf _
+    | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TOffsetOf _ | TAlignOf _
       | TAlignOfE _ | TUnOp _ | TBinOp _ | TCastE _ | TAddrOf _ | TStartOf _
       | Tapp _ | Tlambda _ | TDataCons _ | Tif _ | Tat _
       | Tbase_addr _ | Tblock_length _ | Toffset _ | Toffset_max _ | Toffset_min _
@@ -1541,6 +1543,7 @@ let rec hash_term (acc,depth,tot) t =
       | TSizeOf t -> (acc + 38 + Typ.hash t, tot - 1)
       | TSizeOfE t -> hash_term (acc+57,depth -1, tot-1) t
       | TSizeOfStr s -> (acc + 76 + Hashtbl.hash s, tot - 1)
+      | TOffsetOf fi -> (acc + 97 + Fieldinfo.hash fi, tot - 1)
       | TAlignOf t -> (acc + 95 + Typ.hash t, tot - 1)
       | TAlignOfE t -> hash_term (acc+114,depth-1,tot-1) t
       | TUnOp(op,t) -> hash_term (acc+133+Hashtbl.hash op,depth-1,tot-2) t

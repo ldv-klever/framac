@@ -602,6 +602,7 @@ let rec is_same_term t1 t2 =
     | TSizeOf t1, TSizeOf t2 -> Cil_datatype.TypByName.equal t1 t2
     | TSizeOfE t1, TSizeOfE t2 -> is_same_term t1 t2
     | TSizeOfStr s1, TSizeOfStr s2 -> s1 = s2
+    | TOffsetOf fi1, TOffsetOf fi2 -> Cil_datatype.Fieldinfo.equal fi1 fi2
     | TAlignOf t1, TAlignOf t2 -> Cil_datatype.TypByName.equal t1 t2
     | TAlignOfE t1, TAlignOfE t2 -> is_same_term t1 t2
     | TUnOp (o1,t1), TUnOp(o2,t2) -> o1 = o2 && is_same_term t1 t2
@@ -654,7 +655,7 @@ let rec is_same_term t1 t2 =
         is_same_logic_info d1 d2 && is_same_term b1 b2
     | TLogic_coerce(ty1,t1), TLogic_coerce(ty2,t2) ->
         is_same_type ty1 ty2 && is_same_term t1 t2
-    | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _
+    | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TOffsetOf _
       | TAlignOf _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TCastE _
       | TAddrOf _ | TStartOf _ | Tapp _ | Tlambda _ | TDataCons _
       | Tif _ | Tat _ | Tbase_addr _ | Tblock_length _
@@ -1035,6 +1036,7 @@ and is_same_lexpr l1 l2 =
     | PLrange(l1,h1), PLrange(l2,h2) ->
       is_same_opt is_same_lexpr l1 l2 && is_same_opt is_same_lexpr h1 h2
     | PLsizeof t1, PLsizeof t2 -> is_same_pl_type t1 t2
+    | PLoffsetof (t1, m1), PLoffsetof (t2, m2) -> is_same_pl_type t1 t2 && m1 = m2
     | PLsizeofE e1,PLsizeofE e2 | PLtypeof e1,PLtypeof e2-> is_same_lexpr e1 e2
     | PLcoercionE (b1,t1), PLcoercionE(b2,t2)
     | PLsubtype(b1,t1), PLsubtype(b2,t2) ->
@@ -1087,7 +1089,7 @@ and is_same_lexpr l1 l2 =
       | PLbinop _ | PLdot _ | PLarrow _ | PLarrget _ | PLold _ | PLat _
       | PLbase_addr _ | PLblock_length _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
       | PLresult | PLnull | PLcast _ | PLcast_mod _
-      | PLrange _ | PLsizeof _ | PLsizeofE _ | PLtypeof _ | PLcoercion _
+      | PLrange _ | PLsizeof _ | PLsizeofE _ | PLoffsetof _ | PLtypeof _ | PLcoercion _
       | PLcoercionE _ | PLupdate _ | PLinitIndex _ | PLtype _ | PLfalse
       | PLtrue | PLinitField _ | PLrel _ | PLand _ | PLor _ | PLxor _
       | PLimplies _ | PLiff _ | PLnot _ | PLif _ | PLforall _
@@ -1115,6 +1117,7 @@ let rec hash_term (acc,depth,tot) t =
       | TSizeOfStr s -> (acc + 76 + Hashtbl.hash s, tot - 1)
       | TAlignOf t -> (acc + 95 + Cil_datatype.TypByName.hash t, tot - 1)
       | TAlignOfE t -> hash_term (acc+114,depth-1,tot-1) t
+      | TOffsetOf fi -> (acc + 97 + Cil_datatype.Fieldinfo.hash fi, tot - 1)
       | TUnOp(op,t) -> hash_term (acc+133+Hashtbl.hash op,depth-1,tot-2) t
       | TBinOp(bop,t1,t2) ->
         let hash1,tot1 = 
@@ -1267,6 +1270,9 @@ let rec compare_term t1 t2 =
   | TSizeOfStr s1, TSizeOfStr s2 -> String.compare s1 s2
   | TSizeOfStr _, _ -> 1
   | _, TSizeOfStr _ -> -1
+  | TOffsetOf fi1, TOffsetOf fi2 -> Cil_datatype.Fieldinfo.compare fi1 fi2
+  | TOffsetOf _, _ -> 1
+  | _, TOffsetOf _ -> -1
   | TAlignOf t1, TAlignOf t2 -> Cil_datatype.TypByName.compare t1 t2
   | TAlignOf _, _ -> 1
   | _, TAlignOf _ -> -1
@@ -1978,6 +1984,21 @@ let rec constFoldTermToInt ?(machdep=true) (e: term) : Integer.t option =
     | _ -> None
   end
   | TSizeOfStr s -> Some (Integer.of_int (1 + String.length s))
+  | TOffsetOf fi ->
+    let loc = e.term_loc in
+    (* This relays the actual computation to the Cil module to ensure the same code is used to compute the offset *)
+    Cil.(match constFold true @@
+           new_exp ~loc @@
+           CastE (theMachine.typeOfSizeOf,
+                  Check,
+	          new_exp
+                    ~loc @@
+                    AddrOf (Mem (new_exp ~loc @@
+                                 CastE (TPtr (TComp (fi.fcomp, empty_size_cache (), []), []), Check, zero ~loc)),
+                                 Field (fi, NoOffset)))
+         with
+         | { enode = Const (CInt64(i , _,  _)) } -> Some i
+         | _ -> None)
   | TAlignOf t -> begin
     try Some (Integer.of_int (Cil.bytesAlignOf t))
     with Cil.SizeOfError _ -> None

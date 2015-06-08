@@ -556,7 +556,8 @@ let funcall (ef:Cil_types.exp) (es:Cil_types.exp list) =
 let rec term (context:Context.t) (t:term) =
   match t.term_node with
   | TConst _ 
-  | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ 
+  | TSizeOf _ | TSizeOfE _ | TSizeOfStr _
+  | TOffsetOf _
   | TAlignOf _ | TAlignOfE _ -> ()
   | TUnOp((Neg _|BNot|LNot),t) -> 
       term Context.epsilon t

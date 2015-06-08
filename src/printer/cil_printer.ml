@@ -227,6 +227,7 @@ module Precedence = struct
    | TLval(TResult _,(TField _|TIndex _|TModel _)) -> indexLevel
    | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ -> 20
    | TAlignOf _ | TAlignOfE _ -> 20
+   | TOffsetOf _ -> 20
    (* VP: I'm not sure I understand why sizeof(x) and f(x) should
       have a separated treatment wrt parentheses. *)
    (* application and applications-like constructions *)
@@ -2113,6 +2114,8 @@ the arguments."
     | TSizeOf t -> fprintf fmt "sizeof(%a)" (self#typ None) t
     | TSizeOfE e -> fprintf fmt "sizeof(%a)" self#term e
     | TSizeOfStr s -> fprintf fmt "sizeof(%S)" s
+    | TOffsetOf fi ->
+      fprintf fmt "offsetof(%a,@ %s)" (self#typ None) (TComp (fi.fcomp, { scache = Not_Computed }, [])) fi.fname
     | TAlignOf e -> fprintf fmt "alignof(%a)" (self#typ None) e
     | TAlignOfE e -> fprintf fmt "alignof(%a)" self#term e
     | TUnOp (op,e) -> fprintf fmt "%a%a"

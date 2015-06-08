@@ -1286,6 +1286,7 @@ and term_node =
   | TSizeOf of typ (** size of a given C type. *)
   | TSizeOfE of term (** size of the type of an expression. *)
   | TSizeOfStr of string (** size of a string constant. *)
+  | TOffsetOf of fieldinfo (** offset of a composite type member *)
   | TAlignOf of typ (** alignment of a type. *)
   | TAlignOfE of term (** alignment of the type of an expression. *)
   | TUnOp of unop * term (** unary operator. *)

@@ -230,6 +230,15 @@ and loc_to_exp ~result {term_node = lnode ; term_type = ltype; term_loc = loc} =
         (fun x -> new_exp ~loc (CastE (typ, oft, x))) (loc_to_exp ~result lexp)
   | TAlignOf typ -> [new_exp ~loc (AlignOf typ)]
   | TSizeOf typ -> [new_exp ~loc (SizeOf typ)]
+  | TOffsetOf fi ->
+    [new_exp ~loc @@
+     CastE (theMachine.typeOfSizeOf,
+            Check,
+	    new_exp
+              ~loc @@
+              AddrOf (Mem (new_exp ~loc @@
+                           CastE (TPtr (TComp (fi.fcomp, empty_size_cache (), []), []), Check, zero ~loc)),
+                           Field (fi, NoOffset)))]
   | Trange (Some low, Some high) ->
       let low = singleton (loc_to_exp ~result) low in
       let high = singleton (loc_to_exp ~result) high in
@@ -285,7 +294,7 @@ let rec loc_to_lval ~result t =
     loc_to_lval ~result t
   | Tinter _ -> error_lval() (* TODO *)
   | Tcomprehension _ -> error_lval()
-  | TSizeOfE _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TSizeOfStr _
+  | TSizeOfE _ | TOffsetOf _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TSizeOfStr _
   | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | Tapp _ | Tif _
   | Tat _ | Toffset _ | Toffset_max _ | Toffset_min _
   | Tbase_addr _ | Tblock_length _ | Tnull | Trange _
@@ -310,7 +319,7 @@ let loc_to_offset ~result loc =
       | Tempty_set -> h,[]
       | Trange _ | TAddrOf _
       | TSizeOfE _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TSizeOfStr _
-      | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | Tapp _ | Tif _
+      | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | TOffsetOf _ | Tapp _ | Tif _
       | Tat _ | Toffset _ | Toffset_max _ | Toffset_min _
       | Tbase_addr _ | Tblock_length _ | Tnull
       | TCoerce _ | TCoerceE _ | TDataCons _ | TUpdate _ | Tlambda _

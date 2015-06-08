@@ -122,6 +122,7 @@ let getParenthLevel e =
     | PLcoercion _ | PLcoercionE _ -> 25
     | PLunop (Ustar,_) | PLdot _ | PLarrow _ | PLarrget _
     | PLsizeof _ | PLsizeofE _ -> 20
+    | PLoffsetof _ -> 20
     | PLapp _ | PLold _ | PLat _ 
     | PLoffset _ | PLoffset_max _ | PLoffset_min _ | PLbase_addr _ | PLblock_length _
     | PLupdate _  | PLinitField _ | PLinitIndex _
@@ -209,6 +210,7 @@ and print_lexpr_level n fmt e =
             (pp_opt print_lexpr) e1 (pp_opt print_lexpr) e2
       | PLsizeof t -> fprintf fmt "sizeof(@;@[%a@]@;)" (print_logic_type None) t
       | PLsizeofE e -> fprintf fmt "sizeof(@;@[%a@]@;)" print_lexpr_plain e
+      | PLoffsetof (lt, s) -> fprintf fmt "offsetof(@;@[%a@]@;,@;%s)" (print_logic_type None) lt s
       | PLcoercion(e,t) ->
           fprintf fmt "%a@ :>@ %a" print_lexpr e (print_logic_type None) t
       | PLcoercionE(e1,e2) ->
