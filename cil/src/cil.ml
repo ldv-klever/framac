@@ -6157,6 +6157,11 @@ let need_cast ?(force=false) oldt newt =
      (try integer_lconstant (bytesSizeOf typ)
       with SizeOfError _ -> t)
    | TSizeOfStr str -> integer_lconstant (String.length str + 1)
+   | TOffsetOf fi as t ->
+     (match bitsOffset (TComp (fi.fcomp, empty_size_cache (), [])) @@ Field (fi, NoOffset) with
+      | n, _ when n mod 8 = 0 -> integer_lconstant (n / 8)
+      | _ -> t
+      | exception SizeOfError _ -> t)
    | TAlignOf typ -> integer_lconstant (bytesAlignOf typ)
    | TSizeOfE { term_type= Ctype typ } -> constFoldTermNodeAtTop (TSizeOf typ)
    | TAlignOfE { term_type= Ctype typ }
