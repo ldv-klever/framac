@@ -28,7 +28,7 @@
   let preprocess_buffer = Buffer.create 1024
   let output_buffer = Buffer.create 1024
   let beg_of_line = Buffer.create 8
-  let blacklisted_macros = [ "__STDC__"; "__STDC_HOSTED__"; "assert"]
+  let blacklisted_macros = [ "__STDC__"; "__STDC_HOSTED__"; "assert"; "offsetof"]
   let is_newline = ref CHAR
   let curr_file = ref ""
   let curr_line = ref 1
