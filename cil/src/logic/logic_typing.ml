@@ -2122,22 +2122,31 @@ struct
             | Ctype _ -> TSizeOfE t, Linteger
             | _ -> error loc "sizeof can only handle C types")
       | PLoffsetof (lt, member) ->
-	  (match
-              Logic_utils.unroll_type ~unroll_typedef:false
-                (logic_type loc env lt)
-           with
+	  (match Logic_utils.unroll_type ~unroll_typedef:false (logic_type loc env lt) with
              | Ctype ct when isStructOrUnionType ct ->
                (match unrollType ct with
-                  | TComp (ci, _, _) ->
-                    (try
-                       let fi = getCompField ci member in
-                       TOffsetOf fi, Linteger
-                     with
-                       | Not_found ->
-                         error loc "there is no member `%s' in %s" member (compFullName ci))
-                  | t ->
-                    error loc "%a is not a structure or union type (but %a)"
-                      Cil_printer.pp_typ ct Cil_printer.pp_typ t)
+                | TComp (ci, _, _) ->
+                  let rec loop =
+                    function
+                    | Field (fi, NoOffset) when fi.fcomp.cstruct ->
+                      TOffsetOf fi, Linteger
+                    | Field (fi, off) when fi.fcomp.cstruct ->
+                      let term t = Logic_const.term ~loc t Linteger in
+                      TBinOp (PlusA Check, term (TOffsetOf fi), term (fst @@ loop off)),
+                      Linteger
+                    | Field (_, off) ->
+                      loop off
+                    | NoOffset -> TConst (Integer (Integer.zero, None)), Linteger
+                    | Index _ -> assert false
+                  in
+                  begin match C.find_comp_field ci member with
+                    | off -> loop off
+                    | exception Not_found ->
+                      error loc "there is no field `%s' in %s" member (compFullName ci)
+                  end
+                | t ->
+                  error loc "%a is not a structure or union type (but %a)"
+                    Cil_printer.pp_typ ct Cil_printer.pp_typ t)
              | _ -> error loc "offsetof can only handle C types")
       | PLnamed _ -> assert false (* should be captured by term *)
       | PLconstant (IntConstant s) ->
