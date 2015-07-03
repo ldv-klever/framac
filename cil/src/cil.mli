@@ -515,7 +515,7 @@ val mkCompInfo: bool ->      (* whether it is a struct or a union *)
                attributes -> compinfo
 
 (** Makes a shallow copy of a {!Cil_types.compinfo} changing the name and the key.*)
-val copyCompInfo: compinfo -> string -> compinfo
+val copyCompInfo: bool -> compinfo -> string -> compinfo
 
 (** This is a constant used as the name of an unnamed bitfield. These fields
     do not participate in initialization and their name is not printed. *)

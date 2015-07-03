@@ -788,8 +788,8 @@ let is_empty_behavior b =
    comp
 
  (** Make a copy of a compinfo, changing the name and the key *)
- let copyCompInfo (ci: compinfo) (n: string) : compinfo =
-   let ci' = {ci with cname = n; ckey = nextCompinfoKey (); } in
+ let copyCompInfo (refresh : bool) (ci: compinfo) (n: string) : compinfo =
+   let ci' = {ci with cname = n; ckey = if refresh then nextCompinfoKey () else ci.ckey; } in
    (* Copy the fields and set the new pointers to parents *)
    ci'.cfields <- List.map (fun f -> {f with fcomp = ci'}) ci'.cfields;
    ci'
@@ -1342,7 +1342,7 @@ let copy_visit_gen fresh prj =
     try Cil_datatype.Compinfo.Hashtbl.find compinfos c
     with Not_found ->
       let new_c =
-        if fresh then copyCompInfo c c.cname else { c with ckey = c.ckey }
+        copyCompInfo fresh c c.cname
       in
       temp_set_compinfo c new_c; temp_set_orig_compinfo new_c c; new_c
   in
