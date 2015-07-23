@@ -5003,13 +5003,24 @@ and sizeOf ~loc t =
 	 let bitsbt = bitsSizeOf bt in
 	 loopOff bt bitsbt (start + ei * bitsbt) off
        end
-     | Field(f, off) when not f.fcomp.cstruct (* union *) ->
+     | Field(fi, off) when not fi.fcomp.cstruct (* union *) ->
          if check_invariants then
            assert (match unrollType baset with
-                     | TComp (ci, _, _) -> ci == f.fcomp
+                     | TComp (ci, _, _) -> ci == fi.fcomp
                      | _ -> false);
+         let offsetAcc =
+           offsetOfFieldAcc
+             ?last:None
+             ~fi
+             ~sofar:{
+               oaFirstFree = 0;
+	       oaLastFieldStart = 0;
+	       oaLastFieldWidth = 0;
+	       oaPrevBitPack = None;
+	     }
+         in
 	 (* All union fields start at offset 0 *)
-	 loopOff f.ftype (bitsSizeOf f.ftype) start off
+	 loopOff fi.ftype offsetAcc.oaLastFieldWidth start off
 
      | Field(f, off) (* struct *) ->
          if check_invariants then
