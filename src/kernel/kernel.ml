@@ -647,7 +647,7 @@ module Machdep =
     (struct
        let module_name = "Machdep"
        let option_name = "-machdep"
-       let default = "x86_32"
+       let default = "gcc_x86_64"
        let arg_name = "machine"
        let help =
          "use <machine> as the current machine dependent configuration. \
