@@ -9329,6 +9329,7 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   IH.clear noProtoFunctions;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
+  H.clear typeInfoNameEnv;
   begin match stage with
   | `Names | `Types _ -> ()
   | `Bodies (fname, _) ->
@@ -9387,6 +9388,7 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   end;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
+  H.clear typeInfoNameEnv;
   cleanup_isomorphicStructs ();
   H.clear staticLocals;
   H.clear typedefs;
