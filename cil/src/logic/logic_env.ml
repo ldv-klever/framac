@@ -351,95 +351,114 @@ let save_tables filename =
     Kernel.fatal ~current:true
       "The forward declarations from file `%s' have already been saved" filename
 
-let prepare_tables ?(stage=`Names) () =
-  Logic_ctor_info.clear ();
-  Logic_type_info.clear ();
-  Logic_info.clear ();
-  Lemmas.clear ();
-  Model_info.clear ();
-  Logic_type_builtin.iter Logic_type_info.add;
-  Logic_ctor_builtin.iter Logic_ctor_info.add;
-  Logic_builtin_used.iter (fun x -> Logic_info.add x.l_var_info.lv_name x);
-  match stage with
-  | `Names -> ()
-  | `Types (filename, imports) | `Bodies (filename, imports) ->
-    let module H = Datatype.String.Hashtbl in
-    begin try
-      let ctors, types, infos, models = Forward_decls.find filename in
-      let ctors, types, infos, models = H.copy ctors, H.copy types, H.copy infos, H.copy models in
-      Forward_decls.replace "" (ctors, types, infos, models)
-    with
-    | Not_found -> Kernel.fatal ~current:true "The file `%s' has not been pre-parsed for imports" filename
-    end;
-    let ctors, types, infos, models = Forward_decls.find "" in
-    ListLabels.iter
-      ((filename, []) :: imports)
-      ~f:(fun (filename', names) ->
-          try
-            let ctors', types', infos', models' = Forward_decls.find filename' in
-            let to_import = H.create (List.length names) in
-            List.iter (fun name -> H.add to_import name None) names;
-            let check () =
-              H.iter
-                (fun name source_file ->
-                   if source_file = None then
-                     error (CurrentLoc.get ())
-                       "The name `%s' requested for import from file `%s' \
-                        was not found"
-                       name filename')
-                to_import
-            in
-            let add
+let prepare_tables =
+  let warn_unsupported =
+    let warned_cross_file = ref false and warned_already_declared = ref false in
+    fun ~filename ~filename' ~k ->
+      function
+      | `Cross_file_overloading filename'' when not !warned_cross_file ->
+        Kernel.warning ~current:true
+          "In file `%s': The name `%s' requested for import from file `%s' \
+           has already been imported from another file `%s'. \
+           Cross-file overloading is not supported. Will assume \
+           mere re-importing caused by multiple \
+           inclusion and ignore all duplicate imports."
+          filename k filename' filename'';
+        warned_cross_file := true
+      | `Cross_file_overloading filename'' ->
+        Kernel.warning ~current:true ~once:true
+          "In `%s': re-import of `%s' from `%s' ignored  (already imported from `%s')"
+          filename k filename'' filename'
+      | `Already_declared when not !warned_already_declared ->
+        Kernel.warning ~current:true
+          "In file `%s': The name `%s' requested for import from file `%s' \
+           has already been declared in the importing file. \
+           Imported name overloading is not supported. Will assume \
+           multiple inclusion and ignore all duplicate imports."
+          filename k filename';
+        warned_already_declared := true
+      | `Already_declared ->
+        Kernel.warning ~current:true ~once:true
+          "In `%s': import of `%s' from `%s' ignored (already declared in `%s')"
+          filename k filename' filename
+  in
+  fun ?(stage=`Names) () ->
+    Logic_ctor_info.clear ();
+    Logic_type_info.clear ();
+    Logic_info.clear ();
+    Lemmas.clear ();
+    Model_info.clear ();
+    Logic_type_builtin.iter Logic_type_info.add;
+    Logic_ctor_builtin.iter Logic_ctor_info.add;
+    Logic_builtin_used.iter (fun x -> Logic_info.add x.l_var_info.lv_name x);
+    match stage with
+    | `Names -> ()
+    | `Types (filename, imports) | `Bodies (filename, imports) ->
+      let module H = Datatype.String.Hashtbl in
+      begin try
+        let ctors, types, infos, models = Forward_decls.find filename in
+        let ctors, types, infos, models = H.copy ctors, H.copy types, H.copy infos, H.copy models in
+        Forward_decls.replace "" (ctors, types, infos, models)
+      with
+      | Not_found -> Kernel.fatal ~current:true "The file `%s' has not been pre-parsed for imports" filename
+      end;
+      let ctors, types, infos, models = Forward_decls.find "" in
+      ListLabels.iter
+        ((filename, []) :: imports)
+        ~f:(fun (filename', names) ->
+            try
+              let ctors', types', infos', models' = Forward_decls.find filename' in
+              let to_import = H.create (List.length names) in
+              List.iter (fun name -> H.add to_import name None) names;
+              let check () =
+                H.iter
+                  (fun name source_file ->
+                     if source_file = None then
+                       error (CurrentLoc.get ())
+                         "The name `%s' requested for import from file `%s' \
+                          was not found"
+                         name filename')
+                  to_import
+              in
+              let add
                   (type data)
                   (module T : State_builder.Hashtbl with type key = string and type data = data)
                   (forwards : data H.t)
                   k v =
-              let listed, imported =
-                names = [] && (filename' = filename || not (H.mem forwards k)) || H.mem to_import k,
-                T.mem k
-              in
-              (* Re-importing is only allowed either from the file itself of from the same file
-                 (for overloaded names) *)
-              if listed && (not imported || try H.find to_import k = Some filename' with Not_found -> false) then begin
-                T.add k v;
-                H.replace to_import k (Some filename')
-              end else if listed then
-                let error =
-                  let b, e = Cil_datatype.Location.unknown in
-                  let b = { b with Lexing.pos_fname = filename } in
-                  function
-                  | `Cross_file_overloading filename'' ->
-                    error
-                      (b, e)
-                      "The name `%s' requested for import from file `%s' \
-                       has already been imported from another file `%s'. \
-                       Cross-file overloading is not supported"
-                      k filename' filename''
-                  | `Already_declared ->
-                    error
-                      (b, e)
-                      "The name `%s' requested for import from file `%s' \
-                       has already been declared in the importing file. \
-                       Imported names overloading is not supported"
-                      k filename'
+                let listed, imported =
+                  names = [] && (filename' = filename || not (H.mem forwards k)) || H.mem to_import k,
+                  T.mem k
                 in
-                match H.find to_import k with
-                | Some filename'' when filename' <> filename && filename'' <> filename ->
-                  error (`Cross_file_overloading filename'')
-                | Some _ | None -> error `Already_declared
-                | exception Not_found -> error `Already_declared
-            in
-            H.iter (add (module Logic_ctor_info) ctors) ctors';
-            H.iter (add (module Logic_type_info) types) types';
-            H.iter (add (module Logic_info) infos) infos';
-            H.iter (add (module Model_info) models) models';
-            check ()
-          with
-          | Not_found ->
-            error (CurrentLoc.get ())
-              "The file `%s' specified in import declaration of file `%s' was not provided \
-               to the Frama-C front-end"
-              filename' filename)
+                (* Re-importing is only supported either from the file itself of from the same file
+                   (for overloaded names) *)
+                if
+                  listed &&
+                  (not imported || try H.find to_import k = Some filename' with Not_found -> false)
+                then begin
+                  T.add k v;
+                  H.replace to_import k (Some filename')
+                end else if listed then
+                  let warn = warn_unsupported ~filename ~filename' ~k in
+                  (* There is also a case of re-importing the same definition from different files due to inclusion,
+                     but this is hard to detect since logic_*infos don't contain location information and importing
+                     is performed before typing. So for now issue warnings only. *)
+                  match H.find to_import k with
+                  | Some filename'' when filename' <> filename && filename'' <> filename ->
+                    warn (`Cross_file_overloading filename'')
+                  | Some _ | None -> warn `Already_declared
+                  | exception Not_found -> warn `Already_declared
+              in
+              H.iter (add (module Logic_ctor_info) ctors) ctors';
+              H.iter (add (module Logic_type_info) types) types';
+              H.iter (add (module Logic_info) infos) infos';
+              H.iter (add (module Model_info) models) models';
+              check ()
+            with
+            | Not_found ->
+              error (CurrentLoc.get ())
+                "The file `%s' specified in import declaration of file `%s' was not provided \
+                 to the Frama-C front-end"
+                filename' filename)
 
 (** C typedefs *)
 (**
