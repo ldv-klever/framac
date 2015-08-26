@@ -2140,7 +2140,21 @@ struct
                     | Index _ -> assert false
                   in
                   begin match C.find_comp_field ci member with
-                    | off -> loop off
+                    | off ->
+                      let rec iter_fields f =
+                        let rec loop =
+                          function
+                          | Field (fi, off) ->
+                            f fi;
+                            loop off
+                          | Index (_, off) -> loop off
+                          | NoOffset -> ()
+                        in
+                        loop
+                      in
+                      (* mark all involved fields as addressed due to similar semantics *)
+                      iter_fields (fun fi -> fi.faddrof <- true) off;
+                      loop off
                     | exception Not_found ->
                       error loc "there is no field `%s' in %s" member (compFullName ci)
                   end
