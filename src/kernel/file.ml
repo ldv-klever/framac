@@ -1523,6 +1523,7 @@ let files_to_cil files =
   List.iter
     (Rmtmps.removeUnusedTemps ~isRoot:(keep_entry_point ~specs:true))
     files;
+  List.iter propagate_logic_info_default_labels files;
   debug_globals files;
 
   Kernel.feedback ~level:2 "symbolic link";
@@ -1533,7 +1534,6 @@ let files_to_cil files =
   debug_globals [merged_file];
 
   Logic_utils.complete_types merged_file;
-  propagate_logic_info_default_labels merged_file;
 
   Rmtmps.removeUnusedTemps ~isRoot:keep_entry_point merged_file;
   if Kernel.UnspecifiedAccess.get()
