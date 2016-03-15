@@ -2128,7 +2128,7 @@ the arguments."
 	self#term_binop op
 	(self#term_prec current_level) r
     | TCastE (ty, oft, e) ->
-      fprintf fmt "(%a%a)%a" term_overflow oft (self#typ None) ty
+      fprintf fmt "(%a%a)%a" (self#typ None) ty term_overflow oft
 	(self#term_prec current_level) e
     | TAddrOf lv -> 
       fprintf fmt "&%a" (self#term_lval_prec Precedence.addrOfLevel) lv

@@ -2564,23 +2564,22 @@ struct
           (* no casts of tsets in grammar *)
           (match unroll_type ~unroll_typedef:false (logic_type loc env ty) with
             | (Ctype tnew) as ctnew ->
+              let overflow =
+                match pl with
+                  | PLcast_mod _ when is_integral_type t.term_type && is_integral_type ctnew -> Modulo
+                  | PLcast_mod _ ->
+                      error loc "modulo casts are applicable to integral types only, got types `%a' and `%a'"
+                        Cil_printer.pp_logic_type t.term_type Cil_printer.pp_logic_type ctnew
+                  | _ -> Check
+              in
 	      (match t.term_type with
 		| Ctype told ->
 		  if isPointerType tnew && isArrayType told
 		    && not (is_C_array t) then
 		    error loc
                       "cannot cast logic array to pointer type";
-		  (c_mk_cast t told tnew).term_node , ctnew
-                | _ ->
-                  let overflow =
-                    match pl with
-                    | PLcast_mod _ when is_integral_type t.term_type && is_integral_type ctnew -> Modulo
-                    | PLcast_mod _ ->
-                      error loc "modulo casts are applicable to integral types only, got types `%a' and `%a'"
-                        Cil_printer.pp_logic_type t.term_type Cil_printer.pp_logic_type ctnew
-                    | _ -> Check
-                  in
-                  (Logic_utils.mk_cast ~overflow tnew t).term_node, ctnew)
+		  (c_mk_cast ~overflow t told tnew).term_node , ctnew
+                | _ -> (Logic_utils.mk_cast ~overflow tnew t).term_node, ctnew)
             | Linteger | Lreal | Ltype _ | Lvar _ | Larrow _ ->
               error loc "cannot cast to logic type")
       | PLcoercion (t,ty) ->
