@@ -537,7 +537,7 @@ class cil_printer () = object (self)
     let overflow fmt =
       function
       | Check -> ()
-      | Modulo -> fprintf fmt "/*@%%*/"
+      | Modulo -> fprintf fmt "/*@@%%*/"
     in
     let non_decay = parent_non_decay in
     parent_non_decay <- false;
