@@ -3415,7 +3415,7 @@ struct
 	     b_allocation= (match bfa with
 	       | FreeAllocAny -> FreeAllocAny
 	       | FreeAlloc(f,a) ->
-		   FreeAlloc((List.map (id_term env) f),
+		   FreeAlloc((List.map (id_term (append_old_and_post_labels env)) f),
 			     List.map (id_term (post_state_env Normal)) a));
            b_name = bn;
              b_post_cond =
