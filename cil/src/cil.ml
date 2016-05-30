@@ -3909,8 +3909,8 @@ let parseIntAux (str:string) =
     else if hasSuffix "U" then
       1, [IUInt; IULong; IULongLong]
     else
-      0, if octalhexbin || true (* !!! This is against the ISO but it
-                              * is what GCC and MSVC do !!! *)
+      0, if octalhexbin (*|| true*) (* !!! This is against the ISO but it
+                                     * is what GCC and MSVC do !!! *)
         then [IInt; IUInt; ILong; IULong; ILongLong; IULongLong]
         else [IInt; ILong; IUInt; ILongLong]
   in
