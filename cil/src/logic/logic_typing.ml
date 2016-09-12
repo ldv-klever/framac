@@ -3298,32 +3298,69 @@ struct
       infos.l_body <- LBpred body;
       finish_with infos
 
-  let model_annot ~stage loc ti =
-    let finish_with infos =
-      Logic_env.add_model_field infos;
-      infos
+  let model_annot =
+    (* This workaround is needed, because model fields are indexed by the types they are attached to.
+       So on the first (`Names) pass we need the C base type of the model field
+       while the types have not yet been processed. *)
+    let rec pre_translate_lt =
+      let dummy_struct = mkCompInfo true "dummy" (fun _ -> []) [] in
+      let dummy_union = mkCompInfo false "dummy" (fun _ -> []) [] in
+      fun loc ->
+        function
+        | LTvoid  -> TVoid []
+        | LTint ik -> TInt (ik, [])
+        | LTfloat fk -> TFloat (fk, [])
+        | LTarray (lt, _c) -> TArray (pre_translate_lt loc lt, None, empty_size_cache (), [])
+        | LTpointer lt -> TPtr (pre_translate_lt loc lt, [])
+        | LTenum s -> TEnum ({ eorig_name = s;
+                               ename = s;
+                               eitems = [];
+                               eattr = [];
+                               ereferenced = false;
+                               ekind = IInt }, [])
+        | LTstruct s -> TComp ({ dummy_struct with corig_name = s; cname = s }, empty_size_cache (), [])
+        | LTunion s -> TComp ({ dummy_union with corig_name = s; cname = s }, empty_size_cache (), [])
+        | LTnamed (s, []) -> TNamed ({ torig_name = s;
+                                       tname = s;
+                                       ttype = TComp ({ dummy_struct with corig_name = s; cname = s },
+                                                      empty_size_cache (),
+                                                      []);
+                                       treferenced = false }, [])
+        | LTnamed _
+        | LTinteger
+        | LTreal
+        | LTarrow _ -> error loc "model fields can only be attached to C types"
     in
-    let model_for_type = c_logic_type loc (Lenv.empty ()) ti.model_for_type in
-    match stage with
-    | `Names ->
-      if has_field ti.model_name model_for_type then
-        error loc "Cannot add model field %s for type %a: it already exists"
-          ti.model_name Cil_printer.pp_typ model_for_type;
-      let infos =
-        { mi_name = ti.model_name;
-          mi_base_type = model_for_type;
-          mi_field_type = Linteger;
-          mi_decl = loc
-        }
+    fun ~stage loc ti ->
+      let finish_with infos =
+        Logic_env.add_model_field infos;
+        infos
       in
-      finish_with infos
-    | `Types ->
-      let infos = Logic_env.find_model_field ti.model_name model_for_type in
-      infos.mi_field_type <- logic_type loc (Lenv.empty ()) ti.model_type;
-      finish_with infos
-    | `Bodies ->
-      let infos = Logic_env.find_model_field ti.model_name model_for_type in
-      finish_with infos
+      match stage with
+      | `Names ->
+        let model_for_type = pre_translate_lt loc ti.model_for_type in
+        if has_field ti.model_name model_for_type then
+          error loc "Cannot add model field %s for type %a: it already exists"
+            ti.model_name Cil_printer.pp_typ model_for_type;
+        let infos =
+          { mi_name = ti.model_name;
+            mi_base_type = model_for_type;
+            mi_field_type = Linteger;
+            mi_decl = loc
+          }
+        in
+        finish_with infos
+      | `Types ->
+        let model_for_type = pre_translate_lt loc ti.model_for_type in
+        let infos = Logic_env.find_model_field ti.model_name model_for_type in
+        let model_for_type = c_logic_type loc (Lenv.empty ()) ti.model_for_type in
+        infos.mi_base_type <- model_for_type;
+        infos.mi_field_type <- logic_type loc (Lenv.empty ()) ti.model_type;
+        finish_with infos
+      | `Bodies ->
+        let model_for_type = c_logic_type loc (Lenv.empty ()) ti.model_for_type in
+        let infos = Logic_env.find_model_field ti.model_name model_for_type in
+        finish_with infos
 
   let check_behavior_names loc existing_behaviors names =
     List.iter

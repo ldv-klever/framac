@@ -1347,7 +1347,7 @@ and term_lhost =
 and model_info = {
           mi_name: string; (** name *)
   mutable mi_field_type: logic_type; (** type of the field *)
-          mi_base_type: typ; (** type to which the field is associated. *)
+  mutable mi_base_type: typ; (** type to which the field is associated. *)
           mi_decl: location; (** where the field has been declared. *)
 }
 
