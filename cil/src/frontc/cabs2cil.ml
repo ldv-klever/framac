@@ -712,21 +712,48 @@ let dummy_function = emptyFunction "@dummy@"
 let currentReturnType : typ ref = ref (TVoid([]))
 let currentFunctionFDEC: fundec ref = ref dummy_function
 
+(* Keep a set of self compinfo for composite types *)
+let compInfoNameEnv : (string, (compinfo * bool) * A.field_group list) H.t = H.create 113
 
 let lastStructId = ref 0
-let anonStructName (k: string) (suggested: string) =
-  incr lastStructId;
-  "__anon" ^ k ^ (if suggested <> "" then "_"  ^ suggested else "")
-  ^ "_" ^ (string_of_int (!lastStructId))
-
+let freeStructId = ref 0
+let structKey ~is_struct n = (if is_struct then "struct " else "union ") ^ n
+let anonStructName =
+  let is_correct_redef k nglist =
+    try
+      match nglist with
+      | None -> H.mem compInfoNameEnv k
+      | Some nglist ->
+        let _, nglist' = H.find compInfoNameEnv k in
+        nglist = nglist'
+    with
+    | Not_found -> false
+  in
+  fun (k: string) (suggested: string) nglist ->
+    let base = "__anon" ^ k ^ (if suggested <> "" then "_"  ^ suggested else "") ^ "_" in
+    if
+      !freeStructId <= 0 ||
+      (k <> "struct" && k <> "union") ||
+      is_correct_redef (structKey ~is_struct:(k = "struct") @@ base ^ string_of_int @@ !lastStructId + 1) nglist
+    then begin
+      incr lastStructId;
+      base ^ string_of_int !lastStructId
+    end else begin
+      incr freeStructId;
+      base ^ string_of_int !freeStructId
+    end
 
 let constrExprId = ref 0
 
 
-let startFile () =
+let startFile stage =
   H.clear env;
   H.clear genv;
   H.clear alphaTable;
+  begin match stage with
+  | `Bodies _ -> freeStructId := !lastStructId + 1;
+  | _ -> ()
+  end;
   lastStructId := 0;
 ;;
 
@@ -899,12 +926,10 @@ let mkStartOfAndMark loc ((_b, _off) as lval) : exp =
   let res = new_exp ~loc (StartOf lval) in
   res
 
-(* Keep a set of self compinfo for composite types *)
-let compInfoNameEnv : (string, compinfo * bool) H.t = H.create 113
 let enumInfoNameEnv : (string, enuminfo * bool) H.t = H.create 113
 
 (* Keep a set of self compinfo for composite types *)
-let compInfoCache : (string, (string, compinfo * bool) H.t) H.t = H.create 113
+let compInfoCache : (string, (string, (compinfo * bool) * A.field_group list) H.t) H.t = H.create 113
 let enumInfoCache : (string, (string, enuminfo * bool) H.t) H.t = H.create 113
 
 let typeInfoCache : (string, (string, typeinfo) H.t) H.t = H.create 113
@@ -925,19 +950,19 @@ let lookupType (kind: string)
 
 (* Create the self ref cell and add it to the map. Return also an indication
  * if this is a new one. *)
-let createCompInfo (iss: bool) (n: string) ~(norig: string) : compinfo * bool =
+let createCompInfo (iss: bool) (n: string) ~(norig: string) nglist : compinfo * bool =
   (* Add to the self cell set *)
-  let key = (if iss then "struct " else "union ") ^ n in
+  let key = structKey ~is_struct:iss n in
   try
-    let ci, is_new as res = H.find compInfoNameEnv key in
+    let (ci, is_new as res), nglist' = H.find compInfoNameEnv key in
     (* Only if not already in *)
     if is_new then
-      H.replace compInfoNameEnv key (ci, false);
+      H.replace compInfoNameEnv key ((ci, false), Extlib.opt_conv nglist' nglist);
     res
   with Not_found -> begin
     (* Create a compinfo. This will have "cdefined" false. *)
     let res = mkCompInfo iss n ~norig (fun _ -> []) [] in
-    H.add compInfoNameEnv key (res, false);
+    H.add compInfoNameEnv key ((res, false), Extlib.opt_conv [] nglist);
     res, true
   end
 
@@ -974,7 +999,7 @@ let findCompType (kind: string) (n: string) (a: attributes) =
       TEnum (enum, a)
     else
       let iss = if kind = "struct" then true else false in
-      let self, isnew = createCompInfo iss n ~norig:n in
+      let self, isnew = createCompInfo iss n ~norig:n None in
       if isnew then
         cabsPushGlobal (GCompTagDecl (self, CurrentLoc.get ()));
       TComp (self, empty_size_cache (), a)
@@ -3828,7 +3853,7 @@ let rec doSpecList ghost (suggestedAnonName: string)
       findCompType "struct" n []
     | [A.Tstruct (n, Some nglist, extraAttrs)] -> (* A definition of a struct *)
       let n' =
-        if n <> "" then n else anonStructName "struct" suggestedAnonName in
+        if n <> "" then n else anonStructName "struct" suggestedAnonName (Some nglist) in
       (* Use the (non-cv, non-name) attributes in !attrs now *)
       let a = extraAttrs @ (getTypeAttrs ()) in
       makeCompType ghost true n' ~norig:n nglist (doAttributes ghost a)
@@ -3839,7 +3864,7 @@ let rec doSpecList ghost (suggestedAnonName: string)
       findCompType "union" n []
     | [A.Tunion (n, Some nglist, extraAttrs)] -> (* A definition of a union *)
       let n' =
-        if n <> "" then n else anonStructName "union" suggestedAnonName in
+        if n <> "" then n else anonStructName "union" suggestedAnonName (Some nglist)  in
       (* Use the attributes now *)
       let a = extraAttrs @ (getTypeAttrs ()) in
       makeCompType ghost false n' ~norig:n nglist (doAttributes ghost a)
@@ -3851,7 +3876,7 @@ let rec doSpecList ghost (suggestedAnonName: string)
 
     | [A.Tenum (n, Some eil, extraAttrs)] -> (* A definition of an enum *)
       let n' =
-        if n <> "" then n else anonStructName "enum" suggestedAnonName in
+        if n <> "" then n else anonStructName "enum" suggestedAnonName None in
       (* make a new name for this enumeration *)
       let n'', _  = newAlphaName true "enum" n' in
 
@@ -4515,7 +4540,7 @@ and makeCompType ghost (isstruct: bool)
   let n', _  = newAlphaName true kind n in
   (* Create the self cell for use in fields and forward references. Or maybe
    * one exists already from a forward reference  *)
-  let comp, _ = createCompInfo isstruct n' norig in
+  let comp, _ = createCompInfo isstruct n' norig (Some nglist) in
   let doFieldGroup ((s: A.spec_elem list),
 		    (nl: (A.name * A.expression option) list)) =
     (* Do the specifiers exactly once *)
@@ -4571,7 +4596,7 @@ and makeCompType ghost (isstruct: bool)
           match unrollType ftype with
 	    TComp _ -> begin
 	      incr anonCompFieldNameId;
-	      anonCompFieldName ^ (string_of_int !anonCompFieldNameId)
+	      anonCompFieldName ^ "_" ^ comp.cname ^ "_" ^ (string_of_int !anonCompFieldNameId)
 	    end
 	  | _ -> n
         end else
@@ -9325,7 +9350,7 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   (* Clean up the global types *)
   Cilmsg.clear_errors();
   initGlobals();
-  startFile ();
+  startFile stage;
   IH.clear noProtoFunctions;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
@@ -9333,7 +9358,7 @@ let convFile ~stage (f : A.file) : Cil_types.file =
   begin match stage with
   | `Names | `Types _ -> ()
   | `Bodies (fname, _) ->
-    H.iter (fun k (ci, _) -> H.add compInfoNameEnv k (ci, true)) (H.find compInfoCache fname);
+    H.iter (fun k ((ci, _), body) -> H.add compInfoNameEnv k ((ci, true), body)) (H.find compInfoCache fname);
     H.iter (fun k (ci, _) -> H.add enumInfoNameEnv k (ci, true)) (H.find enumInfoCache fname);
     H.iter (H.add typeInfoNameEnv) (H.find typeInfoCache fname)
   end;
