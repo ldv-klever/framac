@@ -147,8 +147,8 @@ let register_conditional_side_effect_hook f =
 
 let rec is_dangerous_offset t = function
     NoOffset -> false
-  | Field (_,o) as off ->
-    let t_offset = Cil.unrollType (Cil.typeOffset t off) in
+  | Field (fi, o) ->
+    let t_offset = Cil.unrollType (Cil.typeOffset t (Field (fi, NoOffset))) in
     Cil.typeHasAttribute "volatile" t_offset ||
     is_dangerous_offset t_offset o
   | Index _ -> true
