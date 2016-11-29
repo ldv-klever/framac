@@ -2327,15 +2327,16 @@ struct
           TUnOp (BNot, t), logic_arithmetic_promotion t.term_type
       | PLunop (Uminus | Uminus_mod as op, t) ->
           let t = type_num_term env t in
+          let ty = t.term_type in
           let oft =
             match op with
-            | Uminus_mod when is_integral_type t.term_type -> Modulo
+            | Uminus_mod when is_integral_type ty -> Modulo
             | Uminus_mod ->
               error loc "modulo arithmetic is applicable to integral types only, got type %a"
-                Cil_printer.pp_logic_type t.term_type
+                Cil_printer.pp_logic_type ty
             | _ -> Check
           in
-          TUnOp (Neg oft, t), logic_arithmetic_promotion t.term_type
+          TUnOp (Neg oft, mk_cast t (arithmetic_conversion ty ty)), logic_arithmetic_promotion ty
       | PLunop (Ustar, t) ->
           check_current_label loc env;
           (* memory access need a current label to have some semantics *)
