@@ -1023,9 +1023,9 @@ module Properties = struct
           { state_opt: bool option;
             ki_opt: (stmt * bool) option;
             kf:Kernel_function.t }
-      let mk_ctx_func_contrat = mk_fun "Interp.To_zone.mk_ctx_func_contrat"
-      let mk_ctx_stmt_contrat = mk_fun "Interp.To_zone.mk_ctx_stmt_contrat"
-      let mk_ctx_stmt_annot = mk_fun "Interp.To_zone.mk_ctx_stmt_annot"
+      let mk_ctx_func_contrat : (_ -> state_opt:_ -> t_ctx) ref = mk_fun "Interp.To_zone.mk_ctx_func_contrat"
+      let mk_ctx_stmt_contrat : (_ -> _ -> state_opt:_ -> t_ctx) ref = mk_fun "Interp.To_zone.mk_ctx_stmt_contrat"
+      let mk_ctx_stmt_annot : (_ -> _ -> t_ctx) ref = mk_fun "Interp.To_zone.mk_ctx_stmt_annot"
       type t = {before:bool ; ki:stmt ; zone:Locations.Zone.t}
       type t_zone_info = (t list) option
       type t_decl =
@@ -1034,14 +1034,17 @@ module Properties = struct
       type t_pragmas =
           { ctrl: Stmt.Set.t;
             stmt: Stmt.Set.t }
-      let from_term = mk_fun "Interp.To_zone.from_term"
-      let from_terms= mk_fun "Interp.To_zone.from_terms"
-      let from_pred = mk_fun "Interp.To_zone.from_pred"
-      let from_preds= mk_fun "Interp.To_zone.from_preds"
-      let from_zone = mk_fun "Interp.To_zone.from_zone"
-      let from_stmt_annot= mk_fun "Interp.To_zone.from_stmt_annot"
-      let from_stmt_annots= mk_fun "Interp.To_zone.from_stmt_annots"
-      let from_func_annots= mk_fun "Interp.To_zone.from_func_annots"
+      let from_term : (_ -> t_ctx -> t_zone_info * t_decl) ref = mk_fun "Interp.To_zone.from_term"
+      let from_terms : (_ -> t_ctx -> t_zone_info * t_decl) ref = mk_fun "Interp.To_zone.from_terms"
+      let from_pred : (_ -> t_ctx -> t_zone_info * t_decl) ref = mk_fun "Interp.To_zone.from_pred"
+      let from_preds : (_ -> t_ctx -> t_zone_info * t_decl) ref = mk_fun "Interp.To_zone.from_preds"
+      let from_zone : (_ -> t_ctx -> t_zone_info * t_decl) ref = mk_fun "Interp.To_zone.from_zone"
+      let from_stmt_annot : (_ -> _ * _ -> (t_zone_info * t_decl) * t_pragmas) ref =
+        mk_fun "Interp.To_zone.from_stmt_annot"
+      let from_stmt_annots : (_ -> _ * _ -> (t_zone_info * t_decl) * t_pragmas) ref =
+        mk_fun "Interp.To_zone.from_stmt_annots"
+      let from_func_annots : (_ -> _ -> _ -> (t_zone_info * t_decl) * t_pragmas) ref =
+        mk_fun "Interp.To_zone.from_func_annots"
       let code_annot_filter= mk_fun "Interp.To_zone.code_annot_filter"
     end
 
