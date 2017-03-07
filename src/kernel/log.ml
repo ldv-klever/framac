@@ -296,7 +296,7 @@ let echo_source output = function
         let col =
           let col = Lexing.(src.pos_cnum - src.pos_bol) in if col >= 0 then col else 0
         in
-        Printf.sprintf "%s:%d,%d:"
+        Printf.sprintf "%s:%d:%d:"
           (Filepath.pretty src.Lexing.pos_fname) src.Lexing.pos_lnum col
       in
       output s 0 (String.length s)
