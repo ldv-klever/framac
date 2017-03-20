@@ -1073,7 +1073,7 @@ let rec castTo ?loc ?overflow
     Cil_printer.pp_typ ot Cil_printer.pp_typ nt;
   let ot' = unrollType ot in
   let nt' = unrollType nt in
-  if not fromsource && not (need_cast ot' nt') then begin
+  if not fromsource && not (need_cast ~force:(Kernel.ForceEnumIntCasts.get ()) ot' nt') then begin
     (* Do not put the cast if it is not necessary, unless it is from the
      * source. *)
     Kernel.debug ~dkey:category_cast "no cast to perform";
@@ -1214,9 +1214,9 @@ let castToFromSource ?loc ?(overflow=Check) ot nt e =
 
 (* Like Cil.mkCastT, but it calls typeForInsertedCast *)
 let makeCastT ~(e: exp) ~(oldt: typ) ~(newt: typ) =
-  if need_cast oldt newt then
-    Cil.mkCastT e oldt (!typeForInsertedCast e oldt newt)
-  else e
+    if need_cast ~force:(Kernel.ForceEnumIntCasts.get ()) oldt newt then
+      Cil.mkCastT ~force:true ~overflow:Check ~e ~oldt ~newt:(!typeForInsertedCast e oldt newt)
+    else e
 
 let makeCast ~(e: exp) ~(newt: typ) =
   makeCastT e (typeOf e) newt

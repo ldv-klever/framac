@@ -240,6 +240,9 @@ module WarnUndeclared: Parameter_sig.Bool
 module AllowDuplication: Parameter_sig.Bool
   (** Behavior of option "-allow-duplication". *)
 
+module ForceEnumIntCasts : Parameter_sig.Bool
+  (** Behavior of option "-force-enum-int-casts". *)
+
 module DoCollapseCallCast: Parameter_sig.Bool
   (** Behavior of option "-collapse-call-cast". 
 
