@@ -179,6 +179,9 @@ module CppExtraArgs: Parameter_sig.String_list
 module CppGnuLike: Parameter_sig.Bool
   (** Behavior of option "-cpp-gnu-like" *)
 
+module GeneratePPFile: Parameter_sig.Bool
+  (** Behavior of option "-generate-pp-file" *)
+
 module FramaCStdLib: Parameter_sig.Bool
   (** Behavior of option "-frama-c-stdlib" *)
 

@@ -1080,6 +1080,37 @@ class check_file what = object inherit check_file_aux true what end
 (** {2 Initialisations} *)
 (* ************************************************************************* *)
 
+let generate_pp_file =
+  let newline = Str.regexp "^" in
+  let linedir = Str.regexp "#[ ]*\\(line\\)? \\([0-9]+\\)[ ]*\\(\"\\([^\"]+\\)\"\\)?" in
+  fun pp_in_file pp_out_file ->
+  let pp_input =
+    let ic = open_in pp_in_file in
+    let n = in_channel_length ic in
+    let s = Bytes.create n in
+    really_input ic s 0 n;
+    close_in ic;
+    Array.of_list @@ Str.split newline (Bytes.unsafe_to_string s)
+  in
+  let oc = open_out Filename.(remove_extension pp_in_file ^ ".pp" ^ extension pp_in_file) in
+  let file = ref pp_in_file and line = ref 1 in
+  let ic = open_in pp_out_file in
+  begin try while true do
+    let s = input_line ic in
+    if Str.string_match linedir s 0 then begin
+      line := int_of_string (Str.matched_group 2 s);
+      try file := Str.matched_group 4 s with Not_found -> ();
+    end else if String.equal !file pp_in_file then begin
+      pp_input.(!line - 1) <- s;
+      incr line
+    end
+  done with
+  | End_of_file ->
+    close_in ic
+  end;
+  Array.iter (Printf.fprintf oc "%s\n") pp_input;
+  close_out oc
+
 let safe_remove_file f =
   if not (Kernel.Debug_category.exists (fun x -> x = "parser")) then
     Extlib.safe_remove f
@@ -1226,7 +1257,7 @@ preprocessor command or use the option \"-cpp-command\"."
                            preprocessor."; true))
         then begin
           let ppf' =
-            try Logic_preprocess.file ".c" (cmd "-nostdinc") ppf
+            try Logic_preprocess.file ".c" (cmd "-traditional-cpp -nostdinc") ppf
             with Sys_error _ as e ->
               Extlib.safe_remove ppf;
               Kernel.abort "preprocessing of annotations failed (%s)"
@@ -1236,6 +1267,8 @@ preprocessor command or use the option \"-cpp-command\"."
           ppf'
         end else ppf
       in
+      if Kernel.GeneratePPFile.get () then
+        generate_pp_file f ppf;
       let _, decls = Frontc.parse_to_cabs ppf in
       safe_remove_file ppf;
       f, decls

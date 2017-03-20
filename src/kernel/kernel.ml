@@ -717,6 +717,18 @@ module CppGnuLike =
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
+module GeneratePPFile =
+  False
+    (struct
+      let module_name = "GeneratePPFile"
+      let option_name = "-generate-pp-file"
+      let help =
+        "generates .pp file with preprocessed lines superimposed on the original code for \
+         later use in Why3 IDE in place of the original file (for better highlighting)."
+    end)
+
+let () = Parameter_customize.set_group parsing
+let () = Parameter_customize.do_not_reset_on_copy ()
 module FramaCStdLib =
   True
     (struct

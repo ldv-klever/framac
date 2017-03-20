@@ -152,8 +152,8 @@
 
   let add_preprocess_line_info () =
     Printf.bprintf
-      preprocess_buffer "# %d %s \n%s   "
-      !curr_line !curr_file (Buffer.contents beg_of_line);
+      preprocess_buffer "# %d %s \n"
+      !curr_line !curr_file;
     Buffer.clear beg_of_line
 
   let make_newline () =
@@ -322,7 +322,7 @@ and annot = parse
            annot_comment lexbuf }
   | '@' {
       if !is_newline = NEWLINE then is_newline:=SPACE;
-      Buffer.add_char preprocess_buffer ' ';
+      Buffer.add_char preprocess_buffer '@';
       annot lexbuf }
   | ' '  {
       if !is_newline = NEWLINE then is_newline:=SPACE;
