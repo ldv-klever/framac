@@ -942,6 +942,16 @@ module DoCollapseCallCast =
   end)
 
 let () = Parameter_customize.set_group normalisation
+module ForceEnumIntCasts =
+  False(struct
+    let option_name = "-force-enum-int-casts"
+    let module_name = "ForceEnumIntCasts"
+    let help =
+      "Insert evry enum-to-int cast even when the cast is to the \
+                   underlying integer type."
+  end)
+
+let () = Parameter_customize.set_group normalisation
 module ForceRLArgEval =
   False(struct
     let option_name = "-force-rl-arg-eval"
