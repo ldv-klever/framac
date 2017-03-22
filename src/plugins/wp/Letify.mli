@@ -48,7 +48,8 @@ sig
   val empty : t
   val merge : t -> t -> t
   val extract : pred -> t
-  val domain : t -> Vars.t 
+  val add : t ref -> pred -> unit
+  val domain : t -> Vars.t
 end
 
 val bind : Sigma.t -> Defs.t -> Vars.t -> Sigma.t

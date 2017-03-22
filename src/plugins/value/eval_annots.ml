@@ -169,7 +169,7 @@ let eval_and_reduce_pre_post kf ab b pre_post ips states build_prop build_env =
           (fun (accres, accstateset) (state, _trace as stt) ->
             let env = build_env state in
 	    let res = eval_predicate env pr in
-	    notify_status ip (conv_status res) state;
+	    notify_status ip (conv_status res) stt;
 	    let reduced_states = 
 	      if behav_active then
                 match res with
@@ -314,7 +314,7 @@ let check_fct_assigns kf ab ~pre_state found_froms =
           pp_activity activity
           Value_util.pp_callstack;
         emit_status ip status;
-        notify_status ip status pre_state;
+        notify_status ip status (pre_state,Trace.top);
 
 	(* Now, checks the individual froms. *)
 	let check_from ((asgn,deps) as from) assigns_zone =
@@ -360,7 +360,7 @@ let check_fct_assigns kf ab ~pre_state found_froms =
               pp_activity activity
               Value_util.pp_callstack;
             emit_status ip status;
-            notify_status ip status pre_state;
+            notify_status ip status (pre_state,Trace.top);
 	in
 	List.iter2 check_from assigns_deps assigns_zones)
 
@@ -410,17 +410,19 @@ let code_annotation_text ca =
   | APragma _  | AVariant _ | AAssigns _ | AAllocation _ | AStmtSpec _ ->
     assert false (* currently not treated by Value *)
 
-let code_annotation_source ca =
+(* location of the given code annotation. If unknown, use the location of the
+   statement instead. *)
+let code_annotation_loc ca stmt =
   match Cil_datatype.Code_annotation.loc ca with
-  | Some loc when not (Cil_datatype.Location.(equal loc unknown)) -> fst loc
-  | _ -> fst (Cil.CurrentLoc.get ()) (* fallback: current statement *)
+  | Some loc when not (Cil_datatype.Location.(equal loc unknown)) -> loc
+  | _ -> Cil_datatype.Stmt.loc stmt
 
 (* Reduce the given states according to the given code annotations.
    If [record] is true, update the proof state of the code annotation.
    DO NOT PASS record=false unless you know what your are doing *)
 let interp_annot kf ab initial_state slevel states stmt ca record =
   let ips = Property.ip_of_code_annot kf stmt ca in
-  let source = code_annotation_source ca in
+  let source, _ = code_annotation_loc ca stmt in
   let aux_interp ca behav p =
     let ip = Property.ip_of_code_annot_single kf stmt ca in
     let text = code_annotation_text ca in
@@ -526,7 +528,7 @@ let mark_unreachable () =
       let reach_p = Property.ip_reachable_ppt ppt in
       emit ppt Property_status.True;
       emit reach_p Property_status.False_and_reachable;
-      notify_status reach_p Property_status.False_and_reachable Cvalue.Model.bottom
+      notify_status reach_p Property_status.False_and_reachable (Cvalue.Model.bottom,Trace.top)
     end
   in
   (* Mark standard code annotations *)
@@ -584,49 +586,81 @@ let mark_rte () =
       )
     )
 
-(* Evaluates [p] at [stmt], using the most precise states available:
-   per-callstacks if possible, or the synthetic state otherwise. *)
+let c_labels kf cs =
+  if !Db.Value.use_spec_instead_of_definition kf then
+    Cil_datatype.Logic_label.Map.empty
+  else
+    let fdec = Kernel_function.get_definition kf in
+    let aux acc stmt =
+      if stmt.labels != [] then
+        try
+          let hstate = Db.Value.Table_By_Callstack.find stmt in
+          let state = Value_types.Callstack.Hashtbl.find hstate cs in
+          Cil_datatype.Logic_label.Map.add (StmtLabel (ref stmt)) state acc
+        with Not_found -> acc
+      else acc
+    in
+    List.fold_left aux Cil_datatype.Logic_label.Map.empty fdec.sallstmts
+
+(* Evaluates [p] at [stmt], using per callstack states for maximum precision. *)
+(* TODO: we can probably factor some code with the GUI *)
 let eval_by_callstack kf stmt p =
+  let open Abstract_interp.Bot in
   (* This is actually irrelevant for alarms: they never use \old *)
   let pre = Db.Value.get_initial_state kf in
-  let aux_callstack _callstack state acc_status =
-    let env = Eval_terms.env_annot ~pre ~here:state () in
+  let aux_callstack callstack state acc_status =
+    let c_labels = c_labels kf callstack in
+    let env = Eval_terms.env_annot ~c_labels ~pre ~here:state () in
     let status = Eval_terms.eval_predicate env p in
-    let open Eval_terms in
-    (* Join: unknown anywhere or True+False means unknown *)
-    match status, acc_status with
-    | Unknown, _ | True, Some False | False, Some True | _, Some Unknown ->
-      raise Exit
-    | (True | False), None -> Some status
-    | True, Some True | False, Some False -> acc_status
+    let join = Eval_terms.join_predicate_status in
+    match join_or_bottom join acc_status (`Value status) with
+    | `Value Unknown -> raise Exit (* shortcut *)
+    | _ as r -> r
   in
   match Db.Value.get_stmt_state_callstack ~after:false stmt with
-  | None -> (* per-callstacks results unavailable *)
-    let state = Db.Value.get_stmt_state stmt in
-    if Cvalue.Model.is_reachable state then begin
-      let env = Eval_terms.env_annot ~pre ~here:state () in
-      Eval_terms.eval_predicate env p
-    end
-    else Unknown (* Do not evaluate. An 'unreachable' status is better. *)
-  | Some states -> begin (* Per-callstacks results available *)
+  | None -> (* dead; ignore, those will be marked 'unreachable' elsewhere *)
+    Unknown
+  | Some states ->
     try
-      match Value_types.Callstack.Hashtbl.fold aux_callstack states None with
-      | None -> Eval_terms.Unknown (* probably never reached *)
-      | Some status -> status
+      match Value_types.Callstack.Hashtbl.fold aux_callstack states `Bottom with
+      | `Bottom -> Eval_terms.Unknown (* probably never reached *)
+      | `Value status -> status
     with Exit -> Eval_terms.Unknown
-  end
+
+(* Detection of terms \at(_, L) where L is a C label *)
+class contains_c_at = object
+  inherit Visitor.frama_c_inplace
+
+  method! vterm t = match t.term_node with
+    | Tat (_, StmtLabel _) -> raise Exit
+    | _ -> Cil.DoChildren
+end
+
+let contains_c_at ca =
+  let vis = new contains_c_at in
+  let loc = Cil.CurrentLoc.get () in
+  let r =
+    try
+      ignore (Visitor.visitFramacCodeAnnotation vis ca);
+      false
+    with Exit -> true
+  in
+  Cil.CurrentLoc.set loc;
+  r
 
 (* Re-evaluate all alarms, and see if we can put a 'green' or 'red' status,
    which would be more precise than those we have emitted during the current
    analysis. *)
 let mark_green_and_red () =
   let do_code_annot stmt _e ca  =
-    match Alarms.find ca with
-    | None -> () (* Not an alarm. Do nothing, as we already put a status on this
-                    assert each time value visited the statement. *)
-    | Some _ ->
+    (* We reevaluate only alarms, in the hope that we can emit an 'invalid'
+       status, or user assertions that mention a C label. The latter are
+       currently skipped during evaluation. *)
+    if contains_c_at ca || (Alarms.find ca <> None) then
       match ca.annot_content with
       | AAssert (_, p) | AInvariant (_, true, p) ->
+        let loc = code_annotation_loc ca stmt in
+        Cil.CurrentLoc.set loc;
         let kf = Kernel_function.find_englobing_kf stmt in
         let ip = Property.ip_of_code_annot_single kf stmt ca in
         (* This status is exact: we are _not_ refining the statuses previously
@@ -638,7 +672,7 @@ let mark_green_and_red () =
             | `False -> Property_status.False_if_reachable, "invalid"
           in
           Property_status.emit ~distinct Value_util.emitter ~hyps:[] ip status;
-          let source = code_annotation_source ca in
+          let source = fst loc in
           let text_ca = code_annotation_text ca in
           Value_parameters.result ~once:true ~source "%s%a got final status %s."
             text_ca Description.pp_named p text_status;
@@ -657,6 +691,33 @@ let mark_green_and_red () =
   in
   Annotations.iter_all_code_annot do_code_annot
 
+(* Special evaluation for the alarms on the very first statement of the
+   main function. We put 'Invalid' statuses on them using this function. *)
+let mark_invalid_initializers () =
+  let kf = fst (Globals.entry_point ()) in
+  let first_stmt = Kernel_function.find_first_stmt kf in
+  let do_code_annot _e ca  =
+    match Alarms.find ca with (* We only check alarms *)
+    | None -> ()
+    | Some _ ->
+      match ca.annot_content with
+      | AAssert (_, p) ->
+        let ip = Property.ip_of_code_annot_single kf first_stmt ca in
+        (* Evaluate in a fully empty state. Only predicates that do not
+           depend on the memory will result in 'False' *)
+        let bot = Cvalue.Model.bottom in
+        let env = Eval_terms.env_annot ~pre:bot ~here:bot () in
+        begin match Eval_terms.eval_predicate env p with
+        | True | Unknown -> ()
+        | False ->
+          let status = Property_status.False_and_reachable in
+          let distinct = false (* see comment in mark_green_and_red above *) in
+          Property_status.emit ~distinct Value_util.emitter ~hyps:[] ip status;
+        end
+      | _ -> ()
+    in
+    Annotations.iter_code_annot do_code_annot first_stmt
+
 
 let () =
   Db.Value.valid_behaviors :=
@@ -667,6 +728,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

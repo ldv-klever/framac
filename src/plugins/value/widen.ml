@@ -30,12 +30,12 @@ class widen_visitor kf init_widen_hints init_enclosing_loops = object(self)
   val widen_hints = init_widen_hints
   val enclosing_loops = init_enclosing_loops
 
-  (* Caution: except for user pragmas (loop pragma WIDEN_HINTS), [stmt] is
-     always [None]. Because our current dataflow does not stabilize inner loop
-     before the outer ones, we sometimes end up widening an inner variable
-     inside an outer loop. Hence, we need to have the inner widening hints in
-     the outer loops. To do so, the simplest is to avoid specifying statements
-     altogether. This may be inefficient for codes that reuse loop indexes... *)
+  (* Caution: currently, [stmt] is always [None]. Because our dataflow does not
+     stabilize inner loop before the outer ones, we sometimes end up widening
+     an inner variable inside an outer loop. Hence, we need to have the inner
+     widening hints in the outer loops. To do so, the simplest is to avoid
+     specifying statements altogether. This may be inefficient for codes that
+     reuse loop indexes... *)
   method private add_num_hints ?stmt ?base hints =
     widen_hints := Widen_type.add_num_hints stmt base hints !widen_hints
 
@@ -69,9 +69,9 @@ class widen_visitor kf init_widen_hints init_enclosing_loops = object(self)
     | (vars, hints, []) ->
       (* the annotation is empty or contains only variables *)
       if vars = [] then
-        self#add_num_hints ~stmt hints
+        self#add_num_hints ?stmt:None hints
       else
-        List.iter (fun base -> self#add_num_hints ~stmt ~base hints) vars
+        List.iter (fun base -> self#add_num_hints ?stmt:None ~base hints) vars
     | _ ->
       Kernel.warning ~once:true ~current:true
         "could not interpret loop pragma relative to widening hint"
@@ -270,6 +270,6 @@ let getWidenHints (kf:kernel_function) (s:stmt) =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

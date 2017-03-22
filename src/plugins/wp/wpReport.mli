@@ -42,8 +42,8 @@ val export : fcstat -> string -> unit
     - "%<s>" the global statistics with format [<s>].
 
     Prover strings are ["wp"], ["ergo"], ["coq"] , ["z3"] and ["simplify"].
-    Format strings are "100" (percents of valid upon total, default), 
-      ["total"], ["valid"] and ["failed"] 
+    Format strings are "100" (percents of valid upon total, default),
+      ["total"], ["valid"] and ["failed"]
       for respective number of verification conditions.
     Zero is printed as [zero]. Percentages are printed in decimal ["dd.d"].
 

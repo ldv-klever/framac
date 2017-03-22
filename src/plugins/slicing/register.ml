@@ -40,7 +40,7 @@ let _pretty_list pretty fmt l = List.iter (pretty fmt) l
 let print_select fmt db_select =
   let db_fvar, select = db_select in
     Format.fprintf fmt "In %a : %a"
-      Varinfo.pretty_vname db_fvar SlicingActions.print_f_crit select
+      Varinfo.pretty db_fvar SlicingActions.print_f_crit select
 
 let get_select_kf (fvar, _select) = Globals.Functions.get fvar
 
@@ -611,8 +611,8 @@ let higher_select_stmt_ctrl =
 let higher_select_stmt_ctrl set ~spare =
   higher_select_stmt_ctrl set spare
 
-let higher_select_stmt_lval_rw set mark rd wr stmt scope eval =
-  SlicingCmds.select_stmt_lval_rw set mark ~rd ~wr stmt ~scope ~eval
+let higher_select_stmt_lval_rw set mark rd wr stmt eval =
+  SlicingCmds.select_stmt_lval_rw set mark ~rd ~wr stmt ~eval
 let higher_select_stmt_lval_rw =
   Journal.register
     "!Db.Slicing.Select.select_stmt_lval_rw"
@@ -621,18 +621,17 @@ let higher_select_stmt_lval_rw =
        Db.Slicing.Mark.dyn_t
        ~label3:("rd", None) Datatype.String.Set.ty
        ~label4:("wr", None) Datatype.String.Set.ty
-       (Datatype.func4
+       (Datatype.func3
           Stmt.ty
-          ~label2:("scope", None) Stmt.ty
-          ~label3:("eval", None) Stmt.ty
+          ~label2:("eval", None) Stmt.ty
           Kernel_function.ty
           Db.Slicing.Select.dyn_set))
     higher_select_stmt_lval_rw
-let higher_select_stmt_lval_rw set mark ~rd ~wr stmt ~scope ~eval =
-  higher_select_stmt_lval_rw set mark rd wr stmt scope eval
+let higher_select_stmt_lval_rw set mark ~rd ~wr stmt ~eval =
+  higher_select_stmt_lval_rw set mark rd wr stmt eval
 
-let higher_select_stmt_lval set mark lval before stmt scope eval =
-  SlicingCmds.select_stmt_lval set mark lval ~before stmt ~scope ~eval
+let higher_select_stmt_lval set mark lval before stmt eval =
+  SlicingCmds.select_stmt_lval set mark lval ~before stmt ~eval
 let higher_select_stmt_lval =
   Journal.register
     "!Db.Slicing.Select.select_stmt_lval"
@@ -641,15 +640,14 @@ let higher_select_stmt_lval =
        Db.Slicing.Mark.dyn_t
        Datatype.String.Set.ty
        ~label4:("before", None) Datatype.bool
-       (Datatype.func4
+       (Datatype.func3
           Stmt.ty
-          ~label2:("scope", None) Stmt.ty
-          ~label3:("eval", None) Stmt.ty
+          ~label2:("eval", None) Stmt.ty
           Kernel_function.ty
           Db.Slicing.Select.dyn_set))
     higher_select_stmt_lval
-let higher_select_stmt_lval set mark lval ~before stmt ~scope ~eval =
-  higher_select_stmt_lval set mark lval before stmt scope eval
+let higher_select_stmt_lval set mark lval ~before stmt ~eval =
+  higher_select_stmt_lval set mark lval before stmt eval
 
 let higher_select_stmt_annots set mark spare threat user_assert slicing_pragma loop_inv loop_var =
   SlicingCmds.select_stmt_annots set mark ~spare ~threat ~user_assert ~slicing_pragma ~loop_inv ~loop_var
@@ -674,8 +672,8 @@ let higher_select_stmt_annots =
 let higher_select_stmt_annots set mark ~spare ~threat ~user_assert ~slicing_pragma ~loop_inv ~loop_var =
     higher_select_stmt_annots set mark spare threat user_assert slicing_pragma loop_inv loop_var
 
-let higher_select_func_lval_rw set mark rd wr scope eval =
-  SlicingCmds.select_func_lval_rw set mark ~rd ~wr ~scope ~eval
+let higher_select_func_lval_rw set mark rd wr eval =
+  SlicingCmds.select_func_lval_rw set mark ~rd ~wr ~eval
 let higher_select_func_lval_rw =
   Journal.register
     "!Db.Slicing.Select.select_func_lval_rw"
@@ -684,14 +682,13 @@ let higher_select_func_lval_rw =
        Db.Slicing.Mark.dyn_t
        ~label3:("rd", None) Datatype.String.Set.ty
        ~label4:("wr", None) Datatype.String.Set.ty
-       (Datatype.func3
-          ~label1:("scope", None) Stmt.ty
-          ~label2:("eval", None) Stmt.ty
+       (Datatype.func2
+          ~label1:("eval", None) Stmt.ty
           Kernel_function.ty
           Db.Slicing.Select.dyn_set))
     higher_select_func_lval_rw
-let higher_select_func_lval_rw set mark ~rd ~wr ~scope ~eval =
-  higher_select_func_lval_rw set mark rd wr scope eval
+let higher_select_func_lval_rw set mark ~rd ~wr ~eval =
+  higher_select_func_lval_rw set mark rd wr eval
 
 let higher_select_func_return set spare =
     SlicingCmds.select_func_return set ~spare
@@ -842,7 +839,7 @@ let set_modes =
        ~label1:("calls", None) Datatype.int
        ~label2:("callers", None) Datatype.bool
        ~label3:("sliceUndef", None) Datatype.bool
-       ~label4:("keepAnnotation", None) Datatype.bool
+       ~label4:("keepAnnotations", None) Datatype.bool
        (Datatype.func2
           ~label1:("print", None) Datatype.bool
           Datatype.unit
@@ -1229,6 +1226,6 @@ let () = Db.Main.extend main
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

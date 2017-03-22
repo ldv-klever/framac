@@ -29,11 +29,10 @@ let adapt_filename f =
     try Filename.chop_extension f ^ ext
     with Invalid_argument _ -> f ^ ext
   in
-  change_suffix
-    (if Dynlink_common_interface.is_native then ".cmxs" else ".cmo")
+  change_suffix (if FCDynlink.is_native then ".cmxs" else ".cmo")
 
 (* [max_cpt t1 t2] returns the maximum of [t1] and [t2] wrt the total ordering
-   induced by tags creation. This ordering is defined as follow:
+   induced by tags creation. This ordering is defined as follows:
    forall tags t1 t2,
    t1 <= t2 iff
    t1 is before t2 in the finite sequence
@@ -159,6 +158,19 @@ let mapi f l =
     snd (List.fold_left (fun (i,acc) x -> (i+1,f i x :: acc)) (0,[]) l)
   in List.rev res
 
+(* Remove duplicates from a sorted list *)
+let list_unique cmp l =
+  let rec aux acc = function
+   | [] -> acc
+   | [e] -> e :: acc
+   | e1 :: (e2 :: _ as q) ->
+     if cmp e1 e2 = 0 then aux acc q else aux (e1 :: acc) q
+  in
+  List.rev (aux [] l)
+
+(* Remove once OCaml 4.02 is mandatory *)
+let sort_unique cmp l = list_unique cmp (List.sort cmp l)
+
 (* ************************************************************************* *)
 (** {2 Options} *)
 (* ************************************************************************* *)
@@ -205,7 +217,13 @@ let opt_filter f = function
   | None -> None
   | (Some x) as o -> if f x then o else None
 
-let the = function None -> invalid_arg "Extlib.the" | Some x -> x
+let the ?exn = function
+  | None ->
+    begin match exn with
+      | None -> invalid_arg "Extlib.the"
+      | Some exn -> raise exn
+    end
+  | Some x -> x
 
 let find_or_none f v = try Some(f v) with Not_found -> None
 
@@ -353,7 +371,7 @@ let temp_dir_cleanup_at_exit ?(debug=false) base =
   try_dir_cleanup_at_exit 10 base
 
 external terminate_process: int -> unit = "terminate_process" "noalloc"
-  (* In src/buckx/buckx_c.c *)
+  (* In src/buckx/buckx_c.c. Can be replaced by Unix.kill in OCaml >= 4.02 *)
 
 external usleep: int -> unit = "ml_usleep" "noalloc"
   (* In src/buckx/buckx_c.c ; man usleep for details. *)
@@ -362,14 +380,16 @@ external usleep: int -> unit = "ml_usleep" "noalloc"
 (** Strings *)
 (* ************************************************************************* *)
 
+external compare_strings: string -> string -> int -> bool = "compare_strings" "noalloc"
+
 let string_prefix ?(strict=false) prefix s =
   let add = if strict then 1 else 0 in
   String.length s >= String.length prefix + add
-  && String.sub s 0 (String.length prefix) = prefix
+  && compare_strings prefix s (String.length prefix)
 
 let string_del_prefix ?(strict=false) prefix s =
   if string_prefix ~strict prefix s then
-    Some 
+    Some
       (String.sub s
          (String.length prefix) (String.length s - String.length prefix))
   else None
@@ -392,13 +412,8 @@ let make_unique_name mem ?(sep=" ") ?(start=2) from =
 
 external compare_basic: 'a -> 'a -> int = "%compare"
 
-
-let pretty_position fmt p =
-  Format.fprintf fmt "<f:%s l:%d bol:%d c:%d>"
-    p.Lexing.pos_fname p.Lexing.pos_lnum p.Lexing.pos_bol p.Lexing.pos_cnum
-
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

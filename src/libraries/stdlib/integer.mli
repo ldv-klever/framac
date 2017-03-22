@@ -25,6 +25,9 @@
 
 type t
 
+exception Too_big (** Produced by values whose physical representation is too
+                      costly (e.g. in terms of memory usage). *)
+
 val equal : t -> t -> bool
 val compare : t -> t -> int
 val le : t -> t -> bool
@@ -76,7 +79,7 @@ val logand : t -> t -> t
 val logor : t -> t -> t
 val logxor : t -> t -> t
 val lognot : t -> t
-val two_power : t -> t			(* [two_power x] computes 2^x. *)
+val two_power : t -> t			(* [two_power x] computes 2^x. Can raise [Too_big]. *)
 val two_power_of_int : int -> t	        (* Similar to [two_power x], but x is an OCaml int. *)
 
 val extract_bits : start:t -> stop:t -> t -> t
@@ -115,6 +118,6 @@ val pretty : ?hexa:bool -> t Pretty_utils.formatter
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

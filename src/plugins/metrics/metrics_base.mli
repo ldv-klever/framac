@@ -52,6 +52,7 @@ module BasicMetrics : sig
     cdecision_points: int ;  (** Decision points of the program: ifs,
                               switch cases, exception handlers, ... *)
     cglob_vars: int;         (** Global variables *)
+    ccyclo: int;             (** Cyclomatic complexity *)
   }
 
 
@@ -68,6 +69,8 @@ module BasicMetrics : sig
   val incr_calls : t -> t ;;
   val incr_glob_vars : t -> t ;;
 
+  val set_cyclo : t -> int -> t ;;
+
   (** Update a reference from a pure functional function.
       Used in particular in combination with helper functions above.
   *)
@@ -77,7 +80,7 @@ module BasicMetrics : sig
   val empty_metrics: t;;
 
   (** Compute cyclomatic complexity from base_metrics record type. *)
-  val cyclo: t -> int;;
+  val compute_cyclo: t -> int;;
 
   (** Matrix-like representation of the record in "Title: value" stytle *)
   val to_list : t -> string list list ;;
@@ -89,32 +92,26 @@ module BasicMetrics : sig
 end
 ;;
 
-(** Local varinfo map where the comparison function is the lexicographic one on
-    their respectives names.
-*)
-module VInfoMap: sig
-  include FCMap.S with type key = Cil_types.varinfo
-
-  val to_varinfo_map: 'a t -> 'a Cil_datatype.Varinfo.Map.t
-end
+(** Local varinfo map and set where the comparison function is the
+    lexicographic one on their respectives names. *)
+module VInfoMap: FCMap.S with type key = Cil_types.varinfo
+module VInfoSet: FCSet.S with type elt = Cil_types.varinfo
 ;;
 
-val map_cardinal_varinfomap: 'a Cil_datatype.Varinfo.Map.t -> int;;
 
-(** Pretty print a varinfo set. *)
-val pretty_set :
-  ((Cil_types.varinfo -> int -> unit) -> 'a -> unit) ->
-  Format.formatter -> 'a -> unit
+(** Pretty print a varinfo set, with some additional information about the
+    varinfo. *)
+val pretty_set : Format.formatter -> int VInfoMap.t -> unit
 ;;
+
+val pretty_extern_vars: Format.formatter -> VInfoSet.t -> unit
 
 (** Handling entry points informations *)
-val number_entry_points :
-  ((Cil_types.varinfo -> int -> int -> int) -> 'a -> int -> 'b) -> 'a -> 'b
+val number_entry_points : int VInfoMap.t -> int
 ;;
 
 val pretty_entry_points :
-  ((Cil_types.varinfo -> int -> unit) -> 'a -> unit) -> Format.formatter ->
-  'a -> unit
+  Format.formatter -> int VInfoMap.t -> unit
 ;;
 
 (** Get the filename where the definition of a varinfo occurs *)
@@ -146,6 +143,12 @@ val get_file_type: string -> output_type;;
     Skip them using this auxiliary function.
 *)
 val consider_function: Cil_types.varinfo -> bool
+
+(** [consider_variable vinfo] returns false if the varinfo is not an object
+    variable we are interested in. Currently excluded variables are those
+    declared with attribute [__FRAMA_C_MODEL__]
+*)
+val consider_variable: Cil_types.varinfo -> bool
 
 (** Convert float to string with the following convention:
     - if the float is an integer (ie, it has no digits after the decimal point),

@@ -54,6 +54,6 @@ val pp_stmts_reached_by_function: Format.formatter -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

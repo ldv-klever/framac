@@ -20,492 +20,267 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* ************************************************************************* *)
-(** {2 Global variables for paths} *)
-(* ************************************************************************* *)
+(* -------------------------------------------------------------------------- *)
+(* --- Debugging                                                          --- *)
+(* -------------------------------------------------------------------------- *)
 
-let no_default = ref false
+module Klog = Cmdline.Kernel_log
+let dkey = Klog.register_category "dynlink"
 
-let set_default b = no_default := not b
-
-(* directories which plug-ins are searched in *)
-let plugin_dirs = ref (Str.split (Str.regexp ",[ ]*") Config.plugin_dir)
-
-let default_path () =
-  match !no_default, !Config.is_gui with
-  | true, _ -> []
-  | false, true ->
-    List.fold_left (fun acc d -> d :: (d ^ "/gui") :: acc) [] !plugin_dirs
-  | false, false -> !plugin_dirs
-
-(* list of directories which cannot be load: do not try to load them again. *)
-let bad_paths: string list ref = ref []
-
-(* ************************************************************************* *)
-(** {2 Debugging} *)
-(* ************************************************************************* *)
-
-open Cmdline.Kernel_log
-let dkey = register_category "dynamic_loading"
-
-(* Try to display an error message from the argument of a [Sys_error] exception
-   raised whenever a path is incorrect.  Don't display any error for default
-   path since it occurs whenever Frama-C is not installed. *)
-let catch_sysreaddir s =
-  (* [Sys_error] messages for path get usually the form "%s: %s" *)
-  let list_arg = Str.split (Str.regexp ": ") s in
-  match list_arg with
-  | [ dir; error ] ->
-      if not (List.mem dir (default_path ())) then
-        warning
-          "cannot search dynamic plugins inside directory `%s' (%s)."
-          dir error
-  | [] | [ _ ] | _ :: _ :: _ :: _ ->
-      raise (Sys_error s)
-
-(* To determine if Dynlink works on this OCaml version  *)
-let too_old_for_dynlink =
-  try
-    ignore (Dynlink_common_interface.init ());
-    false
-  with Dynlink_common_interface.Unsupported_Feature _ ->
-    true
-
-let is_dynlink_available =
-  not (too_old_for_dynlink && Dynlink_common_interface.is_native)
-
-(* apply [f] to [x] iff dynlink is available *)
-let dynlink_available f x = if is_dynlink_available then f x
-
-let extract_filename f =
-  let f = Filename.basename f in
-  try Filename.chop_extension f with Invalid_argument _ -> f
-
-(* ************************************************************************* *)
-(** {2 Dependency graph} *)
-(* ************************************************************************* *)
-
-module Dep_graph =
-  Graph.Imperative.Digraph.Concrete(
-      struct
-        type t = string
-        let compare s1 s2 =
-          let n1 = extract_filename s1 in
-          let n2 = extract_filename s2 in
-          Datatype.String.compare n1 n2
-        let equal s1 s2 = compare s1 s2 = 0
-        let hash s = Hashtbl.hash (extract_filename s)
-      end
-    )
-
-let plugin_dependencies = Dep_graph.create ()
-let add_dependencies ~from p = Dep_graph.add_edge plugin_dependencies from p
-
-(* debugging purpose only *)
-let _print_graph () =
-  let module G = 
-	Graph.Graphviz.Dot
-	  (struct
-	    include Dep_graph
-	    let graph_attributes _ = []
-	    let default_vertex_attributes _ = []
-	    let vertex_name s = s
-	    let vertex_attributes _ = []
-	    let get_subgraph _ = None
-	    let default_edge_attributes _ = []
-	    let edge_attributes _ = []
-	   end)
-  in
-  G.fprint_graph Format.std_formatter plugin_dependencies
-
-(* ************************************************************************* *)
-(** {2 Paths} *)
-(* ************************************************************************* *)
-
-(** @return true iff [path] is a readable directory *)
-let check_path ?(error=true) path =
-  not (List.mem path !bad_paths)
-  &&
-  try ignore (Sys.readdir path); true
-  with Sys_error s ->
-    if error then catch_sysreaddir s;
-    bad_paths := path :: !bad_paths;
-    false
-
-let rec init_paths =
-  let todo = ref true in
-  fun () ->
-    if !todo then begin
-      todo := false;
-      List.iter (fun s -> ignore (add_path s)) (default_path ())
-    end
-
-(** Display debug message and add a path to list of search path *)
-and add_path_list path =
-  feedback ~dkey
-    "dynamic plug-ins are now searched inside directory `%s'." path;
-  init_paths ();
-  plugin_dirs := path :: !plugin_dirs
-
-and add_path path =
-  (* the lazyness of && is used below *)
-  if not (List.mem path !plugin_dirs) && check_path path then begin
-    add_path_list path;
-    (* in GUI mode, try to load the GUI plug-ins before the standard ones *)
-    if !Config.is_gui then begin
-      let gui = path ^ "/gui" in
-      if check_path gui then add_path_list gui
-    end;
-    true
-  end else
-    false
-
-(* read_path is very similar to check_path but to check a path you must use
-   Sys.readdir and use Sys.readdir after. To prevent two use of Sys.readdir, I
-   introduce this function to check path and read path at the same time. *)
-(** @return read path and check error in the same times *)
-let read_path path=
-  (* sorting ensures a deterministic results of listing directories *)
-  try List.sort String.compare (Array.to_list (Sys.readdir path))
-  with Sys_error s -> catch_sysreaddir s; []
-
-(* ************************************************************************* *)
-(** {2 Loaded files} *)
-(* ************************************************************************* *)
-
-module Loading_error_messages: sig
-  val add: 
-    string (* name *) -> string (* message *) -> string (* detail *) -> unit
-  val print: unit -> unit
-end = struct
-
-  let tbl = Datatype.String.Hashtbl.create 7
-
-  let add name msg details =
-    let t =
-      try Datatype.String.Hashtbl.find tbl msg
-      with Not_found ->
-        let t = Datatype.String.Hashtbl.create 7 in
-        Datatype.String.Hashtbl.add tbl msg t;
-        t
-    in
-    Datatype.String.Hashtbl.replace t name details
-
-  let print () =
-    let once = true in
-    Datatype.String.Hashtbl.iter
-      (fun msg tbl ->
-         let len = Datatype.String.Hashtbl.length tbl in
-         assert (len > 0);
-         if len = 1 then
-           Datatype.String.Hashtbl.iter
-             (fun name details ->
-                let append fmt =
-                  if verbose_atleast 2 && details <> "" then
-                    Format.fprintf fmt " The exact failure is: %s." details
-                in
-                warning ~once ~append "cannot load plug-in `%s' (%s)." name msg)
-             tbl
-         else
-           let append fmt =
-             let first = ref true in
-             let print (name, details) =
-               if verbose_atleast 2 then
-                 Format.fprintf fmt "%s@;(%s)@\n" name details
-               else begin
-                 if !first then Format.fprintf fmt "%s" name
-                 else Format.fprintf fmt ";@;%s" name;
-                 first := false
-               end
-             in
-             let l =
-               Datatype.String.Hashtbl.fold
-                 (fun n d acc -> (n, d) :: acc) tbl []
-             in
-             List.iter print (List.sort Extlib.compare_basic l)
-           in
-           warning ~once ~append "cannot load %d plug-ins (%s).@\n" len msg)
-      tbl;
-    Datatype.String.Hashtbl.clear tbl
-
-end
-
-module Modules : sig
-  val register_once: string -> bool
-  val unregister: string -> unit
-  val mem: string -> bool
-end = struct
-
-  let module_names = ref Datatype.String.Set.empty
-  let forbidden_names = ref Datatype.String.Set.empty
-
-  let add s = module_names := Datatype.String.Set.add s !module_names
-  let disable s = forbidden_names := Datatype.String.Set.add s !forbidden_names
-
-  let () =
-    List.iter add Config.static_plugins;
-    List.iter (fun s -> add (s ^ "_gui")) Config.static_gui_plugins;
-    List.iter disable Config.compilation_unit_names
-
-  let register_once s =
-    if Datatype.String.Set.mem s !module_names then
-      false
-    else begin
-      if Datatype.String.Set.mem s !forbidden_names then begin
-        Loading_error_messages.add
-          (String.capitalize s)
-          "forbidden plug-in name"
-          "name already used by a Frama-C kernel file";
-        false
-      end else begin
-        add s;
-        true
-      end
-    end
-
-  let unregister s = module_names := Datatype.String.Set.remove s !module_names
-
-  let mem s = Datatype.String.Set.mem s !module_names
-
-end
-
-let is_plugin_present = Modules.mem
-
-(* ************************************************************************* *)
-(** {2 Loading of dynamic modules} *)
-(* ************************************************************************* *)
+let error ~name ~message ~details =
+  Klog.error "cannot load plug-in '%s': %s%t" name message
+    (fun fmt ->
+       if details <> "" && Klog.verbose_atleast 2 then
+         Format.fprintf fmt "@\nDetails: %s" details)
+    
+(* -------------------------------------------------------------------------- *)
+(* --- Dynlink Common Interface & Dynamic Library                         --- *)
+(* -------------------------------------------------------------------------- *)
 
 exception Unloadable of string
+
 module Tbl = Type.String_tbl(struct type 'a t = 'a end)
+module Dynlib = FCDynlink
+
+let dynlib_init = ref false
+let dynlib_init () =
+  if not !dynlib_init then
+    begin
+      dynlib_init := true ;
+      Dynlib.init () ;
+      Dynlib.allow_unsafe_modules true ;
+    end
 
 exception Incompatible_type = Tbl.Incompatible_type
 exception Unbound_value = Tbl.Unbound_value
 
-(* Distinction between native and bytecode versions *)
-let object_file_extension_regexp =
-  if Dynlink_common_interface.is_native then ".cmxs$" else ".cm[oa]$"
-
-let add_extension file =
-  if Dynlink_common_interface.is_native then file ^ ".cmxs"
-  else
-    let cma = file ^ ".cma" in
-    if Sys.file_exists cma then cma else file ^ ".cmo"
-
-let dynlink_file path module_name =
-  let error msg details =
-    Modules.unregister module_name;
-    Loading_error_messages.add (String.capitalize module_name) msg details
-  in
-  let file = add_extension (path ^ "/" ^ module_name) in
-  feedback ~dkey "loading plug-in '%s'." file;
-  try Dynlink_common_interface.loadfile file
-  with
-  | Dynlink_common_interface.Error e ->
-    (match e with
-    | Dynlink_common_interface.Not_a_bytecode_file s ->
-      error "not a bytecode file" s
-    | Dynlink_common_interface.File_not_found s ->
-      error "file not found" s
-    | Dynlink_common_interface.Inconsistent_import _
-    | Dynlink_common_interface.Linking_error _
-    | Dynlink_common_interface.Corrupted_interface _
-    | Dynlink_common_interface.Cannot_open_dll _
-    | Dynlink_common_interface.Inconsistent_implementation _
-    | Dynlink_common_interface.Unavailable_unit _ ->
-      error
-        (Format.sprintf "incompatible with %s" Config.version)
-        (Dynlink_common_interface.error_message e)
-    | Dynlink_common_interface.Unsafe_file -> assert false)
+let dynlib_error name = function
+  | Dynlib.Unsupported_Feature s ->
+      error ~name ~message:"dynamic loading not supported" ~details:s ;
+  | Dynlib.Error e ->
+      error ~name ~message:"cannot load module" ~details:(Dynlib.error_message e) ;
   | Sys_error _ as e ->
-    error "system error" (Printexc.to_string e)
-  | Unloadable s ->
-    error "incompatible with current set-up" s
+      error ~name ~message:"system error" ~details:(Printexc.to_string e)
+  | Unloadable details ->
+      error ~name ~message:"incompatible with current set-up" ~details
   (* the three next errors may be raised in case of incompatibilites with
      another plug-in *)
   | Incompatible_type s ->
-    error "code incompatibility" s
+      error ~name ~message:"code incompatibility" ~details:s
   | Unbound_value s ->
-    error "code incompatibility" ("unbound value " ^ s)
+      error ~name ~message:"code incompatibility" ~details:("unbound value " ^ s)
   | Type.No_abstract_type s ->
-    error "code incompatibility" ("unbound abstract type " ^ s)
+      error ~name ~message:"code incompatibility" ~details:("unbound abstract type " ^ s)
   | Log.AbortError _ | Log.AbortFatal _ | Log.FeatureRequest _ as e ->
-    raise e
+      raise e
   | e ->
-    fatal "unexpected exception %S" (Printexc.to_string e)
+      error ~name ~message:("unexpected exception: " ^ Printexc.to_string e)
+        ~details:(Printexc.get_backtrace ())
 
-(** Paths in which additional modules may be searched in: {!modules_to_load}
-    contains the long name of the plug-ins, so these [extra_paths] should be
-    useless. However, when there is a dependency involving such a module, this
-    dependency is stored without path. When the edge is added in the graph, it
-    replaces the previous long name by the short one.  So retrieving its path is
-    required. *)
-let extra_paths = ref []
+let dynlib_module name file =
+  Klog.feedback ~dkey "Loading module '%s' from '%s'." name file ;
+  try
+    dynlib_init () ;
+    Dynlib.loadfile file ;
+  with error ->
+    dynlib_error name error
 
-let load_module_from_unknown_path name =
-  if Modules.register_once name then begin
-    Modules.unregister name;
-    let regexp =
-      Str.regexp_case_fold (name ^ "\\" ^ object_file_extension_regexp)
-    in
-    let check_path path =
-      let files= read_path path in
-      List.exists (fun file -> Str.string_match regexp file 0) files
-    in
-    let paths = !plugin_dirs @ !extra_paths in
-    let tried = ref false in
+(* -------------------------------------------------------------------------- *)
+(* --- Utilities                                                          --- *)
+(* -------------------------------------------------------------------------- *)
+
+let split_word = Str.(split (regexp ":"))
+let split_ext p =
+  try
+    let k = String.rindex p '.' in
+    let d = try String.rindex p '/' with Not_found -> 0 in
+    (* check for '.' belonging to directory or not *)
+    if d <= k then
+      let n = String.length p in
+      String.sub p 0 k , String.sub p k (n-k)
+    else p , ""
+  with Not_found -> p , ""
+
+let is_package = 
+  let pkg = Str.regexp "[a-z-_]+$" in
+  fun name -> Str.string_match pkg name 0
+
+let is_meta =
+  let meta = Str.regexp "META.frama-c-[a-z-_]+$" in
+  fun name -> Str.string_match meta name 0
+
+let is_dir d = Sys.file_exists d && Sys.is_directory d 
+
+let is_file base ext =
+  let file = base ^ ext in
+  if Sys.file_exists file then Some file else None
+
+let is_object base =
+  if Dynlib.is_native then is_file base ".cmxs" else
+    match is_file base ".cma" with
+    | Some _ as file -> file
+    | None -> is_file base ".cmo"
+
+(* -------------------------------------------------------------------------- *)
+(* --- Package Loading                                                    --- *)
+(* -------------------------------------------------------------------------- *)
+
+let packages = Hashtbl.create 64
+
+let () = List.iter (fun p -> Hashtbl.add packages p ()) Config.library_names
+
+let missing pkg = not (Hashtbl.mem packages pkg)
+
+let once pkg =
+  if Hashtbl.mem packages pkg then false
+  else ( Hashtbl.add packages pkg () ; true )
+
+exception ArchiveError of string
+
+let predicates = if Dynlib.is_native then [ "plugin" ] else [ "byte" ]
+let load_archive pkg base file =
+  let path =
+    try Findlib.resolve_path ~base file
+    with Not_found ->
+      let msg = Printf.sprintf "archive '%s' not found in '%s'" file base in
+      raise (ArchiveError msg)
+  in dynlib_module pkg path
+
+let mem_package pkg =
+  try ignore (Findlib.package_directory pkg) ; true
+  with Findlib.No_such_package _ -> false
+
+let load_packages pkgs =
+  Klog.debug ~dkey "trying to load %a"
+    (Pretty_utils.pp_list ~sep:"@, " Format.pp_print_string) pkgs;
+  try
+    let pkgs = List.filter missing pkgs in
     List.iter
-      (fun p -> 
-	if check_path p then begin 
-	  tried := true;
-	  if Modules.register_once name then dynlink_file p name
-	end)
-      paths;
-    if not !tried then begin
-      Modules.unregister name;
-      Loading_error_messages.add 
-	name
-	"plug-in not found" 
-	(match paths with
-	| [] -> "no specified directory"
-	| [ p ] ->
-	  Pretty_utils.sfprintf "plug-in not found in directory `%s'" p
-	| _ :: _ ->
-	  Pretty_utils.sfprintf "plug-in not found in directories %a"
-	    (Pretty_utils.pp_list ~sep:":" Format.pp_print_string)
-	    paths);
-    end;
-    Loading_error_messages.print ();
-  end
+      begin fun pkg ->
+        if once pkg then
+          let base = Findlib.package_directory pkg in
+          let predicates =
+            if !Config.is_gui then "gui"::predicates else predicates in
+          let archive = Findlib.package_property predicates pkg "archive" in
+          let archives = split_word archive in
+          if archives = [] then
+            Klog.warning "no archive to load for package '%s'" pkg
+          else
+            List.iter (load_archive pkg base) archives
+      end
+      (Findlib.package_deep_ancestors predicates pkgs)
+  with
+  | Findlib.No_such_package(pkg,details) ->
+      Klog.error "[findlib] package '%s' not found (%s)" pkg details
+  | Findlib.Package_loop pkg ->
+      Klog.error "[findlib] cyclic dependencies for package '%s'" pkg
+  | ArchiveError msg ->
+      Klog.error "[findlib] %s" msg
 
-(* whether [load_all_modules] has been called *)
-let load_all_done = ref false
+(* -------------------------------------------------------------------------- *)
+(* --- Load Objects                                                       --- *)
+(* -------------------------------------------------------------------------- *)
 
-(* additional modules to load by [load_all_modules] *)
-let modules_to_load = ref []
+let load_path = ref [] (* initialized by load_modules *)
 
-let load_module f =
-  let load f =
-    if !load_all_done then
-      let name = extract_filename f in
-      let dir = Filename.dirname f in
-      if dir = Filename.current_dir_name && Filename.is_implicit f then
-        load_module_from_unknown_path (String.capitalize f)
+let load_script base =
+  Klog.feedback ~dkey "compiling script '%s.ml'" base ;
+  let cmd = Buffer.create 80 in
+  let fmt = Format.formatter_of_buffer cmd in
+  begin
+    if Dynlib.is_native then
+      Format.fprintf fmt "%s -shared -o %s.cmxs" Config.ocamlopt base
+    else
+      Format.fprintf fmt "%s -c" Config.ocamlc ;
+    Format.fprintf fmt " -w Ly -warn-error A -I %s" Config.libdir ;
+    if !Config.is_gui then Format.pp_print_string fmt " -I +lablgtk" ;
+    List.iter (fun p -> Format.fprintf fmt " -I %s" p) !load_path ;
+    Format.fprintf fmt " %s.ml" base ;
+    Format.pp_print_flush fmt () ;
+    let cmd = Buffer.contents cmd in
+    Klog.feedback ~dkey "running '%s'" cmd ;
+    begin
+      let res = Sys.command cmd in
+      if res <> 0
+      then Klog.error "compilation of '%s.ml' failed" base
       else
-        if Modules.register_once (String.capitalize name) then
-          dynlink_file dir name;
-      Loading_error_messages.print ()
-    else begin
-      (* delay module loading while the plug-in dependency graph is not built
-         (by [load_all_modules]) *)
-      modules_to_load := f :: !modules_to_load;
-      extra_paths := Filename.dirname f :: !extra_paths
-    end
-  in
-  dynlink_available load f
-
-let load_script =
-  let load f =
-    let name = extract_filename f in
-    let dir = Filename.dirname f in
-    let ml_name = dir ^ "/" ^ name ^ ".ml" in
-    let mk_name ext = dir ^ "/" ^ String.capitalize name ^ ext in
-    let gen_name = 
-      mk_name (if Dynlink_common_interface.is_native then ".cmxs" else ".cmo")
-    in
-    let cmd =
-      Format.sprintf "%s -w Ly -warn-error A -I %s%s%t -I %s %s"
-        (if Dynlink_common_interface.is_native then
-            Config.ocamlopt ^ " -shared -o " ^ gen_name
-         else
-            Config.ocamlc ^ " -c -o " ^ gen_name)
-        Config.libdir
-        (if !Config.is_gui then " -I +lablgtk2"
-         else "")
-        (fun () ->
-          List.fold_left (fun acc s -> " -I " ^ s ^ acc) "" !plugin_dirs)
-        dir
-        ml_name
-    in
-    feedback ~dkey "executing command `%s'." cmd;
-    let code = Sys.command cmd in
-    if code <> 0 then abort "command `%s' failed." cmd
-    else begin
-      let extended = add_path "." in
-      load_module gen_name;
-      if extended then begin
-	match !plugin_dirs with
-	| [] -> assert false (* contains at least '.', see def of [extended] *)
-	| _ :: l -> plugin_dirs := l
-      end;
-      let cleanup () =
-        feedback ~dkey "removing files generated when compiling `%s'." ml_name;
-        Extlib.safe_remove gen_name (* .cmo or .cmxs *);
-        Extlib.safe_remove (mk_name ".cmi");
-        if Dynlink_common_interface.is_native then begin
-          Extlib.safe_remove (mk_name ".o");
-          Extlib.safe_remove (mk_name ".cmx")
-        end
-      in
-      at_exit cleanup
-    end
-  in
-  dynlink_available load
-
-let plugins_of_dir d =
-  let filter f =
-    Str.string_match (Str.regexp (".+\\" ^ object_file_extension_regexp)) f 0
-  in
-  let files = read_path d in
-  let files = List.filter filter files in
-  List.map (fun f -> d ^ "/" ^ Filename.chop_extension f) files
-
-let load_dir d =
-  let load f =
-    if Modules.register_once f then dynlink_file d (Filename.basename f)
-  in
-  let modules = plugins_of_dir d in
-  (* order of loading inside a directory remains system-independent *)
-  List.iter load (List.sort String.compare modules)
-
-let load_dependencies d =
-  let dir = d ^ "/dependencies" in
-  if Sys.file_exists dir && Sys.is_directory dir then begin
-    load_dir dir;
-    Loading_error_messages.print ()
+        let pkg = Filename.basename base in
+        if Dynlib.is_native then
+          dynlib_module pkg (base ^ ".cmxs")
+        else
+          dynlib_module pkg (base ^ ".cmo") ;
+    end ;
+    let erase = Printf.sprintf "rm -f %s.cm* %s.o" base base in
+    Klog.feedback ~dkey "running '%s'" erase ;
+    let st = Sys.command erase in
+    if st <> 0 then
+      Klog.warning "Error when cleaning '%s.[o|cm*]' files" base ;
   end
 
-let load_all_modules () =
-  load_all_done := true;
-  init_paths ();
-  (* build the plug-in dependency graph *)
-  let add = Dep_graph.add_vertex plugin_dependencies in
-  let add_vertex dir =
-    let modules = plugins_of_dir dir in
-    List.iter add modules
-  in
-  (* add the plug-ins from the registered directories *)
-  List.iter add_vertex !plugin_dirs;
-  (* add the stand-alone modules *)
-  List.iter add !modules_to_load;
-  (* load the plug-ins dependencies *)
-  if not !no_default then  List.iter load_dependencies !plugin_dirs;
-  (* load the plug-ins dependencies of the stand-alone modules *)
-  List.iter
-    (fun s ->
-      let dir = Filename.dirname s ^ "/dependencies" in
-      let base = extract_filename s ^ "_dependencies" in
-      let file = add_extension (dir ^ "/" ^ base) in
-      if Sys.file_exists file && Modules.register_once base then
-        dynlink_file dir base;
-      Loading_error_messages.print ())
-    !modules_to_load;
-(*  print_graph ();*)
-  (* load the plug-ins by following the dependencies *)
-  let module T = Graph.Topological.Make_stable(Dep_graph) in
-  T.iter load_module plugin_dependencies;
-  Loading_error_messages.print ()
+(* -------------------------------------------------------------------------- *)
+(* --- Command-Line Entry Points                                          --- *)
+(* -------------------------------------------------------------------------- *)
 
-let () = Cmdline.load_all_plugins := load_all_modules
+let scan_directory pkgs dir =
+  Klog.feedback ~dkey "Loading directory '%s'" dir ;
+  try
+    let content = Sys.readdir dir in
+    Array.sort String.compare content ;
+    Array.iter
+      (fun name ->
+         if is_meta name then
+           (* name starts with "META.frama-c-" *)
+           let pkg = String.sub name 5 (String.length name - 5) in
+           pkgs := pkg :: !pkgs
+      ) content ;
+  with Sys_error error ->
+    Klog.error "impossible to read '%s' (%s)" dir error
+      
+let load_plugin_path path =
+  begin
+    let add_dir ~user d ps =
+      if is_dir d then d::ps else
+        ( if user then Klog.warning "cannot load '%s' (not a directory)" d
+        ; ps ) in
+    Klog.debug ~dkey "plugin_dir: %s" (String.concat ":" Config.plugin_dir);
+    load_path :=
+      List.fold_right (add_dir ~user:true) path
+        (List.fold_right (add_dir ~user:false) Config.plugin_dir []) ;
+    let pkgs = ref [] in
+    List.iter (scan_directory pkgs) !load_path ;
+    let findlib_path = String.concat ":" !load_path in
+    Klog.debug ~dkey "setting findlib path to %s" findlib_path;
+    Findlib.init ~env_ocamlpath:findlib_path ();
+    load_packages (List.rev !pkgs) ;
+  end
+
+let load_module m =
+  let base,ext = split_ext m in
+  match ext with
+  | ".ml" ->
+      begin
+        (* force script compilation *)
+        match is_file base ".ml" with
+        | Some _ -> load_script base
+        | None -> Klog.error "Missing source file '%s'" m
+      end
+  | "" | "." | ".cmo" | ".cma" | ".cmxs" ->
+      begin
+        (* load object or compile script or find package *)
+        match is_object base with
+        | Some file -> dynlib_module (Filename.basename base) file
+        | None ->
+            match is_file base ".ml" with
+            | Some _ -> load_script base
+            | None -> 
+                if is_package m && mem_package m then load_packages [m]
+                else
+                  let fc = "frama-c-" ^ String.lowercase m in
+                  if mem_package fc then load_packages [fc]
+                  else Klog.error "package or module '%s' not found" m
+      end
+  | _ ->
+      Klog.error "don't know what to do with '%s' (unexpected %s)" m ext
 
 (* ************************************************************************* *)
 (** {2 Registering and accessing dynamic values} *)
@@ -516,7 +291,7 @@ let comments_fordoc = Hashtbl.create 97
 
 let register ?(comment="") ~plugin name ty ~journalize f =
   if Cmdline.use_type then begin
-    debug ~level:5 "registering dynamic function %s" name;
+    Klog.debug ~level:5 "registering dynamic function %s" name;
     let f =
       if journalize then
         let comment fmt =
@@ -545,12 +320,11 @@ let register ?(comment="") ~plugin name ty ~journalize f =
     f
 
 let get ~plugin name ty =
-  if Cmdline.use_type then begin
-    if plugin <> "" then load_module_from_unknown_path plugin;
+  if Cmdline.use_type then
     Tbl.find dynamic_values (plugin ^ "." ^ name) ty
-  end else
+  else
     failwith
-      (Pretty_utils.sfprintf "cannot access value %s in the 'no obj' mode" name)
+      (Printf.sprintf "cannot access value %s in the 'no obj' mode" name)
 
 let iter f = Tbl.iter f dynamic_values
 let iter_comment f = Hashtbl.iter f comments_fordoc 
@@ -597,14 +371,14 @@ module Parameter = struct
 
   module Bool = struct
     include Common
-      (struct type t = bool let ty = Datatype.bool let modname = "Bool"end )
+        (struct type t = bool let ty = Datatype.bool let modname = "Bool"end )
     let on name = apply "Bool" name "on" Datatype.unit Datatype.unit
     let off name = apply "Bool" name "off" Datatype.unit Datatype.unit
   end
 
   module Int = struct
     include Common
-      (struct type t = int let ty = Datatype.int let modname = "Int" end )
+        (struct type t = int let ty = Datatype.int let modname = "Int" end )
     let incr name = apply "Int" name "incr" Datatype.unit Datatype.unit
   end
 
@@ -614,11 +388,11 @@ module Parameter = struct
         type t = string
         let ty = Datatype.string
         let modname = "String"
-       end)
+      end)
 
   module StringSet = struct
     include Common
-      (struct include Datatype.String.Set let modname = "StringSet" end)
+        (struct include Datatype.String.Set let modname = "StringSet" end)
     let add name = apply "StringSet" name "add" Datatype.string Datatype.unit
     let remove name =
       apply "StringSet" name "remove" Datatype.string Datatype.unit
@@ -631,15 +405,15 @@ module Parameter = struct
 
   module StringList = struct
     include Common
-      (struct
-        include Datatype.List(Datatype.String)
-        let modname = "StringList"
-       end)
+        (struct
+          include Datatype.List(Datatype.String)
+          let modname = "StringList"
+        end)
     let add name = apply "StringList" name "add" Datatype.string Datatype.unit
     let append_before name = apply "StringList" name "append_before"
-      (Datatype.list Datatype.string) Datatype.unit
+        (Datatype.list Datatype.string) Datatype.unit
     let append_after name = apply "StringList" name "append_after"
-      (Datatype.list Datatype.string) Datatype.unit
+        (Datatype.list Datatype.string) Datatype.unit
     let remove name =
       apply "StringList" name "remove" Datatype.string Datatype.unit
     let is_empty name =
@@ -651,18 +425,8 @@ module Parameter = struct
 
 end
 
-(* ************************************************************************* *)
-(** {2 Initialisation} *)
-(* ************************************************************************* *)
-
-let () =
-  if is_dynlink_available then begin
-    Dynlink_common_interface.init ();
-    Dynlink_common_interface.allow_unsafe_modules true;
-  end;
-
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

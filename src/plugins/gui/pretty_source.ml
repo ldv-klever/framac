@@ -30,7 +30,7 @@ type localizable =
   | PStmt of (kernel_function * stmt)
   | PLval of (kernel_function option * kinstr * lval)
   | PExp of (kernel_function option * kinstr * exp)
-  | PTermLval of (kernel_function option * kinstr * term_lval)
+  | PTermLval of (kernel_function option * kinstr * Property.t * term_lval)
   | PVDecl of (kernel_function option * varinfo)
   | PGlobal of global
   | PIP of Property.t
@@ -45,8 +45,9 @@ module Localizable =
         | PStmt (_,ki1), PStmt (_,ki2) -> ki1.sid = ki2.sid
         | PLval (_,ki1,lv1), PLval (_,ki2,lv2) ->
           Kinstr.equal ki1 ki2 && lv1 == lv2
-        | PTermLval (_,ki1,lv1), PTermLval (_,ki2,lv2) ->
-          Kinstr.equal ki1 ki2 && Logic_utils.is_same_tlval lv1 lv2
+        | PTermLval (_,ki1,pi1,lv1), PTermLval (_,ki2,pi2,lv2) ->
+          Kinstr.equal ki1 ki2 && Property.equal pi1 pi2 &&
+            Logic_utils.is_same_tlval lv1 lv2
         (* [JS 2008/01/21] term_lval are not shared: cannot use == *)
         | PVDecl (_,v1), PVDecl (_,v2) -> Varinfo.equal v1 v2
 	| PExp (_,_,e1), PExp(_,_,e2) -> Cil_datatype.Exp.equal e1 e2
@@ -67,7 +68,7 @@ module Localizable =
 	  Format.fprintf fmt "LocalizableExp %a (%a)"
             Printer.pp_exp lv
 	    Cil_datatype.Location.pretty (Cil_datatype.Kinstr.loc ki)
-        | PTermLval (_, ki, tlv) ->
+        | PTermLval (_, ki, _pi, tlv) ->
             Format.fprintf fmt "LocalizableTermLval %a (%a)"
             Printer.pp_term_lval tlv
 	    Cil_datatype.Location.pretty (Cil_datatype.Kinstr.loc ki)
@@ -82,7 +83,7 @@ module Localizable =
 let kf_of_localizable loc = match loc with
     | PLval (kf_opt, _, _)
     | PExp (kf_opt,_,_)
-    | PTermLval(kf_opt, _,_)
+    | PTermLval(kf_opt, _,_,_)
     | PVDecl (kf_opt, _) -> kf_opt
     | PStmt (kf, _) -> Some kf
     | PIP ip -> Property.get_kf ip
@@ -92,7 +93,7 @@ let kf_of_localizable loc = match loc with
 let ki_of_localizable loc = match loc with
     | PLval (_, ki, _)
     | PExp (_, ki, _)
-    | PTermLval(_, ki,_) -> ki
+    | PTermLval(_, ki,_,_) -> ki
     | PVDecl (_, _) -> Kglobal
     | PStmt (_, st) -> Kstmt st
     | PIP ip -> Property.get_kinstr ip
@@ -103,9 +104,8 @@ let varinfo_of_localizable loc =
     | Some kf -> Some (Kernel_function.get_vi kf)
     | None ->
         match loc with
-          | PGlobal (GVar (vi, _, _)
-                   | GVarDecl (_, vi, _)
-                   | GFun ({svar = vi }, _)) -> Some vi
+          | PGlobal (GVar (vi, _, _) | GVarDecl (vi, _)
+                    | GFunDecl (_, vi, _) | GFun ({svar = vi }, _)) -> Some vi
           | _ -> None
 
 
@@ -247,9 +247,9 @@ module Tag = struct
     (function lv ->
       incr current;
       Hashtbl.add h !current lv;
-      sprintf "%c%x" charcode !current),
+      sprintf "guitag:%c%x" charcode !current),
     (function code ->
-       Scanf.sscanf code "%c%x"
+       Scanf.sscanf code "guitag:%c%x"
          (fun c code ->
             if c=charcode then
               try Hashtbl.find h code with Not_found -> assert false
@@ -291,11 +291,16 @@ module Tag = struct
       assert false
 end
 
+(* We delay the creation of the class to execution time, so that all
+   pretty-printer extensions get properly registered (as we want to inherit
+   from them). The only known solution is to use a functor *)
+module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
+
 class tagPrinterClass : Printer.extensible_printer = object(self)
 
-  inherit Printer.extensible_printer () as super
+  inherit X.printer as super
 
-  method! varname fmt x = Printer.pp_varname fmt x
+  val mutable current_property = None
 
   method private current_kinstr =
     match self#current_stmt with
@@ -362,21 +367,31 @@ class tagPrinterClass : Printer.extensible_printer = object(self)
     if self#current_kinstr = Kglobal && self#current_kf = None then begin
       super#term_lval fmt lv (* Do not highlight the lvals in initializers. *)
     end else begin
-      Format.fprintf fmt "@{<%s>"
-        (Tag.create (PTermLval (self#current_kf, self#current_kinstr, lv)));
-      (match lv with
-      | TVar vi, (TField _| TIndex _ as o) ->
-        self#term_lval fmt (TVar vi, TNoOffset);
-        self#term_offset fmt o
-      | _ -> super#term_lval fmt lv
-      );
-      Format.fprintf fmt "@}"
+      match current_property with
+      | None -> (* Also use default printer for this case (possible inside
+                   pragmas, for example). *)
+        super#term_lval fmt lv
+      | Some ip ->
+        Format.fprintf fmt "@{<%s>"
+          (Tag.create
+             (PTermLval (self#current_kf, self#current_kinstr, ip, lv)));
+        (match lv with
+         | TVar vi, (TField _| TIndex _ as o) ->
+           self#term_lval fmt (TVar vi, TNoOffset);
+           self#term_offset fmt o
+         | _ -> super#term_lval fmt lv
+        );
+        Format.fprintf fmt "@}"
     end
 
   method! vdecl fmt vi =
     Format.fprintf fmt "@{<%s>%a@}"
       (Tag.create (PVDecl (self#current_kf,vi)))
       super#vdecl vi
+
+  method private tag_property p =
+    current_property <- Some p;
+    Tag.create (PIP p)
 
   method! code_annotation fmt ca =
     match ca.annot_content with
@@ -392,7 +407,7 @@ class tagPrinterClass : Printer.extensible_printer = object(self)
           in
           localize_predicate <- false;
           Format.fprintf fmt "@{<%s>%a@}"
-            (Tag.create (PIP ip))
+            (self#tag_property ip)
             super#code_annotation ca;
           localize_predicate <- true
       | AStmtSpec _ ->
@@ -408,7 +423,7 @@ class tagPrinterClass : Printer.extensible_printer = object(self)
   method! global fmt g =
     match g with
       (* these globals are already covered by PVDecl *)
-    | GVarDecl _ | GVar _ | GFun _ -> super#global fmt g
+    | GVarDecl _ | GVar _ | GFunDecl _ | GFun _ -> super#global fmt g
     | _ ->
         Format.fprintf fmt "@{<%s>%a@}"
           (Tag.create (PGlobal g))
@@ -419,65 +434,58 @@ class tagPrinterClass : Printer.extensible_printer = object(self)
     localize_predicate <- false;
     let b = Extlib.the self#current_behavior in
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_requires
-               (Extlib.the self#current_kf) self#current_kinstr b p)))
+      (self#tag_property
+         (Property.ip_of_requires
+            (Extlib.the self#current_kf) self#current_kinstr b p))
       super#requires p;
     localize_predicate <- true
 
   method! behavior fmt b =
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_behavior
-               (Extlib.the self#current_kf) self#current_kinstr b)))
+      (self#tag_property
+         (Property.ip_of_behavior
+            (Extlib.the self#current_kf) self#current_kinstr b))
       super#behavior b
 
   method! decreases fmt t =
     localize_predicate <- false;
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_decreases
-               (Extlib.the self#current_kf) self#current_kinstr t)))
+      (self#tag_property
+         (Property.ip_of_decreases
+            (Extlib.the self#current_kf) self#current_kinstr t))
       super#decreases t;
     localize_predicate <- true
 
   method! terminates fmt t =
     localize_predicate <- false;
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_terminates
-               (Extlib.the self#current_kf) self#current_kinstr t)))
+      (self#tag_property
+         (Property.ip_of_terminates
+            (Extlib.the self#current_kf) self#current_kinstr t))
       super#terminates t;
     localize_predicate <- true
 
   method! complete_behaviors fmt t =
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_complete
-               (Extlib.the self#current_kf) self#current_kinstr t)))
+      (self#tag_property
+         (Property.ip_of_complete
+            (Extlib.the self#current_kf) self#current_kinstr t))
       super#complete_behaviors t
 
   method! disjoint_behaviors fmt t =
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_disjoint
-               (Extlib.the self#current_kf) self#current_kinstr t)))
+      (self#tag_property
+         (Property.ip_of_disjoint
+            (Extlib.the self#current_kf) self#current_kinstr t))
       super#disjoint_behaviors t
 
   method! assumes fmt p =
     localize_predicate <- false;
     let b = Extlib.the self#current_behavior in
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_assumes
-               (Extlib.the self#current_kf) self#current_kinstr b p)))
+      (self#tag_property
+         (Property.ip_of_assumes
+            (Extlib.the self#current_kf) self#current_kinstr b p))
       super#assumes p;
     localize_predicate <- true
 
@@ -485,10 +493,9 @@ class tagPrinterClass : Printer.extensible_printer = object(self)
     localize_predicate <- false;
     let b = Extlib.the self#current_behavior in
     Format.fprintf fmt "@{<%s>%a@}"
-      (Tag.create
-         (PIP
-            (Property.ip_of_ensures
-               (Extlib.the self#current_kf) self#current_kinstr b pc)))
+      (self#tag_property
+         (Property.ip_of_ensures
+            (Extlib.the self#current_kf) self#current_kinstr b pc))
       super#post_cond pc;
     localize_predicate <- true
 
@@ -500,7 +507,7 @@ class tagPrinterClass : Printer.extensible_printer = object(self)
         None -> super#assigns s fmt a
       | Some ip ->
         Format.fprintf fmt "@{<%s>%a@}"
-          (Tag.create (PIP ip)) (super#assigns s) a
+          (self#tag_property ip) (super#assigns s) a
 
   method! from s fmt ((_, f) as from) =
     match f with
@@ -546,6 +553,7 @@ class tagPrinterClass : Printer.extensible_printer = object(self)
     else super#identified_predicate fmt ip
   *)
 end
+end
 
 exception Found of int*int
 
@@ -577,7 +585,7 @@ let locate_localizable state loc =
 let localizable_from_locs state ~file ~line =
   let loc_localizable = function
     | PStmt (_,st) | PLval (_,Kstmt st,_) | PExp(_,Kstmt st, _)
-    | PTermLval(_,Kstmt st,_) ->
+    | PTermLval(_,Kstmt st,_,_) ->
       Stmt.loc st
     | PIP ip ->
       (match Property.get_kinstr ip with
@@ -605,18 +613,18 @@ let localizable_from_locs state ~file ~line =
 let buffer_formatter state source =
   let starts = Stack.create () in
   let emit_open_tag s =
-    (*    Kernel.debug "EMIT TAG";*)
-    Stack.push
-      (source#end_iter#offset, Tag.get s)
-      starts;
+    (* Ignore tags that are not ours *)
+    if Extlib.string_prefix "guitag:" s then
+      Stack.push (source#end_iter#offset, Tag.get s) starts;
     ""
   in
-  let emit_close_tag _s =
+  let emit_close_tag s =
     (try
-       let (p,sid) = Stack.pop starts in
-       Locs.add state (p, source#end_iter#offset) sid
-     with Stack.Empty ->
-       Gui_parameters.debug "empty stack in emit_tag");
+        if Extlib.string_prefix "guitag:" s then
+          let (p,sid) = Stack.pop starts in
+          Locs.add state (p, source#end_iter#offset) sid
+      with Stack.Empty -> (* This should probably be a hard error *)
+        Gui_parameters.debug "empty stack in emit_tag");
     ""
   in
   let gtk_fmt = Gtk_helper.make_formatter source in
@@ -691,7 +699,10 @@ let display_source globals
        Locs.set_hilite state hiliter;
        (*  Kernel.debug "Display source starts";*)
        let gtk_fmt = buffer_formatter state (source:>GText.buffer) in
-       let tagPrinter = new tagPrinterClass in
+       let pp = Printer.current_printer () in
+       let module CurrentPP = (val pp: Printer.PrinterClass) in
+       let module TagPrinterClass = TagPrinterClassDeferred(CurrentPP) in
+       let tagPrinter = new TagPrinterClass.tagPrinterClass in
        let display_global g =
          tagPrinter#global gtk_fmt g;
          Format.pp_print_flush gtk_fmt ()
@@ -775,10 +786,17 @@ class pos_to_localizable =
 object (self)
   inherit Visitor.frama_c_inplace
 
+  (* used to keep track of conditional expressions, to add them to the
+     list of relevant localizables *)
+  val mutable insideIf = None
+
   method add_range loc (localizable : localizable) =
     if not (Location.equal loc Location.unknown) then (
       let p1, p2 = loc in
-      assert (p1.Lexing.pos_fname = p2.Lexing.pos_fname);
+      if p1.Lexing.pos_fname != p2.Lexing.pos_fname then
+        Gui_parameters.debug "Localizable over two files: %s and %s; %a"
+          p1.Lexing.pos_fname p2.Lexing.pos_fname
+          Localizable.pretty localizable;
       let file = p1.Lexing.pos_fname in
       let hfile =
         try MappingLineLocalizable.find file
@@ -794,7 +812,51 @@ object (self)
 
   method! vstmt_aux s =
     Gui_parameters.debug ~level:3 "Locs for Stmt %d" s.sid;
-    self#add_range (Stmt.loc s) (PStmt (Extlib.the self#current_kf, s));
+    (* we ignore Block statements, since they tend to overlap existing
+       ones which are more precise *)
+    let skip = match s.skind with
+      | Block _ -> true
+      | _ -> false
+    in
+    if not skip then
+      self#add_range (Stmt.loc s) (PStmt (Extlib.the self#current_kf, s));
+    begin
+      match s.skind with
+      | If (exp, _, _, _) ->
+        (* conditional expressions are treated in a special way *)
+        insideIf <- Some (Kstmt s);
+        ignore (Cil.visitCilExpr (self :> Cil.cilVisitor) exp);
+        insideIf <- None
+      | _ -> ()
+    end;
+    Cil.DoChildren
+
+  method! vexpr exp =
+    begin
+      match insideIf with
+      | Some ki ->
+        (* expressions inside conditionals have a special treatment *)
+        begin
+          match exp.enode with
+          | Lval lv ->
+            (* lvals must be generated differently from other expressions *)
+            self#add_range exp.eloc (PLval(self#current_kf, ki, lv))
+          | _ ->
+            self#add_range exp.eloc (PExp(self#current_kf, ki, exp))
+        end
+      | None -> ()
+    end;
+    Cil.DoChildren
+
+  method! vvdec vi =
+    if not vi.vglob && not vi.vtemp then
+      begin
+        Gui_parameters.debug ~level:3 "Locs for local var decl: %s%!" vi.vname;
+        match self#current_kf with
+        | None -> (* should not happen*) ()
+        | Some kf ->
+          self#add_range vi.vdecl (PVDecl (Some kf, vi));
+      end;
     Cil.DoChildren
 
   method! vglob_aux g =
@@ -804,17 +866,72 @@ object (self)
           self#add_range loc (PVDecl (Some (Globals.Functions.get vi), vi))
       | GVar (vi, _, loc) ->
           self#add_range loc (PVDecl (None, vi))
-      | GVarDecl (_, vi, loc) ->
-          if Cil.isFunctionType vi.vtype then
-            self#add_range loc (PVDecl (Some (Globals.Functions.get vi), vi))
-          else
-            self#add_range loc (PVDecl (None, vi))
+      | GFunDecl (_, vi, loc) ->
+          self#add_range loc (PVDecl (Some (Globals.Functions.get vi), vi))
+      | GVarDecl (vi, loc) ->
+          self#add_range loc (PVDecl (None, vi))
       | _ -> self#add_range (Global.loc g) (PGlobal g)
     );
     Cil.DoChildren
 end
 
-let loc_to_localizable loc =
+(* Returns [true] if the column [col] is within location [loc]. *)
+let location_contains_col loc col =
+  let (pos_start, pos_end) = loc in
+  let (col_start, col_end) =
+    pos_start.Lexing.pos_cnum - pos_start.Lexing.pos_bol,
+    pos_end.Lexing.pos_cnum - pos_end.Lexing.pos_bol
+  in
+  col_start <= col && col <= col_end
+
+(* Applies several heuristics to try and match the best localizable to a
+   given location [loc]. The list [possible_locs] should contain all
+   localizables in a given line. If [possible_col] is [true], then we try
+   to take column information into account.
+   Some heuristics may return an empty list, in which case a fallback is
+   later used to return a better choice. *)
+let apply_location_heuristics precise_col possible_locs loc =
+  let col = loc.Lexing.pos_cnum - loc.Lexing.pos_bol in
+  (* Heuristic 1: we try to obtain a subset of localizables related to a given
+     position, or a given column if [precise_col] is true.
+     May result in an empty list. *)
+  let filter_locs l =
+    List.filter (fun (((pos_start, _) as loc'), _) ->
+        if precise_col then location_contains_col loc' col
+        else loc = pos_start
+      ) l
+  in
+  (* Heuristic 2: prioritize expressions if they are present.
+     May result in an empty list. *)
+  let exps l =
+    List.filter (fun (_, lz) -> match lz with | PExp _ -> true | _ -> false) l
+  in
+  (* Heuristic 3: when we have more than one match with the exact same location,
+     we pick the last one in the list. This will be the first statement that has
+     been encountered, and this criterion seems to work well with temporaries
+     introduced by Cil. *)
+  let last l = match List.rev l with [] -> None | (_, lz) :: _ -> Some lz in
+  (* Heuristic 4: when there are no exact locations, we will consider the
+     innermost ones, that is, those at the top of the list. *)
+  let innermost_in loc l =
+    List.filter (fun (loc', _) -> Location.equal loc loc') l
+  in
+  match possible_locs, filter_locs possible_locs with
+  | [], _ -> (* no possible localizables *) None
+  | _, (_ :: _ as exact) ->
+    (* one or more exact localizables; we prioritize expressions *)
+    begin
+      match exps exact with
+      | [] -> (* no expressions, just take the last localizable *) last exact
+      | exps -> (* take the last (usually only) expression *) last exps
+    end
+  | (loc', _) :: __, [] ->
+    (* No exact loc. We consider the innermost statements,
+       ie those at the top of the list *)
+    let filtered = innermost_in loc' possible_locs in
+    last filtered
+
+let loc_to_localizable ?(precise_col=false) loc =
   if not (MappingLineLocalizable.is_computed ()) then (
     Gui_parameters.debug "Computing inverse locs";
     let vis = new pos_to_localizable in
@@ -826,25 +943,14 @@ let loc_to_localizable loc =
     let hfile = MappingLineLocalizable.find loc.Lexing.pos_fname in
     (* Find the localizable for this line *)
     let all = LineToLocalizable.find_all hfile loc.Lexing.pos_lnum in
-    (* Try to a find the good localizable. When we have more than one matches
-       with the exact same location, we pick the last one in the list. This
-       will be the first statement that has been encountered, and this
-       criterion seems to work well with temporaries introduced by Cil *)
-    let last l = match List.rev l with [] -> None | (_, loc) :: _ -> Some loc in
-    (match all, List.filter (fun ((loc', _), _) -> loc = loc') all with
-      | [], _ -> None
-      | _, (_ :: _ as exact) -> last exact (* a pos exactly corresponds *)
-      | (l, _) :: __, [] -> (* No exact loc. We consider the innermost
-                               statements, ie those at the top of the list *)
-          last (List.filter (fun (l', _) -> Location.equal l l') all)
-    )
-  with Not_found ->
+    apply_location_heuristics precise_col all loc
+  with
+  | Not_found ->
     Gui_parameters.debug "No pretty-printed loc found";
     None
 
-
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

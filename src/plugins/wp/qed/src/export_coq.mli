@@ -26,10 +26,10 @@ open Plib
 
 (** Exportation Engine for Coq.
 
-    Provides a full {{:Export.S.engine-c.html}engine} 
+    Provides a full {{:Export.S.engine-c.html}engine}
     from a {{:Export.S.linker-c.html}linker}. *)
 
-module Make(T : Term) : 
+module Make(T : Term) :
 sig
 
   open T
@@ -38,7 +38,7 @@ sig
     object
       inherit [Z.t,ADT.t,Field.t,Fun.t,tau,var,term] Engine.engine
       method op_spaced : string -> bool
-      method declare_fixpoint : prefix:string -> 
+      method declare_fixpoint : prefix:string ->
         formatter -> Fun.t -> var list -> tau -> term -> unit
     end
 

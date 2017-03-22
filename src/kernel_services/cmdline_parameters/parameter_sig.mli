@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Signatures for command line options. 
-    @plugin development guide *)
+(** Signatures for command line options. *)
 
 (* ************************************************************************** *)
 (** {2 Input signatures} 
@@ -61,12 +60,6 @@ module type String_datatype = sig
 
   val to_string: t -> string
 end
-
-val no_element_of_string: string -> 'a
-(**
-   @raise Cannot_build for any entry
-   @since Sodium-20150201
- *)
 
 (** Signature requires to build custom collection parameters in which elements
     are convertible to string.
@@ -197,8 +190,7 @@ module type S_no_parameter = sig
 
 end
 
-(** Generic signature of a parameter.
-    @plugin development guide *)
+(** Generic signature of a parameter. *)
 module type S = sig
   include S_no_parameter
   val parameter: Typed_parameter.t
@@ -402,15 +394,14 @@ module type Set = sig
 
 end
 
-(** @plugin development guide
-    @modify Sodium-20150201 *)
+(** @modify Sodium-20150201 *)
 module type String_set =
   Set with type elt = string and type t = Datatype.String.Set.t
 
 (** Set of defined kernel functions. If you want to also include pure
     prototype, use {!Parameter_customize.argument_may_be_fundecl}.
-
-    @since Sodium-20150201 *)
+    @since Sodium-20150201
+    @plugin development guide *)
 module type Kernel_function_set =
   Set with type elt = Cil_types.kernel_function
       and type t = Cil_datatype.Kf.Set.t
@@ -482,6 +473,11 @@ end
     new command line options.
     @plugin development guide *)
 module type Builder = sig
+
+  val no_element_of_string: string -> 'a
+  (** @raise Cannot_build for any entry
+      @since Sodium-20150201
+  *)
 
   module Bool(X:sig include Input val default: bool end): Bool
   module Action(X: Input) : Bool
@@ -608,6 +604,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

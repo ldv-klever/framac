@@ -62,6 +62,8 @@ val is_reachable : t -> bool
 val join : t -> t -> t
 val is_included : t -> t -> bool
 
+val narrow : t -> t -> t
+
 (** Bases that must be widening in priority, plus widening hints for each
     base. *)
 type widen_hint = Base.Set.t * (Base.t -> widen_hint_base)
@@ -190,6 +192,6 @@ exception Found_prefix of Hptmap.prefix * subtree * subtree
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

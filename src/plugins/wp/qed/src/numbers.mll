@@ -25,10 +25,10 @@
 (* -------------------------------------------------------------------------- *)
 
 {
-  
+
   type base = Dec | Hex
   type sign = Pos | Neg
-      
+
   type cst = {
     base : base ;
     sign : sign ;
@@ -45,7 +45,7 @@
     | "" -> Pos
     | s -> error "Unexpected sign" s
 
-  let exp e = 
+  let exp e =
     (* first char: exponent, second char: optional sign *)
     let n = String.length e in
     if n > 1 then
@@ -91,9 +91,9 @@ and token_dec = parse
       { compile (sign s) Dec m c (exp e) }
 
   | _ { raise Not_found }
-    
+
 and token_hex = parse
-    
+
     (sign? as s) "0x"? (hex* as m) (("." hex*)? as c) ((['p' 'P'] exp)? as e) eof
       { compile (sign s) Hex m c (exp e) }
 
@@ -101,7 +101,7 @@ and token_hex = parse
 
 {
 
-  let parse ?base s = 
+  let parse ?base s =
     try
       let lexbuf = Lexing.from_string s in
       match base with
@@ -122,14 +122,14 @@ and token_hex = parse
 
   let is_zero cst = cst.man = "" && cst.com = ""
 
-  let hex c = 
+  let hex c =
     let d = match c with
       | '0' .. '9' -> int_of_char '0'
       | 'a' .. 'f' -> int_of_char 'a' - 10
       | 'A' .. 'F' -> int_of_char 'A' - 10
-      | _ -> 
-	  let e = "?" in e.[0] <- c ; 
-	  error "Incorrect hex-digit" e 
+      | _ ->
+	  let e = "?" in e.[0] <- c ;
+	  error "Incorrect hex-digit" e
     in int_of_char c - d
 
   open Big_int
@@ -148,12 +148,12 @@ and token_hex = parse
     add_hex s a 1
 
   let big_int_of_hex s =
-    if String.length s > 0 
+    if String.length s > 0
     then of_hex s
     else zero_big_int
 
   let dec_of_hex s =
-    if String.length s > 0 
+    if String.length s > 0
     then string_of_big_int (of_hex s)
     else ""
 
@@ -167,7 +167,7 @@ and token_hex = parse
     let s = String.make (succ e) '0' in
     s.[0] <- '1' ; s
 
-  let significant cst = 
+  let significant cst =
     let digits = cst.man ^ cst.com in
     let coma = String.length cst.com in
     let exp = match cst.base with

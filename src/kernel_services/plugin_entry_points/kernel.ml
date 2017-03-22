@@ -128,26 +128,51 @@ let () = Parameter_customize.set_negative_option_name ""
 module GeneralHelp =
   False
     (struct
-      let option_name = "-help"
+      let option_name = "--help"
       let help = "display a general help"
       let module_name = "GeneralHelp"
      end)
-
 let run_help () = if GeneralHelp.get () then Cmdline.help () else Cmdline.nop
 let () = Cmdline.run_after_exiting_stage run_help
-let () = GeneralHelp.add_aliases [ "--help"; "-h" ]
+let () = GeneralHelp.add_aliases [ "-h"; "-help"]
+
+let () = Parameter_customize.set_group help
+let () = Parameter_customize.set_cmdline_stage Cmdline.Exiting
+let () = Parameter_customize.do_not_journalize ()
+let () = Parameter_customize.set_negative_option_name ""
+module ListPlugins =
+  False
+    (struct
+      let option_name = "--list-plugins"
+      let help = "display a general help"
+      let module_name = "ListPlugins"
+    end)
+let run_list_plugins () =
+  if ListPlugins.get () then Cmdline.list_plugins () else Cmdline.nop
+let () = Cmdline.run_after_exiting_stage run_list_plugins
+let () = ListPlugins.add_aliases ["-plugins"; "--plugins"]
+
+let () = Parameter_customize.set_group help
+let () = Parameter_customize.set_cmdline_stage Cmdline.Early
+let () = Parameter_customize.set_negative_option_name ""
+module PrintConfig =
+  False
+    (struct
+       let option_name = "-print-config"
+       let module_name = "PrintConfig"
+       let help = "print full config information"
+     end)
 
 let () = Parameter_customize.set_group help
 let () = Parameter_customize.set_cmdline_stage Cmdline.Early
 let () = Parameter_customize.set_negative_option_name ""
 module PrintVersion =
-  False
-    (struct
-       let option_name = "-version"
-       let module_name = "PrintVersion"
-       let help = "print version information"
-     end)
-let () = PrintVersion.add_aliases [ "-v"; "--version" ]
+  False(struct
+          let option_name = "-print-version"
+          let module_name = "PrintVersion"
+          let help = "print the Frama-C version"
+        end)
+let () = PrintVersion.add_aliases [ "-v"; "-version" ; "--version" ]
 
 let () = Parameter_customize.set_group help
 let () = Parameter_customize.set_cmdline_stage Cmdline.Early
@@ -314,6 +339,18 @@ module UseUnicode = struct
   let off = deprecated "UseUnicode.off" ~now:"Unicode.off" off
   let get = deprecated "UseUnicode.get" ~now:"Unicode.get" get
 end
+
+let () = Parameter_customize.set_group messages
+let () = Parameter_customize.do_not_projectify ()
+let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
+module TTY =
+  True
+    (struct
+      let option_name = "-tty"
+      let module_name = "TTY"
+      let help = "use terminal capabilities for feedback (when available)"
+    end)
+let () = Log.tty := TTY.get
 
 let () = Parameter_customize.set_group messages
 let () = Parameter_customize.do_not_projectify ()
@@ -523,52 +560,34 @@ module AddPath =
     (struct
        let option_name = "-add-path"
        let module_name = "AddPath"
-       let arg_name = "p1, ..., pn"
-       let help = "prepend paths to dynamic plugins search path"
+       let arg_name = "DIR,..."
+       let help = "Prepend directories to FRAMAC_PLUGIN for loading dynamic plug-ins"
      end)
-let () =
-  AddPath.add_set_hook
-    (fun _ _ -> AddPath.iter (fun s -> ignore (Dynamic.add_path s)))
 
 let () = Parameter_customize.set_group saveload
 let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
 let () = Parameter_customize.do_not_projectify ()
 module LoadModule =
-  String_set
+  String_list
     (struct
        let option_name = "-load-module"
        let module_name = "LoadModule"
-       let arg_name = "m1, ..., mn"
-       let help = "load the given modules dynamically"
-     end)
-let () =
-  LoadModule.add_set_hook (fun _ _ -> LoadModule.iter Dynamic.load_module)
+       let arg_name = "SPEC,..."
+       let help = "Dynamically load plug-ins, modules and scripts. \
+                   Each <SPEC> can be an OCaml source or object file, with \
+                   or without extension, or a directory of oject OCaml \
+                   files to load, or a Findlib package. Loading order is preserved \
+                   and additional dependencies can be listed in *.depend files."
+    end)
+let () = LoadModule.add_aliases [ "-load-script" ]
 
-let () = Parameter_customize.set_group saveload
-let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
-let () = Parameter_customize.do_not_projectify ()
-module Dynlink =
-  True
-    (struct
-      let option_name = "-dynlink"
-      let module_name = "Dynlink"
-      let help = "if set, load all the found dynamic plug-ins"
-     end)
-let () = Dynlink.add_set_hook (fun _ -> Dynamic.set_default)
+let bootstrap_loader () =
+  begin
+    Dynamic.load_plugin_path (AddPath.get()) ;
+    List.iter Dynamic.load_module (LoadModule.get()) ;
+  end
 
-let () = Parameter_customize.set_group saveload
-let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
-let () = Parameter_customize.do_not_projectify ()
-module LoadScript =
-  String_set
-    (struct
-      let option_name = "-load-script"
-      let module_name = "LoadScript"
-      let arg_name = "m1, ..., mn"
-      let help = "load the given OCaml scripts dynamically"
-     end)
-let () =
-  LoadScript.add_set_hook (fun _ _ -> LoadScript.iter Dynamic.load_script)
+let () = Cmdline.load_all_plugins := bootstrap_loader 
 
 module Journal = struct
   let () = Parameter_customize.set_negative_option_name "-journal-disable"
@@ -656,6 +675,22 @@ module Machdep =
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
+module CustomAnnot =
+  P.Empty_string(
+      struct
+        let option_name = "-custom-annot-char"
+        let help = "use a custom character <c> for starting ACSL annotations"
+        let arg_name = "c"
+      end)
+let () = CustomAnnot.add_set_hook 
+           (fun _ s ->
+            if CamlString.length s <> 1 then
+              abort
+                "-custom-annot expects a single character. Invalid argument %s"
+                s)
+
+let () = Parameter_customize.set_group parsing
+let () = Parameter_customize.do_not_reset_on_copy ()
 module ReadAnnot =
   True(struct
          let module_name = "ReadAnnot"
@@ -683,7 +718,7 @@ module CppCommand =
        let arg_name = "cmd"
        let help = "<cmd> is used to build the preprocessing command.\n\
 Default to $CPP environment variable or else \"gcc -C -E -I.\".\n\
-If unset, the command is built as follow:\n\
+If unset, the command is built as follows:\n\
   CPP -o <preprocessed file> <source file>\n\
 %1 and %2 can be used into CPP string to mark the position of <source file> \
 and <preprocessed file> respectively"
@@ -1171,6 +1206,6 @@ module TypeCheck =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

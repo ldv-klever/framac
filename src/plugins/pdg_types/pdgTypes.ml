@@ -40,7 +40,7 @@ module Node : sig
 end
 = struct
 
-  type tt = { id : int; key : PdgIndex.Key.t }
+  type t = { id : int; key : PdgIndex.Key.t }
 
   module Counter =
     State_builder.Counter(struct let name = "PdgTypes.Node.Counter" end)
@@ -64,9 +64,11 @@ end
   let print_id fmt n = 
     Format.fprintf fmt "n:%a" print_id n
 
-  include Datatype.Make_with_collections
-    (struct
-        type t = tt
+  include
+    (Datatype.Make_with_collections
+      (struct
+        type node = t
+        type t = node
         let name = "PdgTypes.Elem"
         let reprs = [ { id = -1; key = PdgIndex.Key.top_input } ]
         let structural_descr = 
@@ -81,7 +83,8 @@ end
         let internal_pretty_code = Datatype.undefined
         let varname = Datatype.undefined
         let mem_project = Datatype.never_any_project
-     end)
+      end)
+     : Datatype.S_with_collections with type t := t)
 
   let pretty_list fmt l =
     List.iter (fun n -> Format.fprintf fmt " %a" pretty n) l
@@ -764,6 +767,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

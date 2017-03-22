@@ -42,7 +42,7 @@ struct
   let create () = build H.Map.empty
   let copy s = build s.map
 
-  let newchunk c = 
+  let newchunk c =
     Lang.freshvar ~basename:(C.basename_of_chunk c) (C.tau_of_chunk c)
 
   let merge a b =
@@ -63,7 +63,7 @@ struct
       let x = newchunk c in
       w.map <- H.Map.add c x w.map ; x
 
-  let mem w c = H.Map.mem c w.map    
+  let mem w c = H.Map.mem c w.map
 
   let join a b =
     let p = ref Passive.empty in
@@ -82,7 +82,7 @@ struct
       (fun chunk x y ->
          if not (H.Set.mem chunk written) then
            match x,y with
-           | Some x , Some y when x != y -> 
+           | Some x , Some y when x != y ->
                p := Bag.add (p_equal (e_var x) (e_var y)) !p
            | Some x , None -> b.map <- H.Map.add chunk x b.map
            | None , Some y -> a.map <- H.Map.add chunk y a.map
@@ -102,7 +102,7 @@ struct
     let x = newchunk c in
     build (H.Map.add c x w.map)
 
-  let havoc_any ~call w = 
+  let havoc_any ~call w =
     let framer c x = if call && C.is_framed c then x else newchunk c in
     build (H.Map.mapi framer w.map)
 
@@ -111,7 +111,7 @@ struct
   let pretty fmt w =
     begin
       Format.fprintf fmt "@[<hov 2>@@%s%d[" C.self w.id ;
-      H.Map.iter 
+      H.Map.iter
         (fun c x -> Format.fprintf fmt "@ %a:%a" C.pretty c Var.pretty x) w.map ;
       Format.fprintf fmt " ]@]" ;
     end

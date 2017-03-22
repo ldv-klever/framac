@@ -326,21 +326,7 @@ Prove: true.
 
 Goal Assigns (file tests/wp_hoare/dispatch_var.i, line 139) in 'call_ref_ctr_nr' (4/4):
 Call Result at line 148
-Assume {
-  (* Domain *)
-  Type: (is_sint32 r5_0) /\ (is_sint32 ref_ctr_nr_0)
-        /\ (is_sint32 (ref_ctr_nr_0-2)).
-  (* tests/wp_hoare/dispatch_var.i:147: Conditional *)
-  If: 0=r5_0
-  Then {
-    (* tests/wp_hoare/dispatch_var.i:147: Assignment *)
-    Have: 4=ref_ctr_nr_0.
-  }
-  Else {
-    (* tests/wp_hoare/dispatch_var.i:147: Assignment *)
-    Have: 4=ref_ctr_nr_0.
-  }
-}
+Assume { }
 Prove: true.
 
 ------------------------------------------------------------

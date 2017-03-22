@@ -28,7 +28,7 @@ open ProverWhy3
 
 class provers : string -> [dp list] Toolbox.selector
 
-class dp_chooser : 
+class dp_chooser :
   main:Design.main_window_extension_points ->
   available:provers ->
   enabled:provers ->

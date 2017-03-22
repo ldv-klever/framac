@@ -201,7 +201,7 @@ let impact_statement restrict s =
       List.iter (Highlighted_stmt.add kf) stmts'
     ) impact;
   let impact = List.concat !stmts in
-  if Slicing.get () then !Db.Impact.slice impact;
+  if Slicing.get () then Register.slice impact;
   Enabled.set true;
   impact
 
@@ -403,6 +403,6 @@ let () = Design.register_extension main
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

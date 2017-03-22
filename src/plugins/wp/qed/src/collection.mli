@@ -81,7 +81,7 @@ sig
 
 end
 
-module type Set = 
+module type Set =
 sig
 
   type elt
@@ -128,11 +128,11 @@ sig
   val equal : t -> t -> bool
   val compare : t -> t -> int
 
-  module Map : Map 
+  module Map : Map
     with type 'a t = 'a map
      and type key = t
      and type domain = set
-  module Set : Set 
+  module Set : Set
     with type t = set
      and type elt = t
      and type 'a mapping = 'a map

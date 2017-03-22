@@ -33,9 +33,9 @@ type model = {
 
 and tuning = unit -> unit
 
-let repr = { 
-  id = "?model" ; descr = "?model" ; 
-  emitter = Emitter.kernel ; 
+let repr = {
+  id = "?model" ; descr = "?model" ;
+  emitter = Emitter.kernel ;
   params = [ fun () -> () ] ;
 }
 
@@ -44,7 +44,7 @@ module D = Datatype.Make_with_collections(struct
     let name = "WP.Model"
 
     let rehash = Datatype.identity (** TODO: register and find below? *)
-    let structural_descr = 
+    let structural_descr =
       let open Structural_descr in
       t_record [| p_string; p_string; pack (t_option t_string) ;
                   Emitter.packed_descr; pack (t_list t_unknown)  |]
@@ -67,7 +67,7 @@ struct
 
   module H = Datatype.String.Map
   let h = ref H.empty
-  (* NOT PROJECTIFIED : Models are defined at Plugin load-time, 
+  (* NOT PROJECTIFIED : Models are defined at Plugin load-time,
      for all projects *)
 
   let mem id = H.mem id !h
@@ -83,7 +83,7 @@ let iter f = MODELS.iter f
 let register ~id ?(descr=id) ?(tuning=[]) () =
   if MODELS.mem id then
     Wp_parameters.fatal "Duplicate model '%s'" id ;
-  let emitter = 
+  let emitter =
     let e_name = "Wp." ^ id in
     let correctness = [ ] in
     let tuning = [ Wp_parameters.Provers.parameter ] in
@@ -98,16 +98,18 @@ let register ~id ?(descr=id) ?(tuning=[]) () =
   MODELS.add model ; model
 
 let get_id m = m.id
-let get_descr m = m.descr    
+let get_descr m = m.descr
 
-let model = Context.create "Wp.Model"
+type scope = Kernel_function.t option
+let scope : scope Context.value = Context.create "Wp.Scope"
+let model : model Context.value = Context.create "Wp.Model"
 
 let rec bind = function [] -> () | f::fs -> f () ; bind fs
 let back = function None -> () | Some c -> bind c.params
-let with_model m f x = 
+let with_model m f x =
   let current = Context.push model m in
   try
-    bind m.params ; 
+    bind m.params ;
     let result = f x in
     Context.pop model current ;
     back current ; result
@@ -115,6 +117,10 @@ let with_model m f x =
     Context.pop model current ;
     back current ; raise err
 let on_model m f = with_model m f ()
+let on_scope s f = Context.bind scope s f ()
+let on_kf kf = on_scope (Some kf)
+let on_global = on_scope None
+let get_scope () = Context.get scope
 
 let get_model () = Context.get model
 let get_emitter model = model.emitter
@@ -188,7 +194,7 @@ struct
       end)
   (* Projectified entry map, indexed by model *)
 
-  let entries () : entries = 
+  let entries () : entries =
     let mid = (Context.get model).id in
     try REGISTRY.find mid
     with Not_found ->
@@ -200,7 +206,7 @@ struct
   let find k = let e = entries () in MAP.find k e.index
   let get k = try Some (find k) with Not_found -> None
 
-  let fire k d = 
+  let fire k d =
     List.iter (fun f -> f k d) !demon
 
   let callback f = demon := !demon @ [f]
@@ -219,7 +225,7 @@ struct
   let update k d =
     begin
       let e = entries () in
-      e.index <- MAP.add k d e.index ; 
+      e.index <- MAP.add k d e.index ;
       fire k d ;
     end
 
@@ -232,7 +238,7 @@ struct
       let d = f k in
       e.index <- MAP.add k d e.index ;
       fire k d ;
-      e.lock <- lock ; 
+      e.lock <- lock ;
       d (* in case of exception, the entry remains intentionally locked *)
 
   let compile f k =
@@ -292,7 +298,7 @@ struct
   let find k = let e = entries () in MAP.find k e.index
   let get k = try Some (find k) with Not_found -> None
 
-  let fire k d = 
+  let fire k d =
     List.iter (fun f -> f k d) !demon
 
   let callback f = demon := !demon @ [f]
@@ -311,7 +317,7 @@ struct
   let update k d =
     begin
       let e = entries () in
-      e.index <- MAP.add k d e.index ; 
+      e.index <- MAP.add k d e.index ;
       fire k d ;
     end
 
@@ -324,7 +330,7 @@ struct
       let d = f k in
       e.index <- MAP.add k d e.index ;
       fire k d ;
-      e.lock <- lock ; 
+      e.lock <- lock ;
       d (* in case of exception, the entry remains intentionally locked *)
 
   let compile f k =
@@ -361,6 +367,21 @@ sig
   val get : key -> data
 end
 
+module StaticGenerator(K : Key)(D : Data with type key = K.t) =
+struct
+
+  module G = Static
+      (struct
+        include K
+        include D
+      end)
+
+  type key = D.key
+  type data = D.data
+  let get = G.memoize D.compile
+
+end
+
 module Generator(K : Key)(D : Data with type key = K.t) =
 struct
 
@@ -381,6 +402,6 @@ type t = S.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

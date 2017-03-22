@@ -56,6 +56,7 @@ module type Location_map_bitwise = sig
   val add_binding : reducing:bool -> exact:bool -> t -> Zone.t -> v -> t
   val add_binding_loc: reducing:bool -> exact:bool -> t -> location -> v -> t
   val add_base: Base.t -> LOffset.t -> t -> t
+  val remove_base: Base.t -> t -> t
 
   val find : t -> Zone.t -> v
   val filter_base : (Base.t -> bool) -> t -> t
@@ -75,8 +76,8 @@ module type Location_map_bitwise = sig
     Locations.Zone.t -> map -> 'b
 
   val map2:
-    Hptmap.cache_type -> idempotent:bool -> empty_neutral:bool ->
-    (LOffset.t -> LOffset.t -> LOffset.map2_decide) ->
+    cache:Hptmap_sig.cache_type -> symmetric:bool -> idempotent:bool
+    -> empty_neutral:bool -> (LOffset.t -> LOffset.t -> LOffset.map2_decide) ->
     (v -> v -> v) -> map -> map -> map
 
   val shape: map -> LOffset.t Hptmap.Shape(Base.Base).t
@@ -292,12 +293,27 @@ struct
    | Bottom | Top as m -> m
    | Map m -> Map (LBase.add b offsm m)
 
+ let remove_base b = function
+   | Bottom | Top as m -> m
+   | Map m -> Map (LBase.remove b m)
+
  let join_on_map =
-   let decide_none b m = LOffset.join m (default_offsetmap b) in
-   let decide_some = LOffset.join in
-   LBase.symmetric_merge
-     ~cache:("lmap_bitwise.join", ())
-     ~empty_neutral:false ~decide_none ~decide_some
+   (* [join t Empty] is [t] if unbound bases are bound to [bottom] by default*)
+   if V.(equal default bottom)
+   then
+     LBase.join
+       ~cache:(Hptmap_sig.PersistentCache "lmap_bitwise.join")
+       ~decide:(fun _ v1 v2 -> LOffset.join v1 v2)
+       ~symmetric:true ~idempotent:true
+   else
+     let decide =
+       let get b = function Some v -> v | None -> default_offsetmap b in
+       fun b v1 v2 -> LOffset.join (get b v1) (get b v2)
+     in
+     LBase.generic_join
+       ~cache:(Hptmap_sig.PersistentCache "lmap_bitwise.join")
+       ~symmetric:true ~idempotent:true ~decide
+
 
  let join m1 m2 =
    let result = match m1, m2 with
@@ -316,7 +332,7 @@ struct
    | Bottom -> Bottom
    | Map m -> Map (LBase.map (fun m -> LOffset.map f m) m)
 
- let map2 cache ~idempotent ~empty_neutral fv f =
+ let map2 ~cache ~symmetric ~idempotent ~empty_neutral fv f =
    let aux = LOffset.map2 cache fv f in
    let decide b om1 om2 = match om1, om2 with
      | None, None -> assert false (* decide is never called in this case *)
@@ -324,19 +340,16 @@ struct
      | None, Some m2 -> aux (default_offsetmap b) m2
      | Some m1, Some m2 -> aux m1 m2
    in
-   let cache = match cache with
-     | Hptmap.PersistentCache _ -> true
-     | Hptmap.NoCache -> false
-     | Hptmap.TemporaryCache _ (* not possible with generic_merge *) -> false
-   in
-   LBase.generic_merge ~idempotent ~empty_neutral ~cache:("", cache) ~decide
+   if empty_neutral
+   then LBase.join ~symmetric ~idempotent ~cache ~decide:(fun _ m1 m2 -> aux m1 m2)
+   else LBase.generic_join ~symmetric ~idempotent ~cache ~decide
 
  let is_included_map =
    let name = Pretty_utils.sfprintf "Lmap_bitwise(%s).is_included" V.name in
    let decide_fst b offs1 = LOffset.is_included offs1 (default_offsetmap b) in
    let decide_snd b offs2 = LOffset.is_included (default_offsetmap b) offs2 in
    let decide_both _ offs1 offs2 = LOffset.is_included offs1 offs2 in
-   LBase.binary_predicate (Hptmap.PersistentCache name) LBase.UniversalPredicate
+   LBase.binary_predicate (Hptmap_sig.PersistentCache name) LBase.UniversalPredicate
      ~decide_fast:LBase.decide_fast_inclusion
      ~decide_fst ~decide_snd ~decide_both
 
@@ -385,7 +398,7 @@ struct
          Zone.fold_i treat_offset loc V.bottom
 
  let fold_join_zone ~both ~conv ~empty_map ~join ~empty =
-   let cache = Hptmap.PersistentCache "Lmap_bitwise.fold_on_zone" in
+   let cache = Hptmap_sig.PersistentCache "Lmap_bitwise.fold_on_zone" in
    let empty_left _ = empty (* zone over which to fold is empty *) in
    let empty_right z = empty_map z in
    let both b itvs map_b = conv b (both itvs map_b) in
@@ -402,6 +415,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

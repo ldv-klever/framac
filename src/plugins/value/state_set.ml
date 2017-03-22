@@ -112,6 +112,6 @@ let add_statement states s =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

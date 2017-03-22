@@ -56,6 +56,6 @@ val get_plevel: unit -> int
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

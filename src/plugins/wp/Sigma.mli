@@ -27,5 +27,5 @@
 module Make
     (C : Memory.Chunk)
     (H : Qed.Collection.S with type t = C.t) :
-  Memory.Sigma with type chunk = C.t 
+  Memory.Sigma with type chunk = C.t
                 and type domain = H.set

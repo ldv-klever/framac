@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Useful high-level system operations. 
-    @plugin development guide *)
+(** Useful high-level system operations. *)
 
 (* ************************************************************************* *)
 (** {2 File Utilities} *)
@@ -130,6 +129,6 @@ val command :
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -24,6 +24,6 @@ include Offsetmap.Int_Intervals
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

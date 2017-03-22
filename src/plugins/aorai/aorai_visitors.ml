@@ -120,8 +120,8 @@ object (self)
       Kernel_function.Hashtbl.add aux_post_table kf vi_post;
       Cil_datatype.Varinfo.Hashtbl.add func_orig_table vi_post (Post_func kf);
       let globs =
-        [ GVarDecl(Cil.empty_funspec (), vi_pre, loc);
-          GVarDecl(Cil.empty_funspec (), vi_post,loc) ]
+        [ GFunDecl(Cil.empty_funspec (), vi_pre, loc);
+          GFunDecl(Cil.empty_funspec (), vi_post,loc) ]
       in
       fundec.sbody.bstmts <-
         Cil.mkStmtOneInstr
@@ -848,9 +848,8 @@ object(self)
 
   method! vglob_aux g =
     match g with
-    | GVarDecl(_,v,_) when
-        Cil.isFunctionType v.vtype
-        && not (Kernel_function.is_definition (Extlib.the self#current_kf))
+    | GFunDecl _ when
+        not (Kernel_function.is_definition (Extlib.the self#current_kf))
         ->
       let my_kf = Extlib.the self#current_kf in
       (* don't use get_spec, as we'd generate default assigns,
@@ -1103,6 +1102,6 @@ let compute_ignored_functions file =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

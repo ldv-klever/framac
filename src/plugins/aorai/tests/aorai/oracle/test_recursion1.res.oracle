@@ -46,12 +46,10 @@ predicate valid_string{L}(char *s) =
   \valid{L}(s) ∧ \valid{L}(s+(0 .. string_len{L}(s)));
  */
 /*@ ghost enum aorai_ListOper aorai_CurOperation = op_main; */
-/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called;
-*/
+/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called; */
 /*@ ghost int T0_S2 = 0; */
 /*@ ghost int T0_init = 1; */
-/*@ ghost int accept_S1 = 0;
-*/
+/*@ ghost int accept_S1 = 0; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_countOne;
     assigns aorai_CurOpStatus, aorai_CurOperation, T0_S2, T0_init, accept_S1;

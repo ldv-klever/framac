@@ -20,6 +20,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* Modified by TrustInSoft *)
+
 open Cil_types
 
 let debug_vid = Kernel.register_category "printer:vid"
@@ -182,16 +184,17 @@ class printer_with_annot () = object (self)
     (* Out of tree global annotations are pretty printed before the first
        variable declaration of the first function definition. *)
     (match glob with
-     | GVarDecl _ | GFun _ -> print_spec <- Ast.is_last_decl glob;
+     | GFunDecl _ | GFun _ -> print_spec <- Ast.is_def_or_last_decl glob;
      | _ -> ());
     super#global fmt glob
 
   method private begin_annotation fmt =
-    if is_ghost then Format.fprintf fmt "/@@" else Format.fprintf fmt "/*@@"
+    let pre = if is_ghost then Some ("@@/": Pretty_utils.sformat) else None in
+    self#pp_open_annotation ~block:false ?pre fmt
 
   method private end_annotation fmt =
-    if is_ghost then Format.fprintf fmt "@@/" 
-    else Format.fprintf fmt "*/"
+    let suf = if is_ghost then Some ("@@/": Pretty_utils.sformat) else None in
+    self#pp_close_annotation ~block:false ?suf fmt
 
   method private loop_annotations fmt annots =
     if annots <> [] then
@@ -238,20 +241,24 @@ class printer_with_annot () = object (self)
       let pGhost fmt s =
 	let was_ghost = is_ghost in
 	if not was_ghost && s.ghost then begin
-          Pretty_utils.pp_open_block fmt "@[/*@@ ghost " ;
+          Format.fprintf fmt "%t %a "
+            (fun fmt -> self#pp_open_annotation ~pre:"@[/*@@" fmt)
+            self#pp_acsl_keyword "ghost";
           is_ghost <- true
 	end;
 	self#stmtkind next fmt s.skind;
 	if not was_ghost && s.ghost then begin
-          Pretty_utils.pp_close_block fmt "@,*/@]";
+          self#pp_close_annotation ~suf:"@,*/@]" fmt;
           is_ghost <- false;
 	end
       in
       (match all_annot with
       | [] -> pGhost fmt s
       | [ a ] when Cil.is_skip s.skind && not s.ghost ->
-	Format.fprintf fmt "@[<hv>@[/*@@@ %a@;<1 1>*/@]@ %a@]"
+        Format.fprintf fmt "@[<hv>@[%t@ %a@;<1 1>%t@]@ %a@]"
+          (fun fmt -> self#pp_open_annotation ~block:false fmt)
           self#code_annotation a
+          (fun fmt -> self#pp_close_annotation ~block:false fmt)
           (self#stmtkind next) s.skind;
       | _ ->
 	let loop_annot, stmt_annot =
@@ -290,6 +297,6 @@ let () = Cil_datatype.Code_annotation.pretty_ref := pp_code_annotation
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

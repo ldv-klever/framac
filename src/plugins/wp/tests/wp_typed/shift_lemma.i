@@ -1,4 +1,3 @@
-
 struct t {
   int b;
   int c;

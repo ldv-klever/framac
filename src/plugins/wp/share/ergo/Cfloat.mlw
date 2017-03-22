@@ -64,10 +64,6 @@ logic round_double : rounding_mode, real -> real
 
 logic round_float : rounding_mode, real -> real
 
-logic is_finite32 : real -> prop
-
-logic is_finite64 : real -> prop
-
 axiom float_32 :
   (forall x:real [round_float(NearestTiesToEven, x)].
   (to_float32(x) = round_float(NearestTiesToEven, x)))
@@ -75,6 +71,16 @@ axiom float_32 :
 axiom float_64 :
   (forall x:real [round_double(NearestTiesToEven, x)].
   (to_float64(x) = round_double(NearestTiesToEven, x)))
+
+type float_kind = Real | Float32 | Float64 | NaN | Inf_pos | Inf_neg
+
+logic classify_float : real -> float_kind
+predicate is_finite32(x:real) = classify_float(x) = Float32
+predicate is_finite64(x:real) = classify_float(x) = Float32 or classify_float(x) = Float64
+predicate is_NaN(x:real) = classify_float(x) = NaN
+predicate is_infinite(x:real) = classify_float(x) = Inf_pos or classify_float(x) = Inf_neg
+predicate is_positive_infinite(x:real) = classify_float(x) = Inf_pos
+predicate is_negative_infinite(x:real) = classify_float(x) = Inf_neg
 
 axiom is_finite_to_float_32 :
   (forall x:real [is_finite32(to_float32(x))]. is_finite32(to_float32(x)))
@@ -118,4 +124,3 @@ axiom model_div :
   (forall x:real. forall y:real. (model((x / y)) = (model(x) / model(y))))
 
 axiom model_sqrt : (forall x:real. (model(sqrt(x)) = sqrt(model(x))))
-

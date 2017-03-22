@@ -113,34 +113,6 @@ module Toplevel: sig
 end
 
 (* ************************************************************************* *)
-(** {2 Graphs} *)
-(* ************************************************************************* *)
-
-(** Callgraph computed by value analysis. It contains function pointers! *)
-module Semantic_Callgraph : sig
-  val dump: (unit -> unit) ref
-    (** Dump the semantic callgraph in stdout or in a file. *)
-
-  val topologically_iter_on_functions : ((kernel_function -> unit) -> unit) ref
-    (** Compute values if required. *)
-
-  val iter_on_callers :
-    ((kernel_function -> unit) -> kernel_function -> unit) ref
-    (** Compute values if required. *)
-
-  val accept_base :
-    (with_formals:bool ->
-     with_locals:bool ->
-     kernel_function -> Base.t -> bool
-     (** [accept_base formals locals kf b] returns [true] if and only [b] is
-         - a global
-         - a formal or local of one of the callers of [kf]
-         - a formal or local of [kf] and the corresponding argument is [true]
-     *)
-    ) ref
-end
-
-(* ************************************************************************* *)
 (** {2 Values} *)
 (* ************************************************************************* *)
 
@@ -155,6 +127,9 @@ module Value : sig
       (** Internal representation of a value. *)
 
   exception Aborted
+
+  val emitter: Emitter.t ref
+    (** Emitter used by Value to emit statuses *)
 
   val self : State.t
     (** Internal state of the value analysis from projects viewpoint.
@@ -278,6 +253,8 @@ module Value : sig
   (** State of the analysis at various points *)
 
   val get_initial_state : kernel_function -> state
+  val get_initial_state_callstack :
+    kernel_function -> state Value_types.Callstack.Hashtbl.t option
   val get_state : kinstr -> state
 
     
@@ -286,6 +263,12 @@ module Value : sig
 
   val get_stmt_state : stmt -> state
   (** @plugin development guide *)
+
+  val fold_stmt_state_callstack :
+    (state -> 'a -> 'a) -> 'a -> after:bool -> stmt -> 'a
+
+  val fold_state_callstack :
+    (state -> 'a -> 'a) -> 'a -> after:bool -> kinstr -> 'a
 
   val find : state -> Locations.location ->  t
 
@@ -592,7 +575,8 @@ end
 (** {2 Properties} *)
 (* ************************************************************************* *)
 
-(** Dealing with logical properties. *)
+(** Dealing with logical properties.
+    @plugin development guide *)
 module Properties : sig
 
   (** Interpretation of logic terms. *)
@@ -600,8 +584,23 @@ module Properties : sig
 
     (** {3 Parsing logic terms and annotations} *)
 
-    val lval : (kernel_function -> stmt -> string -> Cil_types.term_lval) ref
-    val expr : (kernel_function -> stmt -> string -> Cil_types.term) ref
+    (** For the three functions below, [env] can be used to specify which
+        logic labels are parsed. By default, only [Here] is accepted. All
+        the C labels inside the function are also  accepted, regardless of
+        [env]. [loc] is used as the source for the beginning of the string.
+        All three functions may raise {!Logic_interp.Error} or
+        {!Parsing.Parse_error}. *)
+
+    val term_lval :
+      (kernel_function -> ?loc:location -> ?env:Logic_typing.Lenv.t -> string ->
+       Cil_types.term_lval) ref
+    val term :
+      (kernel_function -> ?loc:location -> ?env:Logic_typing.Lenv.t -> string ->
+       Cil_types.term) ref
+    val predicate :
+      (kernel_function -> ?loc:location -> ?env:Logic_typing.Lenv.t -> string ->
+       Cil_types.predicate named) ref
+
     val code_annot : (kernel_function -> stmt -> string -> code_annotation) ref
 
 
@@ -767,14 +766,6 @@ end
 (** {2 Plugins} *)
 (* ************************************************************************* *)
 
-(** Interface for the syntactic_callgraph plugin.
-    @see <../syntactic_callgraph/index.html> internal documentation. *)
-module Syntactic_Callgraph: sig
-  val dump: (unit -> unit) ref
-end
-
-
-
 (** Declarations common to the various postdominators-computing modules *)
 module PostdominatorsTypes: sig
 
@@ -873,8 +864,6 @@ module Impact : sig
     (** Compute the impact analysis of the given set of PDG nodes,
         that come from the given function.
         @return the impacted nodes *)
-  val slice: (stmt list -> unit) ref
-    (** Slice the given statement according to the impact analysis. *)
 end
 
 (** Security analysis.
@@ -1234,8 +1223,8 @@ module Scope : sig
     (kernel_function -> stmt -> code_annotation ->
        Stmt.Hptset.t * code_annotation list) ref
     (** compute the set of statements where the given annotation has the same
-    * value than it has before the given stmt.
-    * Also return the *)
+      value as before the given stmt. Also returns the eventual code annotations
+      that are implied by the one given as argument. *)
 
   val check_asserts : (unit -> code_annotation list) ref
     (** Print how many assertions could be removed based on the previous
@@ -1243,8 +1232,7 @@ module Scope : sig
     * that can be removed. *)
 
   val rm_asserts : (unit -> unit) ref
-    (** Same analysis than [check_asserts] but change assert to remove by true
-      * *)
+    (** Same analysis than [check_asserts] but mark the assertions as proven. *)
 
   val get_defs :
     (kernel_function -> stmt -> lval ->
@@ -1290,7 +1278,7 @@ module Sparecode : sig
       * (the current one if no project given).
       * The source project is not modified.
       * The result is in the returned new project.
-      * optional argument [new_proj_name] added @since Carbon-20110201
+      * @modify Carbon-20110201 optional argument [new_proj_name] added
       * *)
 end
 
@@ -1490,28 +1478,29 @@ module Slicing : sig
        rd:Datatype.String.Set.t ->
        wr:Datatype.String.Set.t ->
        stmt ->
-       scope:stmt ->
        eval:stmt ->
        kernel_function -> set) ref
       (** To select rw accesses to lvalues (given as string) related to a statement.
           Variables of [~rd] and [~wr] string are bounded
-          relatively to the scope of the statement [~scope].
+          relatively to the whole scope of the function.
           The interpretation of the address of the lvalues is
           done just before the execution of the statement [~eval].
           The selection preserve the [~rd] and ~[wr] accesses contained into the statement [ki].
-          Note: add also a transparent selection on the whole statement. *)
+          Note: add also a transparent selection on the whole statement.
+	  @modify Magnesium-20151001 argument [~scope] removed. *)
 
     val select_stmt_lval :
       (set -> Mark.t -> Datatype.String.Set.t -> before:bool -> stmt ->
-        scope:stmt -> eval:stmt -> kernel_function -> set) ref
+        eval:stmt -> kernel_function -> set) ref
       (** To select lvalues (given as string) related to a statement.
           Variables of [lval_str] string are bounded
-          relatively to the scope of the statement [~scope].
+          relatively to the whole scope of the function.
           The interpretation of the address of the lvalue is
           done just before the execution of the statement [~eval].
           The selection preserve the value of these lvalues before or
           after (c.f. boolean [~before]) the statement [ki].
-          Note: add also a transparent selection on the whole statement. *)
+          Note: add also a transparent selection on the whole statement.
+	  @modify Magnesium-20151001 argument [~scope] removed.  *)
 
     val select_stmt_zone :
       (set -> Mark.t -> Locations.Zone.t -> before:bool -> stmt ->
@@ -1546,13 +1535,14 @@ module Slicing : sig
 
     val select_func_lval_rw :
       (set -> Mark.t -> rd:Datatype.String.Set.t -> wr:Datatype.String.Set.t ->
-        scope:stmt -> eval:stmt -> kernel_function -> set) ref
+        eval:stmt -> kernel_function -> set) ref
       (** To select rw accesses to lvalues (given as a string) related to a function.
           Variables of [~rd] and [~wr] string are bounded
-          relatively to the scope of the statement [~scope].
+          relatively to the whole scope of the function.
           The interpretation of the address of the lvalues is
           done just before the execution of the statement [~eval].
-          The selection preserve the value of these lvalues into the whole project. *)
+          The selection preserve the value of these lvalues into the whole project.
+          @modify Magnesium-20151001 argument [~scope] removed. *)
 
     val select_func_lval :
       (set -> Mark.t -> Datatype.String.Set.t -> kernel_function -> set) ref
@@ -1964,6 +1954,6 @@ exception Cancel
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

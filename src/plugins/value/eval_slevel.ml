@@ -75,17 +75,40 @@ struct
    let slevel = 
      if obviously_terminates
      then Per_stmt_slevel.Global max_int
-     else Per_stmt_slevel.for_kf current_kf
+     else Per_stmt_slevel.local current_kf
 
    let slevel stmt = match slevel with
      | Per_stmt_slevel.Global i -> i
      | Per_stmt_slevel.PerStmt f -> f stmt
 
+   (* This function decides whether we should merge all incoming states
+      on the given statement before treating it. *)
+   let merge =
+     (* Ideally, we would like to merge only the states propagated along the
+        back edges of the loop. Since this is not currently easy, we
+        use an approximation that consists in merging all the states on the
+        loop node. *)
+     let after_loop =
+       Kernel_function.Set.mem current_kf
+         (Value_parameters.SlevelMergeAfterLoop.get ())
+     in
+     match Per_stmt_slevel.merge current_kf with
+     | Per_stmt_slevel.NoMerge ->
+       if after_loop then
+         (fun stmt -> match stmt.skind with
+            | Loop _ -> true
+            | _ -> false)
+       else (fun _ -> false)
+     | Per_stmt_slevel.Merge fun_s ->
+       (fun stmt ->
+          fun_s stmt ||
+          (after_loop && match stmt.skind with Loop _ -> true | _ -> false))
+
+
    let (initial_state,_) = State_set.join AnalysisParam.initial_states
 
    (** State propagated by the dataflow, that contains only 'new' states
-       (i.e. not propagated before). All the states that have been seen so far
-       are stored in an object of type *)
+       (i.e. not propagated before). *)
    type diff = { mutable to_propagate : State_set.t ; }
 
    (** The real state for a given statement, used in particular to detect
@@ -93,15 +116,18 @@ struct
    type stmt_state = {
      (** All the state that have been propagated separately, by slevel *)
      superposition : State_imp.t;
+
      (** Bottom if we have never consumed all the slevel allocated. If no
-         more slevel is available, the state that is being propgated. This
+         more slevel is available, the state that is being propagated. This
          state is *not* present in [superposition]. *)
      mutable widening_state : Cvalue.Model.t ;
+
      (** should we widen the statement at the current iteration.
          [widening_state] is decremented each time we visit the statement,
          unless it is equal to zero. (In which case we widen, and set
          [widening_state] to a non-zero value, currently 1.) *)
      mutable widening : int;
+
      (** Number of states that were put in [superposition]; i.e. the
 	 sum of the cardinals of the state sets that were added with
 	 [update_and_tell_if_changed]. It may be different
@@ -145,8 +171,8 @@ struct
      else
        State_imp.merge_set_return_new set record.superposition
 
-   let update_stmt_widening_info kinstr wcounter wstate =
-     let record = stmt_state kinstr in
+   let update_stmt_widening_info stmt wcounter wstate =
+     let record = stmt_state stmt in
      record.widening <- wcounter;
      record.widening_state <- wstate
 
@@ -290,7 +316,9 @@ struct
 
   let cacheable = ref Value_types.Cacheable
 
-  module DataflowArg: Dataflow2.ForwardsTransfer with type t = diff = struct
+  module DataflowArg: Dataflow2.ForwardsTransfer
+    with type t = diff
+  = struct
 
    let debug = false
    let name = "Values analysis"
@@ -317,6 +345,7 @@ struct
    let computeFirstPredecessor (s: stmt) states =
      let v = states.to_propagate in
      let v = State_set.add_statement v s in
+     (stmt_state s).counter_unroll <- State_set.length v;
      (* Create an impure state for this statement. It will be mutated by
         the other functions *)
      { to_propagate = v;}
@@ -344,7 +373,7 @@ struct
           instructions. This needelessly degrades precision for
           postconditions and option -split-return. *)
        let r =
-         if old_counter >= slevel s && not (is_return s)
+         if old_counter > slevel s && not (is_return s)
 	 then
            let new_state, new_trace = State_set.join new_v in
            let old_state, old_trace = State_set.join old.to_propagate in
@@ -380,8 +409,9 @@ struct
 
   let interp_call stmt lval_to_assign funcexp argl d_value =
     let with_alarms = warn_all_quiet_mode () in
-    let aux =
-      Eval_stmt.interp_call ~with_alarms clob stmt lval_to_assign funcexp argl
+    let aux state =
+      Eval_stmt.interp_call
+        ~with_alarms clob stmt lval_to_assign funcexp argl state
     in
     State_set.fold
       (fun acc (state, trace) ->
@@ -411,6 +441,7 @@ struct
             let states_after_i =
               State_set.fold
                 (fun acc (state, trace) ->
+                  Value_messages.set_current_state (state,trace);
                   State_set.add (f state, trace) acc
                 ) State_set.empty d_states
             in
@@ -477,7 +508,7 @@ struct
       | Loop _ ->
 	  let current_info = stmt_state s in
 	  let counter = current_info.counter_unroll in
-          if counter >= slevel s then
+          if counter > slevel s then
             Value_parameters.result ~level:1 ~once:true ~current:true
               "entering loop for the first time";
           states
@@ -496,26 +527,12 @@ struct
         )
       | _ -> states
 
-  (* Ideally, we would like this function to merge only the states propagated
-     along the back edges of the loop. Since this is not currently easy, we
-     use an approximation that consists in merging all the states on the
-     loop node. *)
-  let maybe_merge_loop s (d: t) =
-    match s.skind with
-    | Loop _ ->
-       let kf = Kernel_function.find_englobing_kf s in
-       if Kernel_function.Set.mem kf
-         (Value_parameters.SlevelMergeAfterLoop.get ())
-       then
-         d.to_propagate <-
-           State_set.singleton (State_set.join d.to_propagate)
-    | _ -> ()
-
-
   let doStmt (s: stmt) (d: t) =
     Valarms.start_stmt (Kstmt s);
     check_signals ();
-    maybe_merge_loop s d;
+    (* Merge incoming states if the user requested it *)
+    if merge s then
+      d.to_propagate <- State_set.singleton (State_set.join d.to_propagate);
     let states = d.to_propagate in
     Db.Value.Compute_Statement_Callbacks.apply (s, call_stack(), 
 						State_set.to_list states);
@@ -529,10 +546,10 @@ struct
     in
     if State_set.is_empty states then ret Dataflow2.SDefault
     else
-    let states = (* Remove states already present *)
+    let states =
       if obviously_terminates
       then states
-      else update_stmt_states s states
+      else update_stmt_states s states (* Remove states already present *)
     in
     if State_set.is_empty states then ret Dataflow2.SDefault
     else
@@ -558,7 +575,7 @@ struct
     let current_info = stmt_state s in
     let old_counter = current_info.counter_unroll in
     let new_states =
-      if (old_counter >= slevel && not is_return)
+      if (old_counter > slevel && not is_return)
         || (is_return && obviously_terminates)
       then (* No slevel left, perform some join and/or widening *)
         let curr_wcounter, curr_wstate = stmt_widening_info s in
@@ -572,7 +589,7 @@ struct
                              Nothing remains to do *)
         else
 	  if obviously_terminates
-	  then begin
+	  then begin (* User thinks the analysis will terminate: do not widen *)
 	    update_stmt_widening_info s 0 joined;
 	    states
 	  end
@@ -624,9 +641,12 @@ struct
         with Not_found -> Cvalue.Model.bottom
       in
       let updated = State_set.fold
-	(fun acc (state, _trace) -> Cvalue.Model.join acc state) old states in
+	(fun acc (state, trace) ->
+          Value_messages.set_current_state (state,trace);
+          Cvalue.Model.join acc state) old states in
       Cil_datatype.Stmt.Hashtbl.replace states_after s updated
     );
+    (* Variables exiting their scope *)
     let states =
       match Kernel_function.blocks_closed_by_edge s succ with
       | [] -> states
@@ -645,6 +665,9 @@ struct
               State_set.empty
               states;
     in
+    (* Variables entering in scope *)
+    let opened_blocks = Kernel_function.blocks_opened_by_edge s succ in
+    let states = List.fold_left bind_block_locals states opened_blocks in
     Valarms.end_stmt ();
     d.to_propagate <- states;
     d
@@ -662,7 +685,8 @@ struct
                 eval_expr_with_deps_state None ~with_alarms state exp
               in
               Valarms.set_syntactic_context context;
-              let warn = Warn.check_not_comparable Eq V.singleton_zero test in
+              Value_messages.set_current_state (state,trace);
+              let warn = not (Warn.are_comparable Eq V.singleton_zero test) in
               let do_it =
                 (warn && Value_parameters.UndefinedPointerComparisonPropagateAll.get ()) ||
                   let t1 = unrollType (typeOf exp) in
@@ -794,6 +818,7 @@ struct
 
   let compute states =
     let start = Kernel_function.find_first_stmt AnalysisParam.kf in
+    let states = bind_block_locals states current_fundec.sbody in
     (* Init the dataflow state for the first statement *)
     let dinit = { to_propagate = states} in
     let dinit = DataflowArg.computeFirstPredecessor start dinit in
@@ -806,6 +831,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

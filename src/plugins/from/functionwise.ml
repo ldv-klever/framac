@@ -50,15 +50,14 @@ module To_Use = struct
   let get_from_call kf _ = memo kf
 
   let keep_base kf = (* Eta-expansion required *)
-    !Db.Semantic_Callgraph.accept_base ~with_formals:false ~with_locals:false kf
+    Callgraph.Uses.accept_base ~with_formals:false ~with_locals:false kf
 
   let cleanup kf froms =
     if Function_Froms.Memory.is_bottom froms.Function_Froms.deps_table
     then froms
     else
     let f b intervs =
-      if !Db.Semantic_Callgraph.accept_base
-        ~with_formals:true ~with_locals:false kf b
+      if Callgraph.Uses.accept_base ~with_formals:true ~with_locals:false kf b
       then Zone.inject b intervs
       else Zone.bottom
     in
@@ -94,7 +93,7 @@ let () =
 
 let force_compute_all () =
   !Db.Value.compute ();
-  !Db.Semantic_Callgraph.topologically_iter_on_functions
+  Callgraph.Uses.iter_in_rev_order
     (fun kf ->
        if Kernel_function.is_definition kf && !Db.Value.is_called kf
        then !Db.From.compute kf)
@@ -129,6 +128,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

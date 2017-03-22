@@ -41,9 +41,6 @@ exception Offset_not_based_on_Null of
 exception Cannot_find_lv
 let cannot_find_lv = Cannot_find_lv
 
-exception Too_linear
-let too_linear = Too_linear
-
 type cond =
     { exp: exp; (* The condition of the branch*)
       positive: bool; (* true: normal false: negated *)}
@@ -56,7 +53,6 @@ let do_promotion_c ~with_alarms ~src_typ ~dst_typ v e_src =
   in
   Valarms.set_syntactic_context (Valarms.SyUnOp e_src);
   Eval_op.do_promotion ~with_alarms rounding_mode ~src_typ ~dst_typ v msg
-
 
 let rec lval_to_loc ~with_alarms state lv =
   let _, r, _typ = lval_to_loc_state ~with_alarms state lv in
@@ -112,7 +108,7 @@ and lval_to_precise_loc_deps_state ~with_alarms ~deps state ~reduce_valid_index 
         eval_offset ~with_alarms ~reduce_valid_index deps typ state offset
       in
       let state, deps, loc = eval_host ~with_alarms ~deps state host offs in
-      let size = Eval_op.sizeof_lval_typ typ_offs in
+      let size = Eval_typ.sizeof_lval_typ typ_offs in
       let loc = Precise_locs.make_precise_loc loc ~size in
       state, deps, loc, typ_offs
     with Offset_not_based_on_Null(deps,offset,typ_offs) ->
@@ -121,7 +117,7 @@ and lval_to_precise_loc_deps_state ~with_alarms ~deps state ~reduce_valid_index 
       in
       let imprecise = Precise_locs.imprecise_location_bits loc_no_offset in
       let loc = Location_Bits.join (loc_bytes_to_loc_bits offset) imprecise in
-      let size = Eval_op.sizeof_lval_typ typ_offs in
+      let size = Eval_typ.sizeof_lval_typ typ_offs in
       let loc =
         Precise_locs.(make_precise_loc (inject_location_bits loc) ~size)
       in
@@ -172,9 +168,7 @@ and pass_cast state exn typ e =
         else
           (* try to ignore the cast if it acts as identity on the value [e] *)
           let size = bitsSizeOf typ in
-          let all_values =
-            V.create_all_values ~size ~signed:sityp ~modu:Integer.one
-          in
+          let all_values = V.create_all_values ~size ~signed:sityp in
           let with_alarms = Value_util.with_alarms_raise_exn exn in
           if not (V.is_included (eval_expr ~with_alarms state e) all_values)
           then raise exn
@@ -400,7 +394,7 @@ and eval_expr_with_deps_state ~with_alarms deps state e =
         | Some v -> Cvalue.V.inject_int v
         | _ ->
             Valarms.do_warn with_alarms.CilE.imprecision_tracing
-              (fun _ ->
+              (fun () ->
                  Value_parameters.result ~current:true
                    "cannot interpret sizeof or alignof (incomplete type)"
               );
@@ -429,207 +423,6 @@ and eval_expr_with_deps_state ~with_alarms deps state e =
      Calling reinterpret should be useless *)
   let rr = Eval_op.reinterpret ~with_alarms (typeOf e) r in
   (if Cvalue.V.is_bottom rr then Cvalue.Model.bottom else state), deps, rr
-
-and eval_expr_with_deps_state_subdiv ~with_alarms deps state e =
-  let (state_without_subdiv, deps_without_subdiv, result_without_subdiv as r) =
-    eval_expr_with_deps_state ~with_alarms deps state e
-  in
-  let subdivnb = Value_parameters.Subdivide_float_in_expr.get() in
-  if subdivnb=0
-  then r
-  else if not (Location_Bytes.is_included result_without_subdiv Location_Bytes.top_int)
-  then begin
-      Value_parameters.debug ~level:2
-        "subdivfloatvar: expression has an address result";
-      r
-    end
-  else
-    let compare_min, compare_max =
-      if Location_Bytes.is_included result_without_subdiv Locations.Location_Bytes.top_float
-      then begin
-          Value_parameters.debug ~level:2
-            "subdivfloatvar: optimizing floating-point expression %a=%a"
-            Printer.pp_exp e
-            Locations.Location_Bytes.pretty result_without_subdiv;
-          Cvalue.V.compare_min_float, Cvalue.V.compare_max_float
-        end
-      else begin
-          Value_parameters.debug ~level:2
-            "subdivfloatvar: optimizing integer expression %a=%a"
-            Printer.pp_exp e
-            Locations.Location_Bytes.pretty result_without_subdiv;
-          Cvalue.V.compare_min_int, Cvalue.V.compare_max_int
-        end
-    in
-    let vars = get_influential_vars state e in
-    Value_parameters.debug ~level:2 "subdivfloatvar: variable list=%a"
-      (Pretty_utils.pp_list Locations.pretty)
-      vars;
-    let rec try_sub vars =
-      match vars with
-      | [] | [ _ ] -> r
-      | v :: tail ->
-          try
-            if not (List.exists (fun x -> Locations.loc_equal v x) tail)
-            then raise too_linear;
-            let _, v_value = Cvalue.Model.find state v in
-	    (* Value_parameters.result ~current:true
-	      "subdivfloatvar: considering optimizing variable %a (value %a)"
-	       Locations.pretty v Cvalue.V.pretty v_value; *)
-            if not (Locations.Location_Bytes.is_included
-                       v_value
-                       Locations.Location_Bytes.top_float)
-            then raise too_linear;
-            let working_list = ref [ (v_value, result_without_subdiv) ] in
-	    let bound1, bound2 = Cvalue.V.min_and_max_float v_value in
-	    let compute subvalue =
-	      let substate =
-                Cvalue.Model.reduce_previous_binding state v subvalue
-              in
-	      let subexpr = 
-		eval_expr ~with_alarms substate e 
-	      in
-(*	      Value_parameters.debug ~current:true
-		"subdivfloatvar: computed var=%a expr=%a"
-		V.pretty subvalue
-		V.pretty subexpr; *)
-	      subexpr
-	    in
-	    let r1 = compute (Cvalue.V.inject_float bound1) in
-	    let r2 = compute (Cvalue.V.inject_float bound2) in
-	    let wont_find_better =
-	      ref
-		(if compare_min r2 r1 >= 0
-		then r1
-		else r2)
-	    in
-(*	    Value_parameters.debug ~current:true
-	      "subdivfloatvar: wont initial %a"
-	      V.pretty !wont_find_better; *)
-            let had_bottom = ref false in
-            let size =
-              if Value_parameters.AllRoundingModes.get ()
-              then 0
-              else Int.to_int (Int_Base.project v.Locations.size)
-            in
-            let subdiv_for_bound better_bound =
-              let insert_subvalue_in_list (_, exp_value as p) l =
-		let wont = !wont_find_better in
-		let bound_to_test =
-		  if better_bound exp_value wont <= 0
-		  then exp_value
-		  else wont
-		in
-		let rec aux l =
-                  match l with
-                    [] -> [p]
-                  | (_, exp_value1 as p1) :: tail ->
-                      if better_bound exp_value1 bound_to_test >= 0
-                      then p :: l
-                      else p1 :: (aux tail)
-		in
-		aux l
-              in
-              let exp_subvalue subvalue l =
-		let subexpr = compute subvalue in
-                if Cvalue.V.is_bottom subexpr
-                then begin
-                    had_bottom := true;
-                    l
-                  end
-                else 
-                  insert_subvalue_in_list (subvalue, subexpr) l
-              in
-              let subdiv l =
-                match l with
-                  [] ->
-(*                    Value_parameters.debug
-                      "subdivfloatvar: all reduced to bottom!!"; *)
-                    raise Ival.Can_not_subdiv
-                | (value, exp_value) :: tail ->
-                    let subvalue1, subvalue2 =
-                      Cvalue.V.subdiv_float_interval ~size value
-                    in
-(*
-		    let rmid = compute middlepoint1 in
-		    if better_bound !wont_find_better rmid > 0
-		    then begin
-			wont_find_better := rmid;
-                 (* Value_parameters.debug ~current:true
-			  "subdivfloatvar: improved wont %a"
-			  V.pretty !wont_find_better; *)
-		      end;		                              *)
-		    if better_bound !wont_find_better exp_value = 0
-		    then begin
-(*			Value_parameters.debug ~current:true
-			  "subdivfloatvar: optimum reached"; *)
-			raise Ival.Can_not_subdiv			
-		      end;
-                    let s = exp_subvalue subvalue1 tail in
-                    exp_subvalue subvalue2 s
-              in
-              try
-                for _i = 1 to subdivnb do
-                  working_list := subdiv !working_list;
-                done
-              with Ival.Can_not_subdiv -> ()
-            in
-            subdiv_for_bound compare_min ;
-            (* Now sort working_list in decreasing order
-               on the upper bounds of exp_value *)
-            let comp_exp_value (_value1,exp_value1) (_value2,exp_value2) =
-              compare_max exp_value1 exp_value2
-            in
-            working_list := List.sort comp_exp_value !working_list ;
-	    wont_find_better :=
-	      if compare_max r2 r1 >= 0
-	      then r1
-	      else r2;	    
-(*            if Value_parameters.debug_atleast 2 then
-              List.iter
-                (function (x, e) ->
-                  Value_parameters.debug
-                    "subdivfloatvar: elements of list max %a %a"
-                    V.pretty x V.pretty e)
-                !working_list;
-	    Value_parameters.debug "subdivfloatvar: wont %a"
-	      V.pretty !wont_find_better; *)
-            subdiv_for_bound compare_max ;
-            let working_list = !working_list in
-(*            if Value_parameters.debug_atleast 2 then
-              List.iter
-                (function (x, e) ->
-                  Value_parameters.debug
-                    "subdivfloatvar: elements of final list %a %a"
-                    V.pretty x V.pretty e)
-                working_list; *)
-            let reduced_state, optimized_exp_value =
-              if !had_bottom
-              then
-                let reduced_var, optimized_exp_value =
-                  List.fold_left
-                    (fun (accv,acce) (value, exp_value)  ->
-                      Cvalue.V.join value accv,
-                      Cvalue.V.join exp_value acce)
-                    (Cvalue.V.bottom,
-                    Cvalue.V.bottom)
-                    working_list
-                in
-                Cvalue.Model.reduce_previous_binding state v reduced_var,
-                optimized_exp_value
-              else
-                state_without_subdiv,
-              List.fold_left
-                (fun acc (_value, exp_value)  ->
-                  Cvalue.V.join exp_value acc)
-                Cvalue.V.bottom
-                working_list
-            in
-            reduced_state, deps_without_subdiv, optimized_exp_value
-          with Not_less_than | Too_linear ->
-            try_sub tail
-    in
-    try_sub vars
 
 (* [loc] is the location pointed to by [lv]. If [lv] is precise enough, we
    reduce it to the parts of [loc] that are valid for a read/write operation *)
@@ -675,9 +468,11 @@ and reduce_by_accessed_loc ~for_writing state lv loc =
                       Location_Bytes.shift
 			(Ival.neg_int plus)(loc_bits_to_loc_bytes valid_loc.loc)
 		    in
-		    (* [new_val] is not necessarily included in previous
-                       binding, use [reduce_binding] *)
-		    Cvalue.Model.reduce_binding state loc_mem new_val
+		    (* [new_val] may have been shifted too much on the left,
+                       intersect with the current content of [loc_mem] *)
+                    let _, v_loc_mem = Model.find state loc_mem in
+                    let new_val = V.narrow new_val v_loc_mem in
+                    Cvalue.Model.reduce_previous_binding state loc_mem new_val
 		  else state
 		with Cannot_find_lv (* find_lval_plus_offset *) -> 
 		  state)
@@ -800,7 +595,7 @@ and reduce_by_accessed_loc ~for_writing state lv loc =
       else state
     in
     let result = Eval_op.make_volatile ~typ:typ_lv result in
-    let result = Eval_op.cast_lval_if_bitfield typ_lv loc.size result in
+    let result = Eval_typ.cast_lval_if_bitfield typ_lv loc.size result in
     let state, loc =
       warn_reduce_by_accessed_loc ~with_alarms ~for_writing:false state loc lv
     in
@@ -859,7 +654,7 @@ and reduce_by_accessed_loc ~for_writing state lv loc =
   then state, index
   else begin
     Valarms.do_warn with_alarms.CilE.others
-      (fun _ ->
+      (fun () ->
 	let range = Pretty_utils.to_string Ival.pretty index in
 	let positive = match Ival.min_int index with
 	  | None -> false
@@ -978,7 +773,7 @@ and reduce_by_accessed_loc ~for_writing state lv loc =
           let _, v = Cvalue.Model.find state loc in
           Valarms.set_syntactic_context (Valarms.SyUnOp e);
           let v' = Eval_op.reinterpret ~with_alarms typ v in
-          let v' = Eval_op.cast_lval_if_bitfield typ loc.size v' in
+          let v' = Eval_typ.cast_lval_if_bitfield typ loc.size v' in
           v'
         end else
           V.bottom
@@ -1010,7 +805,7 @@ and warn_reduce_shift_rhs ~with_alarms state typ e ve =
       (Ival.inject_range (Some Int.zero) (Some (Int.pred size_int))) 
   in
   if not (V.is_included ve valid_range_rhs) then begin
-    Valarms.warn_shift with_alarms size;
+    Valarms.warn_shift with_alarms (Some size);
     let ve = V.narrow ve valid_range_rhs in
     reduce_previous_value state e ve, ve
   end else state, ve
@@ -1303,7 +1098,6 @@ let reduce_by_cond state cond =
     else
       result
 
-
 (* Test that two functions types are compatible; used to verify that a call
    through a function pointer is ok. In theory, we could only check that
    both types are compatible as defined by C99, 6.2.7. However, some industrial
@@ -1314,16 +1108,11 @@ let compatible_functions ~with_alarms vi typ_pointer typ_fun =
   try
     ignore (Cabs2cil.compatibleTypes typ_pointer typ_fun); true
   with Failure _ ->
-    if with_alarms.CilE.others.CilE.a_log <> None then
-      warning_once_current
-        "@[Function pointer@ and@ pointed function@ '%a' @ have@ incompatible \
-            types:@ %a@ vs.@ %a.@ assert(function type matches)@]"
-        Printer.pp_varinfo vi Printer.pp_typ typ_pointer Printer.pp_typ typ_fun;
     let compatible_sizes t1 t2 =
       try bitsSizeOf t1 = bitsSizeOf t2
       with Cil.SizeOfError _ -> false
     in
-    match Cil.unrollType typ_pointer, Cil.unrollType typ_fun with
+    let continue = match Cil.unrollType typ_pointer, Cil.unrollType typ_fun with
       | TFun (ret1, args1, var1, _), TFun (ret2, args2, var2, _) ->
           (* Either both functions are variadic, or none. Otherwise, it
              will be too complicated to make the argument match *)
@@ -1339,21 +1128,37 @@ let compatible_functions ~with_alarms vi typ_pointer typ_fun =
              the arguments, or unspecified argument lists *)
           (match args1, args2 with
              | None, None | None, Some _ | Some _, None -> true
-             | Some l1, Some l2 ->
-                 List.length l1 = List.length l2 &&
-                 List.for_all2
-                   (fun (_, t1, _) (_, t2, _) -> compatible_sizes t1 t2)
-                   l1 l2
+             | Some lp, Some lf ->
+               (* See corresponding function fold_left2_best_effort in
+                  Function_args *)
+               let rec comp lp lf = match lp, lf with
+                 | _, [] -> true (* accept too many arguments passed *)
+                 | [], _ :: _ -> false (* fail on too few arguments *)
+                 | (_, tp, _) :: qp, (_, tf, _) :: qf ->
+                   compatible_sizes tp tf && comp qp qf
+               in
+               comp lp lf
           )
       | _ -> false
+    in
+    if with_alarms.CilE.others.CilE.a_log then
+      warning_once_current
+        "@[Function@ pointer@ and@ pointed@ function@ '%a'@ have@ %s\
+          incompatible@ types:@ %a@ vs.@ %a.@ assert(function type matches)@]%t"
+        Printer.pp_varinfo vi
+        (if continue then "" else "completely ")
+        Printer.pp_typ typ_pointer Printer.pp_typ typ_fun
+        Value_util.pp_callstack;
+    continue
+
 
 let resolv_func_vinfo ~with_alarms deps state funcexp =
   let warning_once_current fmt =
     let w = with_alarms.CilE.defined_logic in
     w.CilE.a_call ();
-    match w.CilE.a_log with 
-      | None -> Format.ifprintf Format.std_formatter fmt
-      | Some _ -> warning_once_current fmt
+    if w.CilE.a_log
+    then warning_once_current fmt
+    else Log.nullprintf fmt
   in
   match funcexp.enode with
   | Lval (Var vinfo,NoOffset) ->
@@ -1464,6 +1269,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

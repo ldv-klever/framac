@@ -34,16 +34,6 @@ open Eval_exprs
 let compute_call_ref = ref (fun _ -> assert false)
 
 
-let need_cast t1 t2 =
-  match unrollType t1, unrollType t2 with
-    | (TInt _| TEnum _| TPtr _), (TInt _| TEnum _| TPtr _) | TFloat _, TFloat _
-      ->
-      (try bitsSizeOf t1 <> bitsSizeOf t2
-       with SizeOfError _ -> true)
-    | TComp (c1, _, _), TComp (c2, _, _) -> c1 != c2
-    | _ -> true
-
-
   exception Do_assign_imprecise_copy
 
   (* Assigns [exp] to [lv] in [state]. [typ_lv] is the type if [lv]. [left_loc]
@@ -65,7 +55,7 @@ let need_cast t1 t2 =
        needed between [exp] and [lv], or as backup *)
     let default () =
       let state, _, v =
-        eval_expr_with_deps_state_subdiv ~with_alarms None state exp
+        Eval_non_linear.eval_expr_with_deps_state ~with_alarms None state exp
       in
       Locals_scoping.remember_if_locals_in_value clob left_loc v;
       Warn.warn_right_exp_imprecision ~with_alarms lv left_loc v;
@@ -114,6 +104,8 @@ let need_cast t1 t2 =
                     (V_Or_Uninitialized.map Eval_op.make_volatile) o
                 end else o
               in
+              if not (Eval_typ.offsetmap_matches_type typ_lv o) then
+                raise Do_assign_imprecise_copy;
               (* Warn for unitialized/escaping addresses. May return bottom
                  when a part of the offsetmap contains no value. *)
               if warn_indeterminate then
@@ -159,7 +151,7 @@ let need_cast t1 t2 =
     in
     let state_res =
       try
-        if Eval_op.is_bitfield typ_lv
+        if Eval_typ.is_bitfield typ_lv
         then default ()
         else
           (* An lval assignement might be hidden by a dummy cast *)
@@ -199,51 +191,11 @@ let need_cast t1 t2 =
     in
     if not non_bottom_loc then
       Valarms.do_warn with_alarms.CilE.imprecision_tracing
-        (fun _ -> Kernel.warning ~current:true ~once:true
+        (fun () -> Kernel.warning ~current:true ~once:true
           "@[<v>@[all target addresses were invalid. This path is \
               assumed to be dead.@]%t@]" pp_callstack
         );
     res
-
-
-  exception Too_linear
-
-  let do_assign ~with_alarms kf clob state lv exp =
-    if true then do_assign ~with_alarms kf clob state lv exp
-    else (* Experimental code that performs automatic splitting when
-            the expression is not linear *)
-      let vars = get_influential_vars state exp in
-      let rec try_sub vars =
-        match vars with
-        | [] | [ _ ] -> do_assign ~with_alarms kf clob state lv exp
-        | v :: tail ->
-            try
-              if not (List.exists (fun x -> Locations.loc_equal v x) tail)
-              then raise Too_linear;
-              let _, value = Cvalue.Model.find state v in
-              if Location_Bytes.is_included value Location_Bytes.top_float
-              then raise Too_linear;
-              (* any value is possible, provided it is not too hight *)
-              let max_card = succ (Ival.get_small_cardinal()) in
-              ignore (Cvalue.V.cardinal_less_than value max_card);
-(*              Value_parameters.debug
-                "subdiv assignment: candidate %a value %a@."
-                Locations.pretty v Cvalue.V.pretty value; *)
-              let treat_subdiv subvalue acc =
-                let sub_state =
-                  Cvalue.Model.reduce_previous_binding state v subvalue
-                in
-                let sub_newstate =
-                  do_assign ~with_alarms kf clob sub_state lv exp
-                in
-                Cvalue.Model.join acc sub_newstate
-              in
-              Location_Bytes.fold_enum treat_subdiv value Cvalue.Model.bottom
-            with
-            | Not_less_than | Too_linear -> try_sub tail
-            | Location_Bytes.Error_Top -> assert false;
-      in
-      try_sub vars
 
   (* This functions stores the result of call, represented by offsetmap
      [return], into [lv]. It is not trivial because we must handle the
@@ -258,7 +210,9 @@ let need_cast t1 t2 =
     if Locations.is_bottom_loc loc then
       state
     else
-      if not (Eval_op.is_bitfield lvtyp) && not (need_cast lvtyp rettype) then
+      if not (Eval_typ.is_bitfield lvtyp) &&
+         not (Eval_typ.need_cast lvtyp rettype)
+      then
         (* Direct paste *)
         let size = Int_Base.project loc.size in
         Valarms.set_syntactic_context (Valarms.SyMem lv);
@@ -561,7 +515,7 @@ let need_cast t1 t2 =
                     state, Some r
       in
       let state = Cvalue.Model.remove_variables fundec.slocals state in
-      (* We only remove from [state] the locals that have been overwritten
+      (* We only remove from [state] the formals that have been overwritten
          during the call. The other ones will be used by the caller. See
          {!reduce_actuals_by_formals} above. *)
       let written_formals = Value_util.written_formals kf in
@@ -572,6 +526,6 @@ let need_cast t1 t2 =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

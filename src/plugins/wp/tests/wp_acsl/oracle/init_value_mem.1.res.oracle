@@ -15,13 +15,13 @@ Assume {
   (* Domain *)
   Type: (IsS_St v_0) /\ (IsS_St w_1).
   (* Initializer *)
-  Have: 1=w_1.F_St_a.
+  Init: 1=w_1.F_St_a.
   (* Initializer *)
-  Have: 2=w_1.F_St_b.
+  Init: 2=w_1.F_St_b.
   (* Initializer *)
-  Have: 1=v_0.F_St_a.
+  Init: 1=v_0.F_St_a.
   (* Initializer *)
-  Have: 2=v_0.F_St_b.
+  Init: 2=v_0.F_St_b.
 }
 Prove: (EqS_St v_0 w_1).
 
@@ -35,9 +35,9 @@ Assume {
   (* Domain *)
   Type: (IsS_St w_1).
   (* Initializer *)
-  Have: 1=w_1.F_St_a.
+  Init: 1=w_1.F_St_a.
   (* Initializer *)
-  Have: 2=w_1.F_St_b.
+  Init: 2=w_1.F_St_b.
 }
 Prove: (EqS_St w_0 w_1).
 

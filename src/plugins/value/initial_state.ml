@@ -37,13 +37,8 @@ exception Initialization_failed
     argument. *)
 let add_initialized state loc v =
   Cvalue.Model.add_initial_binding state loc (V_Or_Uninitialized.initialized v)
-let add_unitialized state loc =
-  Cvalue.Model.add_initial_binding state loc V_Or_Uninitialized.uninitialized
 
-
-(* If [filled] is true, bind the contents of hidden_base to a well of itself.
-   If not, do not bind it (typically for function pointers) *)
-let make_well ~filled hidden_base state loc =
+let make_well hidden_base state loc =
   let size = Bit_utils.max_bit_size () in
   let well =
     Cvalue.V.inject_top_origin Origin.Well (Base.Hptset.singleton hidden_base)
@@ -53,11 +48,7 @@ let make_well ~filled hidden_base state loc =
       (Location_Bits.inject hidden_base Ival.zero)
       (Int_Base.inject size)
   in
-  let state =
-    if filled
-    then add_initialized state well_loc well
-    else state
-  in
+  let state = add_initialized state well_loc well in
   add_initialized state loc well
 
 
@@ -71,7 +62,6 @@ let warn_unknown_size =
     (fun fmt v -> Format.fprintf fmt "variable '%a'" Printer.pp_varinfo v)
 
 type validity_hidden_base =
-  | Invalid (* Base is completely invalid *)
   | UnknownValidity (* Base is maybe invalid on its entire validity *)
   | KnownThenUnknownValidity of Integer.t (* Base is valid on i bits, then
                               maybe invalid on the remainder of its validity *)
@@ -80,32 +70,29 @@ let create_hidden_base ~valid ~hidden_var_name ~name_desc pointed_typ =
   let hidden_var = Value_util.create_new_var hidden_var_name pointed_typ in
   hidden_var.vdescr <- Some name_desc;
   let validity =
-    match valid with
-    | Invalid -> Base.Invalid
-    | _ ->
-      (* Add a special case for void* pointers: we do not want to compute the
-         size of void *)
-      let validity = match Cil.unrollType pointed_typ with
-        | TVoid _ -> Base.Unknown (Int.zero, None, Bit_utils.max_bit_address ())
-        | _ -> Base.validity_from_type hidden_var
-      in
-      match validity with
-        | Base.Known (a,b)
-            when not (Value_parameters.AllocatedContextValid.get ()) ->
-            (* Weaken validity, because the created variables are not supposed
-               to be valid *)
-            (match valid with
-               | KnownThenUnknownValidity size -> (*except here, for size bits*)
-                   let size = Integer.pred size in
-                   assert (Integer.le size b);
-                   Base.Unknown (a, Some size, b)
-               | _ -> Base.Unknown (a, None, b)
-            )
-        | Base.Unknown _ -> (* Unknown validity is caused by strange type *)
-          Value_parameters.result ~dkey "creating variable %s with imprecise \
-            size (type %a)" hidden_var_name Printer.pp_typ pointed_typ;
-          validity
-        | Base.Known _ | Base.Invalid -> validity
+    (* Add a special case for void* pointers: we do not want to compute the
+       size of void *)
+    let validity = match Cil.unrollType pointed_typ with
+      | TVoid _ -> Base.Unknown (Int.zero, None, Bit_utils.max_bit_address ())
+      | _ -> Base.validity_from_type hidden_var
+    in
+    match validity with
+    | Base.Known (a,b)
+      when not (Value_parameters.AllocatedContextValid.get ()) ->
+      (* Weaken validity, because the created variables are not supposed
+         to be valid *)
+      (match valid with
+       | KnownThenUnknownValidity size -> (*except here, for size bits*)
+         let size = Integer.pred size in
+         assert (Integer.le size b);
+         Base.Unknown (a, Some size, b)
+       | UnknownValidity -> Base.Unknown (a, None, b)
+      )
+    | Base.Unknown _ -> (* Unknown validity is caused by strange type *)
+      Value_parameters.result ~dkey "creating variable %s with imprecise \
+          size (type %a)" hidden_var_name Printer.pp_typ pointed_typ;
+      validity
+    | Base.Known _ | Base.Invalid -> validity
   in
   Base.register_memory_var hidden_var validity
 
@@ -152,9 +139,9 @@ let initialize_var_using_type varinfo state =
             
       | TFloat (fkind, _) -> begin
         match Value_util.float_kind fkind with
-        | Ival.Float_abstract.Float32 ->
+        | Fval.Float32 ->
           bind_entire_loc Cvalue.V.top_single_precision_float
-        | Ival.Float_abstract.Float64 ->
+        | Fval.Float64 ->
           bind_entire_loc Cvalue.V.top_float
       end
 
@@ -165,8 +152,9 @@ let initialize_var_using_type varinfo state =
           let attr = Cil.typeAttr full_typ in
           let context_max_width =
             Value_parameters.AutomaticContextMaxWidth.get ()
-          in
-          if not (Cil.isVoidType typ) && not (Cil.isFunctionType typ) then
+          in begin
+          match Cil.isVoidType typ, Cil.isFunctionType typ with
+          | false, false -> (* non-void, non-function *)
             let i =
               match Cil.findAttribute "arraylen" attr with
               | [AInt i] -> i
@@ -210,17 +198,20 @@ let initialize_var_using_type varinfo state =
               else Cvalue.V.join Cvalue.V.singleton_zero value
             in
             bind_entire_loc ~state value
-          else
+          | true, false -> (* void *)
             let hidden_var_name = Cabs2cil.fresh_global ("S_" ^ name) in
             let name_desc = "*"^name_desc in
-            let valid, filled =
-              if Cil.isFunctionType typ then Invalid, false
-              else UnknownValidity, true
-            in   
+            let valid = UnknownValidity in
             let hidden_base =
               create_hidden_base ~valid ~hidden_var_name ~name_desc typ
             in
-            make_well ~filled hidden_base state (Lazy.force loc)
+            make_well hidden_base state (Lazy.force loc)
+          | false, true -> (* function *)
+            (* Generating functions is next to useless for the user (what
+               does the function do), and too dangerous for the AST. *)
+            bind_entire_loc ~state V.singleton_zero
+          | true, true -> assert false (* inconsistent *)
+          end
 
       | TArray (typ, len, _, _) ->
           begin try
@@ -333,47 +324,22 @@ let initialize_var_using_type varinfo state =
 
       | TComp ({cstruct=true;} as compinfo, _, _) -> (* Struct *)
           reject_empty_struct b offset_orig typ;
-          let treat_field (next_offset,state) field =
-            let new_offset = Field (field, NoOffset) in
-            let offset = Cil.addOffset new_offset offset_orig in
-            let field_offset,field_width = Cil.bitsOffset typ_orig offset in
-            let state =
-              if field_offset>next_offset then (* padding bits need filling*)
-                let loc = make_loc
-                  (Location_Bits.inject b (Ival.of_int next_offset))
-                  (Int_Base.inject (Int.of_int (field_offset-next_offset)))
-                in
-                add_unitialized state loc
-              else state
-            in
-            field_offset+field_width,
-            add_offsetmap
-              depth
-              b
-              (name_desc ^ "." ^ field.fname)
-              (field.fname^"_"^name)
-              field.ftype
-              offset
-              typ_orig
-              state
+          let treat_field state field =
+            match field.fbitfield with
+            | Some 0 -> state (* skip the field, nothing to initialize *)
+            | _ ->
+              let new_offset = Field (field, NoOffset) in
+              let offset = Cil.addOffset new_offset offset_orig in
+              let nd = name_desc ^ "." ^ field.fname in
+              let n = field.fname ^ "_" ^ name in
+              add_offsetmap depth b nd n field.ftype offset typ_orig state
           in
-          begin try
-            let boff,bwidth = Cil.bitsOffset typ_orig offset_orig in
-            let last_offset,state = List.fold_left
-              treat_field
-              (boff,state)
-              compinfo.cfields
-            in
-            if last_offset<(boff+bwidth) then (* padding at end of struct*)
-              let loc = make_loc
-                (Location_Bits.inject b (Ival.of_int last_offset))
-                (Int_Base.inject (Int.of_int (boff+bwidth-last_offset)))
-              in
-              add_unitialized state loc
-            else state
-          with Cil.SizeOfError (s, t) ->
-            warn_unknown_size varinfo (s, t);
-            bind_entire_loc Cvalue.V.top_int;
+          begin
+            try
+              List.fold_left treat_field state compinfo.cfields
+            with Cil.SizeOfError (s, t) ->
+              warn_unknown_size varinfo (s, t);
+              bind_entire_loc Cvalue.V.top_int;
           end
 
       | TComp ({cstruct=false}, _, _) when Cil.is_fully_arithmetic typ ->
@@ -400,7 +366,7 @@ let initialize_var_using_type varinfo state =
           hidden_var.vdescr <- Some (name_desc^"_WELL");
           let validity = Base.Known (Int.zero, Bit_utils.max_bit_address ()) in
           let hidden_base = Base.register_memory_var hidden_var validity in
-          make_well ~filled:true hidden_base state (Lazy.force loc)
+          make_well hidden_base state (Lazy.force loc)
       | TNamed (_, _)  -> assert false
   in
   add_offsetmap
@@ -409,67 +375,70 @@ let initialize_var_using_type varinfo state =
     varinfo.vname varinfo.vname varinfo.vtype NoOffset varinfo.vtype state
 
 
-let init_var_zero vi state =
+(** Fill [vi] everywhere with padding. The exact contents (bottom | zero |
+    top_int), initialized or not, is determined from [lib_entry] and option
+    [-val-initialization-padding-globals] *)
+let init_var_padding ~lib_entry vi state = 
   let loc = Locations.loc_of_varinfo vi in
-  let v =
-    if Cil.typeHasQualifier "volatile" vi.vtype
-    then V.top_int
-    else V.singleton_zero
-  in
-  (try
-     ignore (Cil.bitsSizeOf vi.vtype)
-   with Cil.SizeOfError (s, t)->
-     warn_unknown_size vi (s, t);
-  );
-  add_initialized state loc v
+  match Value_parameters.InitializationPaddingGlobals.get () with
+  | "yes" ->
+    let v = if lib_entry then V.top_int else V.singleton_zero in
+    Cvalue.Model.add_initial_binding state loc
+      (V_Or_Uninitialized.C_init_noesc v)
+  | "no" ->
+    Cvalue.Model.add_initial_binding state loc
+      V_Or_Uninitialized.uninitialized
+  | "maybe" ->
+    let v = if lib_entry then V.top_int else V.singleton_zero in
+    Cvalue.Model.add_initial_binding state loc
+      (V_Or_Uninitialized.C_uninit_noesc v)
+  | _ -> assert false
 
-
-let initialized_padding () =
-  Value_parameters.InitializedPaddingGlobals.get ()
-
-(* initialize the padding needing for type [typ], assuming that
-   [last_bitsoffset] bits have been initialized. The padding is added
-   starting from [lval+abs_offset bits] *)
-let init_trailing_padding state ~last_bitsoffset ~abs_offset typ lval =
+let warn_size vi =
   try
-    let size_to_add = Cil.bitsSizeOf typ - last_bitsoffset in
-    let offset = Ival.inject_singleton (Int.of_int abs_offset) in
-    assert (size_to_add >= 0);
-    if size_to_add <> 0 then
-      let loc =
-        match lval with
-          | Var vinfo, _  ->
-            let base = Base.of_varinfo vinfo in
-            let size_to_add = Int.of_int size_to_add in
-            let loc = Location_Bits.inject base offset in
-            make_loc loc (Int_Base.inject size_to_add)
-          | _ -> assert false
-      in
-      if initialized_padding ()
-      then
-	let v =
-          if Cil.typeHasQualifier "volatile" typ
-          then V.top_int
-          else V.singleton_zero
-	in
-        add_initialized state loc v
-      else
-        add_unitialized state loc
-    else state
-  with Cil.SizeOfError (s,t) ->
-    warn_unknown_size_aux Printer.pp_lval lval  (s, t);
-    state
+    ignore (Cil.bitsSizeOf vi.vtype);
+    false
+  with Cil.SizeOfError (s, t)->
+    warn_unknown_size vi (s, t);
+    true
 
-(* Evaluation of a [SingleInit] in Cil parlance *)
-let eval_single_initializer state lval exp =
+let init_var_zero vi state =
+  ignore (warn_size vi);
+  let loc = Locations.loc_of_varinfo vi in
+  add_initialized state loc V.singleton_zero
+
+let init_var_volatile vi state =
+  ignore (warn_size vi);
+  let loc = Locations.loc_of_varinfo vi in
+  add_initialized state loc V.top_int
+
+let init_var_lib_entry vi state =
+  let loc = Locations.loc_of_varinfo vi in
+  if warn_size vi then
+    add_initialized state loc V.top_int
+  else
+    (* add padding everywhere *)
+    let state = init_var_padding ~lib_entry:true vi state in
+    (* then initialize non-padding bits according to the type *)
+    initialize_var_using_type vi state
+
+
+(* Is the padding filled with fully initialized values. In this case, we
+   can speed up the generation of the initial state in a few cases. *)
+let fully_initialized_padding () =
+  Value_parameters.InitializationPaddingGlobals.get () = "yes"
+
+let eval_lval_to_loc lval =
   let with_alarms = CilE.warn_none_mode in
   (* Eval in Top state. We do not want the location to depend on other globals*)
   let _, loc, typ_lval =
     Eval_exprs.lval_to_loc_state ~with_alarms Cvalue.Model.top lval
   in
-  if not (cardinal_zero_or_one loc) then
-    Value_parameters.fatal ~current:true
-     "In global initialisation, the location cannot be represented. Aborting.";
+  loc, typ_lval
+
+(* Evaluation of a [SingleInit] in Cil parlance *)
+let init_single_initializer state lval exp =
+  let loc, typ_lval = eval_lval_to_loc lval in
   let value =
     Eval_exprs.eval_expr ~with_alarms:(warn_all_quiet_mode ()) state exp
   in
@@ -480,85 +449,45 @@ let eval_single_initializer state lval exp =
   let v =
     if Cil.typeHasQualifier "volatile" typ_lval
     then V.top_int
-    else Eval_op.cast_lval_if_bitfield typ_lval loc.Locations.size value
+    else Eval_typ.cast_lval_if_bitfield typ_lval loc.Locations.size value
   in
   add_initialized state loc v
 
-
-let rec eval_initializer state lval init =
-  match init with
-    | SingleInit exp -> eval_single_initializer state lval exp
-
+(* Apply an initializer (not recursively). Take volatile qualifiers into
+   account. If [warn] holds, we warn when an initializer is ignored
+   because it points to a volatile location. *)
+let rec init_initializer_or_volatile state lval init warn =
+  if Cil.typeHasQualifier "volatile" (Cil.typeOfLval lval) then begin
+    if warn then
+      warning_once_current "global initialization of volatile zone %a ignored"
+        Printer.pp_lval lval;
+    let loc, _ = eval_lval_to_loc lval in
+    add_initialized state loc V.top_int
+  end
+  else
+    match init with
+    | SingleInit exp -> init_single_initializer state lval exp
     | CompoundInit (base_typ, l) ->
-      if Cil.typeHasQualifier "volatile" base_typ
-      then state (* initializer is not useful *)
-      else
-        let last_bitsoffset, state =
-          Cil.foldLeftCompound
-            ~implicit:(not (initialized_padding ()))
-            ~doinit:
-            (fun off init typ (acc, state) ->
-              let o,w = Cil.bitsOffset base_typ off in
-              (* Format.printf "acc:%d o:%d w:%d@." acc o w; *)
-              let state =
-                if acc<o
-                then begin (* uninitialize the padding bits *)
-                  let vi, (base_off,_) =
-                    (match lval with
-                      | Var vinfo, abs_offset ->
-                        vinfo,
-                        (Cil.bitsOffset vinfo.vtype abs_offset)
-                      | _ ->
-                        Value_parameters.fatal "Whacky initializer?")
-                  in
-                  let loc_bits =
-                    Location_Bits.inject
-                      (Base.of_varinfo vi)
-                      (Ival.inject_singleton (Int.of_int (base_off+acc)))
-                  in
-                  let loc_size = Int_Base.inject (Int.of_int (o-acc)) in
-                  let loc = make_loc loc_bits loc_size in
-                  (* Format.printf "loc:%a@." Locations.pretty loc; *)
-                  add_unitialized state loc
-                end
-                else (assert (acc=o); state)
-              in
-              if Cil.typeHasQualifier "volatile" typ then
-                warning_once_current
-                  "global initialization of volatile %s ignored"
-                  (match off with
-                    | Field _ -> "field"
-                    | Index _ -> "array element"
-                    | NoOffset -> "element");
-              o+w,
-              eval_initializer state (Cil.addOffsetLval off lval) init
-            )
-            ~ct:base_typ
-            ~initl:l
-            ~acc:(0, state)
-        in
-        let base_off,_ =
-          (match lval with
-            | Var vinfo, abs_offset -> Cil.bitsOffset vinfo.vtype abs_offset
-            | _ -> Value_parameters.fatal "Whacky initializer?")
-        in
-	if initialized_padding ()
-	then
-	  init_trailing_padding state ~last_bitsoffset
-            ~abs_offset:(base_off+last_bitsoffset)
-            base_typ
-            lval
-        else state
+      Cil.foldLeftCompound
+        ~implicit:false
+        ~doinit:
+        (fun off init _typ state ->
+          let lval' = Cil.addOffsetLval off lval in
+          init_initializer_or_volatile state lval' init warn)
+        ~ct:base_typ
+        ~initl:l
+        ~acc:state
 
-(* Special initializers. Only lval with attributes 'const' are initialized *)
-let rec eval_const_initializer state lval init =
+(* Special initializers. Only lval with attributes 'const' and non-volatile
+   are initialized *)
+let rec init_const_initializer state lval init =
   match init with
     | SingleInit exp ->
       let typ_lval = Cil.typeOfLval lval in
       if Cil.typeHasQualifier "const" typ_lval &&
         not (Cil.typeHasQualifier "volatile" typ_lval)
       then
-        eval_single_initializer state lval exp
+        init_single_initializer state lval exp
       else state
 
     | CompoundInit (base_typ, l) ->
@@ -570,143 +499,154 @@ let rec eval_const_initializer state lval init =
           ~implicit:true
           ~doinit:
           (fun off init _typ state ->
-            eval_const_initializer state (Cil.addOffsetLval off lval) init)
+            init_const_initializer state (Cil.addOffsetLval off lval) init)
           ~ct:base_typ
           ~initl:l
           ~acc:state
 
-(** Initial value for globals and NULL in no-lib-entry mode (everything
-    initialized to 0). *)
-let initial_state_only_globals =
-  let module S =
-    State_builder.Option_ref
-      (Cvalue.Model)
-      (struct
-        let name = "Value.Initial_state.Not_context_free"
-        let dependencies =
-          [ Ast.self; Kernel.AbsoluteValidRange.self;
-            Value_parameters.InitializedPaddingGlobals.self ]
-      end)
-  in
-  function () ->
-    let compute ()  =
-      Value_parameters.debug ~level:2 "Computing globals values";
-      let state = ref Cvalue.Model.empty_map in
-      let update_state st' =
-        if not (Db.Value.is_reachable st')
-        then raise Initialization_failed
-        else state := st'
-      in
-      Globals.Vars.iter_in_file_order
-        (fun varinfo init ->
-          if varinfo.vsource then begin
-              Cil.CurrentLoc.set varinfo.vdecl;
-              let volatile = Cil.typeHasQualifier "volatile" varinfo.vtype in
-              match init.init, volatile with
-              | None, _ | _, true -> (* Default to zero init *)
-                  if volatile && init.init != None then
-                    warning_once_current
-                      "global initialization of volatile value ignored";
-                  if varinfo.vstorage = Extern
-                  then
-                    (* Must not assume zero when the storage is extern. *)
-                    update_state (initialize_var_using_type varinfo !state)
-                  else
-                  if initialized_padding () then
-		    update_state (init_var_zero varinfo !state)
-		  else
-		    let typ = varinfo.vtype in
-		    let loc = Cil_datatype.Location.unknown in
-		    let zi = Cil.makeZeroInit ~loc typ in
-		    update_state
-                      (eval_initializer !state (Var varinfo,NoOffset) zi)
-              | Some i, false ->
-                  update_state
-                    (eval_initializer !state (Var varinfo,NoOffset) i)
-            end);
-
-      (** Bind the declared range for NULL to top int *)
-      let min_valid = Base.min_valid_absolute_address () in
-      let max_valid = Base.max_valid_absolute_address () in
-      if Int.le min_valid max_valid
-      then begin
-        (* Bind everything between [0..max] to bottom. Offsetmaps cannot
-           contain holes, which would happend if min > 0 holds. *)
-        let bot = V_Offsetmap.create_isotropic
-          ~size:max_valid (V_Or_Uninitialized.initialized V.bottom)
-        in
-        let v = if true (* TODO: command line option *)
-        then V_Or_Uninitialized.initialized V.top_int
-        else V_Or_Uninitialized.uninitialized
-        in
-        let offsm =
-          V_Offsetmap.add (min_valid, max_valid) (v, Int.one, Rel.zero) bot
-        in
-        state := Cvalue.Model.add_base Base.null offsm !state
-      end;
-      let result = !state in
-      result
+(** Bind the declared range for NULL to top int *)
+let initialize_null state =
+  let min_valid = Base.min_valid_absolute_address () in
+  let max_valid = Base.max_valid_absolute_address () in
+  if Int.le min_valid max_valid
+  then begin
+    (* Bind everything between [0..max] to bottom. Offsetmaps cannot
+       contain holes, which can happen when min > 0 holds. *)
+    let bot = V_Offsetmap.create_isotropic
+      ~size:max_valid (V_Or_Uninitialized.initialized V.bottom)
     in
-    S.memo
-      (fun () -> 
-         try compute ()
-         with Initialization_failed -> Cvalue.Model.bottom)
+    let v = if true (* TODO: command line option *)
+      then V_Or_Uninitialized.initialized V.top_int
+      else V_Or_Uninitialized.uninitialized
+    in
+    let offsm =
+      V_Offsetmap.add (min_valid, max_valid) (v, Int.one, Rel.zero) bot
+    in
+    Cvalue.Model.add_base Base.null offsm state
+  end
+  else state
 
-module ContextfreeGlobals =
+(* initialize [vi] when [-lib-entry] is not set, by writing successively
+   the padding, zero, and the initializers. *)
+let init_var_not_lib_entry_initializer vi init state =
+  Cil.CurrentLoc.set vi.vdecl;
+  let volatile_somewhere = Cil.typeHasAttributeDeep "volatile" vi.vtype in
+  let volatile_everywhere = Cil.typeHasQualifier "volatile" vi.vtype in
+  if fully_initialized_padding () &&
+    (volatile_everywhere || not volatile_somewhere)
+  then
+    (* shortcut: padding and volatile won't interfere, we can do a global
+       initialisation, then write the initializer on top if there is one. *)
+    if volatile_everywhere then begin
+      if init <> None then
+        warning_once_current
+          "global initialization of volatile variable %a ignored"
+          Printer.pp_varinfo vi;
+      init_var_volatile vi state
+    end
+    else
+      let state = init_var_zero vi state in
+      match init with
+      | None -> state
+      | Some init ->
+        init_initializer_or_volatile state (Var vi,NoOffset) init true
+  else (* "slow" initialization *)
+    let state = init_var_padding ~lib_entry:false vi state in
+    let typ = vi.vtype in
+    let loc = Cil_datatype.Location.unknown in
+    let zi = Cil.makeZeroInit ~loc typ in
+    (* initialise everything (except padding) to zero). Do not warn, as
+       most of the initializer is generated. *)
+    let state = init_initializer_or_volatile state (Var vi,NoOffset) zi false in
+    (* then write the real initializer on top *)
+    match init with
+    | None -> state
+    | Some init ->
+      init_initializer_or_volatile state (Var vi,NoOffset) init true
+
+
+(* initialize [vi] as if in [-lib-entry] mode. Active when [-lib-entry] is set,
+   or when [vi] is extern. [const] initializers, explicit or implicit, are
+   taken into account *)
+let init_var_lib_entry_initializer vi init state =
+  Cil.CurrentLoc.set vi.vdecl;
+  if Cil.typeHasAttribute "const" vi.vtype && not (vi.vstorage = Extern)
+  then (* Fully const base. Ignore -lib-entry altogether *)
+    init_var_not_lib_entry_initializer vi init state
+  else
+    (* Fill padding + contents of non-padding bits according to the type *)
+    let state = init_var_lib_entry vi state in
+    (* if needed, initialize const fields according to the initialiser
+       (or generate one if there are none). In the first phase, they have been
+       set to generic values *)
+    if Cil.typeHasAttributeDeep "const" vi.vtype && not (vi.vstorage = Extern)
+    then
+      let init = match init with
+        | None -> Cil.makeZeroInit ~loc:vi.vdecl vi.vtype
+        | Some init -> init
+      in
+      init_const_initializer state (Var vi, NoOffset) init
+    else state
+
+
+module NotLibEntryGlobals =
   State_builder.Option_ref
     (Cvalue.Model)
     (struct
-      let name = "Value.Initial_state.ContextfreeGlobals"
+      let name = "Value.Initial_state.NotLibEntryGlobals"
+      let dependencies =
+        [ Ast.self; Kernel.AbsoluteValidRange.self;
+          Value_parameters.InitializationPaddingGlobals.self ]
+     end)
+
+module LibEntryGlobals =
+  State_builder.Option_ref
+    (Cvalue.Model)
+    (struct
+      let name = "Value.Initial_state.LibEntryGlobals"
       open Value_parameters
       let dependencies =
         [ Ast.self; Kernel.AbsoluteValidRange.self;
-          InitializedPaddingGlobals.self; AllocatedContextValid.self;
+          InitializationPaddingGlobals.self; AllocatedContextValid.self;
           AutomaticContextMaxWidth.self; AutomaticContextMaxDepth.self;
         ]
      end)
+let () = Ast.add_monotonic_state LibEntryGlobals.self
 
-let () = Ast.add_monotonic_state ContextfreeGlobals.self
+let initial_state ~lib_entry () =
+  Value_parameters.debug ~level:2 "Computing globals values";
+  try
+    Globals.Vars.fold_in_file_order
+      (fun vi init state ->
+        if vi.vsource then begin
+          let initialize = 
+            if lib_entry || (vi.vstorage = Extern (* use -lib-entry mode. *)) 
+            then init_var_lib_entry_initializer
+            else init_var_not_lib_entry_initializer
+          in
+          initialize vi init.init state
+        end
+        else state
+      ) (initialize_null Cvalue.Model.empty_map)
+  with Initialization_failed -> Cvalue.Model.bottom
 
-(** Initial state in [-lib-entry] mode *)
-let initial_state_contextfree_only_globals () =
-    let add_varinfo state vi =
-      Cil.CurrentLoc.set vi.vdecl;
-      let state = initialize_var_using_type vi state in
-      (* We may do a second phase to initialize const fields again. In the
-         first phase, they have been set to generic values *)
-      if Cil.typeHasAttributeDeep "const" vi.vtype && not (vi.vstorage = Extern)
-      then
-        let init = match (Globals.Vars.find vi).init with
-          | None -> Cil.makeZeroInit ~loc:vi.vdecl vi.vtype
-          | Some init -> init
-        in
-        eval_const_initializer state (Var vi, NoOffset) init
-      else state
-    in
-    let treat_global state = function
-      | GVar(vi,_,_) -> add_varinfo state vi
-      | GVarDecl(_,vi,_) when not (Cil.isFunctionType vi.vtype) ->
-          add_varinfo state vi
-      | GType _ | GCompTag _ | GCompTagDecl _ | GEnumTag _ | GEnumTagDecl _
-      | GVarDecl _ | GFun _ | GAsm _ | GPragma _ | GText _ | GAnnot _ -> state
-    in
-    let compute ()  =
-      List.fold_left treat_global (initial_state_only_globals())
-        (Ast.get ()).globals
-    in
-    ContextfreeGlobals.memo compute
+let initial_state_not_lib_entry () =
+  NotLibEntryGlobals.memo (initial_state ~lib_entry:false)
+
+let initial_state_lib_entry () =
+  LibEntryGlobals.memo (initial_state ~lib_entry:true)
 
 let () =
   Db.Value.initial_state_only_globals :=
     (fun () ->
-      if snd(Globals.entry_point ()) then
-        initial_state_contextfree_only_globals ()
+      if snd (Globals.entry_point ()) then
+        initial_state_lib_entry ()
       else
-        initial_state_only_globals ()
+        initial_state_not_lib_entry ()
     );
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

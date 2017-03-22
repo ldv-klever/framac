@@ -24,6 +24,6 @@ tests/wp_plugin/struct_hack.i:53:[wp] warning: Missing assigns clause (assigns '
      Alt-Ergo:        2
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
-f0                   3      2 (25)     5       100%
+f0                   3      2 (22)     5       100%
 f1                   5     -           5       100%
 ----------------------------------------------------------

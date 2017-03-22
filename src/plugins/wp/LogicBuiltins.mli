@@ -29,7 +29,7 @@ open Lang
 
 type category = Lang.lfun Qed.Logic.category
 
-type kind = 
+type kind =
   | Z                   (** integer *)
   | R                   (** real *)
   | I of Ctypes.c_int   (** C-ints *)
@@ -49,10 +49,11 @@ val compare : driver -> driver -> int
 val find_lib: string -> string
 (** find a file in the includes of the current drivers *)
 
-val dependencies : string -> string list (** Of external theories. 
-                                             					     Raises Not_found if undefined *)
+val dependencies : string -> string list
+(** Of external theories. Raises Not_found if undefined *)
 
-val add_library : string -> string list -> unit (** External theories *)
+val add_library : string -> string list -> unit
+(** Add a new library or update the dependencies of an existing one *)
 
 val add_builtin : string -> kind list -> lfun -> unit
 
@@ -64,8 +65,8 @@ val add_type : string -> library:string ->
 val add_ctor : string -> kind list ->
   library:string -> link:Qed.Engine.link infoprover -> unit -> unit
 
-val add_logic : kind -> string -> kind list -> 
-  library:string -> ?category:category -> 
+val add_logic : kind -> string -> kind list ->
+  library:string -> ?category:category ->
   link:Qed.Engine.link infoprover -> unit -> unit
 
 val add_predicate : string -> kind list ->
@@ -92,7 +93,6 @@ val get_option : doption -> library:string -> string list
 type builtin =
   | ACSLDEF
   | LFUN of lfun
-  | CONST of F.term
 
 val logic : logic_info -> builtin
 val ctor : logic_ctor_info -> builtin

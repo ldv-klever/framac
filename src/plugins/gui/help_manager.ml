@@ -21,10 +21,11 @@
 (**************************************************************************)
 
 let show main_ui =
-  let authors =
-    [ "Patrick Baudin" ;
-      "François Bobot" ;
+  let authors = [
+      "Patrick Baudin";
+      "François Bobot";
       "Richard Bonichon";
+      "David Bühler";
       "Loïc Correnson";
       "Pascal Cuoq";
       "Zaynah Dargaye";
@@ -33,12 +34,18 @@ let show main_ui =
       "Florent Kirchner";
       "Matthieu Lemerre";
       "Claude Marché";
+      "André Maroneze";
       "Benjamin Monate";
       "Yannick Moy";
       "Anne Pacalet";
+      "Valentin Perrelle";
+      "Guillaume Petiot";
       "Virgile Prevosto";
+      "Armand Puccetti";
+      "Muriel Roger";
       "Julien Signoles";
-      "Boris Yakobowski" ]
+      "Boris Yakobowski"
+  ]
   in
   let copyright (* should be automatically generated *) =
     "\t © CEA and INRIA for the Frama-C kernel\n\
@@ -49,7 +56,7 @@ semantic callgraph, slicing, sparecode, syntactic callgraph, users and value.\n\
 See the particular header of each source file for details."
   in
   let license (* should be automatically generated *) =
-    "Licences of the Frama-C kernel and plug-ins are either under LGPL v2.1, \
+    "Licenses of the Frama-C kernel and plug-ins are either under LGPL v2.1, \
 or BSD.\n\
 See the particular header of each source file for details."
   in
@@ -64,7 +71,7 @@ See the particular header of each source file for details."
       ~license
       ~website:"http://frama-c.com"
       ~website_label:"Questions and support"
-      ~version:(Config.version ^ "\nBuilt on " ^ Config.date)
+      ~version:(Config.version ^ "\nGenerated on " ^ Config.date)
       ~comments:"Frama-C is a suite of tools dedicated to the analysis of the \
 source code of software written in C."
       ()
@@ -101,6 +108,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

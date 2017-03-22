@@ -37,6 +37,6 @@ val kf_visible : proj -> kernel_function -> bool
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

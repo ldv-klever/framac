@@ -32,6 +32,6 @@ module DotBasename: Parameter_sig.String
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

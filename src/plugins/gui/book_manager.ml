@@ -59,7 +59,7 @@ let prepend_source_tab w titre =
                   (w.notebook#prepend_page ~tab_label:label#coerce arg))
     ()
   in
-  let window = (Source_viewer.make ~packing:sw#add) in
+  let window = (Source_viewer.make ~packing:sw#add ()) in
     (* Remove default pango menu for textviews *)
     ignore (window#event#connect#button_press ~callback:
               (fun ev -> GdkEvent.Button.button ev = 3));
@@ -167,7 +167,7 @@ let append_source_tab w titre =
                   (w.notebook#append_page ~tab_label:label#coerce arg)) *)
     ()
   in
-  let window = (Source_viewer.make ~packing:sw#add) in
+  let window = (Source_viewer.make ~packing:sw#add ()) in
     ignore
       (cbutton#connect#clicked 
 	 ~callback:(fun () -> delete_view_and_loc w window ()));
@@ -182,6 +182,6 @@ let append_source_tab w titre =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

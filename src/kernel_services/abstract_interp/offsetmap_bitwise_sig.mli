@@ -65,6 +65,7 @@ val find_iset : validity:Base.validity -> intervals -> t -> v
 
 val add_binding_intervals :
   validity:Base.validity -> exact:bool -> intervals -> v -> t -> [`Map of t | `Bottom]
+
 val add_binding_ival :
   validity:Base.validity ->
   exact:bool -> Ival.t -> size:Int_Base.t -> v -> t -> [`Map of t | `Bottom]
@@ -72,6 +73,7 @@ val add_binding_ival :
 
 (** {2 Creating an offsetmap} *)
 
+(** [size] must be strictly greater than zero. *)
 val create: size:Integer.t -> v -> t
 
 
@@ -84,7 +86,7 @@ type map2_decide =
 (** See the documentation of type {!Offsetmap_sig.map2_decide} *)
 
 val map2:
-  Hptmap.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
+  Hptmap_sig.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
 (** See the documentation of function {!Offsetmap_sig.map2_on_values}. *)
 
 
@@ -96,7 +98,12 @@ val fold_fuse_same: (intervals -> v -> 'a -> 'a) -> t -> 'a -> 'a
     directly on [r1 U r2], where U is the join on sets of intervals. *)
 
 val fold_itv:
-  (Int_Intervals_sig.itv -> v -> 'a -> 'a) -> Int_Intervals_sig.itv -> t -> 'a -> 'a
+  ?direction:[`LTR | `RTL] ->
+  entire:bool ->
+  (Int_Intervals_sig.itv -> v -> 'a -> 'a) ->
+  Int_Intervals_sig.itv ->
+  t -> 'a -> 'a
+(** See documentation of {!Offsetmap_sig.fold_between}. *)
 
 (** [fold_join f join vempty itvs m] is an implementation of [fold] that
     restricts itself to the intervals in [itvs]. Unlike in [fold] (where the
@@ -107,7 +114,7 @@ val fold_itv:
     applied to its first three arguments. If you do not need a cache, use
     [fold] instead. *)
 val fold_join_itvs:
-  cache:Hptmap.cache_type ->
+  cache:Hptmap_sig.cache_type ->
   (Integer.t -> Integer.t -> v -> 'a) ->
   ('a -> 'a -> 'a) ->
   'a ->

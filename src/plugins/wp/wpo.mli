@@ -36,9 +36,9 @@ type index =
 
 module DISK :
 sig
-  val cache_log : pid:prop_id -> model:Model.t -> 
+  val cache_log : pid:prop_id -> model:Model.t ->
     prover:prover -> result:result -> string
-  val pretty : pid:prop_id -> model:Model.t -> 
+  val pretty : pid:prop_id -> model:Model.t ->
     prover:prover -> result:result -> Format.formatter -> unit
   val file_kf : kf:kernel_function -> model:Model.t -> prover:prover -> string
   val file_goal : pid:prop_id -> model:Model.t -> prover:prover -> string
@@ -66,7 +66,7 @@ sig
 
   type t = {
     lemma : Definitions.dlemma ;
-    depends : logic_lemma list ; 
+    depends : logic_lemma list ;
     (* list of axioms and lemma on which the proof depends on *)
   }
 
@@ -108,24 +108,26 @@ end
 (**{1 Proof Obligations}                                                    *)
 (* ------------------------------------------------------------------------ *)
 
-type formula = 
+type formula =
   | GoalLemma of VC_Lemma.t
   | GoalAnnot of VC_Annot.t
   | GoalCheck of VC_Check.t
 
 (** Dynamically exported as ["Wpo.po"] *)
 type po = t and t = {
-  po_gid   : string ;  (* goal identifier *)
-  po_name  : string ;  (* goal informal name *)
-  po_idx   : index ;   (* goal index *)
-  po_model : Model.t ;
-  po_pid   : WpPropId.prop_id ; (* goal target property *)
-  po_updater : Emitter.t ; (* property status updater *)
-  po_formula : formula ; (* proof obligation *)
-}
+    po_gid   : string ;  (* goal identifier *)
+    po_sid   : string ;  (* goal short identifier (without model) *)
+    po_name  : string ;  (* goal informal name *)
+    po_idx   : index ;   (* goal index *)
+    po_model : Model.t ;
+    po_pid   : WpPropId.prop_id ; (* goal target property *)
+    po_updater : Emitter.t ; (* property status updater *)
+    po_formula : formula ; (* proof obligation *)
+  }
 
 module S : Datatype.S_with_collections with type t = po
-
+module Index : Map.OrderedType with type t = index
+module Gmap : Map.S with type key = index
 
 (** Dynamically exported
     @since Nitrogen-20111001
@@ -150,7 +152,6 @@ val clear : unit -> unit
 val remove : t -> unit
 val resolve : t -> bool
 
-val gid : model:string -> propid:WpPropId.prop_id -> string
 val add : t -> unit
 val age : t -> int (* generation *)
 val set_result : t -> prover -> result -> unit
@@ -166,9 +167,6 @@ val warnings : t -> Warning.t list
     @since Nitrogen-20111001
 *)
 val is_valid: result -> bool
-
-(** [true] if the result is meaningfull (Valid, Unknown or Timeout) *)
-val is_verdict: result -> bool
 
 val get_time: result -> float
 val get_steps: result -> int
@@ -190,7 +188,7 @@ val iter_on_goals: (t -> unit) -> unit
 
 (** All POs related to a given property.
     Dynamically exported
-    @since Oxygen-20120901 
+    @since Oxygen-20120901
 *)
 val goals_of_property: Property.t -> t list
 

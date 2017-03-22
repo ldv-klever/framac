@@ -29,9 +29,8 @@
 (* ************************************************************************* *)
 
 type alarm_behavior =
-    { a_log: (Emitter.t * (Format.formatter -> unit)) option;
-  (** log the alarm, and continue,
-      pretending that the problematic values do not happen *)
+    { a_log: bool;
+      (** should the alarm be sent to the log *)
       
       a_call: unit -> unit;
     (** call function after optionally emitting with field a_log. *)
@@ -58,7 +57,7 @@ type warn_mode =
           {!warn_none_mode} below when you have to provide an argument of type
           [warn_mode]. *)
 
-val warn_all_mode : Emitter.t -> (Format.formatter -> unit) -> warn_mode
+val warn_all_mode: warn_mode
   (** Emit all messages, including alarms and informative messages
       regarding the loss of precision. *)
 
@@ -67,6 +66,6 @@ val warn_none_mode : warn_mode
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

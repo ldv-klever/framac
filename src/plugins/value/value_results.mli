@@ -45,6 +45,6 @@ val merge_after_states_in_db:
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

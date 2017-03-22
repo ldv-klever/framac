@@ -39,19 +39,8 @@ let add_offset_lval =
     ~now:"Logic_const.addTermOffsetLval"
     Logic_const.addTermOffsetLval
 
-let error (source,_ as loc) fstring =
-  CurrentLoc.set loc;
-  (if Kernel.ContinueOnAnnotError.get() then
-      Kernel.with_warning (fun _ -> raise Exit)
-   else
-      Kernel.abort)
-    ~source
-    (fstring ^^ " in annotation.")
-
 let loc_join (b,_) (_,e) = (b,e)
-let unescape s =
-  let b = Buffer.create (String.length s) in
-    Logic_lexer.chr b (Lexing.from_string s)
+let unescape s = Logic_lexer.chr (Lexing.from_string s)
 
 let wcharlist_of_string s =
   let res = ref [] in
@@ -501,16 +490,18 @@ type typing_context = {
 
 module Extensions = struct
   let typer_tbl = Hashtbl.create 5
-  let find_typer name= Hashtbl.find typer_tbl name
+  let find_typer name = Hashtbl.find typer_tbl name
+  let is_extension name = Hashtbl.mem typer_tbl name
   let register name typer =
     Logic_utils.register_extension name;
     Hashtbl.add typer_tbl name typer
   let typer name ~typing_context:typing_context ~loc bhv p =
     try let typ = find_typer name in
     typ ~typing_context ~loc bhv p
-    with Not_found -> error loc "unsupported clause of name '%s'" name
-
+    with Not_found ->
+      Kernel.fatal ~source:(fst loc) "unsupported clause of name '%s'" name
 end
+
 let register_behavior_extension = Extensions.register
 
 let rec arithmetic_conversion ty1 ty2 =
@@ -554,12 +545,6 @@ let plain_arithmetic_type t =
           name = Utf8_logic.boolean
       | Lreal | Ltype _ | Lvar _ | Larrow _ -> false
 
-  let plain_non_void_ptr loc typ =
-    match unroll_type typ with
-        Ctype (TPtr(ty,_) | TArray(ty,_,_,_)) ->
-          not (Cil.isVoidType ty)
-      | _ -> error loc "not a pointer or array type"
-
   let plain_fun_ptr typ =
     match unroll_type typ with
       | Ctype (TPtr(ty,_)) -> Cil.isFunctionType ty
@@ -569,13 +554,7 @@ let plain_arithmetic_type t =
 
   let is_integral_type = plain_or_set plain_integral_type
 
-  let is_non_void_ptr loc = plain_or_set (plain_non_void_ptr loc)
-
   let is_fun_ptr = plain_or_set plain_fun_ptr
-
-  let check_non_void_ptr loc typ =
-    if not (is_non_void_ptr loc typ) then
-      error loc "expecting a non-void pointer"
 
   let rec type_of_pointed t =
     match unroll_type t with
@@ -600,7 +579,7 @@ let plain_arithmetic_type t =
          match unroll_type t with
            Ctype ty when isArrayType ty -> Ctype (Cil.typeOf_array_elem ty)
          | _ ->
-             error (CurrentLoc.get()) "type %a is not an array type"
+             Kernel.fatal ~current:true "type %a is not an array type"
                Cil_printer.pp_logic_type t)
 
   let rec ctype_of_array_elem t =
@@ -634,7 +613,7 @@ let plain_arithmetic_type t =
 
   let is_array_type = plain_or_set is_plain_array_type
   let is_pointer_type = plain_or_set is_plain_pointer_type
-  
+
 module Make
   (C:
     sig
@@ -657,6 +636,7 @@ module Make
       val find_logic_type: string -> logic_type_info
       val find_logic_ctor: string -> logic_ctor_info
       val integral_cast: Cil_types.typ -> Cil_types.term -> Cil_types.term
+      val error: location -> ('a,formatter,unit, 'b) format4 -> 'a 
     end) =
 struct
 
@@ -686,8 +666,21 @@ struct
     find_all_logic_functions = C.find_all_logic_functions;
     find_logic_type = C.find_logic_type;
     find_logic_ctor = C.find_logic_ctor;
-    error = error;
+    error = C.error;
   }
+
+  let add_logic_function loc li =
+    let l = Logic_env.find_all_logic_functions li.l_var_info.lv_name in
+    if List.exists (Logic_utils.is_same_logic_profile li) l then begin
+      C.error loc
+        "%s %s is already declared with the same profile"
+        (match li.l_type with None -> "predicate" | Some _ -> "logic function")
+        li.l_var_info.lv_name
+    end else C.add_logic_function li
+
+  let check_non_void_ptr loc ty =
+    if Logic_utils.isLogicVoidPointerType ty then
+      C.error loc "Cannot use a pointer to void here"
 
   let has_field f ty =
     try
@@ -707,9 +700,9 @@ struct
              let typ = Cil.typeOffset ty field in
              Logic_utils.offset_to_term_offset ~cast:false field,
              Ctype (Cil.typeAddAttributes attrs typ)
-           with Not_found -> error loc "cannot find field %s" f)
+           with Not_found -> C.error loc "cannot find field %s" f)
       | _ ->
-	  error loc "expected a struct with field %s" f
+	  C.error loc "expected a struct with field %s" f
 
   let plain_type_of_field loc f = function
     | Ctype ty ->
@@ -717,8 +710,7 @@ struct
            let mf = Logic_env.find_model_field f ty in
            TModel(mf,TNoOffset), mf.mi_field_type
          with Not_found -> plain_type_of_c_field loc f ty)
-    | _ ->
-        error loc "expected a struct with field %s" f
+    | _ -> C.error loc "expected a struct with field %s" f
 
   let type_of_field loc f = function
     | Ltype ({lt_name = "set"} as lt,[t]) ->
@@ -787,7 +779,7 @@ struct
           match length with
               Some (IntConstant s) -> Some (parseIntExp ~loc s)
             | Some (FloatConstant _ | StringConstant _ | WStringConstant _) ->
-                error loc "size of array must be an integral value"
+                C.error loc "size of array must be an integral value"
             | None -> None
         in
         Ctype (TArray (c_logic_type loc env ty, size,
@@ -795,20 +787,23 @@ struct
     | LTpointer ty -> Ctype (TPtr (c_logic_type loc env ty, []))
     | LTenum e ->
         (try Ctype (C.find_type Enum e)
-         with Not_found -> error loc "no such enum %s" e)
+         with Not_found -> C.error loc "no such enum %s" e)
     | LTstruct s ->
         (try Ctype (C.find_type Struct s)
-         with Not_found -> error loc "no such struct %s" s)
+         with Not_found -> C.error loc "no such struct %s" s)
     | LTunion u ->
         (try Ctype (C.find_type Union u)
-         with Not_found -> error loc "no such union %s" u)
+         with Not_found -> C.error loc "no such union %s" u)
     | LTarrow (prms,rt) ->
         (* For now, our only function types are C function pointers. *)
         let prms = List.map (fun x -> "", c_logic_type loc env x, []) prms in
         let rt = c_logic_type loc env rt in
         (match prms with
              [] -> Ctype (TFun(rt,None,false,[]))
-           | _ -> Ctype (TFun(rt,Some prms,false,[])))
+            | [(_,arg_typ,_)] when isVoidType arg_typ ->
+              (* Same invariant as in C *)
+              Ctype (TFun(rt,Some [],false,[]))
+            | _ -> Ctype (TFun(rt,Some prms,false,[])))
     | LTnamed (id,[]) ->
         (try Lenv.find_type_var id env
          with Not_found ->
@@ -816,24 +811,28 @@ struct
              try
                let info = C.find_logic_type id in
                if info.lt_params <> [] then
-                 error loc "wrong number of parameter for type %s" id
+                 C.error loc "wrong number of parameter for type %s" id
                else Ltype (info,[])
              with Not_found ->
-               error loc "no such type %s" id)
+               C.error loc "no such type %s" id)
     | LTnamed(id,l) ->
         (try
            let info = C.find_logic_type id in
            if List.length info.lt_params <> List.length l then
-             error loc "wrong number of parameter for type %s" id
+             C.error loc "wrong number of parameter for type %s" id
            else Ltype (info,List.map (logic_type loc env) l)
          with Not_found ->
-           error loc "no such type %s" id)
+           C.error loc "no such type %s" id)
     | LTinteger -> Linteger
     | LTreal -> Lreal
+    | LTattribute (ty,attr) -> 
+      (* attributes can only qualify C types *)
+      Ctype (Cil.typeAddAttributes [attr] (c_logic_type loc env ty))
 
   and c_logic_type loc env t = match logic_type loc env t with
     | Ctype t -> t
-    | Ltype _ | Linteger | Lreal | Lvar _ | Larrow _ -> error loc "not a C type"
+    | Ltype _ | Linteger | Lreal | Lvar _ | Larrow _ ->
+        C.error loc "not a C type"
 
 
   let mk_logic_access env t =
@@ -940,7 +939,7 @@ struct
              | _ -> ())
       | TIndex _ -> ()
       | TModel (mf,_) ->
-          error loc "Cannot take the address of model field %s" mf.mi_name
+          C.error loc "Cannot take the address of model field %s" mf.mi_name
       | TField(fi,_) -> fi.faddrof <- true
     end;
     Logic_utils.mk_logic_AddrOf ~loc lval t.term_type
@@ -954,7 +953,9 @@ struct
     if is_same_c_type oldt newt then e
     else begin
       (* Watch out for constants *)
-      if isPointerType newt && isLogicNull e && not (isLogicZero e) then e
+      if isPointerType newt && isLogicNull e && not (isLogicZero e) then
+        (* \null can have any pointer type, see ACSL manual. *)
+        { e with term_type = Ctype newt }
       else if isPointerType newt && isArrayType oldt && is_C_array e then begin
         let e = mk_logic_StartOf e in
         let oldt = Logic_utils.logicCType e.term_type in
@@ -995,6 +996,22 @@ struct
       Cil.isFunctionType (Cil.typeOf_pointed  ty)
     with Assert_failure _ -> false
 
+  let is_compatible_funtype ty1 ty2 =
+    if is_same_c_type ty1 ty2 then true
+    else begin
+      let rt1, _, variadic1, _ = Cil.splitFunctionType ty1 in
+      let rt2, args2, _, _ = Cil.splitFunctionType ty2 in
+      if not (is_same_c_type rt1 rt2) then false
+      else begin
+        (* types are not identical: they can only be compatible
+           if args2 are not specified and variadic1 is false. *)
+        match args2 with
+          | Some _ -> false
+          | None -> not variadic1
+      end
+    end
+    
+
   let is_implicit_pointer_conversion term ctyp1 ctyp2 =
     let same_pointed () =
       is_same_c_type (typeOf_pointed ctyp1) (typeOf_pointed ctyp2)
@@ -1005,6 +1022,9 @@ struct
     let compatible_pointed () =
       same_pointed () ||
         (isVoidPtrType ctyp2 && not (is_function_pointer ctyp1))
+      ||
+        (is_function_pointer ctyp2 && is_function_pointer ctyp1 &&
+           is_compatible_funtype (typeOf_pointed ctyp1) (typeOf_pointed ctyp2))
     in
     (isArrayType ctyp1 && isArrayType ctyp2 && same_array_elt ()) ||
     (isPointerType ctyp1 && isPointerType ctyp2 &&
@@ -1028,6 +1048,7 @@ struct
         | Tempty_set -> { e with term_type = set }
         | TLogic_coerce(_,e) ->
             { e with term_type = t; term_node = TLogic_coerce(t,e) }
+        | _ when Cil.isLogicArithmeticType t -> Logic_utils.numeric_coerce t e
         | _ -> { e with term_type = t; term_node = TLogic_coerce(t,e) }
     in 
     if is_same_type e.term_type t then e else aux e
@@ -1035,8 +1056,9 @@ struct
   let location_to_char_ptr t =
     let convert_one_location t =
       let ptd_type = type_of_pointed t.term_type in
-      if isLogicCharType ptd_type then t
-      else if isLogicVoidType ptd_type then error t.term_loc
+      if isLogicCharType ptd_type then 
+        logic_coerce (make_set_type t.term_type) t
+      else if isLogicVoidType ptd_type then C.error t.term_loc
         "can not have a set of void pointers"
       else
         let loc = t.term_loc in
@@ -1077,29 +1099,29 @@ struct
         | Ltype({lt_name = "set"},[_]), Ltype({lt_name="set"},[ty2]) ->
           let e = lift_set (fun e -> mk_cast e ty2) e in
           { e with term_type = make_set_type e.term_type}
-        | ty1 , Ltype({lt_name =  "set"},[ ty2 ]) ->
+        | _ , Ltype({lt_name =  "set"},[ ty2 ]) ->
             let e = mk_cast e ty2 in
-            { e with term_type = make_set_type ty1}
+            logic_coerce (make_set_type e.term_type) e
         | Linteger, Linteger | Lreal, Lreal -> e
         | Linteger, Ctype t when isLogicPointerType newt && isLogicNull e ->
             c_mk_cast e intType t
         | Linteger, Ctype t when isIntegralType t ->
         (try
            C.integral_cast t e
-         with Failure s -> error loc "%s" s)
+         with Failure s -> C.error loc "%s" s)
          | Linteger, Ctype _ | Lreal, Ctype _ ->
-            error loc "invalid implicit cast from %a to C type %a"
+            C.error loc "invalid implicit cast from %a to C type %a"
               Cil_printer.pp_logic_type e.term_type
 	      Cil_printer.pp_logic_type newt
         | Ctype t, Linteger when Cil.isIntegralType t -> logic_coerce Linteger e
         | Ctype t, Lreal when isArithmeticType t -> logic_coerce Lreal e
         | Ctype _, (Lreal | Linteger) ->
-            error loc "invalid implicit cast from %a to logic type %a"
+            C.error loc "invalid implicit cast from %a to logic type %a"
               Cil_printer.pp_logic_type e.term_type
 	      Cil_printer.pp_logic_type newt
         | Linteger, Lreal -> logic_coerce Lreal e
         | Lreal, Linteger ->
-            error loc
+            C.error loc
               "invalid cast from real to integer. \
          Use conversion functions instead"
         | Larrow (args1,_), Larrow(args2,rt2) ->
@@ -1119,7 +1141,7 @@ struct
         | Ltype _, _ | _, Ltype _
         | Lvar _,_ | _,Lvar _
         | Larrow _,_ | _,Larrow _ ->
-            error loc "invalid cast from %a to %a"
+            C.error loc "invalid cast from %a to %a"
               Cil_printer.pp_logic_type e.term_type
 	      Cil_printer.pp_logic_type newt
           
@@ -1142,6 +1164,10 @@ struct
         | (TPtr _ | TArray _), (TPtr _ | TArray _)
             when isLogicNull e -> result
         | TPtr _, TPtr _ when isVoidPtrType nt -> (nt, e)
+        | TPtr (t1,_), TPtr (t2,_) when
+            Cil.isFunctionType t1 &&
+              Cil.isFunctionType t2 &&
+              is_compatible_funtype t1 t2 -> result
         | TEnum _, TInt _ -> result
         | TFloat _, (TInt _|TEnum _) -> result
         | (TInt _|TEnum _), TFloat _ -> result
@@ -1191,8 +1217,10 @@ struct
                 || (sz1 = sz2 && (isSignedInteger ty1 = isSignedInteger ty2))
                 || is_enum_cst oterm nt)
             then begin let t, e = c_cast_to ty1 ty2 oterm in Ctype t,e end
-            else error loc "invalid implicit conversion from '%a' to '%a'"
-              Cil_printer.pp_typ ty1 Cil_printer.pp_typ ty2
+            else if overloaded then raise Not_applicable
+            else
+              C.error loc "invalid implicit conversion from '%a' to '%a'"
+                Cil_printer.pp_typ ty1 Cil_printer.pp_typ ty2
           end else if is_implicit_pointer_conversion oterm ty1 ty2
               || (match unrollType ty1, unrollType ty2 with
                     | (TFloat (f1,_), TFloat (f2,_)) ->
@@ -1204,26 +1232,25 @@ struct
             then begin
               let t,e = c_cast_to ty1 ty2 oterm in Ctype t, e
             end else if overloaded then raise Not_applicable
-              else if
-                  isArrayType ty1 && isPointerType ty2
-                  && is_same_c_type (typeOf_array_elem ty1) (typeOf_pointed ty2)
-              then
-                (if overloaded then raise Not_applicable
-                 else if Logic_utils.is_C_array oterm then
-                   error loc
-                     "In ACSL, there is no implicit conversion between \
-                      a C array and a pointer. Either introduce an explicit \
-                      cast or take the address of the first element of %a"
-                     Cil_printer.pp_term oterm
-                 else
-                   error loc
-                     "%a is a logic array. Only C arrays can be \
-                      converted to pointers, and this conversion must be \
-                      explicit (cast or take the address of the first element)"
-                     Cil_printer.pp_term oterm)
-	      else
-                error loc "invalid implicit conversion from '%a' to '%a'"
-                  Cil_printer.pp_typ ty1 Cil_printer.pp_typ ty2
+            else if (* not overloaded: raise an error. *)
+                isArrayType ty1 && isPointerType ty2
+                && is_same_c_type (typeOf_array_elem ty1) (typeOf_pointed ty2)
+            then
+              if Logic_utils.is_C_array oterm then
+                C.error loc
+                  "In ACSL, there is no implicit conversion between \
+                   a C array and a pointer. Either introduce an explicit \
+                   cast or take the address of the first element of %a"
+                  Cil_printer.pp_term oterm
+              else
+                C.error loc
+                  "%a is a logic array. Only C arrays can be \
+                   converted to pointers, and this conversion must be \
+                   explicit (cast or take the address of the first element)"
+                  Cil_printer.pp_term oterm
+	    else
+              C.error loc "invalid implicit conversion from '%a' to '%a'"
+                Cil_printer.pp_typ ty1 Cil_printer.pp_typ ty2
       | Ctype ty, Linteger when Cil.isIntegralType ty -> Linteger, oterm
       | Ctype ty, Lreal when Cil.isArithmeticType ty -> Lreal, oterm
       | Linteger, Lreal -> Lreal, oterm
@@ -1237,7 +1264,7 @@ struct
            nt, C.integral_cast ty oterm
          with Failure s ->
            if overloaded then raise Not_applicable
-           else error loc "%s" s)
+           else C.error loc "%s" s)
       | t1, Ltype ({lt_name = "set"},[t2]) when
           is_pointer_type t1 &&
           is_plain_pointer_type t2 &&
@@ -1274,7 +1301,7 @@ struct
          (Ctype _| Linteger | Lreal | Ltype _ | Lvar _ | Larrow _)) ->
           if overloaded then raise Not_applicable
           else
-	    error loc "invalid implicit conversion from %a to %a"
+	    C.error loc "invalid implicit conversion from %a to %a"
               Cil_printer.pp_logic_type ot Cil_printer.pp_logic_type nt
 
   let rec find_supertype ~overloaded loc t ot nt =
@@ -1287,7 +1314,7 @@ struct
             let res,_ = c_cast_to ot nt t in Ctype res
           else if overloaded then raise Not_applicable
           else
-            error loc "incompatible types %a and %a@."
+            C.error loc "incompatible types %a and %a@."
               Cil_printer.pp_typ ot Cil_printer.pp_typ nt
       | Ctype ot, (Ltype({lt_name = n},[]) as nt) when
           n = Utf8_logic.boolean && Cil.isIntegralType ot -> nt
@@ -1328,7 +1355,7 @@ struct
       | (Ctype _ | Ltype _ | Lvar _ | Linteger | Lreal | Larrow _), _ ->
           if overloaded then raise Not_applicable
           else
-            error loc "incompatible types %a and %a" 
+            C.error loc "incompatible types %a and %a" 
               Cil_printer.pp_logic_type ot Cil_printer.pp_logic_type nt
 
   let rec partial_unif ~overloaded loc term ot nt env =
@@ -1356,7 +1383,7 @@ struct
                 Lenv.add_type_var s2 ot env, ot, ot
             else if s1 = s2 then env, ot, ot (* same type *)
             else
-              error loc
+              C.error loc
                 "implicit unification of type variables %s and %s" s1 s2
       | Lvar s1, _ when generated_var s1 ->
           (try let ot = Lenv.find_type_var s1 env in
@@ -1426,7 +1453,7 @@ struct
       | (Ltype _|Larrow _|Lvar _), _ | _, (Larrow _| Ltype _|Lvar _) ->
           if overloaded then raise Not_applicable
 	  else 
-	    error loc "incompatible types %a and %a"
+	    C.error loc "incompatible types %a and %a"
               Cil_printer.pp_logic_type ot 
 	      Cil_printer.pp_logic_type nt
 
@@ -1596,7 +1623,7 @@ struct
             else if
               (isPointerType ty1 || isArrayType ty1) &&
                 (isPointerType ty2 || isArrayType ty2)
-            then error loc "types %a and %a are not convertible"
+            then C.error loc "types %a and %a are not convertible"
               Cil_printer.pp_typ ty1 Cil_printer.pp_typ ty2
             else (* pointer to integer conversion *)
               Ctype (C.conditionalConversion ty1 ty2)
@@ -1620,7 +1647,7 @@ struct
         | Ltype ({lt_name = "set"} as lt,[t1]), t2
         | t1, Ltype({lt_name="set"} as lt,[t2]) -> Ltype(lt,[aux t1 t2])
         | _ ->
-            error loc "types %a and %a are not convertible"
+            C.error loc "types %a and %a are not convertible"
               Cil_printer.pp_logic_type lty1 Cil_printer.pp_logic_type lty2
     in
     let rt = aux ty1 ty2 in
@@ -1678,12 +1705,12 @@ struct
         let lab = C.find_label l in
         StmtLabel lab
       with Not_found ->
-        error loc "logic label `%s' not found" l
+        C.error loc "logic label `%s' not found" l
 
   let find_old_label loc env =
     try Lenv.find_logic_label "Old" env
     with Not_found ->
-      error loc "\\old undefined in this context"
+      C.error loc "\\old undefined in this context"
 
   let default_inferred_label = LogicLabel (None, "L")
 
@@ -1698,7 +1725,7 @@ struct
                   Lenv.default_label := Some lab; lab
               | Some lab -> lab
           end else
-	    error loc
+	    C.error loc
               "no label in the context. (\\at or explicit label missing?)"
 
   let find_current_logic_label loc env = function
@@ -1716,7 +1743,7 @@ struct
 	      (fun l1 l2 -> (l1,l2))
 	      fun_labels effective_labels
 	  with Invalid_argument _ ->
-	    error loc "wrong number of labels for %s" id
+	    C.error loc "wrong number of labels for %s" id
 
   let add_quantifiers loc ~kind q env =
     let (tq,env) =
@@ -1908,14 +1935,14 @@ struct
 	  let ofs_type =
 	    if Cil.isArrayType t_type && check_type idx.term_type
 	    then Ctype (Cil.typeOf_array_elem t_type)
-	    else error loc "subscripted value is not an array"
+	    else C.error loc "subscripted value is not an array"
 	  in mk_idx idx, ofs_type
 
   let normalize_updated_offset_term idx_typing env loc t normalizing_cont toff =
    let t_type =
      try Logic_utils.logicCType t.term_type 
      with Failure _ ->
-       error loc "Trying to update field on a non struct type %a"
+       C.error loc "Trying to update field on a non struct type %a"
          Cil_printer.pp_logic_type t.term_type
    in
    let mk_let_info name t t_off2 type2 =
@@ -1943,7 +1970,7 @@ struct
    in
    let (toff, t_off2, opt_idx_let), ofs_type =
      let check_type typ = plain_integral_type typ
-       || error loc "range is only allowed for last offset"
+       || C.error loc "range is only allowed for last offset"
      and mk_field f = TField(f,TNoOffset),TField(f,TNoOffset),(fun x -> x)
      and mk_idx idx =
        let mk_idx_let, idx, idx2 =
@@ -2009,7 +2036,7 @@ struct
 	  let t_type = 
             try Logic_utils.logicCType t.term_type 
             with Failure _ ->
-              error loc "Update field on a non-struct type %a"
+              C.error loc "Update field on a non-struct type %a"
                 Cil_printer.pp_logic_type t.term_type
           in
 	  let tail =
@@ -2074,9 +2101,9 @@ struct
   and term_node ?(silent=false) env loc pl =
     match pl with
       | PLinitIndex _ ->
-	  error loc "unsupported aggregated array construct"
+	  C.error loc "unsupported aggregated array construct"
       | PLinitField _ ->
-	  error loc "unsupported aggregated field construct"
+	  C.error loc "unsupported aggregated field construct"
       | PLupdate (t, toff, PLupdateCont cont) ->
 	  let t = term env t in
             normalize_update_cont env loc t (cont, toff)
@@ -2090,7 +2117,7 @@ struct
                 (logic_type loc env typ)
            with
                Ctype t -> TSizeOf t,Linteger
-             | _ -> error loc "sizeof can only handle C types")
+             | _ -> C.error loc "sizeof can only handle C types")
 	    (* NB: don't forget to add the case of literal string
                when they are authorized in the logic *)
       | PLsizeofE 
@@ -2103,7 +2130,7 @@ struct
           in
           (match typ with
             | Ctype _ -> TSizeOfE t, Linteger
-            | _ -> error loc "sizeof can only handle C types")
+            | _ -> C.error loc "sizeof can only handle C types")
       | PLnamed _ -> assert false (* should be captured by term *)
       | PLconstant (IntConstant s) ->
           begin match (parseInt loc s).term_node with
@@ -2150,7 +2177,7 @@ struct
               (match lv.lv_type with
               | Ctype (TVoid _)->
                 if silent then raise Backtrack;
-                error (CurrentLoc.get())
+                C.error (CurrentLoc.get())
 		  "Variable %s is bound to a predicate, not a term" x
               | _ -> old_val lv)
 	    with Not_found ->
@@ -2187,7 +2214,7 @@ struct
                                   (fun x -> fresh (Lvar x))
                                   info.ctor_type.lt_params)
                       | _ ->
-                          error loc "Data constructor %s needs arguments"
+                          C.error loc "Data constructor %s needs arguments"
                             info.ctor_name
                   with Not_found ->
                     (* We have a global logic variable. It may depend on
@@ -2205,13 +2232,12 @@ struct
                       let typ =
                         match f.l_type, f.l_profile with
 		          | Some t, [] -> t
-                          | Some t, l ->
-                              fresh
-                                (Larrow (List.map (fun x -> x.lv_type) l, t))
+                          | Some t, l -> Larrow (List.map (fun x -> x.lv_type) l, t)
                           | None, _ ->
                             if silent then raise Backtrack;
-                            error loc "%s is not a logic variable" x
+                            C.error loc "%s is not a logic variable" x
                       in
+                      let typ = fresh typ in
                       match f.l_labels with
                           [] ->
                             TLval (TVar(f.l_var_info),TNoOffset), typ
@@ -2219,12 +2245,12 @@ struct
                             let curr = find_current_label loc env in
                             Tapp(f,[l,curr],[]), typ
                         | _ ->
-                            error loc
+                            C.error loc
                               "%s labels must be explicitly instantiated" x
                     in
                     match C.find_all_logic_functions x with
 
-                        [] -> error loc "unbound logic variable %s" x
+                        [] -> C.error loc "unbound logic variable %s" x
                       | [f] -> make_expr f
                       | l ->
                           (try
@@ -2232,7 +2258,7 @@ struct
                                List.find (fun info -> info.l_profile = []) l
                              in make_expr f
                            with Not_found ->
-                               error loc
+                               C.error loc
                                  "invalid use of overloaded function \
                                   %s as constant" x)
           end
@@ -2242,8 +2268,10 @@ struct
           begin
 	    try
               let info = C.find_logic_ctor f in
-              if labels <> [] then error loc "symbol %s is a data constructor. \
-                                         It cannot have logic labels" f;
+              if labels <> [] then
+                C.error loc
+                  "symbol %s is a data constructor. \
+                   It cannot have logic labels" f;
               let params = List.map fresh info.ctor_params in
               let env, tl =
                 type_arguments ~overloaded:false env loc params ttl
@@ -2261,7 +2289,7 @@ struct
 	      match t with
 	        | None ->
                   if silent then raise Backtrack;
-                  error loc "symbol %s is a predicate, not a function" f
+                  C.error loc "symbol %s is a predicate, not a function" f
 	        | Some t -> Tapp(info, label_assoc, tl), t
           end
       | PLunop (Ubw_not, t) ->
@@ -2280,7 +2308,7 @@ struct
             let t = mk_mem t TNoOffset in
 	    t.term_node, t.term_type
           end else begin
-            error loc "invalid type %a for `unary *'" 
+            C.error loc "invalid type %a for `unary *'" 
 	      Cil_printer.pp_logic_type t.term_type
           end
       | PLunop (Uamp, t) ->
@@ -2342,7 +2370,7 @@ struct
                 let t2 = mk_logic_pointer_or_StartOf t2 in
 	        TBinOp (MinusPP, t1, mk_cast t2 ty1), Linteger
             | _ ->
-	        error loc
+	        C.error loc
                   "invalid operands to binary %a; unexpected %a and %a"
                   Cil_printer.pp_binop (type_binop op) 
 		  Cil_printer.pp_logic_type ty1 
@@ -2359,7 +2387,7 @@ struct
           (* memory access need a current label to have some semantics *)
           let t = term env t in
           if not (isLogicPointer t) then
-            error loc "%a is not a pointer" Cil_printer.pp_term t;
+            C.error loc "%a is not a pointer" Cil_printer.pp_term t;
           let t = mk_logic_pointer_or_StartOf t in
           let struct_type = type_of_pointed t.term_type in
           let f_ofs, f_type = type_of_field loc f struct_type in
@@ -2398,8 +2426,8 @@ struct
               mk_logic_access env t2, t1, type_of_array_elem t2.term_type
             else (* error *)
               if isLogicArrayType t1.term_type || isLogicArrayType t2.term_type
-              then error loc "subscript is not an integer range"
-              else error loc "subscripted value is neither array nor pointer"
+              then C.error loc "subscript is not an integer range"
+              else C.error loc "subscripted value is neither array nor pointer"
           in
           let t = lift_set (mk_shift loc env t'2 tres) t'1 in
             t.term_node, t.term_type
@@ -2442,7 +2470,7 @@ struct
                 (fun t -> Logic_const.term (Tbase_addr (l,t))
                    (Ctype Cil.charPtrType)) (mk_logic_pointer_or_StartOf t)
             in t.term_node, t.term_type
-          else error loc "subscripted value is neither array nor pointer"
+          else C.error loc "subscripted value is neither array nor pointer"
       | PLoffset (l, t) ->
           (* offset need a current label to have some semantics *)
 	  let l = find_current_logic_label loc env l in
@@ -2452,7 +2480,7 @@ struct
               lift_set (fun t -> Logic_const.term (Toffset (l,t)) Linteger)
                 (mk_logic_pointer_or_StartOf t)
             in t.term_node, t.term_type
-          else error loc "subscripted value is neither array nor pointer"
+          else C.error loc "subscripted value is neither array nor pointer"
       | PLblock_length (l, t) ->
           (* block_length need a current label to have some semantics *)
 	  let l = find_current_logic_label loc env l in
@@ -2462,7 +2490,7 @@ struct
               lift_set (fun t -> Logic_const.term (Tblock_length (l,t)) Linteger)
                 (mk_logic_pointer_or_StartOf t)
             in t.term_node, t.term_type
-          else error loc "subscripted value is neither array nor pointer"
+          else C.error loc "subscripted value is neither array nor pointer"
       | PLresult ->
           (try let t = Lenv.find_var "\\result" env in
            match t.lv_type with
@@ -2472,7 +2500,7 @@ struct
 	       Kernel.fatal ~current:true "\\result associated to non-C type"
                  (* \\result is the value returned by a C function.
                     It has always a C type *)
-           with Not_found -> error loc "\\result meaningless")
+           with Not_found -> C.error loc "\\result meaningless")
       | PLnull -> Tnull, c_void_star
       | PLcast (ty, t) ->
           let t = term env t in
@@ -2483,19 +2511,18 @@ struct
 		| Ctype told ->
 		  if isPointerType tnew && isArrayType told
 		    && not (is_C_array t) then
-		    error loc
-                      "cannot cast logic array to pointer type";
+		    C.error loc "cannot cast logic array to pointer type";
 		  (c_mk_cast t told tnew).term_node , ctnew
 		| _ -> (Logic_utils.mk_cast tnew t).term_node, ctnew)
             | Linteger | Lreal | Ltype _ | Lvar _ | Larrow _ ->
-              error loc "cannot cast to logic type")
+              C.error loc "cannot cast to logic type")
       | PLcoercion (t,ty) ->
           let t = term env t in
           (match unroll_type ~unroll_typedef:false (logic_type loc env ty) with
              | Ctype ty as cty
                -> TCoerce (t, ty), cty
              | Linteger | Lreal | Ltype _ | Lvar _ | Larrow _ ->
-                 error loc "cannot cast to logic type")
+                 C.error loc "cannot cast to logic type")
       | PLcoercionE (t,tc) ->
           let t = term env t in
           let tc = term env tc in
@@ -2534,7 +2561,7 @@ struct
           begin match logic_type loc env ty with
             | Ctype ty -> Ttype ty, Ltype (C.find_logic_type "typetag",[])
             | Linteger | Lreal | Ltype _ | Lvar _ | Larrow _ ->
-                error loc "cannot take type tag of logic type"
+                C.error loc "cannot take type tag of logic type"
           end
       | PLlet (ident, def, body) ->
           let tdef = term env def in
@@ -2564,7 +2591,7 @@ struct
       | PLsingleton t ->
           let t = term env t in
 	  if is_set_type t.term_type then
-            error loc "syntax error (set of set is not yet implemented)" ;
+            C.error loc "syntax error (set of set is not yet implemented)" ;
 	  Tunion [t], (* lifting to a set can be used for non-set type *)
 	  Ltype(C.find_logic_type "set",[t.term_type])
       | PLunion l ->
@@ -2618,7 +2645,7 @@ struct
       | PLimplies _ | PLiff _
       | PLxor _ | PLsubtype _ | PLseparated _ ->
         if silent then raise Backtrack;
-        error loc "syntax error (expression expected but predicate found)"
+        C.error loc "syntax error (expression expected but predicate found)"
   and type_relation:
       'a. _ -> (_ -> _ -> _ -> _ -> 'a) -> _ -> _ -> _ -> 'a =
     fun env f t1 op t2 ->
@@ -2667,7 +2694,7 @@ struct
         | Eq | Neq when isLogicArrayType ty1 && isLogicArrayType ty2 ->
           if is_same_logic_array_type ty1 ty2 then f loc op t1 t2
           else
-            error loc "comparison of incompatible types %a and %a"
+            C.error loc "comparison of incompatible types %a and %a"
               Cil_printer.pp_logic_type ty1 Cil_printer.pp_logic_type ty2
         | _ when isLogicPointer t1 && isLogicPointer t2 ->
           let t1 = mk_logic_pointer_or_StartOf t1 in
@@ -2679,12 +2706,12 @@ struct
           then f loc op t1 t2
           else if (op=Eq || op = Neq) then conditional_conversion t1 t2
           else
-            error loc "comparison of incompatible types: %a and %a"
+            C.error loc "comparison of incompatible types: %a and %a"
               Cil_printer.pp_logic_type t1.term_type 
 	      Cil_printer.pp_logic_type t2.term_type
         | Eq | Neq -> conditional_conversion t1 t2
         | _ ->
-	  error loc "comparison of incompatible types: %a and %a"
+	  C.error loc "comparison of incompatible types: %a and %a"
             Cil_printer.pp_logic_type t1.term_type 
 	    Cil_printer.pp_logic_type t2.term_type
       end
@@ -2703,7 +2730,7 @@ struct
               { t with
                 term_type = type_of_pointed t.term_type;
                 term_node = TLval lv }
-          | _ -> error t.term_loc "not a left value: %a"
+          | _ -> C.error t.term_loc "not a left value: %a"
               Cil_printer.pp_term t
     in
     lift_set check_lval t
@@ -2715,7 +2742,7 @@ struct
       with Not_found ->
         C.find_all_logic_functions f in
     match infos with
-      | [] -> error loc "unbound function %s" f
+      | [] -> C.error loc "unbound function %s" f
       | [info] ->
 	  begin
 	    let labels = List.map (find_logic_label loc env) labels in
@@ -2768,25 +2795,25 @@ struct
 	  match l with
 	    | [] ->
 	        let tl = List.map (fun t -> t.term_type) ttl in
-	        error loc "no such predicate or logic function %s(%a)" f
+	        C.error loc "no such predicate or logic function %s(%a)" f
 		  (Pretty_utils.pp_list ~sep:",@ " Cil_printer.pp_logic_type) tl
 	    | [x,y,z,t] -> (x,y,(List.map (fun (t, e) -> mk_cast e t) z),t)
 	    | _ ->
 	        let tl = List.map (fun t -> t.term_type) ttl in
-	        error loc "ambiguous logic call to %s(%a)" f
+	        C.error loc "ambiguous logic call to %s(%a)" f
 		  (Pretty_utils.pp_list ~sep:",@ " Cil_printer.pp_logic_type) tl
 
   and type_int_term env t =
     let tt = term env t in
     if not (plain_integral_type tt.term_type) then
-      error t.lexpr_loc
+      C.error t.lexpr_loc
         "integer expected but %a found" Cil_printer.pp_logic_type tt.term_type;
     tt
 
   and type_bool_term ?(silent=false) env t =
     let tt = term ~silent env t in
     if not (plain_boolean_type tt.term_type) then
-      error t.lexpr_loc "boolean expected but %a found"
+      C.error t.lexpr_loc "boolean expected but %a found"
         Cil_printer.pp_logic_type tt.term_type;
     mk_cast tt (Ltype (C.find_logic_type Utf8_logic.boolean,[]))
 
@@ -2799,7 +2826,7 @@ struct
   and type_num_term env t =
     let tt = term env t in
     if not (is_arithmetic_type tt.term_type) then
-      error t.lexpr_loc "integer or float expected";
+      C.error t.lexpr_loc "integer or float expected";
     tt
 
   (* type_arguments checks if argument list tl is well-typed for the
@@ -2812,10 +2839,10 @@ struct
 	  let env, l = type_list env (etl, tl) in env, et' :: l
       | [], _ ->
 	  if overloaded then raise Not_applicable
-	  else error loc "too many arguments"
+	  else C.error loc "too many arguments"
       | _, [] ->
 	  if overloaded then raise Not_applicable
-	  else error loc "partial application"
+	  else C.error loc "partial application"
     in
     let rec conversion env = function
       | [], [] -> []
@@ -2861,7 +2888,7 @@ struct
       | Ltype _ | Lvar _ | Larrow _
       | Ctype (TVoid _ | TNamed _ | TComp _ | TEnum _ | TBuiltin_va_list _)
         ->
-	error loc "expecting a predicate and not a term"
+	C.error loc "expecting a predicate and not a term"
 
   and boolean_to_predicate env p0 =
     boolean_term_to_predicate (term env p0)
@@ -2953,13 +2980,13 @@ struct
 	  in
           let tloc = t.lexpr_loc in
 	  if l1 == l2 then
-	    error tloc "\\fresh requires two different labels";
+	    C.error tloc "\\fresh requires two different labels";
           let t = term env t in
           let n = term env n in
           if isLogicPointerType t.term_type then
             let t = mk_logic_pointer_or_StartOf t in
 	    pfresh ~loc:p0.lexpr_loc (l1,l2,t,n)
-          else error tloc "subscripted value is not a pointer"
+          else C.error tloc "subscripted value is not a pointer"
       | PLfreeable (l, t) ->
           (* freeable need a current label to have some semantics *)
           let l = find_current_logic_label loc env l in
@@ -2967,7 +2994,7 @@ struct
           if isLogicPointer t then
             let t = mk_logic_pointer_or_StartOf t in
 	    pfreeable ~loc:p0.lexpr_loc (l,t)
-	  else error loc "subscripted value is neither array nor pointer"
+	  else C.error loc "subscripted value is neither array nor pointer"
        | PLallocable (l, t) ->
           (* allocable need a current label to have some semantics *)
           let l = find_current_logic_label loc env l in
@@ -2975,7 +3002,7 @@ struct
           if isLogicPointer t then
             let t = mk_logic_pointer_or_StartOf t in
 	    pallocable ~loc:p0.lexpr_loc (l,t)
-	  else error loc "subscripted value is neither array nor pointer"
+	  else C.error loc "subscripted value is neither array nor pointer"
       | PLvalid_read (l, t) ->
           predicate_label_non_void_ptr pvalid_read l t
       | PLvalid (l,t) ->
@@ -3006,7 +3033,7 @@ struct
 		       [] -> []
 		     | [l] -> [l,find_current_label loc env]
 		     | _ ->
-		       error loc
+		       C.error loc
 			 "%s labels must be explicitly instantiated" x
 		   in
 		   papp ~loc (info,labels,[])
@@ -3052,7 +3079,7 @@ struct
       | PLupdate _ | PLinitIndex _ | PLinitField _
       | PLtypeof _ | PLtype _ -> boolean_to_predicate env p0
       | PLrange _ ->
-          error p0.lexpr_loc "cannot use operator .. within a predicate"
+          C.error p0.lexpr_loc "cannot use operator .. within a predicate"
       | PLnamed (n, p) ->
           let p = predicate env p in { p with name = n::p.name }
       | PLsubtype (t,tc) ->
@@ -3069,7 +3096,7 @@ struct
           let seps = List.map type_loc seps in
           pseparated ~loc:p0.lexpr_loc seps
       | PLcomprehension _ | PLsingleton _ | PLunion _ | PLinter _ | PLempty ->
-          error p0.lexpr_loc "expecting a predicate and not tsets"
+          C.error p0.lexpr_loc "expecting a predicate and not tsets"
 
   (* checks if the given offset points to a location inside a formal. *)
   and is_substructure off =
@@ -3092,7 +3119,7 @@ struct
   and term_lval_assignable ~accept_formal env t =
     let f t =
       if isLogicArrayType t.term_type then
-        error t.term_loc "not an assignable left value: %a" 
+        C.error t.term_loc "not an assignable left value: %a" 
 	  Cil_printer.pp_term t
       else begin
         match t.term_node with
@@ -3102,14 +3129,14 @@ struct
                 (fun _ t ->
                    match t.term_node with
                        TStartOf lv | TCastE(_,{ term_node = TStartOf lv}) ->
-                         error t.term_loc "not an assignable left value: %a"
+                         C.error t.term_loc "not an assignable left value: %a"
                            Cil_printer.pp_term_lval lv
                      | TLval (TVar v, o) when not accept_formal ->
                        (match v.lv_origin with
                            None -> t
                          | Some v ->
                            if v.vformal && is_substructure o then
-                             error t.term_loc
+                             C.error t.term_loc
                                "can not assign part of a formal parameter: %a"
                                Cil_printer.pp_term t
                            else t)
@@ -3145,7 +3172,7 @@ struct
           List.map
             (fun td ->
               if Logic_utils.contains_result td then
-                error td.term_loc "invalid \\result in dependencies";
+                C.error td.term_loc "invalid \\result in dependencies";
             Logic_const.new_identified_term td)
             tf
         in
@@ -3187,13 +3214,13 @@ struct
     infos.l_profile <- [v];
     infos.l_labels <- [Logic_const.here_label];
     infos.l_body <- LBpred body;
-    C.add_logic_function infos; infos
+    add_logic_function loc infos; infos
 
   let model_annot loc ti =
     let env = Lenv.empty() in
     let model_for_type = c_logic_type loc env ti.model_for_type in
     if has_field ti.model_name model_for_type then
-      error loc "Cannot add model field %s for type %a: it already exists"
+      C.error loc "Cannot add model field %s for type %a: it already exists"
         ti.model_name Cil_printer.pp_typ model_for_type
     else begin
       let model_type = logic_type loc env ti.model_type in
@@ -3210,7 +3237,7 @@ struct
   let check_behavior_names loc existing_behaviors names =
     List.iter
       (fun x -> if not (List.mem x existing_behaviors) then
-         error loc "reference to unknown behavior %s" x) names
+         C.error loc "reference to unknown behavior %s" x) names
 
   let check_unique_behavior_names loc old_behaviors behaviors =
     List.fold_left
@@ -3218,7 +3245,7 @@ struct
          if b.b_name = Cil.default_behavior_name then names
          else begin
            if (List.mem b.b_name names) then
-             error loc "behavior %s already defined" b.b_name ;
+             C.error loc "behavior %s already defined" b.b_name ;
 	   b.b_name::names
          end)
       old_behaviors
@@ -3227,10 +3254,15 @@ struct
   let type_extended ~typing_context ~loc behavior extensions =
     List.iter
       (fun (name,_,ps) ->
-         let loc = match ps with
-	   | [] -> loc
-	   | p::_ -> p.lexpr_loc in
-         Extensions.typer name ~typing_context ~loc  behavior ps)
+        let loc = match ps with
+	  | [] -> loc
+	  | p::_ -> p.lexpr_loc in
+        if Extensions.is_extension name then
+          Extensions.typer name ~typing_context ~loc  behavior ps
+        else
+          C.error
+            loc "No type-checking function registered for extension %s" name
+      )
       extensions
 
   (* This module is used to sort the list of behaviors in [complete] and
@@ -3328,7 +3360,8 @@ struct
       | None -> None
       | (Some _) as x ->
 	  if is_stmt_contract then
-	    error loc "%s clause isn't allowed into statement contract" clause;
+	    C.error
+              loc "%s clause isn't allowed into statement contract" clause;
 	  x
     in
     let v = Extlib.opt_map (type_variant env)
@@ -3340,9 +3373,9 @@ struct
     let expand_my_names = function
       | [] ->
         if my_names = [] then
-          error loc
+          C.error loc
             "complete or disjoint behaviors clause in a contract with empty \
-             list of behavior."
+             list of behavior"
         else my_names
       | l -> l
     in
@@ -3454,7 +3487,7 @@ struct
       (fun env x ->
          try
            ignore (Lenv.find_type_var x env);
-           error loc "duplicated type variable in annotation"
+           C.error loc "duplicated type variable in annotation"
          with Not_found -> Lenv.add_type_var x (Lvar x) env)
       (Lenv.empty()) l
 
@@ -3490,7 +3523,7 @@ struct
     List.iter
       (fun v -> ignore (Cil.visitCilLogicType (obj prm_vars) v.lv_type)) p;
     if not (Datatype.String.Set.subset !rt_vars !prm_vars) then
-      error loc "some type variable appears only in the return type. \
+      C.error loc "some type variable appears only in the return type. \
                All type variables need to occur also in the parameters types."
 
   let annot_env loc labels poly =
@@ -3500,7 +3533,7 @@ struct
         (fun l (labs,e) ->
 	   try
 	     let _ = Lenv.find_logic_label l e in
-	     error loc "multiply defined label `%s'" l
+	     C.error loc "multiply defined label `%s'" l
 	   with Not_found ->
 	     let lab = LogicLabel (None, l) in
 	     (lab::labs,Lenv.add_logic_label l lab e))
@@ -3545,12 +3578,15 @@ struct
     info.l_profile <- p;
     info.l_type <- t;
     info.l_labels <- labels;
-    begin
-      C.add_logic_function info;
-      env,info
-    end
+    add_logic_function loc info;
+    env,info
 
   let type_datacons loc env type_info (name,params) =
+    (try
+       let info = C.find_logic_ctor name in
+       C.error loc "type constructor %s is already used by type %s"
+         name info.ctor_type.lt_name
+     with Not_found -> ());
     let tparams = List.map (logic_type loc env) params in
     let my_info =
       { ctor_name = name;
@@ -3611,7 +3647,7 @@ struct
 	       update_info_wrt_default_label info (* potential creation of label w.r.t. def *) ;
                Dfun_or_pred (info,loc)
              end else
-               error loc
+               C.error loc
                  "return type of logic function %s is %a but %a was expected"
                  f
 		 Cil_printer.pp_logic_type new_typ
@@ -3648,7 +3684,7 @@ struct
             indcases
 	in
 	if !need_label && input_labels = [] then
-	  error loc "inductive predicate %s needs a label" f
+	  C.error loc "inductive predicate %s needs a label" f
 	else (
 	  info.l_body <- LBinductive l;
 	  Dfun_or_pred (info,loc)
@@ -3669,13 +3705,17 @@ struct
               lt_def = None; (* will be updated later *)
             }
           in
+          (try
+             ignore (C.find_logic_type s);
+             C.error loc "logic type %s is already defined" s
+           with Not_found -> ());
           C.add_logic_type s my_info;
           (try
              let tdef =
                Extlib.opt_map (typedef loc env my_info) def
              in
              if is_cyclic_typedef s tdef then
-               error loc "Definition of %s is cyclic" s;
+               C.error loc "Definition of %s is cyclic" s;
              my_info.lt_def <- tdef;
              Dtype (my_info,loc)
            with e ->
@@ -3700,7 +3740,7 @@ struct
 		  Kernel.fatal ~current:true
 		    "Logic_env.get_lemma must return Dlemma"
             in
-            error loc "%s is already registered as %s (%a)"
+            C.error loc "%s is already registered as %s (%a)"
               x (if is_axiom then "axiom" else "lemma")
               Cil_datatype.Location.pretty old_loc
           end;
@@ -3719,7 +3759,7 @@ struct
         let li = Cil_const.make_logic_info s in
 	li.l_labels <- [Logic_const.here_label];
         li.l_body <- LBpred p;
-        C.add_logic_function li;
+        add_logic_function loc li;
 	Dinvariant (li,loc)
       | LDtype_annot l ->
           Dtype_annot (type_annot loc l,loc)
@@ -3738,13 +3778,13 @@ struct
                    | _ -> false
                  in
 		 if not (Logic_const.plain_or_set check t.term_type) then
-		   error t.term_loc "incompatible return type of '%s' with %a"
+		   C.error t.term_loc "incompatible return type of '%s' with %a"
 		     fct Cil_printer.pp_term t)
               tsets
 	  in
           let checks_reads_fct fct ty =
 	    let error () =
-	      error loc
+	      C.error loc
                 "incompatible type of '%s' with volatile writes declaration"
                 fct;
 	    in let ret,args,is_varg_arg,_attrib =
@@ -3776,7 +3816,7 @@ struct
  	  in
           let checks_writes_fct fct ty =
 	    let error () =
-	      error loc
+	      C.error loc
                 "incompatible type of '%s' with volatile writes declaration"
                 fct;
 	    in let ret,args,is_varg_arg,_attrib =
@@ -3793,14 +3833,17 @@ struct
                   && Cil_datatype.Typ.equal
                       (typeOf_pointed arg1) volatile_ret_type
 		  -> (* matching prototype: T fct (volatile T *arg1, T arg2) *)
-                  checks_tsets_type fct volatile_ret_type (* tsets should have type: volatile T *)
+                  checks_tsets_type fct volatile_ret_type
+                   (* tsets should have type: volatile T *)
 	      | Some ((_,arg1,_)::[_,arg2,_]) when
 		    (not (isVoidType ret || is_varg_arg))
                   && isPointerType arg1
                   && Cil_datatype.Typ.equal arg2 ret_type
                   && Cil_datatype.Typ.equal (typeOf_pointed arg1) ret_type
 		  && Cil.typeHasAttributeDeep "volatile" ret
-		  ->  (* matching prototype: T fct (T *arg1, T arg2) when T has some volatile attr *)
+		  -> 
+                  (* matching prototype: T fct (T *arg1, T arg2) 
+                     when T has some volatile attr *)
                   checks_tsets_type fct ret_type (* tsets should have type: T *)
 	      | _ ->
                 error ()
@@ -3813,7 +3856,7 @@ struct
                   | None -> raise Not_found
 		  | Some vi as vi_opt-> checks_type fct vi.vtype ; vi_opt)
 	      with Not_found ->
-                error loc "cannot find function '%s' for volatile clause" fct
+                C.error loc "cannot find function '%s' for volatile clause" fct
 	  in
           let tsets = List.map (Logic_const.new_identified_term) tsets in
 	  let rvi_opt = get_volatile_fct checks_reads_fct rd_opt in

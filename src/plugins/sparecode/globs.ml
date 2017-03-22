@@ -103,7 +103,7 @@ class collect_visitor = object (self)
                   ignore (visitCilInit (self:>Cil.cilVisitor) v NoOffset init)
               end
         in Cil.SkipChildren
-    | GVarDecl(_,v,_) when isFunctionType v.vtype -> DoChildren
+    | GFunDecl _ -> DoChildren
     | _ -> Cil.SkipChildren
 
 end
@@ -116,8 +116,8 @@ class filter_visitor prj = object
     match g with
       | GFun (_f, _loc) (* function definition *)
         -> Cil.DoChildren (* keep everything *)
-      | GVar (v, _, _loc) (* variable definition *)
-      | GVarDecl (_, v, _loc) -> (* variable/function declaration *)
+      | GVar (v, _, _) (* variable definition *)
+      | GVarDecl (v, _) | GFunDecl (_, v, _) -> (* variable/function declaration *)
           if Hashtbl.mem used_variables v then DoChildren
           else begin
             debug "remove var %s@." v.vname;
@@ -178,6 +178,6 @@ let rm_unused_decl =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

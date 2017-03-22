@@ -29,6 +29,14 @@ type kind =
 module LocationSetLattice = struct
   include Abstract_interp.Make_Lattice_Set(Cil_datatype.Location)
   let currentloc_singleton () = inject_singleton (Cil.CurrentLoc.get ())
+
+  (* Do not let garbled mix locations grow. We stop at cardinal one. *)
+  let join o1 o2 = match o1, o2 with
+    | Top, _ | _, Top -> top
+    | Set s1, Set s2 ->
+       (* use the fact that [s1] and [s2] are never empty. *)
+       if O.equal s1 s2 then o1 else top
+
 end
 
 type origin =
@@ -88,21 +96,22 @@ let top = Unknown
 let is_top x = equal top x
 
 
+let pretty_source fmt = function
+  | LocationSetLattice.Top -> () (* Hide unhelpful 'TopSet' *)
+  | LocationSetLattice.Set _ as s ->
+    Format.fprintf fmt "@ %a" LocationSetLattice.pretty s
+
 let pretty fmt o = match o with
   | Unknown ->
       Format.fprintf fmt "Unknown"
   | Misalign_read o ->
-      Format.fprintf fmt "Misaligned@ %a"
-        LocationSetLattice.pretty o
+      Format.fprintf fmt "Misaligned%a" pretty_source o
   | Leaf o ->
-      Format.fprintf fmt "Library function@ %a"
-        LocationSetLattice.pretty o
+      Format.fprintf fmt "Library function%a" pretty_source o
   | Merge o ->
-      Format.fprintf fmt "Merge@ %a"
-        LocationSetLattice.pretty o
+      Format.fprintf fmt "Merge%a" pretty_source o
   | Arith o ->
-      Format.fprintf fmt "Arithmetic@ %a"
-        LocationSetLattice.pretty o
+      Format.fprintf fmt "Arithmetic%a" pretty_source o
   | Well ->       Format.fprintf fmt "Well"
 
 let pretty_as_reason fmt org =
@@ -196,6 +205,6 @@ let is_included o1 o2 =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -33,6 +33,6 @@ include module type of Int_Intervals_sig
 
 (*
 Local Variables:
-compile-command: "make -C ../.. byte"
+compile-command: "make -C ../../.. byte"
 End:
 *)

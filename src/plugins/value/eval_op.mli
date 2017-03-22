@@ -48,17 +48,6 @@ val v_of_offsetmap:
   typ:Cil_types.typ -> V_Offsetmap.t -> V.t
 
 
-(** Bitfields *)
-val is_bitfield: typ -> bool
-
-val cast_lval_if_bitfield : typ -> Int_Base.t -> Cvalue.V.t -> Cvalue.V.t
-(** if needed, cast the given abstract value to the given size. Useful
-    to handle bitfield. The type given as argument must be the type of
-    the l-value the abstract value is written into, which is of size [size]. *)
-
-val sizeof_lval_typ: typ -> Int_Base.t
-(** Size of the type of a lval, taking into account that the lval might have
-    been a bitfield. *)
 
 val reinterpret_int:
   with_alarms:CilE.warn_mode -> Cil_types.ikind -> V.t -> V.t
@@ -76,7 +65,7 @@ val reinterpret:
 
 val eval_binop_float :
   with_alarms:CilE.warn_mode ->
-  Ival.Float_abstract.rounding_mode ->
+  Fval.rounding_mode ->
   Cil_types.fkind option ->
   Cvalue.V.t -> binop -> Cvalue.V.t -> Cvalue.V.t
 
@@ -98,7 +87,7 @@ val handle_overflow:
 
 val do_promotion:
   with_alarms:CilE.warn_mode ->
-  Ival.Float_abstract.rounding_mode ->
+  Fval.rounding_mode ->
   src_typ:Cil_types.typ ->
   dst_typ:Cil_types.typ ->
   Cvalue.V.t -> (Format.formatter -> unit) -> Cvalue.V.t
@@ -201,9 +190,15 @@ val reduce_by_valid_loc:
 val write_abstract_value: with_alarms:CilE.warn_mode ->
   Model.t -> lval -> typ -> Locations.Location.t -> V.t -> Model.t
 
+val make_loc_contiguous: Locations.location -> Locations.location
+(** 'Simplify' the location if it represents a contiguous zone: instead
+    of multiple offsets with a small size, change it into a single offset
+    with a size that covers the entire range. *)
+
+val pretty_stitched_offsetmap: Format.formatter -> typ -> V_Offsetmap.t -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -47,7 +47,7 @@ let rec log2up n a b =
   if c = a then b else
   if s < n then log2up n c b else log2up n a c
 
-let max_cache_log = 
+let max_cache_log =
   log2up Sys.max_array_length 0 (Sys.word_size - 3) - 1
 
 let alloc size = 1 lsl (log2up size 0 max_cache_log)

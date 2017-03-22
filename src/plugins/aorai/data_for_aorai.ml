@@ -667,6 +667,9 @@ struct
     Aorai_option.abort
       "term %a has type %a, but %a is expected."
       Printer.pp_term t Printer.pp_logic_type Linteger Printer.pp_typ ty
+
+  let error (source,_) msg = Aorai_option.abort ~source msg
+
 end
 
 module LTyping = Logic_typing.Make(C_logic_env)
@@ -1517,7 +1520,7 @@ let setCData () =
   variables_from_c:=
     Globals.Vars.fold
     (fun v _ lv ->
-      Pretty_utils.sfprintf "%a" Cil_datatype.Varinfo.pretty_vname v :: lv)
+      Pretty_utils.sfprintf "%a" Cil_datatype.Varinfo.pretty v :: lv)
     []
 
 (** Return the list of all function name observed in the C file, except ignored functions. *)
@@ -2139,6 +2142,6 @@ let op_status_to_cenum status =
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

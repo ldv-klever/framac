@@ -22,8 +22,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Logic typing and logic environment.
-    @plugin development guide *)
+(** Logic typing and logic environment. *)
 
 open Cil_types
 
@@ -103,8 +102,7 @@ type typing_context = {
   type_assigns:
     accept_formal:bool -> 
     Lenv.t -> Logic_ptree.lexpr assigns -> identified_term assigns;
- 
- error: 'a. location -> ('a,Format.formatter,unit) format -> 'a;
+  error: 'a. location -> ('a,Format.formatter,unit) format -> 'a;
 }
 
 (** [register_behavior_extension name f] registers a typing function [f] to 
@@ -126,7 +124,7 @@ type typing_context = {
 
     @since Carbon-20101201
 *)
-val register_behavior_extension:  
+val register_behavior_extension:
   string ->
   (typing_context:typing_context -> loc:location -> funbehavior -> 
     Logic_ptree.lexpr list -> unit)
@@ -136,7 +134,8 @@ module Make
   (C :
     sig
       val is_loop: unit -> bool 
-      (** whether the annotation we want to type is contained in a loop. *)
+      (** whether the annotation we want to type is contained in a loop.
+          Only useful when creating objects of type [code_annotation]. *)
       val anonCompFieldName : string
       val conditionalConversion : typ -> typ -> typ
       val find_macro : string -> Logic_ptree.lexpr
@@ -164,6 +163,10 @@ module Make
           @since Nitrogen-20111001
        *)
       val integral_cast: Cil_types.typ -> Cil_types.term -> Cil_types.term
+
+      (** raises an error at the given location and with the given message.
+          @since Magnesium-20151001 *)
+      val error: location -> ('a,Format.formatter,unit, 'b) format4 -> 'a 
 
     end) :
 sig
@@ -248,6 +251,6 @@ val post_state_env: termination_kind -> logic_type -> Lenv.t
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../../.."
+compile-command: "make -C ../../.."
 End:
 *)

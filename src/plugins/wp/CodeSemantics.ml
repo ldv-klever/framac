@@ -54,11 +54,11 @@ struct
   (* --- Initializers                                                       --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let is_zero_int = function 
+  let is_zero_int = function
     | Val e -> p_equal e e_zero
     | Loc l -> M.is_null l
 
-  let is_zero_float = function 
+  let is_zero_float = function
     | Val e -> p_equal e e_zero_real
     | Loc l -> M.is_null l
 
@@ -85,11 +85,20 @@ struct
         let init = is_zero sigma obj (M.shift l obj k) in
         p_forall [x] (p_hyps range init)
 
-  let is_zero_range sigma l obj a b =
+  let is_exp_range sigma l obj a b v =
     let x = Lang.freshvar ~basename:"k" Logic.Int in
     let k = e_var x in
     let range = [ p_leq a k ; p_lt k b ] in
-    let init = is_zero sigma obj (M.shift l obj k) in
+    let init =
+      match v with
+      | None -> is_zero sigma obj (M.shift l obj k)
+      | Some v ->
+          let shift = (M.load sigma obj (M.shift l obj k)) in
+          if Ctypes.is_pointer obj then
+            M.loc_eq (cloc shift) (cloc v)
+          else
+            p_equal (cval shift) (cval v)
+    in
     p_forall [x] (p_hyps range init)
 
   (* -------------------------------------------------------------------------- *)
@@ -119,7 +128,7 @@ struct
         let obj = Ctypes.object_of te in
         loc_of_offset env (M.shift l obj k) te offset
 
-  let lval env (lhost,offset) = 
+  let lval env (lhost,offset) =
     loc_of_offset env (loc_of_lhost env lhost) (Cil.typeOfLhost lhost) offset
 
   (* -------------------------------------------------------------------------- *)
@@ -127,7 +136,7 @@ struct
   (* -------------------------------------------------------------------------- *)
 
   let exp_unop env typ unop e =
-    let v = 
+    let v =
       match Ctypes.object_of typ , unop with
       | C_int i , Neg -> Cint.iopp i (val_of_exp env e)
       | C_int i , BNot -> Cint.bnot i (val_of_exp env e)
@@ -135,7 +144,7 @@ struct
       | C_int _ , LNot -> Cvalues.bool_eq (val_of_exp env e) e_zero
       | C_float _ , LNot -> Cvalues.bool_eq (val_of_exp env e) e_zero_real
       | C_pointer _ , LNot -> Cvalues.is_true (M.is_null (loc_of_exp env e))
-      | _ -> 
+      | _ ->
           Warning.error "Undefined unary operator (%a)" Printer.pp_typ typ
     in Val v
 
@@ -188,7 +197,7 @@ struct
     | Ge      -> Val (bool_of_comp env Cvalues.bool_leq M.loc_leq e2 e1)
     | LAnd    -> Val (Cvalues.bool_and (bool_of_exp env e1) (bool_of_exp env e2))
     | LOr     -> Val (Cvalues.bool_or  (bool_of_exp env e1) (bool_of_exp env e2))
-    | PlusPI | IndexPI -> 
+    | PlusPI | IndexPI ->
         let te = Cil.typeOf_pointed (Cil.typeOf e1) in
         let obj = Ctypes.object_of te in
         Loc(M.shift (loc_of_exp env e1) obj (val_of_exp env e2))
@@ -208,7 +217,7 @@ struct
   let cast tr te ve =
     match Ctypes.object_of tr , Ctypes.object_of te with
 
-    | C_int ir , C_int ie -> 
+    | C_int ir , C_int ie ->
         let v = cval ve in
         Val( if Ctypes.sub_c_int ie ir then v else Cint.iconvert ir v )
 
@@ -222,13 +231,13 @@ struct
     | C_pointer tr , C_pointer te ->
         let obj_r = Ctypes.object_of tr in
         let obj_e = Ctypes.object_of te in
-        if Ctypes.compare obj_r obj_e = 0 
+        if Ctypes.compare obj_r obj_e = 0
         then ve
         else Loc (M.cast {pre=obj_e;post=obj_r} (cloc ve))
 
     | C_pointer te , C_int _ ->
         let e = cval ve in
-        Loc(if F.equal e (F.e_zero) then M.null 
+        Loc(if F.equal e (F.e_zero) then M.null
             else M.loc_of_int (Ctypes.object_of te) e)
 
     | C_int ir , C_pointer _ ->
@@ -244,7 +253,7 @@ struct
   (* --- Exp-Node                                                           --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let exp_node env e = 
+  let exp_node env e =
     match e.enode with
 
     | Const (CStr s)  -> Loc (M.literal ~eid:e.eid (Cstring.C_str s))
@@ -271,7 +280,7 @@ struct
 
     | CastE(tr,e) -> cast tr (Cil.typeOf e) (!s_exp env e)
 
-  let rec call_node env e = 
+  let rec call_node env e =
     match e.enode with
     | CastE(_,e) -> call_node env e
     | AddrOf lv | StartOf lv | Lval lv -> lval env lv
@@ -287,8 +296,8 @@ struct
     Val (e_var x)
 
   let exp_protected env e =
-    Warning.handle 
-      ~handler:exp_handler 
+    Warning.handle
+      ~handler:exp_handler
       ~severe:false
       ~effect:"Hide sub-term definition"
       (exp_node env) e
@@ -301,8 +310,8 @@ struct
     match v1 , v2 with
     | Loc p , Loc q -> M.loc_eq p q
     | Val a , Val b -> p_equal a b
-    | _ -> 
-        if Cil.isPointerType t 
+    | _ ->
+        if Cil.isPointerType t
         then M.loc_eq (cloc v1) (cloc v2)
         else p_equal (cval v1) (cval v2)
 
@@ -310,7 +319,7 @@ struct
     match v1 , v2 with
     | Loc p , Loc q -> M.loc_eq p q
     | Val a , Val b -> p_equal a b
-    | _ -> 
+    | _ ->
         if Ctypes.is_pointer t
         then M.loc_eq (cloc v1) (cloc v2)
         else p_equal (cval v1) (cval v2)

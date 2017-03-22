@@ -107,14 +107,15 @@ class type main_window_extension_points = object
   method main_window : GWindow.window
     (** The main window *)
 
-  method annot_window : GText.view
+  method annot_window : Toolbox.text
     (** The information panel.
         The text is automatically cleared whenever the selection is changed.
         You should not directly use the buffer contained in the annot_window
         to add text. Use the method [pretty_information].
     *)
-  method pretty_information : 'a.  ('a, Format.formatter, unit) format -> 'a
-    (** Pretty print a message in the [annot_window]. *)
+  method pretty_information : 'a. ?scroll:bool -> ('a, Format.formatter, unit) format -> 'a
+    (** Pretty print a message in the [annot_window],
+        optionally scrolling it to the beginning of the message. *)
 
   method lower_notebook : GPack.notebook
     (** The lower notebook with messages tabs *)
@@ -265,6 +266,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

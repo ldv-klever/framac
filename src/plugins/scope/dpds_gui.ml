@@ -47,12 +47,12 @@ let add_msg (main_ui:Design.main_window_extension_points) txt =
 let pretty_zone fmt z =
   Format.fprintf fmt "@[<h 1>%a@]" Locations.Zone.pretty z
 
-let ask_for_lval (main_ui:Design.main_window_extension_points) kf stmt =
+let ask_for_lval (main_ui:Design.main_window_extension_points) kf =
   let txt = GToolbox.input_string ~title:"Input lvalue expression" "" in
     match txt with None | Some "" -> None
       | Some txt ->
           try
-            let term_lval = !Db.Properties.Interp.lval kf stmt txt in
+            let term_lval = !Db.Properties.Interp.term_lval kf txt in
             let lval =
               !Db.Properties.Interp.term_lval_to_lval ~result:None term_lval
             in
@@ -74,19 +74,23 @@ let get_annot_opt localizable = match localizable with
   | _ -> None
 
 
-(** [kf_stmt_opt] is used if we want to ask the lval to the user in a popup *)
-let get_lval_opt main_ui kf_stmt_opt localizable =
+(** [kf_opt] is used if we want to ask the lval to the user in a popup *)
+let get_lval_opt main_ui kf_opt localizable =
   match localizable with
     | Pretty_source.PLval (Some _kf, (Kstmt _stmt), lv) ->
         let lv_txt = Pretty_utils.sfprintf "%a" Printer.pp_lval lv in
         Some (lv_txt, lv)
     | _ ->
-       ( match kf_stmt_opt with
+       ( match kf_opt with
          None -> None
-       | Some (kf, stmt) ->
-              match (ask_for_lval main_ui kf stmt) with
+       | Some kf ->
+              match (ask_for_lval main_ui kf) with
                 None -> None
               | Some (lv_txt, lv) -> Some (lv_txt, lv))
+
+let eval_lval =
+  let typ_lval_to_zone_gui = Datatype.func2 Stmt.ty Lval.ty Locations.Zone.ty in
+  Dynamic.get ~plugin:"Value" "lval_to_zone_gui" typ_lval_to_zone_gui
 
 module Kf_containing_highlighted_stmt =
   Kernel_function.Make_Table
@@ -280,7 +284,8 @@ module ShowDef : (DpdCmdSig with type t_in = lval) = struct
     Stmt.Map.fold aux m Stmt.Map.empty
 
   let compute kf stmt lv =
-    let r = !Db.Scope.get_defs_with_type kf stmt lv in
+    let z = eval_lval stmt lv in
+    let r = Defs.compute_with_def_type_zone kf stmt z in
     Datascope.R.feedback "Defs computed";
     match r with
       | None -> clear ();
@@ -430,7 +435,7 @@ let callbacks ?(defs=false) ?(zones=false) ?(scope=false) ?(pscope=false)
     end
     else begin
       Pscope.clear ();
-      match get_lval_opt main_ui (Some(kf, stmt)) localizable with
+      match get_lval_opt main_ui (Some kf) localizable with
       | None -> reset ()
       | Some (lval_txt, lval) ->
           begin

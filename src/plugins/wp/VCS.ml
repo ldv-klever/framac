@@ -61,7 +61,7 @@ let name_of_prover = function
   | Coq -> "Coq"
   | Qed -> "Qed"
 
-let name_of_mode = function 
+let name_of_mode = function
   | FixMode -> "Fix"
   | EditMode -> "Edit"
   | BatchMode -> "Batch"
@@ -72,7 +72,7 @@ let sanitize_why3 s =
   Buffer.add_string buffer "Why3_" ;
   String.iter
     (fun c ->
-       let c = if 
+       let c = if
          ('0' <= c && c <= '9') ||
          ('a' <= c && c <= 'z') ||
          ('A' <= c && c <= 'Z')
@@ -146,6 +146,12 @@ let pp_language fmt = function
 
 let pp_mode fmt m = Format.pp_print_string fmt (name_of_mode m)
 
+module Pmap = Map.Make
+    (struct
+      type t = prover
+      let compare = cmp_prover
+    end)
+
 (* -------------------------------------------------------------------------- *)
 (* --- Results                                                            --- *)
 (* -------------------------------------------------------------------------- *)
@@ -157,22 +163,27 @@ type verdict =
   | Timeout
   | Stepout
   | Computing of (unit -> unit) (* kill function *)
+  | Checked
   | Valid
   | Failed
 
 type result = {
-  verdict : verdict ; 
+  verdict : verdict ;
   solver_time : float ;
-  prover_time : float ; 
+  prover_time : float ;
   prover_steps : int ;
   prover_errpos : Lexing.position option ;
   prover_errmsg : string ;
 }
 
-let result ?(solver=0.0) ?(time=0.0) ?(steps=0) verdict = { 
-  verdict = verdict ; 
+let is_verdict r = match r.verdict with
+  | Valid | Checked | Unknown | Invalid | Timeout | Stepout | Failed -> true
+  | NoResult | Computing _ -> false
+
+let result ?(solver=0.0) ?(time=0.0) ?(steps=0) verdict = {
+  verdict = verdict ;
   solver_time = solver ;
-  prover_time = time ; 
+  prover_time = time ;
   prover_steps = steps ;
   prover_errpos = None ;
   prover_errmsg = "" ;
@@ -180,6 +191,7 @@ let result ?(solver=0.0) ?(time=0.0) ?(steps=0) verdict = {
 
 let no_result = result NoResult
 let valid = result Valid
+let checked = result Checked
 let invalid = result Invalid
 let unknown = result Unknown
 let timeout = result Timeout
@@ -190,30 +202,49 @@ let failed ?pos msg = {
   solver_time = 0.0 ;
   prover_time = 0.0 ;
   prover_steps = 0 ;
-  prover_errpos = pos ; 
+  prover_errpos = pos ;
   prover_errmsg = msg ;
 }
 
 let pp_perf fmt r =
   begin
     let t = r.solver_time in
-    if t > Rformat.epsilon && not (Wp_parameters.has_dkey "no-time-info") 
+    if t > Rformat.epsilon && not (Wp_parameters.has_dkey "no-time-info")
     then Format.fprintf fmt " (Qed:%a)" Rformat.pp_time t ;
     let t = r.prover_time in
-    if t > Rformat.epsilon && not (Wp_parameters.has_dkey "no-time-info") 
+    if t > Rformat.epsilon && not (Wp_parameters.has_dkey "no-time-info")
     then Format.fprintf fmt " (%a)" Rformat.pp_time t ;
     let s = r.prover_steps in
     if s > 0 && not (Wp_parameters.has_dkey "no-step-info")
     then Format.fprintf fmt " (%d)" s
   end
 
-let pp_result fmt r = 
+let pp_result fmt r =
   match r.verdict with
   | NoResult -> Format.pp_print_string fmt "-"
   | Invalid -> Format.pp_print_string fmt "Invalid"
   | Computing _ -> Format.pp_print_string fmt "Computing"
   | Valid -> Format.fprintf fmt "Valid%a" pp_perf r
+  | Checked -> Format.fprintf fmt "Typechecked"
   | Unknown -> Format.fprintf fmt "Unknown%a" pp_perf r
   | Timeout -> Format.fprintf fmt "Timeout%a" pp_perf r
   | Stepout -> Format.fprintf fmt "Step limit%a" pp_perf r
   | Failed -> Format.fprintf fmt "Failed@\nError: %s" r.prover_errmsg
+
+let compare p q =
+  let rank = function
+    | NoResult | Computing _ -> 0
+    | Failed -> 1
+    | Unknown -> 2
+    | Timeout | Stepout -> 3
+    | Valid -> 4
+    | Invalid -> 5
+    | Checked -> 6
+  in
+  let r = rank q.verdict - rank p.verdict in
+  if r <> 0 then r else
+    let s = Pervasives.compare p.prover_steps q.prover_steps in
+    if s <> 0 then s else
+      let t = Pervasives.compare p.prover_time q.prover_time in
+      if t <> 0 then t else
+        Pervasives.compare p.solver_time q.solver_time

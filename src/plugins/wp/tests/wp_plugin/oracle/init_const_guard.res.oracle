@@ -12,7 +12,7 @@
 Goal Post-condition 'Const' in 'f':
 Assume {
   (* Initializer *)
-  Have: (shift_sint32 (global G_x_67) 0)=
+  Init: (shift_sint32 (global G_x_67) 0)=
         Mptr_0[(shift_PTR (global K_q_68) 0)].
   (* Heap *)
   Have: (framed Mptr_0) /\ (linked Malloc_0).
@@ -25,7 +25,7 @@ Goal Post-condition 'Pointed_Valid' in 'f':
 Let a_0 = (shift_sint32 (global G_x_67) 0).
 Assume {
   (* Initializer *)
-  Have: a_0=Mptr_0[(shift_PTR (global K_q_68) 0)].
+  Init: a_0=Mptr_0[(shift_PTR (global K_q_68) 0)].
   (* Heap *)
   Have: (framed Mptr_0) /\ (linked Malloc_0).
 }
@@ -58,7 +58,7 @@ Goal Assertion 'Read' (file tests/wp_plugin/init_const_guard.i, line 31):
 Let a_0 = (shift_sint32 (global G_x_67) 0).
 Assume {
   (* Initializer *)
-  Have: a_0=Mptr_2[(shift_PTR (global K_q_68) 0)].
+  Init: a_0=Mptr_2[(shift_PTR (global K_q_68) 0)].
   (* Heap *)
   Have: (framed Mptr_2) /\ (linked Malloc_0).
 }
@@ -70,7 +70,7 @@ Goal Assertion 'Guard_against_Const' (file tests/wp_plugin/init_const_guard.i, l
 Let a_0 = (shift_sint32 (global G_x_67) 0).
 Assume {
   (* Initializer *)
-  Have: a_0=Mptr_2[(shift_PTR (global K_q_68) 0)].
+  Init: a_0=Mptr_2[(shift_PTR (global K_q_68) 0)].
   (* Heap *)
   Have: (framed Mptr_2) /\ (linked Malloc_0).
   (* Assertion 'Read' (file tests/wp_plugin/init_const_guard.i, line 31) *)

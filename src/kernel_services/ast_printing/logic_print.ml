@@ -39,7 +39,12 @@ let rec print_logic_type name fmt typ =
     | None -> (fun _ -> ())
   in
   match typ with
-      LTvoid -> fprintf fmt "void%t" pname
+    | LTattribute (t,attr) -> 
+        let pname fmt =
+	  fprintf fmt "%a" Cil_printer.pp_attribute attr
+        in 
+        print_logic_type (Some pname) fmt t
+    | LTvoid -> fprintf fmt "void%t" pname
     | LTinteger ->
         fprintf fmt "%s%t"
 	  (if Kernel.Unicode.get () then Utf8_logic.integer else "integer")
@@ -366,7 +371,7 @@ let print_assigns fmt a =
   match a with
       WritesAny -> ()
     | Writes l ->
-      pp_list ~sep:"@\n"
+      pp_list ~pre:"" ~sep:"" ~suf:""
         (fun fmt (loc,deps) ->
           fprintf fmt "@\nassigns@ %a%a;"
             print_lexpr loc

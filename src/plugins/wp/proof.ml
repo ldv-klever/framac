@@ -160,7 +160,7 @@ let savescripts () =
             if !needback then
               ( Command.copy file (file ^ ".back") ; needback := false ) ;
             if !needwarn then
-              ( needwarn := false ;	    
+              ( needwarn := false ;
                 Wp_parameters.warning ~current:false
                   "No script file specified.@\n\
                    Your proofs are saved in '%s'@\n\
@@ -199,7 +199,7 @@ let loadscripts () =
             needwarn := true ;
             needback := false ;
           end
-        else 
+        else
           (* update user's file *)
           begin
             scriptfile := Some user ;
@@ -255,7 +255,7 @@ let find_script_with_hints required hints =
   loadscripts () ;
   let required = List.sort String.compare required in
   let hints = List.sort String.compare hints in
-  List.sort most_suitable 
+  List.sort most_suitable
     begin
       Hashtbl.fold
         (fun g (xs,p) scripts ->
@@ -288,7 +288,7 @@ let rec head n = function [] -> []
 let hints_for ~pid =
   let default = match Wp_parameters.CoqTactic.get () with
     | "none" -> []
-    | tactic -> ["Default tactic",Printf.sprintf "  %s.\n" tactic] 
+    | tactic -> ["Default tactic",Printf.sprintf "  %s.\n" tactic]
   in
   if Wp_parameters.TryHints.get () then
     let nhints = Wp_parameters.Hints.get () in
@@ -318,7 +318,7 @@ let script_for_ide ~pid ~gid =
             (fun fmt ->
                List.iter
                  (fun (_,g,script) ->
-                    Format.fprintf fmt 
+                    Format.fprintf fmt
                       "(*@ --------------------------------------\n  \
                        @ From '%s': \n%s*)\n%!" g script
                  ) (head nhints scripts))

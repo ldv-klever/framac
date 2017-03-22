@@ -31,8 +31,7 @@ Assume {
   (* Invariant 'Partial' (file tests/wp_typed/user_init.i, line 9) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Partial': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (0<=i_0) -> (is_sint32 i_0)
-        -> (v_1=Mint_2[(shift_sint32 a_2 i_0)]).
+        (i_0<i_2) -> (0<=i_0) -> (v_1=Mint_2[(shift_sint32 a_2 i_0)]).
   (* Invariant 'Range' (file tests/wp_typed/user_init.i, line 8) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Range': *)
   Have: (0<=i_2) /\ (i_2<=n_0).
@@ -64,8 +63,7 @@ Assume {
   (* Invariant 'Partial' (file tests/wp_typed/user_init.i, line 9) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Partial': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (0<=i_0) -> (is_sint32 i_0)
-        -> (v_0=Mint_1[(shift_sint32 a_0 i_0)]).
+        (i_0<i_2) -> (0<=i_0) -> (v_0=Mint_1[(shift_sint32 a_0 i_0)]).
   (* Invariant 'Range' (file tests/wp_typed/user_init.i, line 8) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Range': *)
   Have: (0<=i_2) /\ (i_2<=n_0).
@@ -101,8 +99,7 @@ Assume {
   (* Invariant 'Partial' (file tests/wp_typed/user_init.i, line 9) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Partial': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (0<=i_0) -> (is_sint32 i_0)
-        -> (v_0=Mint_3[(shift_sint32 a_0 i_0)]).
+        (i_0<i_2) -> (0<=i_0) -> (v_0=Mint_3[(shift_sint32 a_0 i_0)]).
   (* Invariant 'Range' (file tests/wp_typed/user_init.i, line 8) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Range': *)
   Have: (0<=i_2) /\ (i_2<=n_0).
@@ -158,8 +155,7 @@ Assume {
   (* Invariant 'Partial' (file tests/wp_typed/user_init.i, line 9) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Partial': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (0<=i_0) -> (is_sint32 i_0)
-        -> (v_0=Mint_3[(shift_sint32 a_0 i_0)]).
+        (i_0<i_2) -> (0<=i_0) -> (v_0=Mint_3[(shift_sint32 a_0 i_0)]).
   (* Invariant 'Range' (file tests/wp_typed/user_init.i, line 8) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Range': *)
   Have: (0<=i_2) /\ (i_2<=n_0).
@@ -193,8 +189,7 @@ Assume {
   (* Invariant 'Partial' (file tests/wp_typed/user_init.i, line 9) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Partial': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (0<=i_0) -> (is_sint32 i_0)
-        -> (v_0=Mint_3[(shift_sint32 a_0 i_0)]).
+        (i_0<i_2) -> (0<=i_0) -> (v_0=Mint_3[(shift_sint32 a_0 i_0)]).
   (* Invariant 'Range' (file tests/wp_typed/user_init.i, line 8) *)
   (* tests/wp_typed/user_init.i:12: Invariant 'Range': *)
   Have: (0<=i_2) /\ (i_2<=n_0).

@@ -63,7 +63,7 @@ struct
     let cmp = E.compare a c in
     if cmp <> 0 then cmp else E.compare b d
   let pretty fmt (x,y) = Format.fprintf fmt "(%a,%a)" E.pretty x E.pretty y
-end  
+end
 
 module PSYM(E : Elt) : Pair with type elt = E.t =
 struct

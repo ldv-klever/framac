@@ -667,7 +667,8 @@ let remove_declared_global c_vars logic_vars = function
   | GType _ | GCompTag _ | GCompTagDecl _ | GEnumTag _ | GEnumTagDecl _
   | GAsm _ | GPragma _ | GText _ ->
     c_vars, logic_vars
-  | GVarDecl (_,vi,_) | GVar(vi,_,_) | GFun ({ svar = vi; },_) ->
+  | GVarDecl (vi,_) | GVar(vi,_,_)
+  | GFun ({ svar = vi; },_) | GFunDecl(_, vi, _) ->
     Cil_datatype.Varinfo.Set.remove vi c_vars, logic_vars
   | GAnnot (g,_) -> c_vars, remove_declared_global_annot logic_vars g
 
@@ -1239,6 +1240,21 @@ let has_code_annot ?emitter stmt =
       false
 
 exception Found of Emitter.t
+
+let emitter_of_code_annot ca stmt =
+  let tbl = Code_annots.find stmt in
+  try
+    Emitter.Usable_emitter.Hashtbl.iter
+      (fun e lca ->
+         let aux ca' =
+           if Cil_datatype.Code_annotation.equal ca ca' then
+             raise (Found (Emitter.Usable_emitter.get e))
+         in
+         List.iter aux !lca;
+      ) tbl;
+    raise Not_found
+  with Found e -> e
+
 let emitter_of_global a =
   let h = Globals.find a in
   try
@@ -1303,6 +1319,6 @@ let code_annot_of_kf kf = match kf.fundec with
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

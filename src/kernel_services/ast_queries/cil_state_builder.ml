@@ -34,6 +34,6 @@ module Code_annotation_hashtbl =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

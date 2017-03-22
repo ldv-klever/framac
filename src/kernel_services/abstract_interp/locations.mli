@@ -41,7 +41,7 @@ module Location_Bytes : sig
     val shape: t -> Ival.t Hptmap.Shape(Base.Base).t
   end
 
-  type z =
+  type t =
     | Top of Base.SetLattice.t * Origin.t
        (** Garbled mix of the addresses in the set *)
     | Map of M.t (** Precice set of addresses+offsets *)
@@ -51,9 +51,11 @@ module Location_Bytes : sig
   (** Those locations have a lattice structure, including standard operations
       such as [join], [narrow], etc. *)
   include Lattice_type.AI_Lattice_with_cardinal_one
-    with type t = z
+    with type t := t
     and type  widen_hint = Base.t -> Ival.widen_hint
   include Lattice_type.With_Error_Top
+
+  include Datatype.S_with_collections with type t := t
 
   val singleton_zero : t
     (** the set containing only the value for to the C expression [0] *)
@@ -70,7 +72,7 @@ module Location_Bytes : sig
 
   val inject : Base.t -> Ival.t -> t
   val inject_ival : Ival.t -> t
-  val inject_float : Ival.F.t -> t
+  val inject_float : Fval.F.t -> t
 
   val add : Base.t -> Ival.t ->  t ->  t
   (** [add b i loc] binds [b] to [i] in [loc] when [i] is not {!Ival.bottom},
@@ -207,9 +209,9 @@ module Zone : sig
 
   (** This type should be considered private *)
   (* TODO: make it private when OCaml 4.01 is mandatory *)
-  type tt = private Top of Base.SetLattice.t * Origin.t | Map of map_t
+  type t = private Top of Base.SetLattice.t * Origin.t | Map of map_t
 
-  include Datatype.S_with_collections with type t = tt
+  include Datatype.S_with_collections with type t := t
   val pretty_debug: t Pretty_utils.formatter
 
   include Lattice_type.Bounded_Join_Semi_Lattice with type t := t
@@ -268,7 +270,7 @@ module Zone : sig
     joiner:('b -> 'b -> 'b) -> empty:'b -> t -> 'b
 
   val fold2_join_heterogeneous:
-    cache:Hptmap.cache_type ->
+    cache:Hptmap_sig.cache_type ->
     empty_left:('a Hptmap.Shape(Base.Base).t -> 'b) ->
     empty_right:(t -> 'b) ->
     both:(Base.t -> Int_Intervals.t -> 'a -> 'b) ->
@@ -309,10 +311,6 @@ val is_valid : for_writing:bool -> location -> bool
 (** Is the given location entirely valid, as the destination of a write
     operation if [for_writing] is true, as the destination of a read
     otherwise. *)
-
-val is_valid_or_function : location -> bool
-(** Is the location entirely valid for reading, or is it a valid function
-    pointer. *)
 
 val valid_part : for_writing:bool -> location -> location
 (** Overapproximation of the valid part of the given location. Beware that
@@ -362,6 +360,6 @@ val loc_of_typoffset : Base.t -> typ -> offset -> location
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

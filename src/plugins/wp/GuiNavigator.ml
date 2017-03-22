@@ -35,7 +35,7 @@ open GuiSource
 
 type filter = [ `All | `Module | `Select ]
 type card = [ `List | `Goal ]
-type focus = 
+type focus =
   [ `All
   | `Index of Wpo.index
   | `Call of GuiSource.call
@@ -64,7 +64,7 @@ let focus_of_selection selection filter =
 
 exception FIRST of Wpo.t
 
-let first iter = 
+let first iter =
   try iter (fun w -> raise (FIRST w)) ; None
   with FIRST w -> Some w
 
@@ -80,7 +80,7 @@ let goal_of_selection = function
   | S_call c -> first (iter_ips (calls c))
   | S_fun kf -> first (iter_kf kf)
 
-class behavior 
+class behavior
     ~(main : Design.main_window_extension_points)
     ~(filter : filter Toolbox.selector)
     ~(next : Toolbox.button)
@@ -114,13 +114,13 @@ class behavior
           | `All -> Wpo.iter ~on_goal ()
           | `Index index -> Wpo.iter ~index ~on_goal ()
           | `Property ip -> Wpo.iter ~ip ~on_goal ()
-          | `Call c -> iter_ips (calls c) on_goal 
+          | `Call c -> iter_ips (calls c) on_goal
         end ;
         let n = list#size in
         let k = match currentgoal with
           | None -> (-1)
           | Some w ->
-              try list#index w 
+              try list#index w
               with Not_found -> (-1)
         in
         index#set_enabled (n>0) ;
@@ -158,7 +158,7 @@ class behavior
       | None ->
           begin
             currentgoal <- None ;
-            next#set_enabled false ; 
+            next#set_enabled false ;
             prev#set_enabled false ;
             source#set None ;
             self#details ;
@@ -172,13 +172,13 @@ class behavior
             next#set_enabled (succ k < n) ;
             source#set (if src then sw else None) ;
             self#details ;
-          with Not_found -> 
+          with Not_found ->
             self#navigator false None
 
     method private next () = self#move succ
     method private prev () = self#move pred
     method private move dir =
-      try 
+      try
         match currentgoal with
         | None -> ()
         | Some w ->
@@ -233,7 +233,7 @@ class behavior
     method private clear () =
       begin
         let title = "Delete Proof Obligations" in
-        let text = Printf.sprintf	
+        let text = Printf.sprintf
             "Confirm deletion of %d proof obligation(s)" list#count_selected in
         let icon = GMisc.image ~stock:`DELETE () in
         let response = GToolbox.question_box
@@ -256,7 +256,7 @@ class behavior
     val mutable popup_target = None
 
     method private popup_delete () =
-      match popup_target with 
+      match popup_target with
       | Some(w,_) -> (popup_target <- None ; Wpo.remove w ; self#reload ())
       | None -> ()
 
@@ -279,11 +279,11 @@ class behavior
     initializer
       let open VCS in
       begin
-        self#popup_proofmodes popup_why3 
+        self#popup_proofmodes popup_why3
           [ "Run",BatchMode ] ;
-        self#popup_proofmodes popup_ergo 
+        self#popup_proofmodes popup_ergo
           [ "Run",BatchMode ; "Open Altgr-Ergo on Fail",EditMode ; "Open Altgr-Ergo",EditMode ] ;
-        self#popup_proofmodes popup_coq 
+        self#popup_proofmodes popup_coq
           [ "Check Proof",BatchMode ; "Edit on Fail",EditMode ; "Edit Proof",EditMode ] ;
         List.iter
           (fun menu ->
@@ -298,7 +298,7 @@ class behavior
       begin
         popup_target <- Some (w,p) ;
         match p with
-        | None 
+        | None
         | Some (Qed|Why3ide) -> popup_qed#popup ()
         | Some Coq -> popup_coq#popup ()
         | Some AltErgo -> popup_ergo#popup ()
@@ -324,8 +324,8 @@ class behavior
                list#update w ;
              end
           ) ;
-        list#on_double_click 
-          (fun w p -> 
+        list#on_double_click
+          (fun w p ->
              match p with
              | None ->
                  begin
@@ -375,17 +375,17 @@ let make (main : main_window_extension_points) =
     let filter = new Toolbox.switch (`All :> filter) in
     let switch = new Toolbox.rack [
       filter#add_toggle ~label:"All" ~tooltip:"All goals" ~value:`All () ;
-      filter#add_toggle ~label:"Module" 
+      filter#add_toggle ~label:"Module"
         ~tooltip:"Goals of current function or axiomatics" ~value:`Module () ;
-      filter#add_toggle ~label:"Property" 
+      filter#add_toggle ~label:"Property"
         ~tooltip:"Goals of current property" ~value:`Select () ;
     ] in
     let prev = new Toolbox.button ~icon:`GO_BACK ~tooltip:"Previous goal" () in
     let next = new Toolbox.button ~icon:`GO_FORWARD ~tooltip:"Next goal" () in
     let index = new Toolbox.button ~icon:`INDEX ~tooltip:"List of goals" () in
-    let navigation = new Toolbox.rack [ 
-      (prev :> widget) ; 
-      (index :> widget) ; 
+    let navigation = new Toolbox.rack [
+      (prev :> widget) ;
+      (index :> widget) ;
       (next :> widget) ;
     ] in
     let provers = new Toolbox.button ~label:"Provers..." () in
@@ -442,12 +442,12 @@ let make (main : main_window_extension_points) =
     ignore (main#lower_notebook#append_page ~tab_label panel#coerce) ;
     main#register_source_highlighter source#highlight ;
     main#register_source_selector popup#register ;
-    GuiPanel.register ~main 
+    GuiPanel.register ~main
       ~available_provers:available
       ~enabled_provers:enabled
       ~configure_provers:dp_chooser#run ;
   end
 
 let () = Design.register_extension make
-let () = Design.register_reset_extension 
+let () = Design.register_reset_extension
     (fun main -> main#protect ~cancelable:false GuiPanel.reload)

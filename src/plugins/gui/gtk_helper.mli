@@ -330,6 +330,14 @@ val make_text_page:
       contents changes.
       @since Beryllium-20090901 *)
 
+val open_in_external_viewer : ?line:int -> string -> unit
+(** Opens [file] in an external viewer, optionally centered on line [line]
+    (if supported by the viewer). The viewer is executed in the
+    background (i.e. it does not block the execution of Frama-C).
+    The external viewer is given by the environment variable [EDITOR].
+    If undefined, a default viewer is used.
+    @since Magnesium-20151001 *)
+
 (** A functor to build custom Gtk lists.
     You'll probably prefer to use the highlevel custom models in 
     the next module named Custom.List.
@@ -404,7 +412,9 @@ module Custom: sig
     method add_column_text   : ('a,GTree.cell_properties_text) column
     method add_column_pixbuf : ('a,GTree.cell_properties_pixbuf) column
     method add_column_toggle : ('a,GTree.cell_properties_toggle) column
-    method add_column_empty : unit
+    method add_column_empty : GTree.view_column
+      (** Add an empty column that always appears after the columns created
+          by the other [add_column] methods. *)
   end
 
   module List: sig 
@@ -468,6 +478,6 @@ val graph_window_through_dot:
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

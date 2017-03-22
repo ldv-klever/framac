@@ -40,8 +40,9 @@ Defined.
 (* Why3 goal *)
 Lemma ite1 : forall {a:Type} {a_WT:WhyType a}, forall (p:bool) (x:a) (y:a),
   ((p = true) /\ ((ite p x y) = x)) \/ ((p = false) /\ ((ite p x y) = y)).
-intros a a_WT p x y.
-destruct p; intuition.
+Proof.
+  intros a a_WT p x y.
+  destruct p; intuition.
 Qed.
 
 (* Why3 goal *)
@@ -52,17 +53,19 @@ Defined.
 (* Why3 goal *)
 Lemma eqb1 : forall {a:Type} {a_WT:WhyType a}, forall (x:a) (y:a), ((eqb x
   y) = true) <-> (x = y).
-intros a a_WT x y.
-destruct a_WT.
-compute;destruct (why_decidable_eq x y);intuition discriminate.
+Proof.
+  intros a a_WT x y.
+  destruct a_WT.
+  compute;destruct (why_decidable_eq x y);intuition discriminate.
 Qed.
 
 (* Why3 goal *)
 Lemma eqb_false : forall {a:Type} {a_WT:WhyType a}, forall (x:a) (y:a),
   ((eqb x y) = false) <-> ~ (x = y).
-intros a a_WT x y.
-destruct a_WT.
-compute;destruct (why_decidable_eq x y);intuition discriminate.
+Proof.
+  intros a a_WT x y.
+  destruct a_WT.
+  compute;destruct (why_decidable_eq x y);intuition discriminate.
 Qed.
 
 (* Why3 goal *)
@@ -73,9 +76,10 @@ Defined.
 (* Why3 goal *)
 Lemma neqb1 : forall {a:Type} {a_WT:WhyType a}, forall (x:a) (y:a), ((neqb x
   y) = true) <-> ~ (x = y).
-intros a a_WT x y.
-destruct a_WT.
-compute;destruct (why_decidable_eq x y);intuition discriminate.
+Proof.
+  intros a a_WT x y.
+  destruct a_WT.
+  compute;destruct (why_decidable_eq x y);intuition discriminate.
 Qed.
 
 (* Why3 goal *)
@@ -90,16 +94,18 @@ Defined.
 
 (* Why3 goal *)
 Lemma zlt1 : forall (x:Z) (y:Z), ((zlt x y) = true) <-> (x < y)%Z.
-intros x y.
-assert (T:= Zlt_is_lt_bool x y).
-tauto.
+Proof.
+  intros x y.
+  assert (T:= Zlt_is_lt_bool x y).
+  tauto.
 Qed.
 
 (* Why3 goal *)
 Lemma zleq1 : forall (x:Z) (y:Z), ((zleq x y) = true) <-> (x <= y)%Z.
-intros x y.
-assert (T:= Zle_is_le_bool x y).
-tauto.
+Proof.
+  intros x y.
+  assert (T:= Zle_is_le_bool x y).
+  tauto.
 Qed.
 
 (* Why3 goal *)
@@ -114,14 +120,16 @@ Defined.
 
 (* Why3 goal *)
 Lemma rlt1 : forall (x:R) (y:R), ((rlt x y) = true) <-> (x < y)%R.
-intros x y.
-compute;destruct (Rlt_dec x y); intuition discriminate.
+Proof.
+  intros x y.
+  compute;destruct (Rlt_dec x y); intuition discriminate.
 Qed.
 
 (* Why3 goal *)
 Lemma rleq1 : forall (x:R) (y:R), ((rleq x y) = true) <-> (x <= y)%R.
-intros x y.
-compute;destruct (Rle_dec x y);intuition;discriminate.
+Proof.
+  intros x y.
+  compute;destruct (Rle_dec x y);intuition;discriminate.
 Qed.
 
 (* Why3 goal *)
@@ -144,10 +152,11 @@ Admitted.
 (* Why3 goal *)
 Lemma c_euclidian : forall (n:Z) (d:Z), (~ (d = 0%Z)) ->
   (n = (((ZArith.BinInt.Z.quot n d) * d)%Z + (ZArith.BinInt.Z.rem n d))%Z).
-intros n d.
-intros H.
-rewrite Int.Comm1.
-exact (ComputerDivision.Div_mod n d H).
+Proof.
+  intros n d.
+  intros H.
+  rewrite Int.Comm1.
+  exact (ComputerDivision.Div_mod n d H).
 Qed.
 
 Lemma lt_is_not_eqb1: forall x y, (x < y -> Z.eqb x y = false)%Z.
@@ -176,15 +185,16 @@ Lemma cdiv_cases : forall (n:Z) (d:Z), ((0%Z <= n)%Z -> ((0%Z < d)%Z ->
   ((ZArith.BinInt.Z.quot n d) = (-(ZArith.BinInt.Z.quot n (-d)%Z))%Z))) /\
   ((n <= 0%Z)%Z -> ((d < 0%Z)%Z ->
   ((ZArith.BinInt.Z.quot n d) = (ZArith.BinInt.Z.quot (-n)%Z (-d)%Z)))))).
-intros n d.
-rewrite Zquot.Zquot_opp_l.
-rewrite Zquot.Zquot_opp_r.
-rewrite Zquot.Zquot_opp_l.
-rewrite Zquot.Zquot_opp_r.
-rewrite Z.opp_involutive.
-assert (lem1 := lt_is_not_eqb1 d 0).
-assert (lem2 := lt_is_not_eqb2 d 0).
-intuition (rewrite H1;reflexivity).
+Proof.
+  intros n d.
+  rewrite Zquot.Zquot_opp_l.
+  rewrite Zquot.Zquot_opp_r.
+  rewrite Zquot.Zquot_opp_l.
+  rewrite Zquot.Zquot_opp_r.
+  rewrite Z.opp_involutive.
+  assert (lem1 := lt_is_not_eqb1 d 0).
+  assert (lem2 := lt_is_not_eqb2 d 0).
+  intuition (rewrite H1;reflexivity).
 Qed.
 
 (* Why3 goal *)
@@ -196,15 +206,16 @@ Lemma cmod_cases : forall (n:Z) (d:Z), ((0%Z <= n)%Z -> ((0%Z < d)%Z ->
   ((ZArith.BinInt.Z.rem n d) = (ZArith.BinInt.Z.rem n (-d)%Z)))) /\
   ((n <= 0%Z)%Z -> ((d < 0%Z)%Z ->
   ((ZArith.BinInt.Z.rem n d) = (-(ZArith.BinInt.Z.rem (-n)%Z (-d)%Z))%Z))))).
-intros n d.
-rewrite Zquot.Zrem_opp_l.
-rewrite Zquot.Zrem_opp_r.
-rewrite Zquot.Zrem_opp_l.
-rewrite Zquot.Zrem_opp_r.
-rewrite Z.opp_involutive.
-assert (lem1 := lt_is_not_eqb1 d 0).
-assert (lem2 := lt_is_not_eqb2 d 0).
-intuition (rewrite H1;reflexivity).
+Proof.
+  intros n d.
+  rewrite Zquot.Zrem_opp_l.
+  rewrite Zquot.Zrem_opp_r.
+  rewrite Zquot.Zrem_opp_l.
+  rewrite Zquot.Zrem_opp_r.
+  rewrite Z.opp_involutive.
+  assert (lem1 := lt_is_not_eqb1 d 0).
+  assert (lem2 := lt_is_not_eqb2 d 0).
+  intuition (rewrite H1;reflexivity).
 Qed.
 
 (* Why3 goal *)
@@ -217,24 +228,27 @@ Lemma cmod_remainder : forall (n:Z) (d:Z), ((0%Z <= n)%Z -> ((0%Z < d)%Z ->
   ((ZArith.BinInt.Z.rem n d) < (-d)%Z)%Z))) /\ ((n <= 0%Z)%Z ->
   ((d < 0%Z)%Z -> ((d < (ZArith.BinInt.Z.rem n d))%Z /\
   ((ZArith.BinInt.Z.rem n d) <= 0%Z)%Z))))).
-intros n d.
-(split;[|split;[|split]]);intros;
-[exact (Zquot.Zrem_lt_pos_pos _ _ H H0)|
- exact (Zquot.Zrem_lt_neg_pos _ _ H H0)|
- exact (Zquot.Zrem_lt_pos_neg _ _ H H0)|
- exact (Zquot.Zrem_lt_neg_neg _ _ H H0)].
+Proof.
+  intros n d.
+  (split;[|split;[|split]]);intros;
+  [exact (Zquot.Zrem_lt_pos_pos _ _ H H0)|
+   exact (Zquot.Zrem_lt_neg_pos _ _ H H0)|
+   exact (Zquot.Zrem_lt_pos_neg _ _ H H0)|
+   exact (Zquot.Zrem_lt_neg_neg _ _ H H0)].
 Qed.
 
 (* Why3 goal *)
 Lemma cdiv_neutral : forall (a:Z), ((ZArith.BinInt.Z.quot a 1%Z) = a).
-intro a.
-exact (Z.quot_1_r a).
+Proof.
+  intro a.
+  exact (Z.quot_1_r a).
 Qed.
 
 (* Why3 goal *)
 Lemma cdiv_inv : forall (a:Z), (~ (a = 0%Z)) ->
   ((ZArith.BinInt.Z.quot a a) = 1%Z).
-intros a h1.
-exact (Z.quot_same a h1).
+Proof.
+  intros a h1.
+  exact (Z.quot_same a h1).
 Qed.
 

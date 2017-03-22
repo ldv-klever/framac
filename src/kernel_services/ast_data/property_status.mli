@@ -255,6 +255,6 @@ val automatically_proven: Property.t -> bool
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

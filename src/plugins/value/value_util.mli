@@ -44,7 +44,7 @@ val pretty_call_stack : Format.formatter -> callstack -> unit
 val pp_callstack : Format.formatter -> unit
 
 (* TODO: Document the rest of this file. *)
-val get_rounding_mode : unit -> Ival.Float_abstract.rounding_mode
+val get_rounding_mode : unit -> Fval.rounding_mode
 val stop_if_stop_at_first_alarm_mode : unit -> unit
 val emitter : Emitter.t
 val warn_all_mode : CilE.warn_mode
@@ -54,7 +54,6 @@ val warn_all_quiet_mode : unit -> CilE.warn_mode
 val get_slevel : Kernel_function.t -> Value_parameters.SlevelFunction.value
 val warn_indeterminate: Kernel_function.t -> bool
 val set_loc : kinstr -> unit
-module Got_Imprecise_Value : State_builder.Ref with type data = Datatype.Bool.t
 val pretty_actuals :
   Format.formatter -> (Cil_types.exp * Cvalue.V.t * 'b) list -> unit
 val pretty_current_cfunction_name : Format.formatter -> unit
@@ -80,7 +79,7 @@ val is_const_write_invalid: typ -> bool
 (** Detect that the type is const, and that option [-global-const] is set. In
     this case, we forbid writing in a l-value that has this type. *)
 
-val float_kind: Cil_types.fkind -> Ival.Float_abstract.float_kind
+val float_kind: Cil_types.fkind -> Fval.float_kind
 (** Classify a [Cil_types.fkind] as either a 32 or 64 floating-point type.
     Emit a warning when the argument is [long double], and [long double]
     is not equal to [double] *)
@@ -91,8 +90,13 @@ val postconditions_mention_result: Cil_types.funspec -> bool
 val written_formals: Cil_types.kernel_function -> Cil_types.varinfo list
 (** Over-approximation of its formals the given function may write into. *)
 
+val bind_block_locals: State_set.t -> Cil_types.block -> State_set.t
+(** Bind all locals of the the block to their default value
+    (namely UNINITIALIZED) *)
+
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

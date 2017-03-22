@@ -20,7 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-type tt = {
+type t = {
   over_inputs: Locations.Zone.t;
   over_inputs_if_termination: Locations.Zone.t;
   under_outputs_if_termination: Locations.Zone.t;
@@ -54,10 +54,12 @@ let pretty_outputs = wrap_vbox pretty_outputs_aux
 
 open Locations
 
-include Datatype.Make
-(struct
+include
+(Datatype.Make
+ (struct
   include Datatype.Serializable_undefined
-  type t = tt
+  type inout_t = t
+  type t = inout_t
     let pretty fmt x =
       Format.fprintf fmt "@[<v>";
       pretty_operational_inputs_aux fmt x;
@@ -101,6 +103,7 @@ include Datatype.Make
       Zone.equal a a' && Zone.equal b b' && Zone.equal c c' && Zone.equal d d' && Zone.equal e e'
     let mem_project = Datatype.never_any_project
  end)
+ : Datatype.S with type t := t)
 
 let map f v = {
   over_inputs_if_termination = f v.over_inputs_if_termination;
@@ -132,6 +135,6 @@ let join c1 c2 = {
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -38,8 +38,8 @@ class type computer =
 
 let compute_ip cc ip =
   match ip with
-  | Property.IPLemma _ 
-  | Property.IPAxiomatic _ 
+  | Property.IPLemma _
+  | Property.IPAxiomatic _
     ->
       let rec iter cc = function
         | Property.IPLemma(name,_,_,_,_) -> cc#add_lemma (LogicUsage.logic_lemma name)
@@ -53,15 +53,15 @@ let compute_ip cc ip =
       List.iter cc#add_strategy
         (WpAnnot.get_function_strategies ~assigns:WpAnnot.WithAssigns ~bhv kf) ;
       cc#compute
-  | Property.IPComplete _ 
+  | Property.IPComplete _
   | Property.IPDisjoint _
   | Property.IPCodeAnnot _
   | Property.IPAllocation _
   | Property.IPAssigns _
   | Property.IPDecrease _
-  | Property.IPPredicate _ 
+  | Property.IPPredicate _
     ->
-      List.iter cc#add_strategy 
+      List.iter cc#add_strategy
         (WpAnnot.get_id_prop_strategies ~assigns:WpAnnot.WithAssigns ip) ;
       cc#compute
 
@@ -73,7 +73,7 @@ let compute_ip cc ip =
   | Property.IPTypeInvariant _
   | Property.IPGlobalInvariant _
     ->
-      Wp_parameters.result "Nothing to compute for '%a'" Property.pretty ip ; 
+      Wp_parameters.result "Nothing to compute for '%a'" Property.pretty ip ;
       Bag.empty
 
 (* -------------------------------------------------------------------------- *)
@@ -82,8 +82,8 @@ let compute_ip cc ip =
 
 type functions =
   | F_All
-  | F_List of string list
-  | F_Skip of string list
+  | F_List of Cil_datatype.Kf.Set.t
+  | F_Skip of Cil_datatype.Kf.Set.t
 
 let iter_kf phi = function
   | None -> Globals.Functions.iter phi
@@ -91,19 +91,13 @@ let iter_kf phi = function
 
 let iter_fct phi = function
   | F_All -> Globals.Functions.iter phi
-  | F_Skip fs -> Globals.Functions.iter 
-                   (fun kf ->
-                      let f = Kernel_function.get_name kf in
-                      if not (List.mem f fs) then phi kf)
-  | F_List fs -> List.iter
-                   (fun f -> 
-                      try phi (Globals.Functions.find_by_name f)
-                      with Not_found -> 
-                        Wp_parameters.error "Unknown function '%s' (skipped)" f
-                   ) fs
+  | F_Skip fs ->
+      Globals.Functions.iter
+        (fun kf -> if not (Cil_datatype.Kf.Set.mem kf fs) then phi kf)
+  | F_List fs -> Cil_datatype.Kf.Set.iter phi fs
 
 let add_kf cc ?bhv ?prop kf =
-  List.iter cc#add_strategy 
+  List.iter cc#add_strategy
     (WpAnnot.get_function_strategies ~assigns:WpAnnot.WithAssigns ?bhv ?prop kf)
 
 let compute_kf cc ?kf ?bhv ?prop () =
@@ -119,13 +113,13 @@ let compute_selection cc ?(fct=F_All) ?bhv ?prop () =
     if do_lemmas fct then
       begin
         match prop with
-        | None | Some[] -> 
+        | None | Some[] ->
             LogicUsage.iter_lemmas
               (fun lem ->
                  let idp = WpPropId.mk_lemma_id lem in
                  if WpAnnot.filter_status idp then cc#add_lemma lem)
-        | Some ps -> 
-            if List.mem "-@lemmas" ps then () 
+        | Some ps ->
+            if List.mem "-@lemmas" ps then ()
             else LogicUsage.iter_lemmas
                 (fun lem ->
                    let idp = WpPropId.mk_lemma_id lem in

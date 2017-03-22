@@ -1474,6 +1474,6 @@ let print_ff_sig fmt ff =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -24,7 +24,7 @@ open Cil_types
 open Locations
 
 
-val check_not_comparable :
+val are_comparable :
   binop -> Location_Bytes.t -> Location_Bytes.t -> bool
 
 val check_no_recursive_call: kernel_function -> bool

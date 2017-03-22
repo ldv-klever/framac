@@ -54,6 +54,6 @@ val force_ast_compute: (unit -> unit) ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

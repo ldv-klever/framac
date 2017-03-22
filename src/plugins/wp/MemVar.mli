@@ -26,7 +26,7 @@
 
 open Cil_types
 
-type param = ByValue | ByRef | InHeap
+type param = ByValue | ByRef | InContext | InHeap
 
 module type VarUsage =
 sig

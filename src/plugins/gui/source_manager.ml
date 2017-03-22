@@ -25,12 +25,14 @@ type tab = {
   tab_file : string ;
   tab_page : int ;
   tab_select : line:int -> unit ;
+  tab_source_view : GSourceView2.source_view;
 }
 
 type t = {
   notebook : GPack.notebook;
   file_index : (string,tab) Hashtbl.t;
   name_index : (string,tab) Hashtbl.t;
+  page_index : (int,tab) Hashtbl.t;
   mutable pages : int ;
 }
 
@@ -43,6 +45,7 @@ let make ?tab_pos ?packing () =
     notebook = notebook ;
     file_index = Hashtbl.create 7;
     name_index = Hashtbl.create 7;
+    page_index = Hashtbl.create 7;
     pages = 0 ;
   }
 
@@ -68,6 +71,7 @@ let clear w =
     w.pages <- 0 ;
     Hashtbl.clear w.file_index ;
     Hashtbl.clear w.name_index ;
+    Hashtbl.clear w.page_index ;
   end
 
 let later f = ignore (Glib.Idle.add (fun () -> f () ; false))
@@ -84,13 +88,18 @@ let select_name w title =
     later (fun () -> w.notebook#goto_page tab.tab_page)
   with Not_found -> ()
 
-let load_file w ?title ~filename ?(line=(-1)) () =
+let selection_locked = ref false
+
+let load_file w ?title ~filename ?(line=(-1)) ~click_cb () =
   Gui_parameters.debug "Opening file %S line %d" filename line ;
   let tab =
     begin
       try Hashtbl.find w.file_index filename
       with Not_found ->
-        let name = match title with None -> filename | Some s -> s in
+        let name = match title with
+          | None -> Filepath.pretty filename
+          | Some s -> s
+        in
         let label = GMisc.label ~text:name () in
         let sw = GBin.scrolled_window
           ~vpolicy:`AUTOMATIC
@@ -99,7 +108,10 @@ let load_file w ?title ~filename ?(line=(-1)) () =
                       ignore
                         (w.notebook#append_page ~tab_label:label#coerce arg))
           () in
-        let window = ((Source_viewer.make ~packing:sw#add) :> GText.view) in
+        let original_source_view = Source_viewer.make ~name:"original_source"
+            ~packing:sw#add ()
+        in
+        let window = (original_source_view :> GText.view) in
         let page_num = w.notebook#page_num sw#coerce in
         let b = Buffer.create 1024 in
         with_file filename ~f:(input_channel b) ;
@@ -108,30 +120,90 @@ let load_file w ?title ~filename ?(line=(-1)) () =
         let (buffer:GText.buffer) = window#buffer in
         buffer#set_text s;
         let select_line ~line =
-          w.notebook#goto_page page_num;
-          if line >= 0 then
-            let it = buffer#get_iter (`LINE (line-1)) in
-            buffer#place_cursor ~where:it;
-            let y = if buffer#line_count < 20 then 0.23 else 0.3 in
-            window#scroll_to_mark ~use_align:true ~yalign:y `INSERT
+          if !selection_locked then
+            (* ignore a single call and release the lock for the next one *)
+            selection_locked := false
+          else
+            begin
+              w.notebook#goto_page page_num;
+              if line >= 0 then
+                let it = buffer#get_iter (`LINE (line-1)) in
+                buffer#place_cursor ~where:it;
+                let y = if buffer#line_count < 20 then 0.23 else 0.3 in
+                window#scroll_to_mark ~use_align:true ~yalign:y `INSERT
+            end
         in
+        (* Ctrl+click opens the external viewer at the current line and file. *)
+        ignore (window#event#connect#button_press
+          ~callback:
+            (fun ev ->
+               (if GdkEvent.Button.button ev = 1 &&
+                   List.mem `CONTROL
+                     (Gdk.Convert.modifier (GdkEvent.Button.state ev))
+                then
+                  Gtk_helper.later
+                    (fun () ->
+                       try
+                         let cur_page = w.notebook#current_page in
+                         let tab = Hashtbl.find w.page_index cur_page in
+                         let file = tab.tab_file in
+                         let iter = buffer#get_iter_at_mark `INSERT in
+                         let line = iter#line + 1 in
+                         Gtk_helper.open_in_external_viewer ~line file
+                       with Not_found ->
+                         failwith (Printf.sprintf "ctrl+click cb: invalid page %d"
+                                     w.notebook#current_page)
+                    );
+                if GdkEvent.Button.button ev = 1 then
+                  Gtk_helper.later
+                    (fun () ->
+                       try
+                         let iter = buffer#get_iter_at_mark `INSERT in
+                         let line = iter#line + 1 in
+                         let col = iter#line_index in
+                         let offset = iter#offset in
+                         let pos = {Lexing.pos_fname = filename;
+                                    Lexing.pos_lnum = line;
+                                    Lexing.pos_bol = offset - col;
+                                    Lexing.pos_cnum = offset;} in
+                         let localz =
+                           Pretty_source.loc_to_localizable ~precise_col:true pos
+                         in
+                         click_cb localz
+                       with Not_found ->
+                         failwith (Printf.sprintf "click cb: invalid page %d"
+                                     w.notebook#current_page)
+                    );
+               );
+               false (* other events are processed as usual *)
+            ));
         let tab = {
           tab_file = filename ;
           tab_name = name ;
           tab_select = select_line ;
           tab_page = page_num ;
+          tab_source_view = original_source_view;
         } in
         w.pages <- succ page_num ;
         Hashtbl.add w.file_index filename tab ;
         Hashtbl.add w.name_index name tab ;
+        Hashtbl.add w.page_index page_num tab ;
         tab
     end
   in
   (* Runs this at idle priority to let the text be displayed before. *)
   later (fun () -> tab.tab_select ~line)
 
+let get_current_source_view w =
+  try
+    let tab = Hashtbl.find w.page_index w.notebook#current_page in
+    tab.tab_source_view
+  with Not_found ->
+    failwith (Printf.sprintf "get_source_view: invalid page %d"
+                w.notebook#current_page)
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

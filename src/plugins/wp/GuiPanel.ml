@@ -55,7 +55,7 @@ let kf_of_selection = function
 let rte_generated s =
   match kf_of_selection s with
   | None -> false
-  | Some kf -> 
+  | Some kf ->
       if Wp_parameters.RTE.get () then
         let mem = Rte_generated.mem kf in
         if not mem then
@@ -63,8 +63,8 @@ let rte_generated s =
         not mem
       else false
 
-let run_and_prove 
-    (main:Design.main_window_extension_points) 
+let run_and_prove
+    (main:Design.main_window_extension_points)
     (selection:GuiSource.selection)
   =
   begin
@@ -90,7 +90,7 @@ let run_and_prove
 type memory = HOARE | TYPED
 
 class model_selector (main : Design.main_window_extension_points) =
-  let dialog = new Toolbox.dialog 
+  let dialog = new Toolbox.dialog
     ~title:"WP Memory Model" ~window:main#main_window () in
   let memory = new Toolbox.switch HOARE in
   let r_hoare  = memory#add_radio ~label:"Hoare Memory Model" ~value:HOARE () in
@@ -126,7 +126,7 @@ class model_selector (main : Design.main_window_extension_points) =
 
     method set (s:setup) =
       begin
-        (match s.mheap with 
+        (match s.mheap with
          | Hoare -> memory#set HOARE
          | Typed m -> memory#set TYPED ; c_casts#set (m = MemTyped.Unsafe)) ;
         c_byref#set (s.mvar = Ref) ;
@@ -135,10 +135,10 @@ class model_selector (main : Design.main_window_extension_points) =
       end
 
     method get : setup =
-      let m = match memory#get with 
-        | HOARE -> Hoare 
+      let m = match memory#get with
+        | HOARE -> Hoare
         | TYPED -> Typed
-                     (if c_casts#get then MemTyped.Unsafe else MemTyped.Fits) 
+                     (if c_casts#get then MemTyped.Unsafe else MemTyped.Fits)
       in {
         mheap = m ;
         mvar = if c_byref#get then Ref else Var ;
@@ -188,11 +188,11 @@ let wp_update_script label () =
   let text = if file = "" then "(None)" else Filename.basename file in
   label#set_text text
 
-let wp_panel 
-    ~(main:Design.main_window_extension_points) 
+let wp_panel
+    ~(main:Design.main_window_extension_points)
     ~(available_provers:GuiConfig.provers)
     ~(enabled_provers:GuiConfig.provers)
-    ~(configure_provers:unit -> unit) 
+    ~(configure_provers:unit -> unit)
   =
   let vbox = GPack.vbox () in
   let demon = Gtk_form.demon () in
@@ -200,7 +200,7 @@ let wp_panel
 
   let form = new Toolbox.form () in
   (* Model Row *)
-  let model_cfg = new Toolbox.button 
+  let model_cfg = new Toolbox.button
     ~label:"Model..." ~tooltip:"Configure WP Model" () in
   let model_lbl = GMisc.label ~xalign:0.0 () in
   Gtk_form.register demon (wp_update_model model_lbl) ;
@@ -216,7 +216,7 @@ let wp_panel
   form#add_label_widget script_cfg#coerce ;
   form#add_field script_lbl#coerce ;
   (* Prover Row *)
-  let prover_cfg = new Toolbox.button 
+  let prover_cfg = new Toolbox.button
     ~label:"Provers..." ~tooltip:"Detect WP Provers" () in
   prover_cfg#connect configure_provers ;
   form#add_label_widget prover_cfg#coerce ;
@@ -280,7 +280,7 @@ let wp_panel
     Wp_parameters.Procs.get
     (fun n ->
        Wp_parameters.Procs.set n ;
-       ignore (ProverTask.server ()) 
+       ignore (ProverTask.server ())
        (* to make server procs updated is server exists *)
     ) demon ;
 
@@ -322,8 +322,8 @@ let wp_panel
     "WP" , vbox#coerce , Some (Gtk_form.refresh demon) ;
   end
 
-let register ~main ~available_provers ~enabled_provers ~configure_provers = 
-  main#register_panel 
+let register ~main ~available_provers ~enabled_provers ~configure_provers =
+  main#register_panel
     (fun main -> wp_panel ~main ~available_provers ~enabled_provers ~configure_provers)
 
 (* -------------------------------------------------------------------------- *)

@@ -49,7 +49,7 @@ struct
   type sigma = M.Sigma.t
   type chunk = M.Chunk.t
 
-  type signature = 
+  type signature =
     | CST of Integer.t
     | SIG of sig_param list
   and sig_param =
@@ -80,24 +80,28 @@ struct
     let p = Cvalues.has_ltype ltyp (e_var x) in
     Lang.assume p ; x
 
-  let fresh_cvar ?basename typ = 
+  let fresh_cvar ?basename typ =
     fresh_lvar ?basename (Ctype typ)
 
   (* -------------------------------------------------------------------------- *)
   (* --- Logic Frame                                                        --- *)
   (* -------------------------------------------------------------------------- *)
 
+  type call = {
+    kf : kernel_function ;
+    formals : value Varinfo.Map.t ;
+    mutable result : var option ;
+    mutable status : var option ;
+  }
+
   type frame = {
     name : string ;
     pool : pool ;
     gamma : gamma ;
-    kf : kernel_function option ;
-    formals : value Varinfo.Map.t ;
+    call : call option ;
     types : string list ;
     mutable triggers : trigger list ;
     mutable labels : sigma LabelMap.t ;
-    mutable result : var option ;
-    mutable status : var option ;
   }
 
   let pp_frame fmt f =
@@ -119,14 +123,18 @@ struct
       name = a ;
       pool = Lang.new_pool () ;
       gamma = Lang.new_gamma () ;
-      formals = Varinfo.Map.empty ;
       types = types ;
       triggers = [] ;
-      kf = None ;
-      result = None ;
-      status = None ;
+      call = None ;
       labels = LabelMap.empty ;
     }
+
+  let call0 kf =
+    { kf ; formals = Varinfo.Map.empty ; result = None ; status = None }
+
+  let call kf vs =
+    let formals = wrap_var (Kernel_function.get_formals kf) vs in
+    { kf ; formals ; result = None ; status = None }
 
   let frame kf =
     {
@@ -134,51 +142,35 @@ struct
       types = [] ;
       pool = Lang.new_pool () ;
       gamma = Lang.new_gamma () ;
-      formals = Varinfo.Map.empty ;
       triggers = [] ;
-      kf = Some kf ;
-      result = None ;
-      status = None ;
+      call = Some (call0 kf) ;
       labels = LabelMap.empty ;
     }
 
-  let call_pre init kf vs mem =
+  let call_pre init call mem =
     {
-      name = "Pre " ^ Kernel_function.get_name kf ;
+      name = "Pre " ^ Kernel_function.get_name call.kf ;
       types = [] ;
       pool = Lang.get_pool () ;
       gamma = Lang.get_gamma () ;
-      formals = wrap_var (Kernel_function.get_formals kf) vs ;
       triggers = [] ;
-      kf = None ;
-      result = None ;
-      status = None ;
+      call = Some call ;
       labels = wrap_mem [ Clabels.Init , init ; Clabels.Pre , mem ] ;
     }
 
-  let call_post init kf vs seq =
+  let call_post init call seq =
     {
-      name = "Post " ^ Kernel_function.get_name kf ;
+      name = "Post " ^ Kernel_function.get_name call.kf ;
       types = [] ;
       pool = Lang.get_pool () ;
       gamma = Lang.get_gamma () ;
-      formals = wrap_var (Kernel_function.get_formals kf) vs ;
       triggers = [] ;
-      kf = Some kf ;
-      result = None ;
-      status = None ;
-      labels = wrap_mem [ 
-          Clabels.Init , init ; 
-          Clabels.Pre , seq.pre ; 
+      call = Some call ;
+      labels = wrap_mem [
+          Clabels.Init , init ;
+          Clabels.Pre , seq.pre ;
           Clabels.Post , seq.post ;
         ] ;
-    }
-
-  let frame_copy f =
-    { f with
-      pool = Lang.new_pool ~copy:f.pool () ;
-      gamma = Lang.new_gamma ~copy:f.gamma () ;
-      labels = LabelMap.map Sigma.copy f.labels ;
     }
 
   (* -------------------------------------------------------------------------- *)
@@ -191,7 +183,7 @@ struct
 
   let in_frame f cc =
     Context.bind Lang.poly f.types
-      (Context.bind cframe f 
+      (Context.bind cframe f
          (Lang.local ~pool:f.pool ~gamma:f.gamma cc))
 
   let mem_at_frame frame label =
@@ -203,37 +195,38 @@ struct
 
   let mem_frame label = mem_at_frame (Context.get cframe) label
 
+  let get_call = function
+    | { call = Some call } -> call
+    | { name } ->
+        Wp_parameters.fatal
+          "Frame '%s' has is outside a function definition" name
+
   let formal x =
-    let f = Context.get cframe in
+    let f = get_call (Context.get cframe) in
     try Some (Varinfo.Map.find x f.formals)
     with Not_found -> None
 
+  let return_type kf =
+    if Kernel_function.returns_void kf then
+      Wp_parameters.fatal
+        "Function '%s' has no result" (Kernel_function.get_name kf) ;
+    Kernel_function.get_return_type kf
+
   let return () =
-    let f = Context.get cframe in
-    match f.kf with
-    | None -> Wp_parameters.fatal "No function in frame '%s'" f.name
-    | Some kf ->
-        if Kernel_function.returns_void kf then
-          Wp_parameters.fatal "No result in frame '%s'" f.name ;
-        Kernel_function.get_return_type kf
+    return_type (get_call (Context.get cframe)).kf
 
   let result () =
-    let f = Context.get cframe in
+    let f = get_call (Context.get cframe) in
     match f.result with
     | Some x -> x
     | None ->
-        match f.kf with
-        | None -> Wp_parameters.fatal "No function in frame '%s'" f.name
-        | Some kf ->
-            if Kernel_function.returns_void kf then
-              Wp_parameters.fatal "No result in frame '%s'" f.name ;
-            let tr = Kernel_function.get_return_type kf in
-            let basename = Kernel_function.get_name kf in
-            let x = fresh_cvar ~basename tr in
-            f.result <- Some x ; x
+        let tr = return_type f.kf in
+        let basename = Kernel_function.get_name f.kf in
+        let x = fresh_cvar ~basename tr in
+        f.result <- Some x ; x
 
   let status () =
-    let f = Context.get cframe in
+    let f = get_call (Context.get cframe) in
     match f.status with
     | Some x -> x
     | None ->
@@ -278,7 +271,7 @@ struct
 
   let move env s = { env with lhere = Some s ; current = Some s }
 
-  let env_at env label = 
+  let env_at env label =
     let s = match label with
       | Clabels.Here ->  env.lhere
       | label -> Some(mem_frame label)
@@ -308,10 +301,10 @@ struct
         let x = param_of_lv lv in
         let h = Cvalues.has_ltype lv.lv_type (e_var x) in
         let v = plain_of_exp lv.lv_type (e_var x) in
-        profile_env 
-          (Logic_var.Map.add lv v vars) 
-          (h::domain) 
-          ((lv,x)::sigv) 
+        profile_env
+          (Logic_var.Map.add lv v vars)
+          (h::domain)
+          ((lv,x)::sigv)
           profile
 
   let default_label env = function
@@ -319,13 +312,13 @@ struct
     | _ -> env
 
   let compile_step
-      (name:string) 
-      (types:string list) 
-      (profile:logic_var list) 
+      (name:string)
+      (types:string list)
+      (profile:logic_var list)
       (labels:logic_label list)
       (cc : env -> 'a -> 'b)
-      (filter : 'b -> var -> bool) 
-      (data : 'a) 
+      (filter : 'b -> var -> bool)
+      (data : 'a)
     : var list * trigger list * pred list * 'b * sig_param list =
     let frame = logic_frame name types in
     in_frame frame
@@ -336,30 +329,30 @@ struct
         let used = List.filter (fun (_,x) -> filter result x) sigv in
         let parp = List.map snd used in
         let sigp = List.map (fun (lv,_) -> Sig_value lv) used in
-        let (parm,sigm) = 
+        let (parm,sigm) =
           LabelMap.fold
             (fun label sigma ->
                Heap.Set.fold_sorted
                  (fun chunk acc ->
-                    if filter result (Sigma.get sigma chunk) then 
+                    if filter result (Sigma.get sigma chunk) then
                       let (parm,sigm) = acc in
                       let x = Sigma.get sigma chunk in
                       let s = Sig_chunk(chunk,label) in
                       ( x::parm , s::sigm )
-                    else acc) 
+                    else acc)
                  (Sigma.domain sigma))
             frame.labels (parp,sigp)
         in
         parm , frame.triggers , domain , result , sigm
       end ()
 
-  let cc_term : (env -> Cil_types.term -> term) ref 
+  let cc_term : (env -> Cil_types.term -> term) ref
     = ref (fun _ _ -> assert false)
-  let cc_pred : (bool -> env -> predicate named -> pred) ref 
+  let cc_pred : (bool -> env -> predicate named -> pred) ref
     = ref (fun _ _ -> assert false)
-  let cc_logic : (env -> Cil_types.term -> logic) ref 
+  let cc_logic : (env -> Cil_types.term -> logic) ref
     = ref (fun _ _ -> assert false)
-  let cc_region : (env -> Cil_types.term -> loc sloc list) ref 
+  let cc_region : (env -> Cil_types.term -> loc sloc list) ref
     = ref (fun _ _ -> assert false)
 
   let term env t = !cc_term env t
@@ -378,7 +371,7 @@ struct
   let in_reads _ _ = true
 
   let is_recursive l =
-    if LogicUsage.is_recursive l then Rec else Def 
+    if LogicUsage.is_recursive l then Rec else Def
 
   (* -------------------------------------------------------------------------- *)
   (* --- Registering User-Defined Signatures                                --- *)
@@ -412,7 +405,7 @@ struct
 
   let compile_lemma cluster name ~assumed types labels lemma =
     let qs,prop = strip_forall [] lemma in
-    let xs,tgs,domain,prop,_ = 
+    let xs,tgs,domain,prop,_ =
       compile_step name types qs labels (pred true) in_pred prop in
     {
       l_name = name ;
@@ -468,7 +461,7 @@ struct
     let ldef = {
       d_lfun = lfun ;
       d_types = List.length l.l_tparams ;
-      d_params = parp ; 
+      d_params = parp ;
       d_cluster = cluster ;
       d_definition = Logic tau ;
     } in
@@ -485,30 +478,30 @@ struct
     let tau = Lang.tau_of_return l in
     let parp = Lang.local (List.map param_of_lv) l.l_profile in
     let sigp = List.map (fun lv -> Sig_value lv) l.l_profile in
-    let (parm,sigm) = 
+    let (parm,sigm) =
       if vars = [] then (parp,sigp)
-      else 
+      else
         let heap = List.fold_left
             (fun m x ->
                let obj = object_of x.vtype in
                Heap.Set.union m (M.domain obj (M.cvar x))
-            ) Heap.Set.empty vars 
+            ) Heap.Set.empty vars
         in List.fold_left
-          (fun acc l -> 
+          (fun acc l ->
              let label = Clabels.c_label l in
              let sigma = Sigma.create () in
-             Heap.Set.fold_sorted 
-               (fun chunk (parm,sigm) -> 
+             Heap.Set.fold_sorted
+               (fun chunk (parm,sigm) ->
                   let x = Sigma.get sigma chunk in
                   let s = Sig_chunk (chunk,label) in
                   ( x::parm , s :: sigm )
                ) heap acc
-          ) (parp,sigp) l.l_labels 
+          ) (parp,sigp) l.l_labels
     in
     let ldef = {
       d_lfun = lfun ;
       d_types = List.length l.l_tparams ;
-      d_params = parm ; 
+      d_params = parm ;
       d_cluster = cluster ;
       d_definition = Logic tau ;
     } in
@@ -519,13 +512,13 @@ struct
   (* --- Compiling Logic Function with Reads                                --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let compile_lbreads cluster l ts = 
+  let compile_lbreads cluster l ts =
     let lfun = ACSL l in
     let name = l.l_var_info.lv_name in
     let tau = Lang.tau_of_return l in
-    let xs,_,_,(),s = 
-      compile_step name l.l_tparams l.l_profile l.l_labels 
-        reads in_reads ts 
+    let xs,_,_,(),s =
+      compile_step name l.l_tparams l.l_profile l.l_labels
+        reads in_reads ts
     in
     let ldef = {
       d_lfun = lfun ;
@@ -534,7 +527,7 @@ struct
       d_cluster = cluster ;
       d_definition = Logic tau ;
     } in
-    Definitions.define_symbol ldef ; 
+    Definitions.define_symbol ldef ;
     type_for_signature l ldef s ; SIG s
 
   (* -------------------------------------------------------------------------- *)
@@ -549,7 +542,7 @@ struct
     if LogicUsage.is_recursive l then
       begin
         let (_,_,_,_,s) = result in
-        Signature.update l (SIG s) ; 
+        Signature.update l (SIG s) ;
         compile_step name types profile labels cc filter data
       end
     else result
@@ -595,7 +588,7 @@ struct
   let heap_case labels_used support = function
     | Sig_value _ -> support
     | Sig_chunk(chk,l_case) ->
-        let l_ind = 
+        let l_ind =
           try LabelMap.find l_case labels_used
           with Not_found -> LabelSet.empty
         in
@@ -615,16 +608,16 @@ struct
     (* Compile cases with default definition and collect used chunks *)
     let support = List.fold_left
         (fun support (case,labels,types,lemma) ->
-           let _,_,_,_,s = 
+           let _,_,_,_,s =
              compile_step case types [] labels (pred true) in_pred lemma in
            let labels_used = LogicUsage.get_induction_labels l case in
            List.fold_left (heap_case labels_used) support s)
         Heap.Map.empty cases in
     (* Make signature with collected chunks *)
-    let (parm,sigm) = 
+    let (parm,sigm) =
       let frame = logic_frame l.l_var_info.lv_name l.l_tparams in
       in_frame frame
-        (fun () -> 
+        (fun () ->
            Heap.Map.fold_sorted
              (fun chunk labels acc ->
                 let basename = Chunk.basename_of_chunk chunk in
@@ -634,7 +627,7 @@ struct
                      let x = Lang.freshvar ~basename tau in
                      x :: parm , Sig_chunk(chunk,label) :: sigm
                   ) labels acc)
-             support (parp,sigp) 
+             support (parp,sigp)
         ) () in
     (* Set global Signature *)
     let lfun = ACSL l in
@@ -649,23 +642,23 @@ struct
     Signature.update l (SIG sigm) ;
     (* Re-compile final cases *)
     let cases = List.map
-        (fun (case,labels,types,lemma) -> 
-           compile_lemma cluster ~assumed:true case types labels lemma) 
+        (fun (case,labels,types,lemma) ->
+           compile_lemma cluster ~assumed:true case types labels lemma)
         cases in
     Definitions.update_symbol { ldef with d_definition = Inductive cases } ;
     type_for_signature l ldef sigp (* sufficient *) ; SIG sigm
 
-  let compile_logic cluster section l = 
+  let compile_logic cluster section l =
     let s_rec = List.map (fun x -> Sig_value x) l.l_profile in
     Signature.update l (SIG s_rec) ;
     match l.l_body with
-    | LBnone -> 
+    | LBnone ->
         let vars = match section with
           | Toplevel _ -> []
           | Axiomatic a -> Varinfo.Set.elements a.ax_reads
         in if l.l_labels <> [] && vars = [] then
           Wp_parameters.warning ~once:true ~current:false
-            "No definition for '%s' interpreted as reads nothing" 
+            "No definition for '%s' interpreted as reads nothing"
             l.l_var_info.lv_name ;
         compile_lbnone cluster l vars
     | LBterm t -> compile_lbterm cluster l t
@@ -679,16 +672,16 @@ struct
 
   let define_type = Definitions.define_type
   let define_logic c a = Signature.compile (compile_logic c a)
-  let define_lemma c l = 
+  let define_lemma c l =
     if l.lem_labels <> [] && Wp_parameters.has_dkey "lemma" then
-      Wp_parameters.warning ~source:l.lem_position 
-        "Lemma '%s' has labels, consider using global invariant instead." 
+      Wp_parameters.warning ~source:l.lem_position
+        "Lemma '%s' has labels, consider using global invariant instead."
         l.lem_name ;
     Definitions.define_lemma
       (compile_lemma c ~assumed:l.lem_axiom
          l.lem_name l.lem_types l.lem_labels l.lem_property)
 
-  let define_axiomatic cluster ax = 
+  let define_axiomatic cluster ax =
     begin
       List.iter (define_type cluster) ax.ax_types ;
       List.iter (define_logic cluster (Axiomatic ax)) ax.ax_logics ;
@@ -719,16 +712,16 @@ struct
           (* force compilation of entire axiomatics *)
           define_axiomatic cluster ax ;
           try Signature.find phi
-          with Not_found -> 
+          with Not_found ->
             Wp_parameters.fatal ~current:true
-              "Axiomatic '%s' compiled, but '%a' not" 
+              "Axiomatic '%s' compiled, but '%a' not"
               ax.ax_name Printer.pp_logic_var phi.l_var_info
 
   (* -------------------------------------------------------------------------- *)
   (* --- Binding Formal with Actual w.r.t Signature                         --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let rec bind_labels env labels : M.Sigma.t LabelMap.t = 
+  let rec bind_labels env labels : M.Sigma.t LabelMap.t =
     match labels with
     | [] -> LabelMap.empty
     | (l1,l2) :: labels ->
@@ -740,39 +733,39 @@ struct
       (phi:logic_info)
       (labels:(logic_label * logic_label) list)
       (sparam : sig_param list)
-      (parameters:F.term list) 
+      (parameters:F.term list)
     : F.term list =
     let mparams = wrap_lvar phi.l_profile parameters in
     let mlabels = bind_labels env labels in
     List.map
       (function
         | Sig_value lv -> Logic_var.Map.find lv mparams
-        | Sig_chunk(c,l) -> 
-            let sigma = 
+        | Sig_chunk(c,l) ->
+            let sigma =
               try LabelMap.find l mlabels
-              with Not_found -> 
+              with Not_found ->
                 Wp_parameters.fatal "*** Label %a not-found@." Clabels.pretty l
             in
             M.Sigma.value sigma c
       ) sparam
 
-  let call_fun env 
-      (phi:logic_info) 
+  let call_fun env
+      (phi:logic_info)
       (labels:(logic_label * logic_label) list)
       (parameters:F.term list) : F.term =
     match signature phi with
     | CST c -> e_zint c
-    | SIG sparam -> 
+    | SIG sparam ->
         let es = call_params env phi labels sparam parameters in
         F.e_fun (ACSL phi) es
 
-  let call_pred env 
-      (phi:logic_info) 
+  let call_pred env
+      (phi:logic_info)
       (labels:(logic_label * logic_label) list)
       (parameters:F.term list) : F.pred =
     match signature phi with
     | CST _ -> assert false
-    | SIG sparam -> 
+    | SIG sparam ->
         let es = call_params env phi labels sparam parameters in
         F.p_call (ACSL phi) es
 
@@ -780,16 +773,18 @@ struct
   (* --- Variable Bindings                                                  --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let logic_var env x = 
+  let logic_var env x =
     try Logic_var.Map.find x env.vars
-    with Not_found -> 
+    with Not_found ->
       try
+        (** It is here because currently the application of a function
+            of arity 0 are represented in the AST as a variable not
+            as an application of the function with no arguments *)
         let cst = Logic_env.find_logic_cons x in
-        let v = 
+        let v =
           match LogicBuiltins.logic cst with
           | ACSLDEF -> call_fun env cst [] []
           | LFUN phi -> e_fun phi []
-          | CONST e -> e
         in plain_of_exp x.lv_type v
       with Not_found ->
         Wp_parameters.fatal "Unbound logic variable '%a'"

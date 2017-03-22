@@ -49,6 +49,6 @@ val trim_by_validity :
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

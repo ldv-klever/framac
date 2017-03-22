@@ -38,17 +38,21 @@ end
 
 module Dfs = Graph.Traverse.Dfs(G)
 
-(* We use the following encoding to store the directives in the AST
-   [slevel i] => predicate <i = i>
-   [slevel default] => predicate <True> *)
+
+(* We use the following encoding to store the directives in the AST: *)
+type local_slevel =
+  | LMerge (* encoded as 'Pfalse' *)
+  | LDefault (* encoded as 'Ptrue' *)
+  | LLocal of int (* encoded as 'Prel (=, i, i)' *)
 
 let retrieve_annot lp =
   match lp with
   | [{ip_content = Prel (_, {term_node = TConst (Integer (i, _))}, _)}] ->
-    Some (Integer.to_int i)
-  | [{ip_content = Ptrue}] -> None
-  | _ -> None (* be kind. Someone is bound to write a visitor that will
-                 simplify our term into something unrecognizable... *)
+    LLocal (Integer.to_int i)
+  | [{ip_content = Ptrue}] -> LDefault
+  | [{ip_content = Pfalse}] -> LMerge
+  | _ -> LDefault (* be kind. Someone is bound to write a visitor that will
+                     simplify our term into something unrecognizable... *)
 
 let () = Logic_typing.register_behavior_extension "slevel"
   (fun ~typing_context:_ ~loc bhv args ->
@@ -59,6 +63,8 @@ let () = Logic_typing.register_behavior_extension "slevel"
     let p = match args with
     | [{lexpr_node = PLvar "default"}] ->
       Logic_const.(new_predicate ptrue)
+    | [{lexpr_node = PLvar "merge"}] ->
+      Logic_const.(new_predicate pfalse)
     | [{lexpr_node = PLconstant (IntConstant i)}] ->
       begin
         try
@@ -76,8 +82,9 @@ let () = Logic_typing.register_behavior_extension "slevel"
 let () = Cil_printer.register_behavior_extension "slevel"
   (fun _pp fmt (_, lp) ->
     match retrieve_annot lp with
-    | None -> Format.pp_print_string fmt "default"
-    | Some i -> Format.pp_print_int fmt i
+    | LDefault -> Format.pp_print_string fmt "default"
+    | LMerge -> Format.pp_print_string fmt "merge"
+    | LLocal i -> Format.pp_print_int fmt i
   )
 
 type slevel =
@@ -88,7 +95,19 @@ module DatatypeSlevel = Datatype.Make(struct
   include Datatype.Undefined
   type t = slevel
   let reprs = [Global 0]
-  let name = "Value.Local_slevel.Datatype"
+  let name = "Value.Local_slevel.DatatypeSlevel"
+  let mem_project = Datatype.never_any_project
+end)
+
+type merge =
+| NoMerge
+| Merge of (stmt -> bool)
+
+module DatatypeMerge = Datatype.Make(struct
+  include Datatype.Undefined
+  type t = merge
+  let reprs = [NoMerge]
+  let name = "Value.Local_slevel.DatatypeMerge"
   let mem_project = Datatype.never_any_project
 end)
 
@@ -108,12 +127,13 @@ let kf_contains_slevel_directive kf =
     (fun stmt -> extract_slevel_directive stmt <> None)
     (Kernel_function.get_definition kf).sallstmts
 
-let for_kf kf =
+let compute kf =
   let default_slevel = Value_util.get_slevel kf in
   if not (kf_contains_slevel_directive kf) then
-    Global default_slevel (* No slevel directive *)
+    Global default_slevel (* No slevel directive *), NoMerge
   else
-    let h = Cil_datatype.Stmt.Hashtbl.create 17 in
+    let h_local = Cil_datatype.Stmt.Hashtbl.create 16 in
+    let h_merge = Cil_datatype.Stmt.Hashtbl.create 16 in
     let local_slevel = Stack.create () in
     Stack.push default_slevel local_slevel;
     let debug = false in
@@ -121,43 +141,47 @@ let for_kf kf =
        to directive *)
     let pre s =
       match extract_slevel_directive s with
-      | None ->
-        Cil_datatype.Stmt.Hashtbl.add h s (Stack.top local_slevel)
-      | Some (Some i) ->
+      | None | Some LMerge as d ->
+        Cil_datatype.Stmt.Hashtbl.add h_local s (Stack.top local_slevel);
+        if d <> None then Cil_datatype.Stmt.Hashtbl.add h_merge s ();
+      | Some (LLocal i) ->
         if debug then Format.printf "Vising split %d, pushing %d@." s.sid i;
-        Cil_datatype.Stmt.Hashtbl.add h s i;
+        Cil_datatype.Stmt.Hashtbl.add h_local s i;
         Stack.push i local_slevel;
-      | Some None ->
+      | Some LDefault ->
         let top = Stack.pop local_slevel in
         if debug then
           Format.printf "Visiting merge %d, poping (prev %d)@." s.sid top;
         (* Store top, ie. the slevel value above s, in h. We will use this
            value in the post function *)
-        Cil_datatype.Stmt.Hashtbl.add h s top
+        Cil_datatype.Stmt.Hashtbl.add h_local s top
     (* after the visit of a statement and its successors. Do the converse
        operation of pre *)
     and post s =
       match extract_slevel_directive s with
-      | None -> ()
-      | Some (Some _) ->
+      | None | Some LMerge -> ()
+      | Some (LLocal _) ->
         if debug then Format.printf "Leaving split %d, poping@." s.sid;
         ignore (Stack.pop local_slevel);
-      | Some None ->
+      | Some LDefault ->
         (* slevel on nodes above s *)
-        let above = Cil_datatype.Stmt.Hashtbl.find h s in
+        let above = Cil_datatype.Stmt.Hashtbl.find h_local s in
         (* slevel on s and on the nodes below *)
         let cur = Stack.top local_slevel in
         if debug then
           Format.printf "Leaving merge %d, restoring %d@." s.sid above;
         Stack.push above local_slevel;
-        Cil_datatype.Stmt.Hashtbl.replace h s cur
+        Cil_datatype.Stmt.Hashtbl.replace h_local s cur
     in
     try
       Dfs.iter ~pre ~post kf;
       PerStmt
         (fun s ->
-          try Cil_datatype.Stmt.Hashtbl.find h s
-          with Not_found -> assert false (* all statements have been visited*))
+          try Cil_datatype.Stmt.Hashtbl.find h_local s
+          with Not_found -> assert false (* all statements have been visited*)),
+      (if Cil_datatype.Stmt.Hashtbl.length h_merge = 0
+       then NoMerge
+       else Merge (fun s -> Cil_datatype.Stmt.Hashtbl.mem h_merge s))
     with Stack.Empty ->
       Value_parameters.abort
         "Incorrectly nested slevel directives in function %a"
@@ -165,7 +189,7 @@ let for_kf kf =
 
 
 module ForKf = Kernel_function.Make_Table
-  (DatatypeSlevel)
+  (Datatype.Pair(DatatypeSlevel)(DatatypeMerge))
   (struct
     let size = 17
     let dependencies =
@@ -173,4 +197,7 @@ module ForKf = Kernel_function.Make_Table
     let name = "Value.Local_slevel.ForKf"
    end)
 
-let for_kf = ForKf.memo for_kf
+let memo = ForKf.memo compute
+
+let local kf = fst (memo kf)
+let merge kf = snd (memo kf)

@@ -47,6 +47,6 @@ val state: Printer_api.state
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

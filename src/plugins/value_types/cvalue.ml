@@ -24,6 +24,41 @@ open Abstract_interp
 open Locations
 open Cil_types
 
+module CardinalEstimate = struct
+  (* We store the estimation as the log10 of the actual number. This is
+     necessary because the number of states gets huge.
+     None denotes a cardinal of 0. *)
+  type t = float option
+
+  let zero = None
+  let one = Some 0.0
+  let of_integer x = Some(Pervasives.log10 (Integer.to_float x))
+  let infinite = Some(infinity)
+  let mul a b = match (a,b) with
+    | None, _ | _, None -> None
+    | Some(a), Some(b) -> Some(a +. b);;
+  let power a b = match a with
+    | None -> None
+    | a when Integer.is_one b -> a
+    | Some(a) -> Some( a *. (Integer.to_float b))
+
+  let pretty fmt a = match a with
+    | None -> Format.fprintf fmt "0"
+    | Some(a) ->
+      let value = 10.0 ** a in
+      if value < 10000.0
+      then Format.fprintf fmt "%.0f" value
+      else if (classify_float value) = FP_infinite
+      then Format.fprintf fmt "10^%.2f" a
+      else Format.fprintf fmt "10^%.2f (%.3g)" a value
+
+  let pretty_long_log10 fmt a = match a with
+    | None -> Format.fprintf fmt "-inf"
+    | Some(a) -> Format.fprintf fmt "%.0f" a
+
+end
+
+
 module V = struct
 
   include Location_Bytes
@@ -40,12 +75,6 @@ module V = struct
 
   let project_ival_bottom m =
     if is_bottom m then Ival.bottom else project_ival m
-	
-  let min_and_max_float f =
-    try
-      let i = project_ival f in
-      Ival.min_and_max_float i
-    with Not_based_on_null -> assert false
 
   let is_imprecise v =
     match v with
@@ -96,22 +125,12 @@ module V = struct
     | false, true -> singleton_one
     | false, false -> bottom
 
-  let subdiv_float_interval ~size v =
-    try
-      let v_ival = project_ival v in
-      let ival1, ival2 = 
-	Ival.subdiv_float_interval ~size v_ival 
-      in
-      inject_ival ival1, inject_ival ival2
-    with Not_based_on_null -> assert false
-
-
   (* Pretty-printing *)
 
   (* Pretty the partial address [b(base)+i(offsets)] in a basic way,
      by printing [i] as an [Ival.t] *)
   let pretty_base_offsets_default fmt b i =
-    if Ival.equal Ival.singleton_zero i then
+    if Ival.equal Ival.zero i then
       Format.fprintf fmt "@[%a@]" Base.pretty_addr b
     else
       Format.fprintf fmt "@[%a +@ %a@]" Base.pretty_addr b Ival.pretty i
@@ -241,8 +260,8 @@ module V = struct
 
   let compare_bound ival_compare_bound l1 l2 =
     if l1 == l2 then 0
-    else if is_bottom l2 then 1
-    else if is_bottom l1 then -1
+    else if is_bottom l2 then -1
+    else if is_bottom l1 then 1
     else try
 	let f1 = project_ival l1 in
 	let f2 = project_ival l2 in
@@ -327,8 +346,8 @@ module V = struct
   let check_equal positive e1 e2 =
     let one,zero =
       if positive
-      then Ival.singleton_one,  Ival.singleton_zero
-      else Ival.singleton_zero, Ival.singleton_one
+      then Ival.one,  Ival.zero
+      else Ival.zero, Ival.one
     in
     inject_ival
       (if (equal e1 e2) && (cardinal_zero_or_one e1)
@@ -395,7 +414,10 @@ module V = struct
      in
      false, alarm_use_as_float, alarm_overflow, inject_ival r
    with Not_based_on_null ->
-     (not (is_bottom v)), true, (true, true), topify_arith_origin v
+     if is_bottom v then
+       false, false, (false, false), v
+     else
+       (not (is_bottom v)), true, (true, true), topify_arith_origin v
 
  let cast_float_to_int_inverse ~single_precision i =
    try
@@ -572,8 +594,9 @@ module V = struct
     try
       let i = project_ival_bottom e in
       inject_ival (Ival.scale (Int.two_power factor) i)
-    with Not_based_on_null  ->
-      topify_with_origin_kind topify e
+    with
+    | Not_based_on_null  -> topify_with_origin_kind topify e
+    | Integer.Too_big -> top_int
 
   let big_endian_merge_bits ~topify ~conflate_bottom ~total_length ~length ~value ~offset acc =
     if is_bottom acc || is_bottom value
@@ -631,8 +654,16 @@ module V = struct
   let anisotropic_cast ~size v =
     if all_values ~size v then top_int else v
 
-  let create_all_values ~modu ~signed ~size =
-    inject_ival (Ival.create_all_values ~modu ~signed ~size)
+  let create_all_values ~signed ~size =
+    inject_ival (Ival.create_all_values ~signed ~size)
+
+  let cardinal_estimate lb size = match lb with
+    | Top _ -> Int.two_power size (* TODO: this could be very slow when [size]
+                                     is big *)
+    | Map m ->
+      M.fold (fun _ v card ->
+        Int.add card (Ival.cardinal_estimate v size)
+      ) m Int.zero
 
 end
 
@@ -641,18 +672,16 @@ module V_Or_Uninitialized = struct
   (* Note: there is a "cartesian product" of the escape and init flags
      in the constructors, instead of having a tuple or two sum types,
      for performance reasons: this avoids an indirection. *)
-  type un_t =
+  type t =
     | C_uninit_esc of V.t
     | C_uninit_noesc of V.t
     | C_init_esc of V.t
     | C_init_noesc of V.t
 
-  type tt = un_t
-
   let mask_init = 2
   let mask_noesc = 1
 
-  external get_flags : tt -> int = "caml_obj_tag" "noalloc"
+  external get_flags : t -> int = "caml_obj_tag" "noalloc"
 
   let is_initialized v = (get_flags v land mask_init) <> 0
   let is_noesc v = (get_flags v land mask_noesc) <> 0
@@ -667,7 +696,7 @@ module V_Or_Uninitialized = struct
     | C_init_noesc _ -> false
     | _ -> true
 
-  let create : int -> V.t -> tt = fun flags v ->
+  let create : int -> V.t -> t = fun flags v ->
     match flags with
     | 0 -> C_uninit_esc v
     | 1 -> C_uninit_noesc v
@@ -762,9 +791,11 @@ module V_Or_Uninitialized = struct
 
   let hash t = (get_flags t) * 4513 + (V.hash (get_v t))
 
-  include Datatype.Make
+  include
+    (Datatype.Make
       (struct
-        type t = tt (* =     | C_uninit_esc of V.t
+        type uninitialized = t
+        type t = uninitialized (* =     | C_uninit_esc of V.t
                        | C_uninit_noesc of V.t
                        | C_init_esc of V.t
                        | C_init_noesc of V.t *)
@@ -795,6 +826,7 @@ module V_Or_Uninitialized = struct
         let varname = Datatype.undefined
         let mem_project = Datatype.never_any_project
        end)
+     : Datatype.S with type t := t)
 
   module Top_Param = Base.SetLattice
 
@@ -866,6 +898,12 @@ module V_Or_Uninitialized = struct
     | C_init_noesc _ as v -> v
     | (C_uninit_noesc v | C_uninit_esc v | C_init_esc v) -> C_init_noesc v
 
+  let cardinal_estimate v size =
+    let vcard v = V.cardinal_estimate v size in
+    match v with
+    | C_init_noesc(v) -> vcard v
+    | C_uninit_noesc(v) | C_init_esc(v) -> Integer.add Integer.one (vcard v)
+    | C_uninit_esc(v) -> Integer.add Integer.two (vcard v)
 end
 
 module V_Offsetmap = struct
@@ -893,6 +931,27 @@ module V_Offsetmap = struct
   let from_cstring = function
     | Base.CSWstring w -> from_wstring w
     | Base.CSString s -> from_string s
+
+  (* Note: it may be surprising that an offsetmap of top_ival repeated
+     on 32 bits gives a state space of size 3^32. Indeed each bit
+     belongs to {-1,0,1}. *)
+  let cardinal_estimate offsetmap =
+    let f (start,stop) (value, size, _) accu =
+      let cardinal = V_Or_Uninitialized.cardinal_estimate value size in
+      (* There are some bottom values bound to offsetmaps, for
+         instance before the minimum of absolute valid range, that
+         have a cardinal of zero; we ignore them. *)
+      let cardinal =
+        if Integer.is_zero cardinal then Integer.one else cardinal
+      in
+      let cardinalf = CardinalEstimate.of_integer cardinal in
+      let repeat = Integer.(div (length start stop) size) in
+      (* If a value is "cut", we still count it as if it were whole. *)
+      let repeat = Integer.(max repeat one) in
+      let cardinalf_repeated = CardinalEstimate.power cardinalf repeat in
+      CardinalEstimate.mul accu cardinalf_repeated
+    in
+    fold f offsetmap CardinalEstimate.one
 end
 
 module Default_offsetmap = struct
@@ -907,13 +966,27 @@ module Default_offsetmap = struct
        end)
   let () = Ast.add_monotonic_state InitializedVars.self
 
+  module StringOffsetmaps =
+    State_builder.Int_hashtbl
+      (V_Offsetmap)
+      (struct
+         let name = "Cvalue.Default_offsetmap.StringOffsetmaps"
+         let dependencies = [ Ast.self ]
+         let size = 17
+       end)
+  let () = Ast.add_monotonic_state StringOffsetmaps.self
+
   let create_initialized_var varinfo validity initinfo =
     InitializedVars.add varinfo initinfo;
     Base.register_initialized_var varinfo validity
 
   let default_offsetmap base = match base with
   | Base.Initialized_Var (v,_) ->
-      `Map (try InitializedVars.find v with Not_found -> assert false)
+    begin
+      match Base.validity base with
+      | Base.Invalid -> `Bottom
+      | _ -> `Map (try InitializedVars.find v with Not_found -> assert false)
+    end
   | Base.Var _ | Base.CLogic_Var _ | Base.Null ->
     (* The map we create is not faithful for NULL: we bind the interval
        [0..start] to uninitialized instead of bottom. This is not a problem in
@@ -928,7 +1001,13 @@ module Default_offsetmap = struct
             `Map (V_Offsetmap.create_isotropic ~size:(Int.succ mx)
                     V_Or_Uninitialized.uninitialized)
       end
-  | Base.String (_,i) -> `Map (V_Offsetmap.from_cstring i)
+  | Base.String (id,lit) ->
+    try
+      `Map (StringOffsetmaps.find id)
+    with Not_found ->
+      let o = V_Offsetmap.from_cstring lit in
+      StringOffsetmaps.add id o;
+      `Map o
 
   let is_default_offsetmap b m =
     match b with
@@ -997,10 +1076,22 @@ module Model = struct
     List.fold_left
       (fun acc block -> remove_variables block.blocals acc) state blocks
 
+ let cardinal_estimate state =
+   match state with
+   | Bottom -> CardinalEstimate.zero
+   | Top -> CardinalEstimate.infinite
+   | Map(m) ->
+     let count = ref (CardinalEstimate.one) in
+     let f _ offsetmap =
+       let offsetmap_card = V_Offsetmap.cardinal_estimate offsetmap in
+       count := CardinalEstimate.mul !count offsetmap_card
+     in
+     iter f m;
+     !count
 end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

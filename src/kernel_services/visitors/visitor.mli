@@ -20,10 +20,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Cil_types
+(** Frama-C visitors dealing with projects. *)
 
-(** Frama-C visitors dealing with projects.
-    @plugin development guide *)
+open Cil_types
 
 (** Class type for a Db-aware visitor.
     This is done by defining auxiliary methods that can be
@@ -150,6 +149,12 @@ val visitFramacType: frama_c_visitor -> typ -> typ
 (** Visit a variable declaration *)
 val visitFramacVarDecl: frama_c_visitor -> varinfo -> varinfo
 
+(** Visit a logic variable declaration 
+
+    @since Magnesium-20151001
+*)
+val visitFramacLogicVarDecl: frama_c_visitor -> logic_var -> logic_var
+
 (** Visit an initializer, pass also the global to which this belongs and the
  * offset. *)
 val visitFramacInit: frama_c_visitor -> varinfo -> offset -> init -> init
@@ -211,6 +216,6 @@ val visitFramacModelInfo: frama_c_visitor -> model_info -> model_info
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -24,6 +24,7 @@ open Abstract_interp
 
 type split_strategy =
   | NoSplit
+  | SplitAuto
   | SplitEqList of Datatype.Integer.t list
   | FullSplit
 (* To be completed with more involved strategies *)
@@ -39,6 +40,9 @@ Datatype.Make_with_collections(struct
     | NoSplit, NoSplit -> 0
     | NoSplit, _ -> -1
     | _, NoSplit -> 1
+    | SplitAuto, SplitAuto -> 0
+    | SplitAuto, _ -> -1
+    | _, SplitAuto -> 1
     | FullSplit, FullSplit -> 0
     | FullSplit, _ -> -1
     | _, FullSplit -> 1
@@ -48,6 +52,7 @@ Datatype.Make_with_collections(struct
   let equal = Datatype.from_compare
   let hash = function
     | NoSplit -> 17
+    | SplitAuto -> 47
     | FullSplit -> 19
     | SplitEqList l ->
       List.fold_left (fun acc i -> acc * 13 + 57 * Int.hash i) 1 l
@@ -55,6 +60,7 @@ Datatype.Make_with_collections(struct
   let internal_pretty_code = Datatype.undefined
   let pretty fmt = function
     | NoSplit -> Format.pp_print_string fmt "no split"
+    | SplitAuto -> Format.pp_print_string fmt "auto split"
     | FullSplit -> Format.pp_print_string fmt "full split"
     | SplitEqList l ->
       Format.fprintf fmt "Split on \\result == %a"
@@ -62,3 +68,26 @@ Datatype.Make_with_collections(struct
   let varname _ = "v"
   let mem_project = Datatype.never_any_project
 end)
+
+exception ParseFailure of string
+
+let of_string s =
+  match s with
+  | "" -> NoSplit
+  | "full" -> FullSplit
+  | "auto" -> SplitAuto
+  | _ ->
+    let r = Str.regexp ":" in
+    let conv s =
+      try Integer.of_string s
+      with Failure _ -> raise (ParseFailure s)
+    in SplitEqList (List.map conv (Str.split r s))
+
+let to_string = function
+  | NoSplit -> ""
+  | SplitAuto -> "auto"
+  | FullSplit -> "full"
+  | SplitEqList l ->
+    Pretty_utils.sfprintf "%t"
+      (fun fmt ->
+         Pretty_utils.pp_list ~sep:":" Datatype.Integer.pretty fmt l)

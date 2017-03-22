@@ -54,7 +54,7 @@ end
 
 include SELF
 module Map = FCMap.Make(SELF)
-module Set = FCSet.Make(SELF)	      
+module Set = FCSet.Make(SELF)
 
 let severe s = Set.exists (fun w -> w.severe) s
 
@@ -87,7 +87,7 @@ let default () = (Context.get collector).default
 
 exception Error of string * string (* source , reason *)
 
-let error ?(source="wp") text = 
+let error ?(source="wp") text =
   let buffer = Buffer.create 120 in
   Format.kfprintf
     (fun fmt ->
@@ -105,7 +105,7 @@ let error ?(source="wp") text =
 (* -------------------------------------------------------------------------- *)
 
 type context = collector option
-let context ?(source="wp") () = 
+let context ?(source="wp") () =
   Context.push collector { default = source ; warnings = Set.empty }
 
 let flush old =
@@ -120,16 +120,16 @@ let add w =
 let emit ?(severe=false) ?source ~effect message =
   let source = match source with Some s -> s | None -> default () in
   let buffer = Buffer.create 80 in
-  Format.kfprintf 
+  Format.kfprintf
     (fun fmt ->
        Format.pp_print_flush fmt () ;
        let text = Buffer.contents buffer in
        let loc = Cil_const.CurrentLoc.get () in
-       add { 
-         loc = fst loc ; 
-         severe = severe ; 
+       add {
+         loc = fst loc ;
+         severe = severe ;
          source = source ;
-         effect = effect ; 
+         effect = effect ;
          reason = text ;
        })
     (Format.formatter_of_buffer buffer)

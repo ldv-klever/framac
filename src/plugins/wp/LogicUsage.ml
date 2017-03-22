@@ -44,7 +44,7 @@ let trim name =
     if ( name.[0]='_' || name.[n-1]='_' ) then
       let p = first name 0 n in
       let q = last name (pred n) in
-      if p <= q then 
+      if p <= q then
         let name = String.sub name p (q+1-p) in
         match name.[0] with
         | '0' .. '9' -> "_" ^ name
@@ -64,7 +64,7 @@ type logic_lemma = {
   lem_types : string list ;
   lem_labels : logic_label list ;
   lem_property : predicate named ;
-  lem_depends : logic_lemma list ; 
+  lem_depends : logic_lemma list ;
   (* global lemmas declared before in AST order (in reverse order) *)
 }
 
@@ -154,8 +154,8 @@ let compute_logicname l =
   try LMap.find l d.names
   with Not_found ->
     let base = l.l_var_info.lv_name in
-    let over = 
-      try SMap.find base d.clash 
+    let over =
+      try SMap.find base d.clash
       with Not_found -> LSet.empty (*TODO: Undected usage -> overloading issue *)
     in
     match LSet.elements over with
@@ -178,10 +178,10 @@ let pp_profile fmt l =
   Format.fprintf fmt "%s" l.l_var_info.lv_name ;
   match l.l_profile with
   | [] -> ()
-  | x::xs -> 
+  | x::xs ->
       Format.fprintf fmt "@[<hov 1>(%a" Printer.pp_logic_type x.lv_type ;
       List.iter
-        (fun y -> Format.fprintf fmt ",@,%a" 
+        (fun y -> Format.fprintf fmt ",@,%a"
             Printer.pp_logic_type y.lv_type)
         xs ;
       Format.fprintf fmt ")@]"
@@ -190,7 +190,7 @@ let pp_profile fmt l =
 (* --- Utilities                                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
-let ip_lemma l = 
+let ip_lemma l =
   (if l.lem_axiom then Property.ip_axiom else Property.ip_lemma)
     (l.lem_name,l.lem_labels,l.lem_types,
      l.lem_property,(l.lem_position,l.lem_position))
@@ -269,17 +269,17 @@ let register_cases l inds =
 
 (* calls : LabelSet.t LabelMap.t
    Given an inductive phi{...A...}
-   In case H{...B...}, have a call to phi{...B...} 
+   In case H{...B...}, have a call to phi{...B...}
    Then: ( A \in calls[B] ).
 *)
 
 let add_call calls (l_a,l_b) =
   let a = Clabels.c_label l_a in
   let b = Clabels.c_label l_b in
-  let s = 
-    try LabelSet.add a (LabelMap.find b calls) 
-    with Not_found -> LabelSet.singleton a 
-  in 
+  let s =
+    try LabelSet.add a (LabelMap.find b calls)
+    with Not_found -> LabelSet.singleton a
+  in
   LabelMap.add b s calls
 
 (* -------------------------------------------------------------------------- *)
@@ -297,7 +297,7 @@ class visitor =
     val mutable inductive : inductive_case option = None
     val mutable toplevel = 0
 
-    method private section = 
+    method private section =
       match axiomatic with
       | None -> Toplevel toplevel
       | Some a -> Axiomatic a
@@ -343,7 +343,7 @@ class visitor =
 
     method! vterm_lval = function
       | (TVar { lv_origin=Some x } , _ ) -> self#do_var x ; DoChildren
-      | (TVar x , _ ) -> self#do_lvar x ; DoChildren 
+      | (TVar x , _ ) -> self#do_lvar x ; DoChildren
       | _ -> DoChildren
 
     (* --- TERMS --- *)
@@ -363,14 +363,14 @@ class visitor =
 
       (* --- AXIOMATICS --- *)
 
-      | Daxiomatic _ -> 
+      | Daxiomatic _ ->
           begin
             let pf = database.proofcontext in
             let ax = axiomatic_of_global pf global in
             register_axiomatic database ax ;
             axiomatic <- Some ax ;
-            DoChildrenPost 
-              (fun g -> 
+            DoChildrenPost
+              (fun g ->
                  if not (is_global_axiomatic ax) then
                    database.proofcontext <- pf ;
                  axiomatic <- None ;
@@ -413,7 +413,7 @@ class visitor =
       | Dinvariant _
       | Dtype_annot _
       | Dmodel_annot _
-      | Dcustom_annot _ 
+      | Dcustom_annot _
         -> SkipChildren
 
     method! vfunc _ = SkipChildren
@@ -421,33 +421,33 @@ class visitor =
   end
 
 let compute () =
-  Wp_parameters.feedback "Collecting axiomatic usage" ;
+  Wp_parameters.feedback ~ontty:`Feedback "Collecting axiomatic usage" ;
   Visitor.visitFramacFile (new visitor) (Ast.get ())
 
 (* -------------------------------------------------------------------------- *)
 (* --- External API                                                       --- *)
 (* -------------------------------------------------------------------------- *)
 
-let (compute,_) = 
-  State_builder.apply_once "LogicUsage.compute" 
+let (compute,_) =
+  State_builder.apply_once "LogicUsage.compute"
     [Ast.self;Annotations.code_annot_state] compute
 
 let is_recursive l =
-  compute () ; 
+  compute () ;
   let d = Database.get () in
   LSet.mem l d.recursives
 
 let get_induction_labels l case =
   compute () ;
-  try 
+  try
     let d = Database.get () in
     let cases = LMap.find l d.cases in
     try (List.find (fun i -> i.ind_case = case) cases).ind_call
     with Not_found ->
       Wp_parameters.fatal "No case '%s' for inductive '%s'"
         case l.l_var_info.lv_name
-    with Not_found ->
-        Wp_parameters.fatal "Non-inductive '%s'" l.l_var_info.lv_name
+  with Not_found ->
+    Wp_parameters.fatal "Non-inductive '%s'" l.l_var_info.lv_name
 
 let axiomatic a =
   compute () ;
@@ -521,7 +521,7 @@ let dump_logic fmt d l =
            LabelMap.iter
              (fun l s ->
                 Format.fprintf fmt "@ @[<hov 2>{%a:" Clabels.pretty l ;
-                LabelSet.iter (fun l -> Format.fprintf fmt "@ %a" 
+                LabelSet.iter (fun l -> Format.fprintf fmt "@ %a"
                                   Clabels.pretty l) s ;
                 Format.fprintf fmt "}@]"
              ) ind.ind_call ;
@@ -533,9 +533,9 @@ let dump_logic fmt d l =
   end
 
 let dump_lemma fmt l =
-  if l.lem_axiom then 
+  if l.lem_axiom then
     Format.fprintf fmt " * axiom '%s'@\n" l.lem_name
-  else 
+  else
     Format.fprintf fmt " * lemma '%s'@\n" l.lem_name
 
 let get_name l = compute () ; compute_logicname l
@@ -547,11 +547,11 @@ let pp_section fmt = function
 
 let dump () =
   compute () ;
-  Log.print_on_output 
+  Log.print_on_output
     begin fun fmt ->
       let d = Database.get () in
       SMap.iter
-        (fun _ a -> 
+        (fun _ a ->
            Format.fprintf fmt "Axiomatic %s {@\n" a.ax_name ;
            List.iter (dump_type fmt) a.ax_types ;
            List.iter (dump_logic fmt d) a.ax_logics ;
@@ -564,8 +564,8 @@ let dump () =
              t.lt_name pp_section s)
         d.types ;
       LMap.iter
-        (fun l s -> 
-           Format.fprintf fmt " * logic '%a' in %a@\n" 
+        (fun l s ->
+           Format.fprintf fmt " * logic '%a' in %a@\n"
              pp_logic l pp_section s)
         d.logics ;
       SMap.iter

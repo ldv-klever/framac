@@ -16,14 +16,15 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Post-condition 'other_bits' in 'rotate_left':
-Let x_1 = (lor (lsr x_0 31) (to_uint32 (lsl x_0 1))).
+Let x_1 = (lsr x_0 31).
 Assume {
   (* Domain *)
   Type: (is_uint32 x_0) /\ (is_uint32 x_1).
   (* Goal *)
   When: (0<=i_0) /\ (i_0<=30) /\ (is_sint32 i_0).
 }
-Prove: (0!=(land x_0 (lsl 1 i_0)))=(0!=(land (lsl 1 (1+i_0)) x_1)).
+Prove: (0!=(land x_0 (lsl 1 i_0)))=
+       (0!=(land (lsl 1 (1+i_0)) (lor x_1 (to_uint32 (lsl x_0 1))))).
 
 ------------------------------------------------------------
 ------------------------------------------------------------

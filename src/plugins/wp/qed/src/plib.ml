@@ -46,21 +46,21 @@ type 'a printer2 = formatter -> 'a -> 'a -> unit
 
 let pp_call_var ~f pp fmt = function
   | [] -> pp_print_string fmt f
-  | x::xs -> 
+  | x::xs ->
       fprintf fmt "@[<hov 2>%s(%a" f pp x ;
       List.iter (fun y -> fprintf fmt ",@ %a" pp y) xs ;
       fprintf fmt ")@]"
 
 let pp_call_void ~f pp fmt = function
   | [] -> fprintf fmt "%s()" f
-  | x::xs -> 
+  | x::xs ->
       fprintf fmt "@[<hov 2>%s(%a" f pp x ;
       List.iter (fun y -> fprintf fmt ",@ %a" pp y) xs ;
       fprintf fmt ")@]"
 
 let pp_call_apply ~f pp fmt = function
   | [] -> pp_print_string fmt f
-  | xs -> 
+  | xs ->
       fprintf fmt "@[<hov 2>(%s" f ;
       List.iter (fun y -> fprintf fmt "@ %a" pp y) xs ;
       fprintf fmt ")@]"
@@ -94,33 +94,33 @@ let rec pp_fold_apply ?e ~f pp fmt = function
   | x::xs -> fprintf fmt "(%s@ %a@ %a)" f pp x (pp_fold_apply ?e ~f pp) xs
 
 let rec pp_fold_call_rev ?e ~f pp fmt = function
-  | [] -> print_not_empty f fmt e 
+  | [] -> print_not_empty f fmt e
   | [x] -> pp fmt x
   | x::xs -> fprintf fmt "%s(%a,@ %a)" f (pp_fold_call_rev ?e ~f pp) xs pp x
 
 let rec pp_fold_apply_rev ?e ~f pp fmt = function
-  | [] -> print_not_empty f fmt e 
+  | [] -> print_not_empty f fmt e
   | [x] -> pp fmt x
   | x::xs -> fprintf fmt "(%s@ %a@ %a)" f pp x (pp_fold_apply_rev ?e ~f pp) xs
 
 let pp_listcompact ~sep pp fmt = function
   | [] -> ()
-  | x::xs -> 
+  | x::xs ->
       pp fmt x ;
       List.iter (fun x -> fprintf fmt "%s@,%a" sep pp x) xs
 
 let pp_listsep ~sep pp fmt = function
   | [] -> ()
-  | x::xs -> 
+  | x::xs ->
       pp fmt x ;
-      List.iter (fun x -> fprintf fmt "%s@ %a" sep pp x) xs    
+      List.iter (fun x -> fprintf fmt "%s@ %a" sep pp x) xs
 
 type index = Isingle | Ifirst | Ilast | Imiddle
 
 let iteri f = function
   | [] -> ()
   | [x] -> f Isingle x
-  | x::xs -> 
+  | x::xs ->
       let rec iterk f = function
         | [] -> ()
         | [x] -> f Ilast x
@@ -136,7 +136,7 @@ let iterk f xs =
 let mapk f xs =
   let rec step f k = function
     | [] -> []
-    | x::xs -> 
+    | x::xs ->
         let y = f k x in
         y :: step f (succ k) xs
   in step f 0 xs
@@ -154,7 +154,7 @@ let global_substitute_fmt regexp repl_fun fmt text =
         repl_fun fmt (Str.matched_group 1 text);
         replace end_pos
       with Not_found ->
-          pp_print_string fmt (Str.string_after text start)
+        pp_print_string fmt (Str.string_after text start)
   in
   replace 0
 
@@ -168,10 +168,10 @@ let substitute_list print s fmt l =
   let args = Array.of_list l in
   let repl_fun fmt grp =
     let i = int_of_string grp in
-    let v = try args.(i-1) with Invalid_argument _ -> 
+    let v = try args.(i-1) with Invalid_argument _ ->
       let msg =  "Qed.Plib.substitute_list %" ^ string_of_int (i-1) in
       raise (Invalid_argument msg)
-    in print fmt v 
+    in print fmt v
   in
   global_substitute_fmt regexp_arg_pos repl_fun fmt s
 

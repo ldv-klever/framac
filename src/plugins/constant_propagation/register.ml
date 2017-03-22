@@ -229,11 +229,11 @@ class propagate project fnames ~cast_intro = object(self)
 	  and const_float m fkind =
             try
 	      let v = Ival.project_float m in
-	      let f1,f2 =  Ival.Float_abstract.min_and_max_float v in
-	      if not (Ival.F.equal f1 f2) then raise Cannot_expand ;
-	      let f = Ival.F.to_float f1 in
+	      let f1,f2 =  Fval.min_and_max v in
+	      if not (Fval.F.equal f1 f2) then raise Cannot_expand ;
+	      let f = Fval.F.to_float f1 in
 	      Cil.kfloat ~loc:expr.eloc fkind f
-	    with Ival.F.Nan_or_infinite -> raise Cannot_expand
+	    with Ival.Nan_or_infinite -> raise Cannot_expand
 	  in
           (match typ_e with
           | TFloat (fkind, _) -> const_float m fkind
@@ -257,6 +257,10 @@ class propagate project fnames ~cast_intro = object(self)
       None
 
   method! vexpr expr =
+    (* nothing is done for [expr] already being a constant *)
+    match expr.enode with
+    | Const (_) -> Cil.DoChildren
+    | _ -> begin
     (* Start by trying to constant-propagate all of [expr]. Casts are allowed
        only if -scf-allow-cast is set *)
     match self#propagated expr ~ignore_const_cast:false with
@@ -279,6 +283,7 @@ class propagate project fnames ~cast_intro = object(self)
       end
       | _ -> Cil.DoChildren
     end
+    end
 
   method! vvdec v =
     if v.vglob then begin
@@ -292,7 +297,7 @@ class propagate project fnames ~cast_intro = object(self)
        some earlier values. If so, we will skip [g]. We do this check now and
        not in [add_decls], because [self#vvdec] will mark g as known. *)
     let g_is_known = match g with
-      | GVarDecl (_, vi, _) -> Varinfo.Set.mem vi known_globals
+      | GVarDecl (vi, _) | GFunDecl (_, vi, _) -> Varinfo.Set.mem vi known_globals
       | _ -> false
     in
     let add_decls l =
@@ -301,10 +306,15 @@ class propagate project fnames ~cast_intro = object(self)
       (* Add declarations for the globals that are referenced in g's propagated
          value. *)
       Varinfo.Set.fold
-        (fun x l ->
+        (fun vi l ->
           PropagationParameters.feedback ~level:2
-            "Adding declaration of global %a" Printer.pp_varinfo x;
-          GVarDecl(Cil.empty_funspec(),x,x.vdecl)::l)
+            "Adding declaration of global %a" Printer.pp_varinfo vi;
+          let g' =
+            if Cil.isFunctionType vi.vtype
+            then GFunDecl(Cil.empty_funspec(), vi, vi.vdecl)
+            else GVarDecl(vi, vi.vdecl)
+          in
+          g' ::l)
         must_add_decl l
     in
     Cil.DoChildrenPost add_decls
@@ -407,6 +417,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

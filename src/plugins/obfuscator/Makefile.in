@@ -38,7 +38,6 @@ PLUGIN_CMO:= options \
 	obfuscate \
 	obfuscator_register
 
-PLUGIN_HAS_MLI:=yes
 PLUGIN_DISTRIB_EXTERNAL:= Makefile.in configure.ac configure
 PLUGIN_NO_TEST:=yes
 

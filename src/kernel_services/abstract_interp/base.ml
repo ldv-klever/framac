@@ -166,16 +166,15 @@ module MaxValidAbsoluteAddress =
 let () =
   Kernel.AbsoluteValidRange.add_set_hook
     (fun _ x ->
-       try Scanf.sscanf x "%Li-%Li"
+       try Scanf.sscanf x "%s@-%s"
          (fun min max ->
 (* let mul_CHAR_BIT = Int64.mul (Int64.of_int (bitsSizeOf charType)) in *)
 (* the above is what we would like to write but it is too early *)
-	   let mul_CHAR_BIT = Int64.mul 8L in 
+	   let mul_CHAR_BIT = Int.mul Int.eight in 
             MinValidAbsoluteAddress.set
-              (Abstract_interp.Int.of_int64 (mul_CHAR_BIT min));
+              (mul_CHAR_BIT (Int.of_string min));
             MaxValidAbsoluteAddress.set
-              (Abstract_interp.Int.of_int64
-                 (Int64.pred (mul_CHAR_BIT (Int64.succ max)))))
+              ((Int.pred (mul_CHAR_BIT (Int.succ (Int.of_string max))))))
        with End_of_file | Scanf.Scan_failure _ | Failure _ as e ->
          Kernel.abort "Invalid -absolute-valid-range integer-integer: each integer may be in decimal, hexadecimal (0x, 0X), octal (0o) or binary (0b) notation and has to hold in 64 bits. A correct example is -absolute-valid-range 1-0xFFFFFF0.@\nError was %S@."
            (Printexc.to_string e))
@@ -219,7 +218,12 @@ let is_valid_offset ~for_writing size base offset =
   if for_writing && (is_read_only base)
   then raise Not_valid_offset;
   match validity base with
-  | Invalid -> raise Not_valid_offset
+  | Invalid ->
+    (* Special case. We stretch the truth and say that the address of the
+       base itself is valid for a size of 0. We use a size of 0 to emulate
+       the semantics of "past-one" pointers. *)
+    if not (Int.(equal zero size) && Ival.(equal offset zero)) then
+      raise Not_valid_offset
   | Known (min_valid,max_valid)
   | Unknown (min_valid, Some max_valid, _) ->
     if not (Ival.is_bottom offset) then
@@ -458,6 +462,6 @@ module SetLattice = Make_Hashconsed_Lattice_Set(Base)(Hptset)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

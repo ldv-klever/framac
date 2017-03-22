@@ -24,22 +24,41 @@ module Make
   (P: sig class printer: unit -> Printer_api.extensible_printer_type end) = 
 struct
 
-  class extensible_printer = P.printer
-  let mk_printer = ref (new extensible_printer)
+  module type PrinterClass = sig
+    class printer : Printer_api.extensible_printer_type
+  end
+
+  let printer_class_ref =
+    ref (module struct class printer = P.printer () end: PrinterClass)
+
   let printer_ref = ref None
+
+  module type PrinterExtension = functor (X: PrinterClass) -> PrinterClass
+
+  let set_printer p =
+    printer_class_ref := p;
+    printer_ref := None
+
+  let update_printer x =
+    let module X = (val x: PrinterExtension) in
+    let module Cur = (val !printer_class_ref: PrinterClass) in
+    let module Updated = X(Cur) in
+    set_printer (module Updated: PrinterClass)
+
   let printer () = match !printer_ref with
     | None ->
-      let p = !mk_printer () in
+      let module Printer = (val !printer_class_ref: PrinterClass) in
+      let p = new Printer.printer in
       printer_ref := Some p;
       p#reset ();
       p
     | Some p ->
       p#reset ();
       p
-    
-  let change_printer new_printer = 
-    mk_printer := new_printer;
-    printer_ref := None
+
+  let current_printer () = !printer_class_ref
+
+  class extensible_printer = P.printer
 
   let without_annot f fmt x = (printer ())#without_annot f fmt x
   let force_brace f fmt x = (printer ())#force_brace f fmt x
@@ -103,6 +122,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

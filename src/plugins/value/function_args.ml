@@ -86,14 +86,14 @@ let main_initial_state_with_formals kf (state:Cvalue.Model.t) =
 
 let compute_actual ~with_alarms ~warn_indeterminate state e =
   let warn kind =
-    if with_alarms.CilE.imprecision_tracing.CilE.a_log != None then
+    if with_alarms.CilE.imprecision_tracing.CilE.a_log then
       Value_parameters.result ~current:true ~once:true
         "completely invalid@ %s in evaluation of@ argument %a"
         kind Printer.pp_exp e;
     raise Actual_is_bottom
   in
   match e with
-  | { enode = Lval lv } when not (Eval_op.is_bitfield (Cil.typeOfLval lv)) ->
+  | { enode = Lval lv } when not (Eval_typ.is_bitfield (Cil.typeOfLval lv)) ->
     let ploc, state, o =
       try Eval_exprs.offsetmap_of_lv ~with_alarms state lv
       with Int_Base.Error_Top ->
@@ -145,6 +145,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

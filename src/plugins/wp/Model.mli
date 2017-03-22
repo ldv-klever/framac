@@ -28,13 +28,13 @@ type model = S.t
 type tuning = (unit -> unit)
 
 val repr : model
-val register : id:string -> 
-  ?descr:string -> 
+val register : id:string ->
+  ?descr:string ->
   ?tuning:tuning list ->
   unit -> model
 
 val get_id : model -> string
-val get_descr : model -> string 
+val get_descr : model -> string
 val get_emitter : model -> Emitter.t
 
 val find : id:string -> model
@@ -43,7 +43,13 @@ val iter : (model -> unit) -> unit
 val with_model : model -> ('a -> 'b) -> 'a -> 'b
 val on_model : model -> (unit -> unit) -> unit
 val get_model : unit -> model (** Current model *)
-val is_model_defined : unit -> bool 
+val is_model_defined : unit -> bool
+
+type scope = Kernel_function.t option
+val on_scope : scope -> (unit -> unit) -> unit
+val on_kf : Kernel_function.t -> (unit -> unit) -> unit (** on_scope None *)
+val on_global : (unit -> unit) -> unit (** on_scope (Some kf) *)
+val get_scope : unit -> scope
 
 val directory : unit -> string (** Current model in ["-wp-out"] directory *)
 
@@ -79,13 +85,13 @@ sig
 
   val iter : (key -> data -> unit) -> unit
   val iter_sorted : (key -> data -> unit) -> unit
-end    
+end
 
 module Index(E : Entries) : Registry with module E = E
 (** projectified, depend on the model, not serialized *)
 
 module Static(E : Entries) : Registry with module E = E
-(** projectified, not serialized *)
+(** projectified, independent from the model, not serialized *)
 
 module type Key =
 sig
@@ -109,6 +115,12 @@ sig
   val get : key -> data
 end
 
-module Generator(K : Key)(D : Data with type key = K.t) : Generator 
+(** projectified, depend on the model, not serialized *)
+module Generator(K : Key)(D : Data with type key = K.t) : Generator
+  with type key = D.key
+   and type data = D.data
+
+(** projectified, independent from the model, not serialized *)
+module StaticGenerator(K : Key)(D : Data with type key = K.t) : Generator
   with type key = D.key
    and type data = D.data

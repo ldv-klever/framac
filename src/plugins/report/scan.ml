@@ -66,8 +66,20 @@ let report_specialized ip =
   (Report_parameters.Specialized.get ()) ||
     (match ip with Property.IPPropertyInstance _ -> false | _ -> true)
 
+let report_proven ip =
+  let open Consolidation in
+  Report_parameters.Proven.get () ||
+    match get ip with
+    | Considered_valid | Valid _
+    | Invalid_but_dead _ | Valid_but_dead _ | Unknown_but_dead _
+    | Valid_under_hyp _ -> false
+
+    | Never_tried | Unknown _ | Invalid _ | Invalid_under_hyp _ | Inconsistent _
+      -> true
+
+
 let report_ip ip =
-  report_untried ip && report_specialized ip
+  report_untried ip && report_specialized ip && report_proven ip
 
 
 let rec add_property ips ip =
@@ -144,6 +156,6 @@ let iter (inspector:inspector) =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -71,7 +71,7 @@ type logic_dependencies = Locations.Zone.t Cil_datatype.Logic_label.Map.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)
 

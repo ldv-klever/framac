@@ -29,8 +29,13 @@ val get_idom: stmt -> stmt option
 val dominates: stmt -> stmt -> bool
 (** [dominates a b] tells whether [a] dominates [b]. *)
 
+val nearest_common_ancestor: stmt list -> stmt
+(** Finds the statement lowest in the function that dominates
+    all the statements in the list passed as argument. The list must not
+    be empty, and must contain statements that are all in the same function. *)
+
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../../.."
+compile-command: "make -C ../../.."
 End:
 *)

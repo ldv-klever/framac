@@ -316,13 +316,16 @@ end
 
 (** {1 Rich Text Renderer} *)
   
-class text : unit ->
+class text : ?autoscroll:bool -> unit ->
 object
   inherit widget
   method clear : unit
   method fmt : Format.formatter (** The formatter used by [printf] method. *)
-  method printf : 'a. ('a,Format.formatter,unit) format -> 'a
-    (** Append material to the text buffer.
+
+  method printf : 'a. ?scroll:bool -> ('a,Format.formatter,unit) format -> 'a
+    (** Append material to the text buffer, optionally scrolling it to the
+        beginning of the message (defaults to autoscrolling setting).
+
 	The underlying formatter (method [fmt]) recognizes the following tags:
 	- ["bf"] bold face
 	- ["it"] italic style
@@ -337,9 +340,24 @@ object
 	Properties for any tag (except link and mark) can be modified
 	with method [set_tag_properties].
 	
-	[t#printf] is a shortcut for [Format.fprintf t#fmt]. *)
+	[t#printf] is a shortcut for [Format.fprintf t#fmt] followed 
+        by flushing and optional scrolling. *)
     
   method highlight : mark:string -> GText.tag_property list -> unit
   method focus : mark:string -> unit
-  method on_link : (string -> unit) -> unit
+  method scroll : ?line:int -> unit -> unit
+  method lines : int 
+  
+  method on_link : (GdkEvent.Button.t -> string -> unit) -> unit
+  (** method called when the user clicks on a 'link' tag. The arguments are
+      the GTK button and the name of the link. *)
+
+  method set_font: string -> unit
+  (** Set the font used to display the text. *)
+
+  method set_autoscroll: bool -> unit
+  (** Set autoscrolling. *)
+
+  method get_view: GText.view
+  (** Returns the viewer object (and the buffer it contains). *)
 end

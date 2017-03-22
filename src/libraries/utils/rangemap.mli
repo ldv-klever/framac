@@ -47,9 +47,7 @@
     Compared to Ocaml's standard libary, this implementation caches at
     each node the hash of the tree (which is computed in an associative
     manner), and contains some functions not yet present in the caml
-    implementation.
-
-    @plugin development guide *)
+    implementation. *)
 
 module type S = sig
   type key (** The type of the map keys. *)
@@ -232,6 +230,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

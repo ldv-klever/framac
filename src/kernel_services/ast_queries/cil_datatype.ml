@@ -688,8 +688,6 @@ end
 module Varinfo = struct
   include Varinfo_Id
 
-  let pretty_vname fmt v = Format.pp_print_string fmt v.vname
-
   module Hptset = struct
     include Hptset.Make
       (Varinfo_Id)
@@ -821,7 +819,9 @@ let compare_constant c1 c2 = match c1, c2 with
  
 let hash_const c =
   match c with
-      CInt64 _ | CStr _ | CWStr _ | CChr _ | CReal _  -> Hashtbl.hash c
+    | CStr _ | CWStr _ | CChr _ -> Hashtbl.hash c
+    | CReal (fn,fk,_) -> Hashtbl.hash fn + Hashtbl.hash fk
+    | CInt64 (n,k,_) -> Integer.hash n + Hashtbl.hash k
     | CEnum ei -> 95 + Enumitem.hash ei
 
 module StructEq =
@@ -1229,7 +1229,6 @@ module Logic_info =
       let varname _ = "logic_varinfo"
      end)
 
-
 let rec compare_logic_type config v1 v2 =
   let rank = function
     | Linteger -> 0
@@ -1352,12 +1351,20 @@ end
 (* --- Comparison Over Terms                                              --- *)
 (* -------------------------------------------------------------------------- *)
 
+(* @return [true] is the given logic real represents an exact float *)
+let is_exact_float r =
+  Pervasives.classify_float r.r_upper = FP_normal &&
+  Datatype.Float.equal r.r_upper r.r_lower
+
 let compare_logic_constant c1 c2 = match c1,c2 with
   | Integer (i1,_), Integer(i2,_) -> Integer.compare i1 i2
   | LStr s1, LStr s2 -> Datatype.String.compare s1 s2
   | LWStr s1, LWStr s2 -> compare_list Datatype.Int64.compare s1 s2
   | LChr c1, LChr c2 -> Datatype.Char.compare c1 c2
-  | LReal r1, LReal r2 -> Datatype.String.compare r1.r_literal r2.r_literal
+  | LReal r1, LReal r2 ->
+    if is_exact_float r1 && is_exact_float r2
+    then Datatype.Float.compare r1.r_lower r2.r_lower
+    else Datatype.String.compare r1.r_literal r2.r_literal
   | LEnum e1, LEnum e2 -> Enumitem.compare e1 e2
   | Integer _,(LStr _|LWStr _ |LChr _|LReal _|LEnum _) -> 1
   | LStr _ ,(LWStr _ |LChr _|LReal _|LEnum _) -> 1
@@ -1509,15 +1516,16 @@ and compare_bound b1 b2 = match b1, b2 with
 
 
 exception StopRecursion of int
-let _hash_const c =
-  match c with
-      CInt64 _ | CStr _ | CWStr _ | CChr _ | CReal _  -> Hashtbl.hash c
-    | CEnum ei -> 95 + Enumitem.hash ei
 
-let hash_logic_constant c =
-  match c with
-      Integer _ | LStr _ | LWStr _ | LChr _ | LReal _  -> Hashtbl.hash c
-    | LEnum ei -> 95 + Enumitem.hash ei
+let hash_logic_constant = function
+  | LStr s -> Datatype.String.hash s
+  | LWStr l -> hash_list Datatype.Int64.hash l
+  | LChr c  -> Datatype.Char.hash c
+  | Integer(n, _) -> Integer.hash n
+  | LReal r ->
+    if is_exact_float r then Datatype.Float.hash r.r_lower
+    else Datatype.String.hash r.r_literal
+  | LEnum ei -> 95 + Enumitem.hash ei
 
 let hash_label x =
   match x with
@@ -1887,9 +1895,12 @@ module Global = struct
           | GEnumTagDecl(t1,_), GEnumTagDecl(t2,_) -> Enuminfo.compare t1 t2
           | GEnumTagDecl _, _ -> -1
           | _, GEnumTagDecl _ -> 1
-          | GVarDecl (_,v1,_), GVarDecl(_,v2,_) -> Varinfo.compare v1 v2
+          | GVarDecl (v1,_), GVarDecl(v2,_) -> Varinfo.compare v1 v2
           | GVarDecl _,_ -> -1
           | _,GVarDecl _ -> 1
+          | GFunDecl (_,v1,_), GFunDecl(_,v2,_) -> Varinfo.compare v1 v2
+          | GFunDecl _,_ -> -1
+          | _,GFunDecl _ -> 1
           | GVar (v1,_,_), GVar (v2,_,_) -> Varinfo.compare v1 v2
           | GVar _,_ -> -1
           | _, GVar _ -> 1
@@ -1915,13 +1926,14 @@ module Global = struct
         | GCompTagDecl (t,_) -> 5 * Compinfo.hash t
         | GEnumTag (t,_) -> 7 * Enuminfo.hash t
         | GEnumTagDecl(t,_) -> 11 * Enuminfo.hash t
-        | GVarDecl (_,v,_) -> 13 * Varinfo.hash v
+        | GVarDecl (v,_) -> 13 * Varinfo.hash v
         | GVar (v,_,_) -> 17 * Varinfo.hash v
         | GFun (f,_) -> 19 * Varinfo.hash f.svar
         | GAsm (_,l) -> 23 * Location.hash l
         | GText t -> 29 * Datatype.String.hash t
         | GAnnot (g,_) -> 31 * Global_annotation.hash g
         | GPragma(_,l) -> 37 * Location.hash l
+        | GFunDecl (_,v,_) -> 43 * Varinfo.hash v
 
       let copy = Datatype.undefined
      end)
@@ -1933,7 +1945,8 @@ module Global = struct
     | GEnumTagDecl(_, l)
     | GCompTag(_, l)
     | GCompTagDecl(_, l)
-    | GVarDecl(_, _, l)
+    | GVarDecl( _, l)
+    | GFunDecl(_, _, l)
     | GVar(_, _, l)
     | GAsm(_, l)
     | GPragma(_, l)
@@ -2203,6 +2216,6 @@ let clear_caches () = List.iter (fun f -> f ()) !clear_caches
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

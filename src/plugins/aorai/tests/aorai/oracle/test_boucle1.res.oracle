@@ -20,14 +20,12 @@ int status = 0;
 /*@ global invariant inv_status: 0 ≤ status ≤ 1;
  */
 /*@ ghost enum aorai_ListOper aorai_CurOperation = op_main; */
-/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called;
-*/
+/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called; */
 /*@ ghost int accept_S1 = 0; */
 /*@ ghost int accept_S2 = 0; */
 /*@ ghost int accept_S3 = 0; */
 /*@ ghost int accept_S4 = 0; */
-/*@ ghost int accept_init = 1;
-*/
+/*@ ghost int accept_init = 1; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_commit_trans;
     assigns aorai_CurOpStatus, aorai_CurOperation, accept_S1, accept_S2,

@@ -44,7 +44,7 @@ sig
   val interf : (key -> 'a -> 'b -> 'c option) -> 'a t -> 'b t -> 'c t
   val interq : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
   val diffq : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
-  val merge : (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t 
+  val merge : (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
 
   (** [insert (fun key v old -> ...) key v map] *)
   val insert : (key -> 'a -> 'a -> 'a) -> key -> 'a -> 'a t -> 'a t
@@ -66,17 +66,17 @@ struct
   let is_empty = Intmap.is_empty
   let empty = Intmap.empty
 
-  (* good sharing *) 
+  (* good sharing *)
   let add k x m = Intmap.add (K.id k) (k,x) m
 
   let _pack k = function None -> None | Some v -> Some (k,v)
   let _packold ((k,old) as o) w = if w==old then o else k,w
   let _oldpack o = function None -> None | Some w -> Some (_packold o w)
 
-  (* good sharing *) 
+  (* good sharing *)
   let insert f k v m = Intmap.insert (fun _k (k,v) ((_,old) as o) -> _packold o (f k v old)) (K.id k) (k,v) m
 
-  (* good sharing *) 
+  (* good sharing *)
   let change f k v m = Intmap.change (fun _k (k,v) -> function
       | None -> _pack k (f k v None)
       | Some ((_,old) as o) -> _oldpack o (f k v (Some old))) (K.id k) (k,v) m
@@ -91,32 +91,32 @@ struct
   let map f m = Intmap.map (fun (k,v) -> k,f k v) m
   let mapf f m = Intmap.mapf (fun _ (k,v) -> _pack k (f k v)) m
 
-  (* good sharing *) 
+  (* good sharing *)
   let mapq f = Intmap.mapq (fun _ ((k,old) as o) -> _oldpack o (f k old))
 
-  (* good sharing *) 
+  (* good sharing *)
   let partition f = Intmap.partition (fun _ (k,v) -> f k v)
 
-  (* good sharing *) 
+  (* good sharing *)
   let remove k = Intmap.remove (K.id k)
 
-  (* good sharing *) 
+  (* good sharing *)
   let filter f = Intmap.filter (fun _ (k,v) -> f k v)
 
-  (* good sharing *) 
-  let union f = Intmap.union (fun _ ((k,v) as x) ((_,v') as y) -> 
+  (* good sharing *)
+  let union f = Intmap.union (fun _ ((k,v) as x) ((_,v') as y) ->
       let w = f k v v' in if w==v then x else if w==v then y else k,w )
 
   let inter f = Intmap.inter (fun _ (k,v) (_,v') -> k,f k v v')
   let interf f = Intmap.interf (fun _ (k,v) (_,v') -> _pack k (f k v v'))
 
-  (* good sharing *) 
-  let interq f = Intmap.interq (fun _ ((k,v) as x) ((_,v') as y) -> match f k v v' with None -> None | Some w -> 
-        Some (if w==v then x else if w==v then y else k,w))
+  (* good sharing *)
+  let interq f = Intmap.interq (fun _ ((k,v) as x) ((_,v') as y) -> match f k v v' with None -> None | Some w ->
+      Some (if w==v then x else if w==v then y else k,w))
 
-  (* good sharing *) 
-  let diffq f = Intmap.diffq (fun _ ((k,v) as x) ((_,v') as y) -> match f k v v' with None -> None | Some w -> 
-        Some (if w==v then x else if w==v then y else k,w))
+  (* good sharing *)
+  let diffq f = Intmap.diffq (fun _ ((k,v) as x) ((_,v') as y) -> match f k v v' with None -> None | Some w ->
+      Some (if w==v then x else if w==v then y else k,w))
 
   let merge f a b = Intmap.merge
       (fun _ u v ->

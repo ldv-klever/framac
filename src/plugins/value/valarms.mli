@@ -37,15 +37,19 @@ val current_stmt : unit -> Cil_types.kinstr
 
 val set_syntactic_context : syntactic_context -> unit
 
-val do_warn: alarm_behavior ->
-  ((Emitter.t * (Format.formatter -> unit)) -> unit) -> unit
+val do_warn: alarm_behavior -> (unit -> unit) -> unit
 
 val warn_div : warn_mode -> addresses:bool -> unit
 (** division. If [addresses] holds, also emit an alarm about the denominator
     not being comparable to \null. *)
 
-val warn_shift : warn_mode -> int -> unit
+val warn_shift : warn_mode -> int option -> unit
+(** Warn that the RHS of a shift operator must be positive, and optionnally
+    less than the given size. *)
+
 val warn_shift_left_positive : warn_mode -> unit
+(** Warn that the LHS of the left shift operator must be positive. *)
+
 val warn_mem_read : warn_mode -> unit
 val warn_mem_write : warn_mode -> unit
 val warn_integer_overflow : 

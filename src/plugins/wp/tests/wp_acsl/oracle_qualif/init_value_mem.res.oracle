@@ -5,48 +5,13 @@
 [wp] Loading driver 'share/wp.driver'
 [wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
-------------------------------------------------------------
-  Function main
-------------------------------------------------------------
-
-Goal Post-condition 'P' in 'main':
-Let a_0 = (shift_St (global G_v_67) 0).
-Let a_1 = (Load_S_St a_0 Mint_0).
-Assume {
-  (* Domain *)
-  Type: (IsS_St w_0) /\ (IsS_St a_1).
-  (* Initializer *)
-  Have: 1=w_0.F_St_a.
-  (* Initializer *)
-  Have: 2=w_0.F_St_b.
-  (* Initializer *)
-  Have: 1=Mint_0[(shiftfield_F_St_a a_0)].
-  (* Initializer *)
-  Have: 2=Mint_0[(shiftfield_F_St_b a_0)].
-  (* Heap *)
-  Have: (region G_v_67)<=0.
-}
-Prove: (EqS_St a_1 w_0).
-
-------------------------------------------------------------
-
-Goal Post-condition 'Q' in 'main':
-Let a_0 = (shift_St (global G_v_67) 0).
-Let a_1 = (Load_S_St a_0 Mint_0).
-Assume {
-  (* Domain *)
-  Type: (IsS_St w_0) /\ (IsS_St a_1).
-  (* Initializer *)
-  Have: 1=w_0.F_St_a.
-  (* Initializer *)
-  Have: 2=w_0.F_St_b.
-  (* Initializer *)
-  Have: 1=Mint_0[(shiftfield_F_St_a a_0)].
-  (* Initializer *)
-  Have: 2=Mint_0[(shiftfield_F_St_b a_0)].
-  (* Heap *)
-  Have: (region G_v_67)<=0.
-}
-Prove: (EqS_St a_1 w_0).
-
-------------------------------------------------------------
+[wp] 2 goals scheduled
+[wp] [Alt-Ergo] Goal typed_main_post_P : Valid
+[wp] [Alt-Ergo] Goal typed_main_post_Q : Valid
+[wp] Proved goals:    2 / 2
+     Qed:             0 
+     Alt-Ergo:        2
+----------------------------------------------------------
+Functions           WP   Alt-Ergo    Total   Success
+main                -       2 (23)     2       100%
+----------------------------------------------------------

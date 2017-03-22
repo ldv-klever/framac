@@ -46,7 +46,7 @@ class provers config =
       Gtk_helper.Configuration.set config
         (ConfList (List.map (fun dp -> ConfString dp.dp_prover) self#get))
 
-    initializer 
+    initializer
       begin
         self#load () ;
         self#on_event self#save ;
@@ -59,12 +59,12 @@ class provers config =
 (* ------------------------------------------------------------------------ *)
 
 class dp_chooser
-    ~(main:Design.main_window_extension_points) 
+    ~(main:Design.main_window_extension_points)
     ~(available:provers)
     ~(enabled:provers)
   =
-  let dialog = new Toolbox.dialog 
-    ~title:"Why3 Provers" 
+  let dialog = new Toolbox.dialog
+    ~title:"Why3 Provers"
     ~window:main#main_window
     ~resize:false () in
   let array = new Toolbox.warray () in
@@ -80,7 +80,7 @@ class dp_chooser
             else head :: hook dp e tail
       in provers <- hook dp e provers
 
-    method private lookup dp = 
+    method private lookup dp =
       try List.assoc dp provers
       with Not_found -> false
 
@@ -168,11 +168,11 @@ class dp_button ~(available:provers) ~(enabled:provers) =
               let dp = ProverWhy3.find p dps in
               if not (List.mem dp dps) then available#set (dps @ [dp]) ;
               let en = dp :: enabled#get in
-              enabled#set 
+              enabled#set
                 (List.filter (fun q -> List.mem q en) available#get)
           | _ -> ()
 
-    method private set_provers dps = 
+    method private set_provers dps =
       button#set_items (items @ List.map (fun dp -> Why3 dp) dps)
 
     method private get_selection = function

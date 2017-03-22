@@ -69,6 +69,6 @@ include Printer_builder.Make(struct class printer () = descriptive_printer end)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

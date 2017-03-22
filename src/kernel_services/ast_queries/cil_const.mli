@@ -109,6 +109,6 @@ val make_logic_info_local : string -> (* logic_type -> *) logic_info
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

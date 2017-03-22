@@ -272,11 +272,14 @@ sig
   val sigma : unit -> sigma
 
   val e_subst : ?sigma:sigma -> (term -> term) -> term -> term
+  val e_subst_var : var -> term -> term -> term
 
   (** {3 Localy Nameless Representation} *)
-  
+
   val lc_bind : var -> term -> bind (** Close [x] as a new bound variable *)
   val lc_open : var -> bind -> term (** Instanciate top bound variable *)
+  val lc_open_term : term -> bind -> term
+  (** Instanciate top bound variable with the given term *)
   val lc_closed : term -> bool
   val lc_closed_at : int -> term -> bool
   val lc_vars : term -> Bvars.t
@@ -297,7 +300,7 @@ sig
 
   val set_builtin : Fun.t -> (term list -> term) -> unit
   (** Register a simplifier for function [f]. The computation code
-      	may raise [Not_found], in which case the symbol is not interpreted. 
+      	may raise [Not_found], in which case the symbol is not interpreted.
 
       	If [f] is an operator with algebraic rules (see type
       	[operator]), the children are normalized {i before} builtin
@@ -308,8 +311,8 @@ sig
   *)
 
   val set_builtin_eq : Fun.t -> (term -> term -> term) -> unit
-  (** Register a builtin equality for comparing any term with head-symbol. 
-      	{b Must} only use recursive comparison for strictly smaller terms. 
+  (** Register a builtin equality for comparing any term with head-symbol.
+      	{b Must} only use recursive comparison for strictly smaller terms.
       	The recognized term with head function symbol is passed first.
 
       	Highest priority is [0].
@@ -317,8 +320,8 @@ sig
   *)
 
   val set_builtin_leq : Fun.t -> (term -> term -> term) -> unit
-  (** Register a builtin for comparing any term with head-symbol. 
-      	{b Must} only use recursive comparison for strictly smaller terms. 
+  (** Register a builtin for comparing any term with head-symbol.
+      	{b Must} only use recursive comparison for strictly smaller terms.
       	The recognized term with head function symbol can be on both sides.
       	Strict comparison is automatically derived from the non-strict one.
 
@@ -372,9 +375,9 @@ sig
 
   (** {2 Shared sub-terms} *)
 
-  val shared : 
-    ?shared:(term -> bool) -> 
-    ?shareable:(term -> bool) -> 
+  val shared :
+    ?shared:(term -> bool) ->
+    ?shareable:(term -> bool) ->
     term list -> term list
   (** Computes the sub-terms that appear several times.
       	[shared marked linked e] returns the shared subterms of [e].
@@ -394,8 +397,8 @@ sig
 
   type marks
   val marks :
-    ?shared:(term -> bool) -> 
-    ?shareable:(term -> bool) -> 
+    ?shared:(term -> bool) ->
+    ?shareable:(term -> bool) ->
     unit -> marks
   val mark : marks -> term -> unit
   val defs : marks -> term list

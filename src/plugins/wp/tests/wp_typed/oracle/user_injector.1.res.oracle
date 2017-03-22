@@ -141,35 +141,31 @@ Prove: true.
 
 Goal Post-condition 'E1' in 'job':
 Let x_0 = service_cpt_4-1.
-Let x_1 = service_result_0[x_0].
 Let m_0 = service_id_6[x_0->a_0].
 Assume {
   (* Domain *)
   Type: (is_sint32 service_cpt_4)
         /\ (is_sint32 service_result_0[service_cpt_4])
         /\ (is_sint32 (service_cpt_4-2)) /\ (is_sint32 x_0)
-        /\ (IsArray1_sint32 m_0) /\ (is_sint32 x_1)
-        /\ (IsArray1_sint32 m_0[service_cpt_4->b_0]).
+        /\ (IsArray1_sint32 m_0) /\ (IsArray1_sint32 m_0[service_cpt_4->b_0]).
   (* Goal *)
-  When: 0=x_1.
+  When: 0=service_result_0[x_0].
 }
 Prove: true.
 
 ------------------------------------------------------------
 
 Goal Post-condition 'E2' in 'job':
-Let x_0 = service_result_0[service_cpt_4].
-Let x_1 = service_cpt_4-1.
-Let x_2 = service_result_0[x_1].
-Let m_0 = service_id_6[x_1->a_0].
+Let x_0 = service_cpt_4-1.
+Let x_1 = service_result_0[x_0].
+Let m_0 = service_id_6[x_0->a_0].
 Assume {
   (* Domain *)
-  Type: (is_sint32 service_cpt_4) /\ (is_sint32 x_0)
-        /\ (is_sint32 (service_cpt_4-2)) /\ (is_sint32 x_1)
-        /\ (IsArray1_sint32 m_0) /\ (is_sint32 x_2)
+  Type: (is_sint32 service_cpt_4) /\ (is_sint32 (service_cpt_4-2))
+        /\ (is_sint32 x_0) /\ (IsArray1_sint32 m_0) /\ (is_sint32 x_1)
         /\ (IsArray1_sint32 m_0[service_cpt_4->b_0]).
   (* Goal *)
-  When: (0=x_0) /\ (0!=x_2).
+  When: (0=service_result_0[service_cpt_4]) /\ (0!=x_1).
 }
 Prove: true.
 
@@ -233,16 +229,14 @@ Goal Assigns 'A' in 'job' (5/6):
 Effect at line 66
 Let x_0 = service_cpt_4-1.
 Let x_1 = service_result_0[x_0].
-Let x_2 = service_result_0[service_cpt_4].
 Let m_0 = service_id_6[x_0->a_0].
 Assume {
   (* Domain *)
-  Type: (is_sint32 service_cpt_4) /\ (is_sint32 x_2)
-        /\ (is_sint32 (service_cpt_4-2)) /\ (is_sint32 x_0)
-        /\ (IsArray1_sint32 m_0) /\ (is_sint32 x_1)
+  Type: (is_sint32 service_cpt_4) /\ (is_sint32 (service_cpt_4-2))
+        /\ (is_sint32 x_0) /\ (IsArray1_sint32 m_0) /\ (is_sint32 x_1)
         /\ (IsArray1_sint32 m_0[service_cpt_4->b_0]).
   (* tests/wp_typed/user_injector.i:61: Call 'service' *)
-  Have: 0=x_2.
+  Have: 0=service_result_0[service_cpt_4].
   (* tests/wp_typed/user_injector.i:66: Then *)
   Have: 0!=x_1.
 }
@@ -253,17 +247,15 @@ Prove: true.
 Goal Assigns 'A' in 'job' (6/6):
 Effect at line 66
 Let x_0 = service_cpt_4-1.
-Let x_1 = service_result_0[x_0].
 Let m_0 = service_id_6[x_0->a_0].
 Assume {
   (* Domain *)
   Type: (is_sint32 service_cpt_4)
         /\ (is_sint32 service_result_0[service_cpt_4])
         /\ (is_sint32 (service_cpt_4-2)) /\ (is_sint32 x_0)
-        /\ (IsArray1_sint32 m_0) /\ (is_sint32 x_1)
-        /\ (IsArray1_sint32 m_0[service_cpt_4->b_0]).
+        /\ (IsArray1_sint32 m_0) /\ (IsArray1_sint32 m_0[service_cpt_4->b_0]).
   (* tests/wp_typed/user_injector.i:60: Call 'service' *)
-  Have: 0=x_1.
+  Have: 0=service_result_0[x_0].
 }
 Prove: true.
 

@@ -189,8 +189,8 @@ end
 module type Lattice_UProduct = sig
   type t1
   type t2
-  type tt = t1*t2
-  include AI_Lattice_with_cardinal_one with type t = tt
+  type t = t1*t2
+  include AI_Lattice_with_cardinal_one with type t := t
 end
 
 (** Signature for a lattice over a sum type
@@ -254,6 +254,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

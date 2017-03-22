@@ -60,6 +60,6 @@ let normalize filename = absolutize_filename base_dir filename
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

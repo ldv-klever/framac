@@ -41,6 +41,8 @@
 (*                          et Automatique).                                *)
 (****************************************************************************)
 
+(* Modified by TrustInSoft *)
+
 (*
  * CIL: An intermediate language for analyzing C progams.
  *
@@ -473,12 +475,14 @@ let mkStmt ?(ghost=false) ?(valid_sid=false) (sk: stmtkind) : stmt =
        TArray (arrayPushAttributes al bt, l, s, a)
    | t -> typeAddAttributes al t
 
- let rec typeRemoveAttributes (anl: string list) t =
+ let rec typeRemoveAttributes ?anl t =
    (* Try to preserve sharing. We use sharing to be more efficient, but also
       to detect that we have removed an attribute under typedefs *)
+   let new_attr al =
+     match anl with None -> [] | Some anl -> dropAttributes anl al
+   in
    let reshare al f =
-     let al' = dropAttributes anl al in
-     if al' == al then t else f al'
+     let al' = new_attr al in if al' == al then t else f al'
    in
    match t with
    | TVoid a -> reshare a (fun a -> TVoid a)
@@ -491,11 +495,13 @@ let mkStmt ?(ghost=false) ?(valid_sid=false) (sk: stmtkind) : stmt =
    | TComp (comp, s, a) -> reshare a (fun a -> TComp (comp, s, a))
    | TBuiltin_va_list a -> reshare a (fun a -> TBuiltin_va_list a)
    | TNamed (tn, a) ->
-     let tn' = typeRemoveAttributes anl tn.ttype in
-     if tn' == tn.ttype then
-       reshare a (fun a -> TNamed (tn, a))
-     else
-       typeAddAttributes (dropAttributes anl a) tn'
+     let tn' = typeRemoveAttributes ?anl tn.ttype in
+     if tn' == tn.ttype then reshare a (fun a -> TNamed (tn, a))
+     else typeAddAttributes (new_attr a) tn'
+
+ let typeRemoveAllAttributes t = typeRemoveAttributes t
+
+ let typeRemoveAttributes anl t = typeRemoveAttributes ~anl t
 
  let rec typeRemoveAttributesDeep (anl: string list) t =
    (* Try to preserve sharing. We use sharing to be more efficient, but also
@@ -788,8 +794,9 @@ let is_empty_behavior b =
    comp
 
  (** Make a copy of a compinfo, changing the name and the key *)
- let copyCompInfo (ci: compinfo) (n: string) : compinfo =
-   let ci' = {ci with cname = n; ckey = nextCompinfoKey (); } in
+ let copyCompInfo ?(fresh=true) ci cname =
+   let ckey = if fresh then nextCompinfoKey () else ci.ckey in
+   let ci' = { ci with cname; ckey } in
    (* Copy the fields and set the new pointers to parents *)
    ci'.cfields <- List.map (fun f -> {f with fcomp = ci'}) ci'.cfields;
    ci'
@@ -1342,7 +1349,7 @@ let copy_visit_gen fresh prj =
     try Cil_datatype.Compinfo.Hashtbl.find compinfos c
     with Not_found ->
       let new_c =
-        if fresh then copyCompInfo c c.cname else { c with ckey = c.ckey }
+        copyCompInfo ~fresh c c.cname
       in
       temp_set_compinfo c new_c; temp_set_orig_compinfo new_c c; new_c
   in
@@ -3567,20 +3574,22 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
    | GCompTag (comp, l) ->
        let comp' = visitCilCompInfo vis comp in
        if comp != comp' then GCompTag(comp',l) else g
-   | GVarDecl(spec, v, l) ->
+   | GVarDecl(v, l) ->
+       let v' = visitCilVarDecl vis v in
+       if v' != v then GVarDecl (v', l) else g
+   | GFunDecl(spec, v, l) ->
        let form =
 	 try Some (getFormalsDecl v) with Not_found -> None
        in
        let v' = visitCilVarDecl vis v in
        let form' = optMapNoCopy (mapNoCopy (visitCilVarDecl vis)) form in
        let spec' =
-	 if isFunctionType v.vtype && not (is_empty_funspec spec) then
-	   visitCilFunspec vis spec
-	 else begin
-	   assert (is_empty_funspec spec);
+	 if is_empty_funspec spec then begin
            if is_copy_behavior vis#behavior then
 	     empty_funspec ()
            else spec (* do not need to change it if it's not a copy visitor. *)
+         end else begin
+	   visitCilFunspec vis spec
 	 end
        in
        if v' != v || spec' != spec || form != form' then
@@ -3592,7 +3601,7 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
 		  apply_on_project
                     ~selection vis (unsafeSetFormalsDecl v') formals
               | Some _ | None -> ());
-	   GVarDecl (spec', v', l)
+	   GFunDecl (spec', v', l)
 	 end
        else g
    | GVar (v, inito, l) ->
@@ -5075,16 +5084,28 @@ and constFold (machdep: bool) (e: exp) : exp =
     if debugConstFold then 
       Kernel.debug "ConstFold CAST to to %a@." !pp_typ_ref t ;
     let e = constFold machdep e in
-      match e.enode, unrollType t with
-        (* Might truncate silently *)
-        Const(CInt64(i,_k,_)), TInt(nk,a)
-          (* It's okay to drop a cast to const.
-             If the cast has any other attributes, leave the cast alone. *)
-          when (dropAttributes ["const"] a) = [] ->
-            if debugConstFold then
-	      Kernel.debug "ConstFold to %a : %a@." 
-		!pp_ikind_ref nk Datatype.Integer.pretty i;
-            kinteger64 ~loc ~kind:nk i
+    match e.enode, unrollType t with
+      | Const(CInt64(i,_k,_)), TInt(nk,a) when a = [] ->
+        begin
+          (* If the cast has attributes, leave it alone. *)
+          if debugConstFold then
+            Kernel.debug "ConstFold to %a : %a@."
+              !pp_ikind_ref nk Datatype.Integer.pretty i;
+          (* Downcasts might truncate silently *)
+          kinteger64 ~loc ~kind:nk i
+        end
+      | Const (CReal (f, _, _)), TInt (ik, a) when a = [] -> (* See above *)
+        begin
+          try
+            let i = Floating_point.truncate_to_integer f in
+            let _i', truncated = truncateInteger64 ik i in
+            if truncated then (* Float is too big. Do not const-fold *)
+              new_exp ~loc (CastE (t, e))
+            else
+              kinteger64 ~loc ~kind:ik i
+          with Floating_point.Float_Non_representable_as_Int64 _ -> (* too big*)
+            new_exp ~loc (CastE (t, e))
+        end
       | _, _ -> new_exp ~loc (CastE (t, e))
     end
   | Lval lv -> new_exp ~loc (Lval (constFoldLval machdep lv))
@@ -6144,18 +6165,17 @@ let need_cast ?(force=false) oldt newt =
  let findOrCreateFunc (f:file) (name:string) (t:typ) : varinfo =
    let rec search glist =
      match glist with
-	 GVarDecl(_,vi,_) :: _rest when vi.vname = name ->
-	   if not (isFunctionType vi.vtype) then
-	     Kernel.fatal ~current:true
-	       "findOrCreateFunc: can't create %s because another global exists with that name."
-	       name ;
-	   vi
+       | GFunDecl(_, vi, _) :: _rest when vi.vname = name -> vi
+       | GVarDecl(vi,_) :: _rest when vi.vname = name ->
+  	   Kernel.fatal ~current:true
+	     "findOrCreateFunc: can't create %s because another global exists \
+               with that name." name ;
        | _ :: rest -> search rest (* tail recursive *)
        | [] -> (*not found, so create one *)
 	   let t' = unrollTypeDeep t in
 	   let new_decl = makeGlobalVar ~temp:false name t' in
 	   setFormalsDecl new_decl t';
-	   f.globals <- GVarDecl(empty_funspec (), new_decl, Location.unknown) :: f.globals;
+           f.globals <- GFunDecl(empty_funspec (), new_decl, Location.unknown) :: f.globals;
 	   new_decl
    in
    search f.globals
@@ -6273,9 +6293,9 @@ let childrenFileSameGlobals vis f =
        let inserted = ref false in
        List.iter
 	 (function
-	     GFun(m, lm) when m.svar.vname = main_name ->
+           | GFun(m, lm) when m.svar.vname = main_name ->
 	       (* Prepend a prototype to the global initializer *)
-	       fl.globals <- GVarDecl (empty_funspec (),f.svar, lm) :: fl.globals;
+	       fl.globals <- GFunDecl (empty_funspec (),f.svar, lm) :: fl.globals;
 	       m.sbody.bstmts <-
 		  mkStmt (Instr (Call(None,
 				      new_exp ~loc:f.svar.vdecl (Lval(var f.svar)),
@@ -6883,39 +6903,53 @@ let rec makeZeroInit ~loc (t: typ) : init =
      ~(initl: (offset * init) list)
      ~(acc: 'a) : 'a =
    match unrollType ct with
-     TArray(bt, leno, _, _) -> begin
-       (* Scan the existing initializer *)
-       let part =
-	 List.fold_left (fun acc (o, i) -> doinit o i bt acc) acc initl in
-       (* See how many more we have to do *)
+   | TArray(bt, leno, _, _) -> begin
+     let default () =
+       (* iter over the supplied initializers *)
+       List.fold_left (fun acc (o, i) -> doinit o i bt acc) acc initl
+     in
+     if implicit then
        match leno with
-	 Some lene when implicit -> begin
-	   match (constFold true lene).enode with
-	     Const(CInt64(i, _, _)) ->
-	       let len_array = Integer.to_int i in
-	       let len_init = List.length initl in
-	       if len_array > len_init then
-                 (*TODO : find a proper loc*)
-                 let loc = Cil_datatype.Location.unknown in
-		 let zi = makeZeroInit ~loc bt in
-		 let rec loop acc i =
-		   if i >= len_array then acc
-		   else
-		     loop (doinit (Index(integer ~loc i, NoOffset)) zi bt acc)
-			  (i + 1)
-		 in
-		 loop part len_init
-	       else
-		 part
-	   | _ -> Kernel.fatal ~current:true
-	       "foldLeftCompoundAll: array with initializer and non-constant length"
-	 end
-
-       | _ when not implicit -> part
-
+       | Some lene -> begin
+	 match constFoldToInt lene with
+	 | Some i ->
+	   let len_array = Integer.to_int i in
+	   let len_init = List.length initl in
+	   if len_array <= len_init then
+             default () (* enough elements in the initializers list *)
+           else
+             (* Some initializers are missing. Iterate over all the indexes in
+                the array, and use either the supplied initializer, or a generic
+                zero one.  *)
+             let loc = CurrentLoc.get () in
+	     let zinit = makeZeroInit ~loc bt in
+             let acc = ref acc in
+             let initl = ref initl in
+             (* Is [off] the offset for the index [i] we are currently at.
+                Works because [initl] is sorted by Cabs2cil.*)
+             let good_offset i off = match off with
+               | Index (i', NoOffset) ->
+                 Integer.(equal (Extlib.the (constFoldToInt i')) (of_int i))
+               | _ -> Kernel.fatal ~current:true
+                 "Invalid initializer"
+             in
+             for i = 0 to len_array - 1 do
+               match !initl with
+               | (off, init) :: qinitl when good_offset i off->
+                 acc := doinit off init bt !acc;
+                 initl := qinitl
+               | _ ->
+                 acc := doinit (Index(integer ~loc i, NoOffset)) zinit bt !acc
+             done;
+             assert (!initl = []);
+             !acc
+	 | _ -> Kernel.fatal ~current:true
+	   "foldLeftCompoundAll: array with initializer and non-constant length"
+       end
        | _ -> Kernel.fatal ~current:true
-	   "foldLeftCompoundAll: TArray with initializer and no length"
-     end
+         "foldLeftCompoundAll: TArray with initializer and no length"
+     else default ()
+   end
 
    | TComp (_comp, _, _) ->
        let getTypeOffset = function
@@ -6930,12 +6964,14 @@ let rec makeZeroInit ~loc (t: typ) : init =
 
 
 
- let rec isCompleteType t =
+ let rec isCompleteType ?(allowZeroSizeArrays=false) t =
    match unrollType t with
    | TArray(_t, None, _, _) -> false
-   | TArray(_t, Some z, _, _) when isZero z -> false
+   | TArray(_t, Some z, _, _) when isZero z -> allowZeroSizeArrays
    | TComp (comp, _, _) -> (* Struct or union *)
-       List.for_all (fun fi -> isCompleteType fi.ftype) comp.cfields
+       comp.cdefined &&
+       List.for_all
+         (fun fi -> isCompleteType ~allowZeroSizeArrays fi.ftype) comp.cfields
    | _ -> true
 
 
@@ -6947,13 +6983,11 @@ let rec makeZeroInit ~loc (t: typ) : init =
      | None -> ()
      | Some lv -> lv.lv_type <- Ctype t
 
- module A = Alpha
-
  (** Uniquefy the variable names *)
  let uniqueVarNames (f: file) : unit =
    (* Setup the alpha conversion table for globals *)
    let gAlphaTable
-       : (string, location A.alphaTableData ref) Hashtbl.t 
+       : (string, location Alpha.alphaTableData ref) Hashtbl.t 
        = Hashtbl.create 113 in
    (* Keep also track of the global names that we have used. Map them to the
       variable ID. We do this only to check that we do not have two globals
@@ -6962,9 +6996,8 @@ let rec makeZeroInit ~loc (t: typ) : init =
    (* Scan the file and add the global names to the table *)
    iterGlobals f
      (function
-	 GVarDecl(_,vi, _)
-       | GVar(vi, _, _)
-       | GFun({svar = vi}, _) ->
+       | GVarDecl(vi, _) | GVar(vi, _, _)
+       | GFunDecl(_, vi, _) | GFun({svar = vi}, _) ->
 	   (* See if we have used this name already for something else *)
 	   (try
 	     let oldid = Hashtbl.find globalNames vi.vname in
@@ -6976,7 +7009,7 @@ let rec makeZeroInit ~loc (t: typ) : init =
 	     (* Here if this is the first time we define a name *)
 	     Hashtbl.add globalNames vi.vname vi.vid;
 	     (* And register it *)
-	     A.registerAlphaName gAlphaTable vi.vname (CurrentLoc.get ())
+             Alpha.registerAlphaName gAlphaTable vi.vname (CurrentLoc.get ())
 	   end)
        | _ -> ());
 
@@ -6993,7 +7026,7 @@ let rec makeZeroInit ~loc (t: typ) : init =
              let lookupname = v.vname in
              let data = CurrentLoc.get () in
 	     let newname, oldloc =
-	       A.newAlphaName 
+               Alpha.newAlphaName
                  ~alphaTable:gAlphaTable ~undolist ~lookupname ~data
 	     in
 	     if false && newname <> v.vname then (* Disable this warning *)
@@ -7012,7 +7045,7 @@ let rec makeZeroInit ~loc (t: typ) : init =
 	   (* And now the locals *)
 	   List.iter processLocal fdec.slocals;
 	   (* Undo the changes to the global table *)
-	   A.undoAlphaChanges gAlphaTable !undolist;
+           Alpha.undoAlphaChanges gAlphaTable !undolist;
 	   ()
 	 end
        | _ -> ());
@@ -7151,8 +7184,12 @@ let pushGlobal (g: global)
         types :=
            (* insert declarations for referred variables ('vl'), before
             * the type definition 'g' itself *)
-           g :: (List.fold_left (fun acc v -> GVarDecl(empty_funspec (),v, loc) :: acc)
-                                !types vl)
+          let aux acc v =
+            if isFunctionType v.vtype
+            then GFunDecl (empty_funspec (),v, loc) :: acc
+            else GVarDecl (v, loc) :: acc
+          in
+          g :: (List.fold_left aux !types vl)
   end
 
 
@@ -7564,41 +7601,9 @@ let separate_switch_succs s =
 
 (** Get the two successors of an If statement *)
 let separate_if_succs (s:stmt) : stmt * stmt =
-  let fstStmt blk = match blk.bstmts with
-      [] -> dummyStmt
-    | fst::_ -> fst
-  in
-  match s.skind with
-    If(_e, b1, b2, _) ->
-      let thenSucc = fstStmt b1 in
-      let elseSucc = fstStmt b2 in
-      let oneFallthrough () =
-        let fallthrough =
-          List.filter
-            (fun s' -> thenSucc != s' && elseSucc != s')
-            s.succs
-        in
-        match fallthrough with
-          [] ->
-	    Kernel.fatal ~current:true
-	      "Bad CFG: missing fallthrough for If."
-        | [s'] -> s'
-        | _ ->
-	  Kernel.fatal ~current:true "Bad CFG: multiple fallthrough for If."
-      in
-      (* If thenSucc or elseSucc is dummyStmt, it's an empty block.
-         So the successor is the statement after the if *)
-      let stmtOrFallthrough s' =
-        if s' == dummyStmt then
-          oneFallthrough ()
-        else
-          s'
-      in
-      (stmtOrFallthrough thenSucc,
-       stmtOrFallthrough elseSucc)
-
-  | _-> Kernel.fatal ~current:true "ifSuccs on a non-If Statement."
-
+  match s.skind, s.succs with
+  | If _, [sthen; selse] -> sthen, selse
+  | _-> Kernel.fatal ~current:true "ifSuccs on an invalid If statement."
 
 module Switch_cases =
   State_builder.Hashtbl
@@ -7655,6 +7660,6 @@ let addTermOffsetLval =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

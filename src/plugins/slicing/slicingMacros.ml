@@ -218,6 +218,6 @@ let has_persistent_selection proj kf =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

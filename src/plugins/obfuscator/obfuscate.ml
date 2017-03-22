@@ -40,7 +40,7 @@ class visitor = object
   | GType (ty,_) ->
     ty.tname <- Dictionary.fresh Obfuscator_kind.Type ty.tname; 
     Cil.DoChildren
-  | GVarDecl (_, v, _) | GVar (v, _, _) | GFun ({svar = v}, _)
+  | GVarDecl (v, _) | GVar (v, _, _) | GFun ({svar = v}, _) | GFunDecl (_, v, _)
       when Cil.is_unused_builtin v ->
     Cil.SkipChildren
   | _ ->
@@ -210,8 +210,10 @@ let obfuscate_behaviors () =
 	Annotations.remove_disjoint
 	Annotations.add_disjoint)
 
-class obfuscated_printer () = object
-  inherit Printer.extensible_printer () as super
+module UpdatePrinter (X: Printer.PrinterClass) = struct
+(* obfuscated printer *)
+class printer = object
+  inherit X.printer as super
   method! constant fmt = function
   | CStr str -> Format.fprintf fmt "%s" (Dictionary.id_of_literal_string str)
   | c -> super#constant fmt c
@@ -252,6 +254,7 @@ into file `%s':@ %s@]"
     end;
     super#file fmt ast
 
+  end
 end
 
 let obfuscate () =
@@ -260,10 +263,10 @@ let obfuscate () =
   Visitor.visitFramacFileSameGlobals 
     (new visitor :> Visitor.frama_c_visitor) 
     (Ast.get ());
-  Printer.change_printer (new obfuscated_printer)
+  Printer.update_printer (module UpdatePrinter: Printer.PrinterExtension)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

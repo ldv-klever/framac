@@ -22,6 +22,11 @@
 
 include Plugin.General_services
 module Enabled : Parameter_sig.Bool
+
 module PrintProperties: Parameter_sig.Bool
+
 module Untried: Parameter_sig.Bool
 module Specialized: Parameter_sig.Bool
+module Proven: Parameter_sig.Bool
+
+module CSVFile: Parameter_sig.String

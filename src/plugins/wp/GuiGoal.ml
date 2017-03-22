@@ -35,7 +35,7 @@ type display_state =
   | DSP_goal of Wpo.t * VCS.prover option
 
 let icon = function
-  | VCS.NoResult -> `REMOVE
+  | VCS.NoResult | VCS.Checked -> `REMOVE
   | VCS.Failed -> `DIALOG_WARNING
   | VCS.Valid -> `YES
   | VCS.Unknown | VCS.Invalid -> `NO
@@ -49,12 +49,12 @@ class prover prv =
     val mutable state = PS_nogoal
     val mutable run = (fun _ _ -> ())
     val mutable log = (fun _ _ -> ())
-    method widget = (button :> Toolbox.widget)    
+    method widget = (button :> Toolbox.widget)
     method set_display = function
-      | DSP_nogoal -> 
+      | DSP_nogoal ->
           begin
-            state <- PS_nogoal ; 
-            button#set_relief false ; 
+            state <- PS_nogoal ;
+            button#set_relief false ;
             button#set_icon None ;
             button#set_enabled false ;
           end
@@ -69,7 +69,7 @@ class prover prv =
                   button#set_relief true ;
                   button#set_icon (Some `MEDIA_PLAY) ;
                 end
-            | VCS.Computing kill -> 
+            | VCS.Computing kill ->
                 let me = match p with None -> false | Some p -> p=prv in
                 if me then
                   begin
@@ -85,7 +85,7 @@ class prover prv =
                   end
             | _ ->
                 let me = match p with None -> false | Some p -> p=prv in
-                if me then 
+                if me then
                   begin
                     state <- PS_click_to_play w ;
                     button#set_relief true ;
@@ -109,7 +109,7 @@ class prover prv =
       | PS_click_to_play w -> run w prv
       | PS_click_to_stop(w,kill) -> kill () ; log w prv
 
-    initializer 
+    initializer
       begin
         self#set_display DSP_nogoal ;
         button#connect (fun () -> self#click) ;
@@ -121,9 +121,10 @@ class pane () =
   let goal = new Toolbox.button ~tooltip:"Proof Obligation" ~icon:`FILE () in
   let title = GMisc.label ~xalign:0.0 ~text:"Goal" () in
   let text = new Toolbox.text () in
+  let () = text#set_font "Monospace" in
   let hbox = GPack.hbox ~show:true () in
   let vbox = GPack.vbox ~show:true () in
-  let provers = List.map (new prover) 
+  let provers = List.map (new prover)
       [VCS.AltErgo ; VCS.Coq ; VCS.Why3ide] in
   object(self)
 
@@ -146,22 +147,22 @@ class pane () =
         List.iter (fun p -> p#on_run self#run) provers ;
       end
 
-    method private goal = 
+    method private goal =
       match state with
       | DSP_nogoal | DSP_goal(_,None) -> ()
       | DSP_goal(w,Some _) -> state <- DSP_goal(w,None) ; self#update
 
     method private log w p =
       begin
-        state <- DSP_goal(w,Some p) ; 
-        self#update ; 
+        state <- DSP_goal(w,Some p) ;
+        self#update ;
       end
 
     method private run w p =
       begin
         state <- DSP_goal(w,Some p) ;
         run w p ;
-        self#update ; 
+        self#update ;
       end
 
     method on_run f = run <- f
@@ -175,8 +176,8 @@ class pane () =
       text#clear ;
       begin
         List.iter (fun p -> p#set_display state) provers ;
-        match state with 
-        | DSP_nogoal -> 
+        match state with
+        | DSP_nogoal ->
             begin
               title#set_text "No Goal" ;
             end

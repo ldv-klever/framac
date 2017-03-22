@@ -70,7 +70,7 @@ module Call_info = struct
   let total_duration current_time call_info =
     let additional_time = match call_info.since with 
       | [] -> 0.0
-      | since::_ -> duration current_time since
+      | since::_ -> duration since current_time
     in
     assert (additional_time >= 0.0);
     additional_time +. call_info.total_duration
@@ -114,7 +114,7 @@ module Call_info = struct
 
   let after_call t to_ = 
     let since = List.hd t.since in
-    let duration = duration to_  since in
+    let duration = duration since to_ in
     assert (duration >= 0.0);
     t.total_duration <- t.total_duration +. duration;
     t.nb_calls <- t.nb_calls + 1;
@@ -173,7 +173,7 @@ let flat_print current_time fmt =
     (if !nb_others > 0
      then Format.fprintf fmt "| %d others: %.3fs (%.1f%%) "
 	!nb_others !total_others (100.0 *. !total_others /. caller_duration));
-    let self_duration = duration caller_duration  !total_sub in
+    let self_duration = duration !total_sub caller_duration in
     Format.fprintf fmt "| self: %.3fs (%.1f%%)|\n" 
       self_duration
       (100.0 *. (self_duration /. caller_duration))
@@ -321,7 +321,7 @@ let start_doing callstack =
     let node = Perf_by_callstack.find perf callstack in
     Call_info.before_call node.call_info_per_stack time;
 
-    if (duration time !last_time_displayed) > display_interval 
+    if (duration !last_time_displayed time) > display_interval 
     then (last_time_displayed := time; Kernel.feedback "%t" display)
   end
 ;;

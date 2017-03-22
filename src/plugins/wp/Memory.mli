@@ -32,7 +32,7 @@ type 'a sequence = { pre : 'a ; post : 'a }
 
 (** Memory Values *)
 
-type acs = 
+type acs =
   | RW (** Read-Write Access *)
   | RD (** Read-Only Access *)
 
@@ -44,14 +44,14 @@ type 'a rloc =
   | Rloc of c_object * 'a
   | Rarray of 'a * c_object * int
   | Rrange of 'a * c_object * term option * term option
-(** a contiguous set of location *)
+  (** a contiguous set of location *)
 
-type 'a sloc = 
+type 'a sloc =
   | Sloc of 'a
   | Sarray of 'a * c_object * int (** full sized-array range *)
   | Srange of 'a * c_object * term option * term option
   | Sdescr of var list * 'a * pred
-(** a set of location *)
+  (** a set of location *)
 
 type 'a logic =
   | Vexp of term
@@ -62,7 +62,7 @@ type 'a logic =
 (** Memory Variables
 
     The memory is partitionned into chunk, set of memory location.
- *)
+*)
 
 module type Chunk =
 sig
@@ -83,7 +83,7 @@ end
 (** Memory Environment
 
     Represent the content of the memory
- *)
+*)
 
 module type Sigma =
 sig
@@ -122,7 +122,7 @@ sig
 
   module Chunk : Chunk
 
-  module Heap : Qed.Collection.S 
+  module Heap : Qed.Collection.S
     with type t = Chunk.t
 
   module Sigma : Sigma

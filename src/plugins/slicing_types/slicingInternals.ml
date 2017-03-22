@@ -263,6 +263,6 @@ let dummy_fct_user_crit = CuTop dummy_pdg_mark
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

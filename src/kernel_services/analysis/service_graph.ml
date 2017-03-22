@@ -23,6 +23,25 @@
 let inter_services_ref = ref false
 let frama_c_display b = inter_services_ref := b
 
+type 'a vertex = { node: 'a; mutable is_root: bool; mutable root: 'a vertex }
+type edge = Inter_services | Inter_functions | Both
+
+module type S = sig
+  type node
+  type graph
+  module Service_graph: sig
+    include Graph.Sig.G with type V.t = node vertex and type E.label = edge
+    module Datatype: Datatype.S with type t = t
+  end
+  val compute: graph -> Datatype.String.Set.t -> Service_graph.t
+  val output_graph: out_channel -> Service_graph.t -> unit
+  val entry_point: unit -> Service_graph.V.t option
+  module TP: Graph.Graphviz.GraphWithDotAttrs
+    with type t = Service_graph.t
+    and type V.t = node vertex
+    and type E.t = Service_graph.E.t
+end
+
 module Make
   (G: sig
      type t
@@ -41,11 +60,11 @@ module Make
    end) =
 struct
 
-  type vertex = { node: G.V.t; mutable is_root: bool; mutable root: vertex }
-  type edge = Inter_services | Inter_functions | Both
+  type graph = G.t
+  type node = G.V.t
 
   module Vertex = struct
-    type t = vertex
+    type t = node vertex
     let id v = (G.V.id v.node)
     let compare v1 v2 = Datatype.Int.compare (id v1) (id v2)
     let equal v1 v2 = (id v1) = (id v2)
@@ -58,7 +77,7 @@ struct
     let compare : t -> t -> _ = Extlib.compare_basic
   end
 
-  module CallG = struct
+  module Service_graph = struct
     module M = Graph.Imperative.Digraph.ConcreteLabeled(Vertex)(Edge)
     include M
     module Datatype =
@@ -67,7 +86,7 @@ struct
           (* [JS 2010/09/27] TODO: do better? *)
           include Datatype.Serializable_undefined
           type t = M.t
-          let name = G.datatype_name ^ " Service_graph.CallG.t"
+          let name = G.datatype_name ^ " Service_graph.Service_graph.t"
           let reprs = [ M.create () ]
           let mem_project = Datatype.never_any_project
          end)
@@ -83,14 +102,14 @@ struct
   type incomming_service =
     | Fresh_if_unchanged
     | Unknown_cycle
-    | To_be_confirmed of vertex
-    | Final of vertex
+    | To_be_confirmed of node vertex
+    | Final of node vertex
 
-  type service = Maybe_fresh of vertex | In_service of vertex
+  type service = Maybe_fresh of node vertex | In_service of node vertex
 
-  module Vertices = struct
+  module Vertices = struct 
     module H = Hashtbl.Make(G.V)
-    let vertices : (vertex * service) H.t = H.create 7
+    let vertices : (node vertex * service) H.t = H.create 7
     let find = H.find vertices
     let add = H.add vertices
     let replace = H.replace vertices
@@ -124,9 +143,9 @@ Src root:%s in %s (is_root:%b) Dst:%s in %s (is_root:%b) [2d case]"
           dst.is_root
 
   let check_invariant callg =
-    CallG.iter_edges_e
+    Service_graph.iter_edges_e
       (fun e ->
-         edge_invariant (CallG.E.src e) (CallG.E.dst e) (CallG.E.label e))
+         edge_invariant (Service_graph.E.src e) (Service_graph.E.dst e) (Service_graph.E.label e))
       callg
 
   let mem initial_roots node =
@@ -164,7 +183,7 @@ Src root:%s in %s (is_root:%b) Dst:%s in %s (is_root:%b) [2d case]"
         | To_be_confirmed root -> Maybe_fresh root
       in
       Vertices.add node (v, s);
-      CallG.add_vertex callg v
+      Service_graph.add_vertex callg v
     in
     if mem initial_roots node then
       mk Fresh_if_unchanged
@@ -227,11 +246,11 @@ Src root:%s in %s (is_root:%b) Dst:%s in %s (is_root:%b) [2d case]"
          G.iter_succ
            (fun node' ->
               let succ = find node' in
-              CallG.add_labeled_edge callg v Inter_functions succ;
+              Service_graph.add_labeled_edge callg v Inter_functions succ;
               let src_root = v.root in
               let dst_root = succ.root in
               if not (Vertex.equal src_root dst_root) then begin
-                CallG.add_labeled_edge callg src_root Inter_services dst_root
+                Service_graph.add_labeled_edge callg src_root Inter_services dst_root
                 (* JS: no need of a `service_to_function' edge since
                    it is not possible to have an edge starting from a
                    not-a-root vertex and going to another service.
@@ -246,7 +265,7 @@ Src root:%s in %s (is_root:%b) Dst:%s in %s (is_root:%b) [2d case]"
   let compute g initial_roots =
     entry_point_ref := None;
     let module Go = Graph.Topological.Make(G) in
-    let callg = CallG.create () in
+    let callg = Service_graph.create () in
     Go.iter (make_vertex g callg initial_roots) g;
     Go.iter (update_vertex g) g;
     add_edges g callg;
@@ -262,7 +281,7 @@ Src root:%s in %s (is_root:%b) Dst:%s in %s (is_root:%b) [2d case]"
 
   module TP = struct
 
-    include CallG
+    include Service_graph
     let root_id v = G.V.id v.root.node
 
     let graph_attributes _ = [ `Ratio (`Float 0.5) ]
@@ -282,13 +301,13 @@ Src root:%s in %s (is_root:%b) Dst:%s in %s (is_root:%b) [2d case]"
 
     let edge_attributes e =
       let color e =
-        let sr = root_id (CallG.E.src e) in
+        let sr = root_id (Service_graph.E.src e) in
         [ `Color (Extlib.number_to_color sr) ]
       in
       if !inter_services_ref then 
         color e
       else
-        match CallG.E.label e with
+        match Service_graph.E.label e with
         | Inter_services -> [ `Style `Invis ]
         | Inter_functions | Both -> color e
 
@@ -313,6 +332,6 @@ end (* functor Service *)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

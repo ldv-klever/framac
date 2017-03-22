@@ -74,6 +74,6 @@ val pretty_debug: t Pretty_utils.formatter
 
 (*
 Local Variables:
-compile-command: "make -C ../.. byte"
+compile-command: "make -C ../../.. byte"
 End:
 *)

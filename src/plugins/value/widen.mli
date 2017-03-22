@@ -28,6 +28,6 @@ val getWidenHints: kernel_function -> stmt ->
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

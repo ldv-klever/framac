@@ -21,8 +21,7 @@
 (**************************************************************************)
 
 (** Alarms Database.
-    @modify Fluorine-20130401 fully re-implemented.
-    @plugin development guide *)
+    @modify Fluorine-20130401 fully re-implemented. *)
 
 open Cil_types
 
@@ -122,8 +121,11 @@ val create_predicate: ?loc:location -> t -> predicate named
 val get_name: t -> string
 (** Short name of the alarm, used to prefix the assertion in the AST. *)
 
+val get_description: t -> string
+(** Long description of the alarm, explaining the UB it guards against. *)
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

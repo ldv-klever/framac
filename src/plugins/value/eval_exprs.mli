@@ -37,13 +37,6 @@ val eval_expr_with_deps_state :
   exp ->
   Cvalue.Model.t * Zone.t option * Location_Bytes.t
 
-val eval_expr_with_deps_state_subdiv :
-  with_alarms:CilE.warn_mode ->
-  Zone.t option ->
-  Cvalue.Model.t ->
-  exp ->
-  Cvalue.Model.t * Zone.t option * Location_Bytes.t
-
 val eval_lval :
   with_alarms:CilE.warn_mode ->
   Zone.t option ->
@@ -155,6 +148,6 @@ val offsetmap_of_lv:
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

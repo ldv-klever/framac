@@ -166,17 +166,17 @@ val catch_at_toplevel: exn -> bool
 
 val catch_toplevel_run:
   f:(unit -> unit) ->
-  quit:bool ->
   at_normal_exit:(unit -> unit) ->
   on_error:(exn -> unit) ->
   unit
     (** Run [f]. When done, either call [at_normal_exit] if running [f] was ok;
-        or call [on_error] in other cases.
-        Set [quit] to [true] iff Frama-C must stop after running [f].
+        or call [on_error] (and exits) in other cases.
         @modify Boron-20100401  additional arguments. They are now
         labelled
-	@modify Fluorine-20130601+Dev add the exception as argument of
-	[on_error]. *)
+	@modify Neon-20140301 add the exception as argument of
+	[on_error].
+        @modify Magnesium-20151001 Removed argument [~quit]
+    *)
 
 val run_normal_exit_hook: unit -> unit
   (** Run all the hooks registered by {!at_normal_exit}.
@@ -230,6 +230,10 @@ val use_cmdline_files: (string list -> unit) -> unit
 val help: unit -> exit
   (** Display the help of Frama-C
       @since Beryllium-20090601-beta1 *)
+
+val list_plugins: unit -> exit
+  (** Display the list of installed plug-ins 
+      @since Magnesium-20151001 *)
 
 val plugin_help: string -> exit
   (** Display the help of the given plug-in (given by its shortname).
@@ -310,7 +314,7 @@ val add_aliases:
 val replace_option_setting: 
   string -> plugin:string -> group:Group.t -> option_setting -> unit
 (** Replace the previously registered option setting. 
-    @since Neon-20140201+dev *)
+    @since Sodium-20150201 *)
 
 (* ************************************************************************** *)
 (** {2 Special parameters}
@@ -374,6 +378,6 @@ val load_all_plugins: (unit -> unit) ref
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

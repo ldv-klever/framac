@@ -45,19 +45,19 @@ let make_fun_float name f =
 let make_pred_float name f =
   extern_f ~library ~result:Logic.Prop ~params "%s_%a" name Ctypes.pp_float f
 
-let f_of_int = 
+let f_of_int =
   extern_f ~library:"qed" ~result "real_of_int"
 
-let f_sqrt = 
+let f_sqrt =
   extern_f ~library:"cmath" ~result ~params ~link:(link "sqrt") "\\sqrt"
 
-let f_iabs = 
+let f_iabs =
   extern_f ~library:"cmath" ~link:{altergo = Qed.Engine.F_call "abs_int";
                                    why3     = Qed.Engine.F_call "IAbs.abs";
                                    coq      = Qed.Engine.F_call "Z.abs";
                                   } "\\iabs"
 
-let f_rabs = 
+let f_rabs =
   extern_f ~library:"cmath"
     ~result ~params
     ~link:{altergo = Qed.Engine.F_call "abs_real";
@@ -65,13 +65,13 @@ let f_rabs =
            coq      = Qed.Engine.F_call "R.abs";
           } "\\rabs"
 
-let f_model = 
+let f_model =
   extern_f ~library ~result ~params ~link:(link "model") "\\model"
 
-let f_delta = 
+let f_delta =
   extern_f ~library ~result ~params ~link:(link "delta") "\\delta"
 
-let f_epsilon = 
+let f_epsilon =
   extern_f ~library ~result ~params ~link:(link "epsilon") "\\epsilon"
 
 let () =
@@ -89,7 +89,7 @@ let () =
 type model = Real | Float
 
 let model = Context.create ~default:Real "Cfloat.model"
-let configure = Context.set model 
+let configure = Context.set model
 
 (* -------------------------------------------------------------------------- *)
 (* --- Litterals                                                          --- *)
@@ -102,19 +102,19 @@ let code_lit f =
 
 let suffixed r_literal =
   let n = String.length r_literal in
-  n > 0 && 
-  match r_literal.[n-1] 
+  n > 0 &&
+  match r_literal.[n-1]
   with 'f' | 'F' | 'd' | 'D' | 'l' | 'L' -> true | _ -> false
 
-let acsl_lit = 
+let acsl_lit =
   let open Cil_types in
   function { r_literal ; r_nearest } ->
     match Context.get model with
     | Float ->
         if suffixed r_literal
-        then e_hexfloat r_nearest 
+        then e_hexfloat r_nearest
         else e_real (R.of_string r_literal)
-    | Real -> 
+    | Real ->
         e_mthfloat r_nearest
 
 let round_lit flt r =
@@ -140,7 +140,7 @@ let builtin_positive_eq lfun z a b =
     | _ -> raise Not_found
   end
 
-let builtin_positive_leq lfun z a b = 
+let builtin_positive_leq lfun z a b =
   let open Qed.Logic in
   begin match F.repr a , F.repr b with
     | Fun(f,[_]) , _ when f = lfun && is_lt0 z b -> e_false
@@ -165,7 +165,7 @@ let builtin_abs f z = function
         | Add [a;m] when is_model (e_opp a) m -> e_fun f_delta [m]
         | Add [m;a] when is_model (e_opp a) m -> e_fun f_delta [m]
         | Div (a,m) when is_delta a m -> e_fun f_epsilon [m]
-        | _ -> 
+        | _ ->
             match is_true (e_leq z e) with
             | Yes -> e
             | No -> e_opp e
@@ -185,8 +185,8 @@ let builtin_sqrt = function
   | _ -> raise Not_found
 
 
-let () = 
-  begin 
+let () =
+  begin
     F.set_builtin     f_iabs (builtin_abs f_iabs e_zero) ;
     F.set_builtin     f_rabs (builtin_abs f_rabs e_zero_real) ;
     F.set_builtin     f_sqrt  builtin_sqrt ;
@@ -236,7 +236,7 @@ let builtin_model = function
         | Fun(f,_) when f = f_model -> e
         | Fun(f,_) when f = f_delta -> e_zero_real
         | Fun(f,_) when f = f_epsilon -> e_zero_real
-        | Fun(op,xs) -> 
+        | Fun(op,xs) ->
             let phi = OP.find op !models in
             (* find phi before computing arguments *)
             phi (List.map (fun e -> e_fun f_model [e]) xs)
@@ -253,7 +253,7 @@ let builtin_round f = function
         | Add ([_;_] as xs) -> e_fun (flt_add f) xs
         | Mul ([_;_] as xs) -> e_fun (flt_mul f) xs
         | Fun(s,([_] as xs)) when s = f_sqrt -> e_fun (flt_sqrt f) xs
-        | Kreal r -> 
+        | Kreal r ->
             begin match R.to_string r with
               | "0.0" | "1.0" | "-1.0" -> e
               | lit -> round_lit f lit
@@ -338,7 +338,7 @@ let compute_f_of_int = function
   | [e] ->
       begin
         match F.repr e with
-        | Qed.Logic.Kint k -> 
+        | Qed.Logic.Kint k ->
             let m = Z.to_string k in
             let r = R.of_string (m ^ ".") in
             F.e_real r

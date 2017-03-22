@@ -168,6 +168,6 @@ let () = Design.register_extension insert
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

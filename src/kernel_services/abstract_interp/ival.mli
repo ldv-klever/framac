@@ -22,114 +22,13 @@
 
 (** Arithmetic lattices.
     The interfaces of this module may change between
-    Frama-C versions. Contact us if you need stable APIs. 
-    @plugin development guide *)
+    Frama-C versions. Contact us if you need stable APIs. *)
 
 open Abstract_interp
 
-module F : sig
-  type t
-  val of_float : float -> t
-  val to_float : t -> float
-  exception Nan_or_infinite
-  val equal : t -> t -> bool
-  val pretty :  Format.formatter -> t -> unit
-  val pretty_normal :  use_hex:bool -> Format.formatter -> t -> unit
-end
-
-exception Can_not_subdiv
-
-module Float_abstract : sig
-  type t
-
-  (** [Nan_or_infinite] means that the operation may not be a finite float.
-      (It does not mean that it is not a finite float). *)
-  exception Nan_or_infinite
-  exception Bottom
-  type rounding_mode = Any | Nearest_Even
-
-  type float_kind =
-  | Float32 (** 32 bits float (a.k.a 'float' C type) *)
-  | Float64 (** 64 bits float (a.k.a 'double' C type) *)
-
-    (** [inject] creates an abstract float interval.
-        Does not handle infinites or NaN.
-        Does not enlarge subnormals to handle flush-to-zero modes *)
-  val inject : F.t -> F.t -> t
-
-  (** [inject_r] creates an abstract float interval. It handles infinites and
-      flush-to-zero, but not NaN. The returned boolean is true if a bound was
-      infinite. May raise {!Bottom} when no part of the result would be
-      finite.  *)
-  val inject_r : F.t -> F.t -> bool (* not finite *) * t
-
-  val inject_singleton : F.t -> t
-  val min_and_max_float : t -> F.t * F.t
-  val top : t
-  val add : rounding_mode -> t -> t -> bool * t
-  val sub : rounding_mode -> t -> t -> bool * t
-  val mul : rounding_mode -> t -> t -> bool * t
-  val div : rounding_mode -> t -> t -> bool * t
-  val contains_zero : t -> bool
-  val compare : t -> t -> int
-  val pretty : Format.formatter -> t -> unit
-  val hash : t -> int
-  val zero : t
-  val is_zero : t -> bool
-    (*    val rounding_inject : F.t -> F.t -> t *)
-  val is_included : t -> t -> bool
-  val join : t -> t -> t
-  val meet : t -> t -> t
-
-  val contains_a_zero : t -> bool
-  val is_singleton : t -> bool
-
-  val minus_one_one : t
-
-  val neg : t -> t
-
-  val cos : t -> t
-  val cos_precise : t -> t
-  val sin : t -> t
-  val sin_precise : t -> t
-
-  val sqrt : rounding_mode -> t -> bool * t
-
-  (** Discussion regarding -all-rounding-modes and the functions below.
-
-     Support for fesetround(FE_UPWARD) and fesetround(FE_DOWNWARD) seems to
-     be especially poor, including in not-so-old versions of Glibc
-     (https://sourceware.org/bugzilla/show_bug.cgi?id=3976). The code for
-     {!exp}, {!log} and {!log10} is correct wrt. -all-rounding-modes ONLY
-     if the C implementation of these functions is correct in directed
-     rounding modes. Otherwise, anything could happen, including crashes. For
-     now, unless the Libc is known to be reliable, these functions should be
-     called with [rounding_mode=Nearest_Even] only *)
-
-  val exp : rounding_mode -> t -> bool * t
-  val log: rounding_mode -> t -> bool * t
-  val log10: rounding_mode -> t -> bool * t
-  (** All three functions may raise {!Bottom}. Can only be called to approximate
-      a computation on double (float64). *)
-
-  val widen : t -> t -> t
-  val equal_float_ieee : t -> t -> bool * bool
-  val maybe_le_ieee_float : t -> t -> bool
-  val maybe_lt_ieee_float : t -> t -> bool
-  val diff : t -> t -> t
-
-  val filter_le_ge_lt_gt : Cil_types.binop -> bool -> float_kind -> t -> t -> t
-  (** [filter_le_ge_lt_gt op allroundingmodes fkind f1 f2] attemps to reduce
-      [f1] into [f1'] so that the relation [f1' op f2] holds. [fkind] is
-      the type of [f1] and [f1'] (not necessarily of [f2]). If
-      [allroundingmodes] is set, all possible rounding modes are taken into
-      acount. [op] must be [Le], [Ge], [Lt] or [Gt] *)
-end
-
-
-type tt = private
+type t = private
   | Set of Int.t array
-  | Float of Float_abstract.t
+  | Float of Fval.t
   (** [Top(min, max, rest, modulo)] represents the interval between
       [min] and [max], congruent to [rest] modulo [modulo]. A value of
       [None] for [min] (resp. [max]) represents -infinity
@@ -165,7 +64,7 @@ end
 
 exception Error_Bottom
 
-include Datatype.S_with_collections with type t = tt
+include Datatype.S_with_collections with type t := t
 include Lattice_type.Full_AI_Lattice_with_cardinality
   with type t := t
   and type widen_hint = Widen_Hints.t
@@ -199,39 +98,58 @@ val bitwise_and : size:int -> signed:bool -> t -> t -> t
 val bitwise_or : t -> t -> t
 val bitwise_xor : t -> t -> t
 
-val min_and_max_float : t -> F.t * F.t
+val min_and_max_float : t -> Fval.F.t * Fval.F.t
 
 
 val zero : t
+(** The lattice element that contains only the integer 0. *)
 val one : t
+(** The lattice element that contains only the integer 1. *)
 val minus_one : t
+(** The lattice element that contains only the integer -1. *)
+
+val zero_or_one : t
+(** The lattice element that contains only the integers 0 and 1. *)
+
+val positive_integers : t
+(** The lattice element that contains exactly the positive or null integers *)
+
+val negative_integers : t
+(** The lattice element that contains exactly the negative or null integers *)
+
 
 val is_zero : t -> bool
 val is_one : t -> bool
 
+val contains_zero : t -> bool
+val contains_non_zero : t -> bool
+
 val top_float : t
 val top_single_precision_float : t
-val project_float : t -> Float_abstract.t
-    (** @raise F.Nan_or_infinite when the float may be Nan or infinite. *)
+
+exception Nan_or_infinite
+
+val project_float : t -> Fval.t
+(** @raise Nan_or_infinite when the float may be NaN or infinite. *)
 
 val force_float: Cil_types.fkind -> t -> bool * t
   (** Reinterpret the given value as a float of the given kind. If the
       returned boolean is [true], some of the values may not be representable
       as finite floats. *)
 
+
 val in_interval :
   Abstract_interp.Int.t ->
   Abstract_interp.Int.t option ->
   Abstract_interp.Int.t option ->
   Abstract_interp.Int.t -> Abstract_interp.Int.t -> bool
-val contains_zero : t -> bool
 
 
 (** Building Ival *)
 
 val inject_singleton : Abstract_interp.Int.t -> t
 
-val inject_float : Float_abstract.t -> t
+val inject_float : Fval.t -> t
 val inject_float_interval : float -> float -> t
 
 val inject_range :
@@ -264,15 +182,28 @@ val cardinal: t -> Integer.t option
 (** [cardinal v] returns [n] if [v] has finite cardinal [n], or [None] if
     the cardinal is not finite. *)
 
+val cardinal_estimate: t -> Integer.t -> Integer.t
+(** [cardinal_estimate v size] returns an estimation of the cardinal
+    of [v], knowing that [v] fits in [size] bits. *)
+
 val cardinal_less_than : t -> int -> int
 (** [cardinal_less_than t n] returns the cardinal of [t] is this cardinal
     is at most [n].
     @raise Abstract_interp.Not_less_than is the cardinal of [t]
     is more than [n] *)
 
+val cardinal_is_less_than: t -> int -> bool
+(** Same than cardinal_less_than but just return if it is the case. *)
+
 val fold_int : (Abstract_interp.Int.t -> 'a -> 'a) -> t -> 'a -> 'a
-(** Iterate on the integer values of the ival. Raise {!Error_Top} if the
-    argument is a float or a potentially infinite integer. *)
+(** Iterate on the integer values of the ival in increasing order.
+    Raise {!Error_Top} if the argument is a float or a potentially
+    infinite integer. *)
+
+val fold_int_decrease : (Abstract_interp.Int.t -> 'a -> 'a) -> t -> 'a -> 'a
+(** Iterate on the integer values of the ival in decreasing order.
+    Raise {!Error_Top} if the argument is a float or a potentially
+    infinite integer. *)
 
 val fold_enum : (t -> 'a -> 'a) -> t -> 'a -> 'a
 (** Iterate on every value of the ival. Raise {!Error_Top} if the argument is a
@@ -287,15 +218,9 @@ val apply_set :
 val apply_set_unary :
   'a -> (Abstract_interp.Int.t -> Abstract_interp.Int.t ) -> t -> t
 
-val singleton_zero : t
-(** The lattice element that contains only the integer zero. *)
-val singleton_one : t
-(** The lattice element that contains only the integer one. *)
-val zero_or_one : t
-(** The lattice element that contains only the integers zero and one. *)
-val contains_non_zero : t -> bool
+
 val subdiv_float_interval : size:int -> t -> t * t
-val subdiv : size:int -> t -> t * t
+val subdiv_int: t -> t * t
 
 
 (** [compare_min_float m1 m2] returns 1 if the float interval [m1] has a
@@ -329,9 +254,7 @@ val scale_div_under : pos:bool -> Abstract_interp.Int.t -> t -> t
     [scale_div_under ~pos:true f v] is an under-approximation of the
     set of elements [x pos_div f] for [x] in [v]. *)
 
-
-val negative : t
-val div : t -> t -> t
+val div : t -> t -> t (** Integer division *)
 val scale_rem : pos:bool -> Abstract_interp.Int.t -> t -> t
 (** [scale_rem ~pos:false f v] is an over-approximation of the set of
     elements [x mod f] for [x] in [v].
@@ -347,20 +270,18 @@ val interp_boolean : contains_zero:bool -> contains_non_zero:bool -> t
 
 (** Extract bits from [start] to [stop] from the given Ival, [start]
     and [stop] being included. [size]  is the size of the entire ival. *)
-val extract_bits :
-  start:Abstract_interp.Int.t -> stop:Abstract_interp.Int.t ->
-  size:Abstract_interp.Int.t -> t -> t
-val create_all_values :
-  modu:Abstract_interp.Int.t -> signed:bool -> size:int -> t
-val all_values : size:Abstract_interp.Int.t -> t -> bool
+val extract_bits: start:Integer.t -> stop:Integer.t -> size:Integer.t -> t -> t
+val create_all_values_modu: modu:Integer.t -> signed:bool -> size:int -> t
+val create_all_values: signed:bool -> size:int -> t
+val all_values: size:Integer.t -> t -> bool
 
 val filter_le_ge_lt_gt_int : Cil_types.binop -> t -> t -> t
 (** [filter_le_ge_lt_gt_int op i1 i2] reduces [i1] into [i1'] so that
     [i1' op i2] holds. [i1] is assumed to be an integer *)
 
 val filter_le_ge_lt_gt_float :
-  Cil_types.binop -> bool -> Float_abstract.float_kind -> t -> t -> t
-(** Same as [Float_abstract.filter_le_ge_lt_gt], except that the arguments
+  Cil_types.binop -> bool -> Fval.float_kind -> t -> t -> t
+(** Same as [Fval.filter_le_ge_lt_gt], except that the arguments
     are now of type {!t}. The first argument must be a floating-point value.
 *)
 
@@ -385,12 +306,12 @@ val max_max :
 val scale_int_base : Int_Base.t -> t -> t
 val cast_float_to_int :
     signed:bool -> size:int -> t -> (** non-finite *) bool * (** Overflow, in each direction *) (bool * bool) * t
-val cast_float_to_int_inverse : single_precision:bool -> tt -> tt
+val cast_float_to_int_inverse : single_precision:bool -> t -> t
 val of_int : int -> t
 val of_int64 : int64 -> t
-val cast_int_to_float : Float_abstract.rounding_mode -> t -> bool * t
+val cast_int_to_float : Fval.rounding_mode -> t -> bool * t
 val cast : size:Integer.t -> signed:bool -> value:t -> t
-val cast_float : rounding_mode:Float_abstract.rounding_mode -> t -> bool * t
+val cast_float : rounding_mode:Fval.rounding_mode -> t -> bool * t
 val cast_double : t -> bool * t
 val pretty_debug : Format.formatter -> t -> unit
 
@@ -404,6 +325,6 @@ val set_small_cardinal: int -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

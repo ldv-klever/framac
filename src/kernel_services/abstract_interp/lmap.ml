@@ -23,6 +23,8 @@
 open Abstract_interp
 open Locations
 
+let msg_emitter = Lattice_messages.register "Lmap";;
+
 module Make_LOffset
   (V: module type of Offsetmap_lattice_with_isotropy)
   (Offsetmap: module type of Offsetmap_sig
@@ -30,7 +32,6 @@ module Make_LOffset
               and type widen_hint = V.widen_hint)
   (Default_offsetmap: sig
     val default_offsetmap : Base.t -> [`Bottom | `Map of Offsetmap.t]
-    val is_default_offsetmap: Base.t -> Offsetmap.t -> bool
   end)
   =
 struct
@@ -65,9 +66,7 @@ struct
 
 
       let add b v m =
-        if Default_offsetmap.is_default_offsetmap b v
-        then remove b m
-        else add b v m
+        add b v m
 
       let find_or_default b map =
         try `Map (find b map)
@@ -297,9 +296,9 @@ struct
         in
         match loc with
         | Location_Bits.Top (Base.SetLattice.Top, orig) ->
-          Kernel.warning ~current:true ~once:true
-	    "writing at a completely unknown address @[%a@]@\n\
-                        Aborting." Origin.pretty_as_reason orig;
+          Lattice_messages.emit_approximation msg_emitter
+	    "writing at a completely unknown address @[%a@]"
+            Origin.pretty_as_reason orig;
           true, top (* the map where every location maps to top *)
         | Location_Bits.Top (Base.SetLattice.Set set, origin) ->
           Base.Hptset.iter (fun b -> aux (Some origin) b Ival.top) set;
@@ -365,15 +364,17 @@ struct
         !alarm, v
 
   let join_internal =
-    let decide_none base v =
-      match default_offsetmap base with
-      | `Bottom -> v
-      | `Map v' -> Offsetmap.join v v'
-    in
-    let decide_some v1 v2 = Offsetmap.join v1 v2 in
+    let decide _k v1 v2 = Offsetmap.join v1 v2 in
+    (* This [join] works because, currently:
+     - during the analysis, we merge maps with the same variables
+       (all locals are present)
+     - after the analysis, for synthetic results, we merge maps with different
+       sets of locals, but do not care about the values of the locals that are
+       out-of-scope.
+     - for dynamic allocation, the default value for variables is Bottom *)
     let symmetric_merge =
-      LBase.symmetric_merge ~cache:("lmap", ())
-        ~empty_neutral:false ~decide_none ~decide_some
+      LBase.join ~cache:(Hptmap_sig.PersistentCache "lmap.join")
+        ~symmetric:true ~idempotent:true ~decide
     in
     fun m1 m2 ->
       Map (symmetric_merge m1 m2)
@@ -386,6 +387,29 @@ struct
           if m1 == m2 then mm1
           else
             join_internal m1 m2
+
+  let narrow_internal =
+    let _decide_none base v =
+      match default_offsetmap base with
+      | `Bottom -> assert false
+      | `Map v' -> Offsetmap.narrow v v'
+    in
+    let decide _k v1 v2 = Offsetmap.narrow v1 v2 in
+    let symmetric_merge =
+      LBase.join ~cache:(Hptmap_sig.PersistentCache "lmap.narrow")
+        ~symmetric:true ~idempotent:true ~decide
+    in
+    fun m1 m2 ->
+      Map (symmetric_merge m1 m2)
+
+  let narrow  mm1 mm2 =
+    match mm1, mm2 with
+      | Bottom,_ | _,Bottom -> Bottom
+      | Top, m | m, Top -> m
+      | Map m1, Map m2 ->
+          if m1 == m2 then mm1
+          else
+            narrow_internal m1 m2
 
   let pretty_diff_aux fmt m1 m2 =
     let print base m1 m2 = match m1, m2 with
@@ -414,8 +438,9 @@ struct
       | Some m, _ | _, Some m -> m
       | None, None -> assert false (* generic_merge invariant *))
     in
-    let aux = LBase.generic_merge
-      ~idempotent:true ~empty_neutral:false ~cache:("", false) ~decide
+    let aux =
+      LBase.generic_join ~cache:Hptmap_sig.NoCache
+        ~idempotent:true ~symmetric:true ~decide
     in
     Format.fprintf fmt "@[<v>";
     ignore (aux m1 m2);
@@ -454,7 +479,7 @@ struct
     in
     let generic_is_included =
       LBase.binary_predicate
-        (Hptmap.PersistentCache name) LBase.UniversalPredicate
+        (Hptmap_sig.PersistentCache name) LBase.UniversalPredicate
         ~decide_fast ~decide_fst ~decide_snd ~decide_both
     in
     fun (m1:t) (m2:t) ->
@@ -496,18 +521,9 @@ struct
         if something_done then
           Map widened
         else
-          let merge base v1 v2 = match v1, v2 with
-            | None, None -> assert false (* generic_merge invariant *)
-            | Some _, None -> assert false (* by precondition *)
-            | None, Some off -> off
-            | Some off1, Some off2 ->
-              if off1 == off2 then off1
-              else
-                Offsetmap.widen (wh_hints base) off1 off2
-          in
-          Map (LBase.generic_merge
-                 ~idempotent:true ~empty_neutral:true ~cache:("", false)
-                 ~decide:merge m1 m2)
+          let decide base off1 off2 = Offsetmap.widen (wh_hints base) off1 off2 in
+          Map (LBase.join ~cache:Hptmap_sig.NoCache
+                 ~symmetric:false ~idempotent:true ~decide m1 m2)
 
   let paste_offsetmap ~reducing ~from ~dst_loc ~size ~exact m =
     match m with
@@ -550,7 +566,7 @@ struct
 
         | Location_Bits.Top (top, orig) ->
           if not (Base.SetLattice.equal top Base.SetLattice.top) then
-            Kernel.result ~current:true ~once:true
+            Lattice_messages.emit_approximation msg_emitter
               "writing somewhere in @[%a@]@[%a@]."
               Base.SetLattice.pretty top
               Origin.pretty_as_reason orig;
@@ -610,6 +626,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

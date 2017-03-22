@@ -136,6 +136,6 @@ let is_non_natural kf s = Stmt.Set.mem s (get_non_naturals kf)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

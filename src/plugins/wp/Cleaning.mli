@@ -34,7 +34,7 @@ val create : unit -> usage
 val as_atom : usage -> pred -> unit
 val as_type : usage -> pred -> unit
 val as_have : usage -> pred -> unit
+val as_init : usage -> pred -> unit
 
 val filter_type : usage -> pred -> pred
 val filter_pred : usage -> pred -> pred
-

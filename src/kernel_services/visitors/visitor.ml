@@ -614,7 +614,7 @@ object(self)
 
   method! vglob g =
     let fundec, has_kf = match g with
-      | GVarDecl(_,v,_) when isFunctionType v.vtype ->
+      | GFunDecl(_,v,_) ->
         let ov = Cil.get_original_varinfo self#behavior v in
         let kf = try Globals.Functions.get ov with Not_found ->
           Kernel.fatal "No kernel function for %s(%d)" v.vname v.vid
@@ -643,11 +643,8 @@ object(self)
     in
     let res = self#vglob_aux g in
     let make_funspec () = match g with
-      | GVarDecl(_,v,_)
-          when isFunctionType v.vtype && Ast.is_last_decl g ->
+      | GFunDecl _ | GFun _ when Ast.is_def_or_last_decl g ->
           self#vfunspec_annot ();
-      | GFun _ when Ast.is_last_decl g ->
-          self#vfunspec_annot ()
       | _ -> ()
     in
     (* NB: we'll loose track of the emitter of an annotation.
@@ -657,17 +654,11 @@ object(self)
        correspondance between annotations and emitters.
     *)
     let get_spec () = match g with
-      | GVarDecl(_,v,_)
-          when isFunctionType v.vtype && Ast.is_last_decl g ->
+      | GFun _ | GFunDecl _ when Ast.is_def_or_last_decl g ->
 	let spec =
 	  Annotations.funspec ~populate:false (Extlib.the self#current_kf)
 	in
         Some (Cil.visitCilFunspec self#plain_copy_visitor spec)
-      | GFun _ when Ast.is_last_decl g ->
-	let spec =
-	  Annotations.funspec ~populate:false (Extlib.the self#current_kf)
-	in
-	Some (Cil.visitCilFunspec self#plain_copy_visitor spec)
       | _ -> None
     in
     let change_glob ng spec =
@@ -685,7 +676,7 @@ object(self)
                      already exists in current project"
                       Cil_datatype.Varinfo.pretty vi)
                 self#get_filling_actions
-        | GVarDecl(_,v,l) when isFunctionType v.vtype ->
+        | GFunDecl(_,v,l) ->
             (match self#current_kf with
               | Some kf ->
                   let new_kf = Cil.get_kernel_function self#behavior kf in
@@ -725,7 +716,7 @@ object(self)
               | None -> ()
               (* User is responsible for registering the new function *)
             )
-      | GVarDecl (_,({vstorage=Extern} as v),_) (* when not (isFunctionType
+      | GVarDecl (({vstorage=Extern} as v),_) (* when not (isFunctionType
                                                    v.vtype) *) ->
         if cond then
           Queue.add
@@ -897,6 +888,10 @@ let visitFramacVarDecl vis v =
   let v' = visitCilVarDecl (vis:>cilVisitor) v in
   vis#fill_global_tables; v'
 
+let visitFramacLogicVarDecl vis v =
+  let v' = visitCilLogicVarDecl (vis:>cilVisitor) v in
+  vis#fill_global_tables; v'
+
 let visitFramacInit vis v o i =
   let i' = visitCilInit (vis:>cilVisitor) v o i in
   vis#fill_global_tables; i'
@@ -987,6 +982,6 @@ let visitFramacModelInfo vis m =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

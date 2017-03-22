@@ -96,7 +96,7 @@ Prove: true.
 
 Goal Establishment of Invariant 'B' (file tests/wp_bts/bts_1462.i, line 10):
 Assume { (* Goal *) When: false. }
-Prove: 1=x_6.
+Prove: true.
 
 ------------------------------------------------------------
 
@@ -120,7 +120,7 @@ Assume {
   (* tests/wp_bts/bts_1462.i:14: Invariant 'A_KO': *)
   Have: (0!=i_1) -> (0=y_3).
   (* tests/wp_bts/bts_1462.i:14: Else *)
-  Have: 9<i_1.
+  Have: 10<=i_1.
 }
 Prove: 0=y_3.
 

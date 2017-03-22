@@ -10,7 +10,7 @@
 [wp] [Alt-Ergo] Goal typed_lemma_fact_next : Timeout
 [wp] [Alt-Ergo] Goal typed_F1_post : Valid
 [wp] [Alt-Ergo] Goal typed_F1_loop_inv_preserved : Valid
-[wp] [Qed] Goal typed_F1_loop_inv_established : Valid
+[wp] [Alt-Ergo] Goal typed_F1_loop_inv_established : Valid
 [wp] [Alt-Ergo] Goal typed_F1_loop_inv_2_preserved : Valid
 [wp] [Alt-Ergo] Goal typed_F1_loop_inv_2_established : Valid
 [wp] [Qed] Goal typed_F1_loop_assign : Valid
@@ -27,14 +27,14 @@
 [wp] [Alt-Ergo] Goal typed_F4_loop_inv_RANGE_established : Valid
 [wp] [Qed] Goal typed_F4_loop_assign : Valid
 [wp] Proved goals:   18 / 20
-     Qed:             4 
-     Alt-Ergo:       14  (interrupted: 2)
+     Qed:             3 
+     Alt-Ergo:       15  (interrupted: 2)
 ----------------------------------------------------------
 Axiomatics          WP   Alt-Ergo    Total   Success
 Lemma               -      -           2       0.0%
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
-F1                   2      4 (26)     6       100%
+F1                   1      5 (26)     6       100%
 F2                   1      5 (29)     6       100%
 F4                   1      5 (84)     6       100%
 ----------------------------------------------------------

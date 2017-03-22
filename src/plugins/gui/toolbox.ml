@@ -958,7 +958,7 @@ let rec tags tgs = function
   | TAG t :: style -> tags (t::tgs) style
   | (LINK _ | MARK _ | PLAIN) :: style -> tags tgs style
       
-class text () =
+class text ?(autoscroll=false) () =
   let buffer = GText.buffer () in
   let view = GText.view ~buffer 
     ~editable:false ~cursor_visible:false
@@ -977,11 +977,14 @@ object(self)
   val css = Hashtbl.create 31
   val marks = Hashtbl.create 131
   val links = Hashtbl.create 131
+  val mutable autoscroll = autoscroll
   val mutable printf = false
   val mutable style = []
   val mutable fmtref = None
   val mutable demon = []
     
+  method set_autoscroll s = autoscroll <- s
+
   method fmt = match fmtref with Some fmt -> fmt | None ->
     let output_string s a b = if b > 0 then Buffer.add_substring text s a b in
     let output_flush () =
@@ -1023,7 +1026,7 @@ object(self)
   method private link_tag lnk =
     try Hashtbl.find links lnk
     with Not_found ->
-      let tag = buffer#create_tag [] in
+      let tag = buffer#create_tag [`FOREGROUND "blue"] in
       let callback tag lnk ~origin evt iter = 
 	ignore origin ; self#cb_link tag lnk evt iter in
       ignore (tag#connect#event ~callback:(callback tag lnk)) ;
@@ -1066,10 +1069,13 @@ object(self)
   (* -------------------------------------------------------------------------- *)
 	
   method private cb_link tag lnk evt _iter =
+    (* Note: ENTER_NOTIFY/LEAVE_NOTIFY implement mouse hovering, but these
+       events are not generated in some configurations; only MOTION_NOTIFY
+       events are generated in these cases. *)
     match GdkEvent.get_type evt with
       | `BUTTON_PRESS -> 
 	  let evt = GdkEvent.Button.cast evt in
-	  if GdkEvent.Button.button evt = 1 then apply demon lnk ;
+          List.iter (fun f -> f evt lnk) demon;
 	  true
       | `ENTER_NOTIFY -> 
 	  tag#set_property (`FOREGROUND "blue") ;
@@ -1087,7 +1093,10 @@ object(self)
 	  
   initializer 
     begin
-      view#misc#modify_font_by_name "Monospace" ;
+      (* Ignore default pango contextual menu (copy/cut/paste etc...), as this
+         widget is read-only *)
+      ignore (view#event#connect#button_press
+                ~callback:(fun ev -> GdkEvent.Button.button ev = 3));
       scroll#add view#coerce
     end
       
@@ -1095,9 +1104,27 @@ object(self)
   (* --- User API                                                           --- *)
   (* -------------------------------------------------------------------------- *)
       
-  method printf : 'b. ('b,Format.formatter,unit) format -> 'b =
-    fun text -> Format.fprintf self#fmt text
+  method printf : 'a. ?scroll:bool -> ('a,Format.formatter,unit) format -> 'a =
+    fun ?(scroll=autoscroll) text ->
+      (* Save current number of lines in the buffer *)
+      let line = view#buffer#line_count in
+      let finally fmt =
+        Format.pp_print_flush fmt () ;
+        if scroll then
+          (* scrolling must be performed asynchronously using Gtk_helper.later,
+             otherwise it will not take into account the newly added text. *)
+          Gtk_helper.later (self#scroll ~line) ;
+      in
+      Format.kfprintf finally self#fmt text
       
+  method lines = view#buffer#line_count
+
+  method scroll ?line () =
+    let buf = view#buffer in
+    let line = match line with Some l -> l | None -> buf#line_count in
+    let iter = buf#get_iter_at_char ~line 0 in
+    ignore (view#scroll_to_iter ~use_align:true ~yalign:0.0 iter)
+
   method clear = 
     Hashtbl.clear marks ;
     Hashtbl.clear links ;
@@ -1121,7 +1148,10 @@ object(self)
       
   method coerce = scroll#coerce 
   method set_enabled (_:bool) = () (* ignored *)
-    
+
+  method set_font font = view#misc#modify_font_by_name font;
+
+  method get_view = view
 end
 
 

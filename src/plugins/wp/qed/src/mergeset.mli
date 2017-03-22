@@ -42,12 +42,12 @@ sig
   val is_empty : t -> bool
   val empty : t
 
-  (* good sharing *) 
+  (* good sharing *)
   val add : elt -> t -> t
   val singleton : elt -> t
   val elements : t -> elt list
 
-  (* good sharing *) 
+  (* good sharing *)
   val remove : elt -> t -> t
 
   val mem : elt -> t -> bool

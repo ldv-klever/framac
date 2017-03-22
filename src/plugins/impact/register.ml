@@ -78,6 +78,7 @@ let compute_multiple_stmts skip kf ls =
   end;
   res_nodes
 
+(* Slice on the given list of stmts *)
 let slice (stmts:stmt list) =
   feedback ~level:2 "beginning slicing";
   let name = "impact slicing" in
@@ -176,15 +177,9 @@ let () =
        ("Impact.from_nodes", Datatype.func2 Kernel_function.ty (Datatype.list PdgTypes.Node.ty) (PdgTypes.NodeSet.ty)))
     Db.Impact.from_nodes
     compute_from_nodes;
-  (* slice *)
-  Db.register
-    (Db.Journalize
-       ("Impact.slice", Datatype.func (Datatype.list Stmt.ty) Datatype.unit))
-    Db.Impact.slice
-    slice
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -5,22 +5,93 @@
 [wp] Loading driver 'share/wp.driver'
 [wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
-[wp] 11 goals scheduled
-[wp] [Alt-Ergo] Goal typed_f_post_M1_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_M2_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_M3_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_M4_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_M5_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_M6_qed_ok : Valid
-[wp] [Alt-Ergo] Goal typed_f_post_P1_qed_ok : Valid
-[wp] [Alt-Ergo] Goal typed_f_post_P2_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_P3_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_P4_qed_ok : Valid
-[wp] [Qed] Goal typed_f_post_P5_qed_ok : Valid
-[wp] Proved goals:   11 / 11
-     Qed:             8 
-     Alt-Ergo:        3
-----------------------------------------------------------
-Functions           WP   Alt-Ergo    Total   Success
-f                    8      3 (12)    11       100%
-----------------------------------------------------------
+------------------------------------------------------------
+  Function f
+------------------------------------------------------------
+
+Goal Post-condition 'M1,qed_ok' in 'f':
+Let x_0 = s2_0.F_T_i.
+Assume {
+  (* Domain *)
+  Type: (IsS_T s1_0) /\ (IsS_T s2_0) /\ (is_sint32 s1_0.F_T_j)
+        /\ (is_sint32 x_0) /\ (is_sint32 s2_0.F_T_j).
+  (* Goal *)
+  When: (EqS_T s1_0 s2_0).
+}
+Prove: s1_0.F_T_i=x_0.
+
+------------------------------------------------------------
+
+Goal Post-condition 'M2,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'M3,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'M4,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'M5,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'M6,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'P1,qed_ok' in 'f':
+Assume {
+  (* Domain *)
+  Type: (IsS_T s2_0) /\ (is_sint32 s2_0.F_T_i) /\ (is_sint32 s2_0.F_T_j).
+}
+Prove: (EqS_T s2_0 s2_0).
+
+------------------------------------------------------------
+
+Goal Post-condition 'P2,qed_ok' in 'f':
+Assume {
+  (* Domain *)
+  Type: (IsArray1_sint32 t1_0) /\ (IsArray1_sint32 t2_0).
+  (* Goal *)
+  When: forall i_0:int. (0<=i_0) -> (i_0<=9) -> (t1_0[i_0]=t2_0[i_0]).
+}
+Prove: (EqArray1_int 10 t1_0 t2_0).
+
+------------------------------------------------------------
+
+Goal Post-condition 'P3,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'P4,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'P5,qed_ok' in 'f':
+Assume { }
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition 'KP5,qed_ko' in 'f':
+Assume { }
+Prove: false.
+
+------------------------------------------------------------

@@ -286,8 +286,8 @@ axiom is_uint16_lsr :
   (is_uint16(x) -> (to_uint16(lsr(x, y)) = lsr(x, y)))))
 
 axiom is_uint16_lsl1_inf :
-  (forall y:int [to_uint16(lsl(1, y))]. (((0 <= y) and (y <  16)) -> (lsl(1,
-  y) = to_uint16(lsl(1, y)))))
+  (forall y:int [to_uint16(lsl(1, y))]. (((0 <= y) and (y <  16)) ->
+  (to_uint16(lsl(1, y)) = lsl(1, y))))
 
 axiom is_uint16_lsl1_sup :
   (forall y:int [to_uint16(lsl(1, y))]. ((16 <= y) -> (to_uint16(lsl(1,
@@ -306,8 +306,8 @@ axiom is_uint32_lsr :
   (is_uint32(x) -> (to_uint32(lsr(x, y)) = lsr(x, y)))))
 
 axiom is_uint32_lsl1_inf :
-  (forall y:int [to_uint32(lsl(1, y))]. (((0 <= y) and (y <  32)) -> (lsl(1,
-  y) = to_uint32(lsl(1, y)))))
+  (forall y:int [to_uint32(lsl(1, y))]. (((0 <= y) and (y <  32)) ->
+  (to_uint32(lsl(1, y)) = lsl(1, y))))
 
 axiom is_uint32_lsl1_sup :
   (forall y:int [to_uint32(lsl(1, y))]. ((32 <= y) -> (to_uint32(lsl(1,
@@ -356,8 +356,8 @@ axiom is_sint8_lsr :
 axiom is_sint8_lsl1 : (lsl(1, 7) = 128)
 
 axiom is_sint8_lsl1_inf :
-  (forall y:int [lsl(1, y)]. (((0 <= y) and (y <  7)) -> is_sint8(lsl(1,
-  y))))
+  (forall y:int [to_sint8(lsl(1, y))]. (((0 <= y) and (y <  7)) ->
+  (to_sint8(lsl(1, y)) = lsl(1, y))))
 
 axiom is_sint8_lsl1_sup :
   (forall y:int [to_sint8(lsl(1, y))]. ((8 <= y) -> (to_sint8(lsl(1,
@@ -386,8 +386,8 @@ axiom is_sint16_lsr :
 axiom is_sint16_lsl1 : (lsl(1, 15) = 32768)
 
 axiom is_sint16_lsl1_inf :
-  (forall y:int [lsl(1, y)]. (((0 <= y) and (y <  15)) -> is_sint16(lsl(1,
-  y))))
+  (forall y:int [to_sint16(lsl(1, y))]. (((0 <= y) and (y <  15)) ->
+  (to_sint16(lsl(1, y)) = lsl(1, y))))
 
 axiom is_sint16_lsl1_sup :
   (forall y:int [to_sint16(lsl(1, y))]. ((16 <= y) -> (to_sint16(lsl(1,
@@ -416,8 +416,8 @@ axiom is_sint32_lsr :
 axiom is_sint32_lsl1 : (lsl(1, 31) = 2147483648)
 
 axiom is_sint32_lsl1_inf :
-  (forall y:int [lsl(1, y)]. (((0 <= y) and (y <  31)) -> is_sint32(lsl(1,
-  y))))
+  (forall y:int [to_sint32(lsl(1, y))]. (((0 <= y) and (y <  31)) ->
+  (to_sint32(lsl(1, y)) = lsl(1, y))))
 
 axiom is_sint32_lsl1_sup :
   (forall y:int [to_sint32(lsl(1, y))]. ((32 <= y) -> (to_sint32(lsl(1,
@@ -446,10 +446,18 @@ axiom is_sint64_lsr :
 axiom is_sint64_lsl1 : (lsl(1, 63) = 9223372036854775808)
 
 axiom is_sint64_lsl1_inf :
-  (forall y:int [lsl(1, y)]. (((0 <= y) and (y <  63)) -> is_sint64(lsl(1,
-  y))))
+  (forall y:int [to_sint64(lsl(1, y))]. (((0 <= y) and (y <  63)) ->
+  (to_sint64(lsl(1, y)) = lsl(1, y))))
 
 axiom is_sint64_lsl1_sup :
   (forall y:int [to_sint64(lsl(1, y))]. ((64 <= y) -> (to_sint64(lsl(1,
   y)) = 0)))
+
+axiom lor_addition :
+  (forall x:int. forall y:int [land(x, y), lor(x, y)]. ((land(x, y) = 0) ->
+  ((x + y) = lor(x, y))))
+
+axiom lxor_addition :
+  (forall x:int. forall y:int [land(x, y), lxor(x, y)]. ((land(x, y) = 0) ->
+  ((x + y) = lxor(x, y))))
 

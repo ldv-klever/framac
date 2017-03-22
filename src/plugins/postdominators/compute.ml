@@ -266,6 +266,6 @@ module PostDomVal =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -58,7 +58,7 @@ module WideningLevel: Parameter_sig.Int
 module ArrayPrecisionLevel: Parameter_sig.Int
 
 module AllocatedContextValid: Parameter_sig.Bool
-module InitializedPaddingGlobals: Parameter_sig.Bool
+module InitializationPaddingGlobals: Parameter_sig.String
 
 module UndefinedPointerComparisonPropagateAll: Parameter_sig.Bool
 
@@ -67,14 +67,14 @@ module UsePrototype: Parameter_sig.Kernel_function_set
 
 module RmAssert: Parameter_sig.Bool
 
-module Subdivide_float_in_expr: Parameter_sig.Int
+module LinearLevel: Parameter_sig.Int
 module BuiltinsOverrides:
   Parameter_sig.Map with type key = Cil_types.kernel_function
                     and type value = string
 module SplitReturnFunction:
   Parameter_sig.Map with type key = Cil_types.kernel_function
                     and type value = Split_strategy.t
-module SplitReturnAuto: Parameter_sig.Bool
+module SplitGlobalStrategy: State_builder.Ref with type data = Split_strategy.t
 
 module ValShowProgress: Parameter_sig.Bool
 module ValShowInitialState: Parameter_sig.Bool
@@ -91,12 +91,14 @@ module ObviouslyTerminatesAll: Parameter_sig.Bool
 module ObviouslyTerminatesFunctions: Parameter_sig.Fundec_set
 module StopAtNthAlarm: Parameter_sig.Int
 
+module ReusedExprs: Parameter_sig.Bool
+
 
 val parameters_correctness: Typed_parameter.t list
 val parameters_tuning: Typed_parameter.t list
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

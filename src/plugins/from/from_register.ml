@@ -28,7 +28,7 @@ let pretty_with_indirect fmt v =
 
 let display fmtopt =
   Extlib.may (fun fmt -> Format.fprintf fmt "@[<v>") fmtopt;
-  !Db.Semantic_Callgraph.topologically_iter_on_functions
+  Callgraph.Uses.iter_in_rev_order
     (fun kf ->
       if !Db.Value.is_called kf then
         let header fmt =
@@ -76,7 +76,7 @@ let iter_callwise_calls_sorted f =
              let m = MapStmtCalls.add s d m in
              Kernel_function.Hashtbl.replace hkf kf m
     );
-  !Db.Semantic_Callgraph.topologically_iter_on_functions
+  Callgraph.Uses.iter_in_rev_order
     (fun kf ->
        try
          let m = Kernel_function.Hashtbl.find hkf kf in
@@ -168,6 +168,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

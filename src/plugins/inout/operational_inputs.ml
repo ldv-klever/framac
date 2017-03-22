@@ -28,7 +28,7 @@ open Locations
    under-approximed outputs.
 *)
 
-type tt = Inout_type.tt = {
+type t = Inout_type.t = {
   over_inputs: Locations.Zone.t;
   over_inputs_if_termination: Locations.Zone.t;
   under_outputs_if_termination: Locations.Zone.t;
@@ -88,17 +88,9 @@ let join_and_is_included smaller larger =
   join, equal join larger
 ;;
 
-let catenate c1 c2 = {
-  over_inputs_d =
-    Zone.join c1.over_inputs_d (Zone.diff c2.over_inputs_d c1.under_outputs_d);
-  under_outputs_d = Zone.link c1.under_outputs_d c2.under_outputs_d;
-  over_outputs_d = Zone.join  c1.over_outputs_d c2.over_outputs_d;
-}
-
-
 let externalize_zone ~with_formals kf =
   Zone.filter_base
-    (!Db.Semantic_Callgraph.accept_base ~with_formals ~with_locals:false kf)
+    (Callgraph.Uses.accept_base ~with_formals ~with_locals:false kf)
 
 (* This code evaluates an assigns, computing in particular a sound approximation
    of sure outputs. For an assigns [locs_out \from locs_from], the process
@@ -234,8 +226,37 @@ module Computer(Fenv:Dataflows.FUNCTION_ENV)(X:sig
       analysis for the given call. Must not contain locals or formals *)
 end) = struct
 
-  let non_terminating_callees_inputs = ref Zone.bottom
-  let non_terminating_callees_outputs = ref Zone.bottom
+  (* We want to compute the in/out for all terminating and
+     non-terminating points of the function. This is not immediate
+     with a dataflow, as all (1) infinite loops, (2) branches that call a non
+     terminating function, or (3) branches that fail, will not appear in the
+     final state. Hence, we two use auxiliary variables into which we add
+     all partial results. *)
+  let non_terminating_inputs = ref Zone.bottom
+  let non_terminating_outputs = ref Zone.bottom
+
+  let store_non_terminating_inputs inputs =
+    non_terminating_inputs := Zone.join !non_terminating_inputs inputs;
+  ;;
+
+  let store_non_terminating_outputs outputs =
+    non_terminating_outputs := Zone.join !non_terminating_outputs outputs;
+  ;;
+
+  (* Store the 'non-termination' information of a function subcall into
+     the current call. [under_outputs] are the current call sure outputs. *)
+  let store_non_terminating_subcall under_outputs subcall =
+    store_non_terminating_inputs (Zone.diff subcall.over_inputs under_outputs);
+    store_non_terminating_outputs subcall.over_outputs;
+  ;;
+
+  let catenate c1 c2 =
+    let inputs = Zone.diff c2.over_inputs_d c1.under_outputs_d in
+    store_non_terminating_inputs inputs;
+    { over_inputs_d = Zone.join c1.over_inputs_d inputs;
+      under_outputs_d = Zone.link c1.under_outputs_d c2.under_outputs_d;
+      over_outputs_d = Zone.join  c1.over_outputs_d c2.over_outputs_d;
+    }
 
   type t = compute_t
 
@@ -251,12 +272,12 @@ end) = struct
   let join = join
   let is_included = is_included
 
-
   (* Transfer function on expression. *)
   let transfer_exp s exp data =
     let state = X.stmt_state s in
     let inputs = !Db.From.find_deps_no_transitivity_state state exp in
     let new_inputs = Zone.diff inputs data.under_outputs_d in
+    store_non_terminating_inputs new_inputs;
     {data with over_inputs_d = Zone.join data.over_inputs_d new_inputs}
   ;;
 
@@ -268,7 +289,9 @@ end) = struct
         !Db.Value.lval_to_zone_with_deps_state state
           ~deps:(Some deps) ~for_writing:true lv
       in
+      store_non_terminating_outputs new_outs;
       let new_inputs = Zone.diff deps data.under_outputs_d in
+      store_non_terminating_inputs new_inputs;
       let new_sure_outs =
         if exact then
           (* There is only one modified zone. So, this is an exact output.
@@ -296,7 +319,6 @@ end) = struct
                  state
                  funcexp
              in
-
              let acc_funcexp_arg_inputs =
                (* add the inputs of [argl] to the inputs of the
                   function expression *)
@@ -319,15 +341,7 @@ end) = struct
                Kernel_function.Hptset.fold
                  (fun kf acc  ->
                     let res = X.at_call stmt kf in
-                    non_terminating_callees_inputs :=
-                      Zone.join
-                        !non_terminating_callees_inputs
-                        (Zone.diff res.Inout_type.over_inputs
-                           data.under_outputs_d);
-                    non_terminating_callees_outputs :=
-                      Zone.join
-                        !non_terminating_callees_outputs
-                        res.over_outputs;
+                    store_non_terminating_subcall data.over_outputs_d res;
                     let for_function = {
                       over_inputs_d = res.over_inputs_if_termination;
                       under_outputs_d = res.under_outputs_if_termination;
@@ -403,32 +417,15 @@ end) = struct
 
   let init = [(Kernel_function.find_first_stmt Fenv.kf), empty];;
 
-  (* We want to compute the in/out for all terminating and
-     non-terminating points of the function. It is computed by joining
-     the result over all statements, not all "end" statements (this is
-     acceptable because if s is before s' in the order of evaluation,
-     then the inouts of s will be included in those of s'; hence the
-     joining "too many statements" does not degrade the result). This
-     takes care of in-out of statements in infinite loops.
-
-     However, the in-out done in functions that do not terminate is
-     not taken into account by this. That is why they are stored
-     separately during the analysis in non_terminating_callees_*. *)
-  let end_dataflow before =
-    let res_if_termination = !return_data in
-    Array.iteri (fun _ data ->
-      non_terminating_callees_inputs :=
-        Zone.join data.over_inputs_d !non_terminating_callees_inputs;
-      non_terminating_callees_outputs :=
-        Zone.join data.over_outputs_d !non_terminating_callees_outputs;
-    ) before;
-    {
+  let end_dataflow () =
+    let res_if_termination = !return_data in {
       over_inputs_if_termination = res_if_termination.over_inputs_d;
       under_outputs_if_termination = res_if_termination.under_outputs_d ;
       over_outputs_if_termination = res_if_termination.over_outputs_d;
-
-      over_inputs = Zone.join !non_terminating_callees_inputs res_if_termination.over_inputs_d;
-      over_outputs = Zone.join !non_terminating_callees_outputs res_if_termination.over_outputs_d;
+      over_inputs =
+        Zone.join !non_terminating_inputs res_if_termination.over_inputs_d;
+      over_outputs =
+        Zone.join !non_terminating_outputs res_if_termination.over_outputs_d;
     }
 
 end
@@ -581,7 +578,7 @@ module Callwise = struct
           with Not_found -> Inout_type.bottom
       end) in
     let module Compute = Dataflows.Simple_forward(Fenv)(Computer) in
-    Computer.end_dataflow Compute.before
+    Computer.end_dataflow ()
 
   let record_for_callwise_inout ((call_stack: Db.Value.callstack), value_res) =
     if compute_callwise () then
@@ -658,7 +655,7 @@ module FunctionWise = struct
       Stack.push kf call_stack;
 
       let module Compute = Dataflows.Simple_forward(Fenv)(Computer) in
-      let result = Computer.end_dataflow Compute.before in
+      let result = Computer.end_dataflow () in
       ignore (Stack.pop call_stack);
       result
 
@@ -761,6 +758,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -22,9 +22,8 @@
 
 (** Emitter. An emitter is the Frama-C entity which is able to emit annotations
     and property status. Thus you have to create (at least) one of your own if
-    you want to do such tasks.  
-    @since Nitrogen-20111001 
-    @plugin development guide *)
+    you want to do such tasks.
+    @since Nitrogen-20111001 *)
 
 (**************************************************************************)
 (** {2 API for Plug-ins Developers} *)
@@ -105,6 +104,8 @@ val get: t -> Usable_emitter.t
 
 val self: State.t
 
+val dummy: t
+
 (** Table indexing: key -> emitter (or equivalent data) -> value.
     Quick access + handle cleaning in the right way (only remove relevant
     bindings when required. 
@@ -144,6 +145,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

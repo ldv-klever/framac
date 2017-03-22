@@ -655,6 +655,6 @@ module Weak(W: Sub_caml_weak_hashtbl)(D: S with type t = W.data) :
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

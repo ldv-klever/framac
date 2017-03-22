@@ -48,21 +48,7 @@ let getident () =
     nextident := !nextident + 1;
     !nextident
 
-let currentLoc () = Errorloc.getPosition ()
-
 let cabslu = Lexing.dummy_pos,Lexing.dummy_pos
-
-let continue_annot _ job default msg =
-  try
-    Cilmsg.push_errors () ;
-    let result = job () in
-    if Cilmsg.had_errors () then failwith "Annotation has errors" ;
-    Cilmsg.pop_errors () ;
-    Log.with_null (fun _ -> result) msg ;
-  with exn when Kernel.ContinueOnAnnotError.get () ->
-    Kernel.debug "Continue on annotation error (%s)" (Printexc.to_string exn) ;
-    Cilmsg.pop_errors ();
-    Log.with_null (fun _ -> default ()) msg
 
 module Comments =
   struct

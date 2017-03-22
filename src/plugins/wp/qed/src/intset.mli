@@ -22,7 +22,7 @@
 
 (** Set of integers using Patricia Trees.
 
-    From the paper of Chris Okasaki and Andrew Gill: 
+    From the paper of Chris Okasaki and Andrew Gill:
     'Fast Mergeable Integer Maps'.
 *)
 

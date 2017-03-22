@@ -378,8 +378,8 @@ module Value = struct
     RecursiveCallsFound.add kf
 
   module Called_Functions_By_Callstack =
-    State_builder.Hashtbl(Value_types.Callstack.Hashtbl)
-      (Cvalue.Model)
+    State_builder.Hashtbl(Kernel_function.Hashtbl)
+      (States_by_callstack)
       (struct
          let name = "called_functions_by_callstack"
          let size = 11
@@ -473,27 +473,41 @@ module Value = struct
       add stmt r
 
   let merge_initial_state cs state =
+    let open Value_types in
+    let kf = match cs with (kf, _) :: _ -> kf | _ -> assert false in
+    let by_callstack =
+      try Called_Functions_By_Callstack.find kf
+      with Not_found ->
+        let h = Callstack.Hashtbl.create 7 in
+        Called_Functions_By_Callstack.add kf h;
+        h
+    in
     try
-      let old = Called_Functions_By_Callstack.find cs in
-      Called_Functions_By_Callstack.replace cs (Cvalue.Model.join old state)
-    with
-      Not_found -> Called_Functions_By_Callstack.add cs state
-
+      let old = Callstack.Hashtbl.find by_callstack cs in
+      Callstack.Hashtbl.replace by_callstack cs (Cvalue.Model.join old state)
+    with Not_found ->
+      Callstack.Hashtbl.add by_callstack cs state
 
   let get_initial_state kf =
     assert (is_computed ()); (* this assertion fails during value analysis *)
     try Called_Functions_Memo.find kf
     with Not_found ->
       let state =
-        Called_Functions_By_Callstack.fold (fun cs state acc ->
-          match cs with
-          | (kf', _) :: _ when Kernel_function.equal kf kf' ->
-            Cvalue.Model.join acc state
-          | _ -> acc
-        ) Cvalue.Model.bottom
+        try
+          let open Value_types in
+          let by_callstack = Called_Functions_By_Callstack.find kf in
+          Callstack.Hashtbl.fold
+            (fun _cs state acc -> Cvalue.Model.join acc state)
+            by_callstack Cvalue.Model.bottom
+        with Not_found -> Cvalue.Model.bottom
       in
       Called_Functions_Memo.add kf state;
       state
+
+  let get_initial_state_callstack kf =
+    assert (is_computed ()); (* this assertion fails during value analysis *)
+    try Some (Called_Functions_By_Callstack.find kf)
+    with Not_found -> None
 
   let valid_behaviors = mk_fun "Value.get_valid_behaviors"
 
@@ -537,8 +551,21 @@ module Value = struct
 	  Table_By_Callstack.find stmt)
     with Not_found -> None
 
+  let fold_stmt_state_callstack f acc ~after stmt =
+    assert (is_computed ()); (* this assertion fails during value analysis *)
+    match get_stmt_state_callstack ~after stmt with
+    | None -> acc
+    | Some h -> Value_types.Callstack.Hashtbl.fold (fun _ -> f) h acc
+
+  let fold_state_callstack f acc ~after ki =
+    assert (is_computed ()); (* this assertion fails during value analysis *)
+    match ki with
+    | Kglobal -> f (globals_state ()) acc
+    | Kstmt stmt -> fold_stmt_state_callstack f acc ~after stmt
+
   let is_reachable = Cvalue.Model.is_reachable
 
+  exception Is_reachable
   let is_reachable_stmt stmt =
     if !no_results (Kernel_function.(get_definition (find_englobing_kf stmt)))
     then true
@@ -547,8 +574,13 @@ module Value = struct
       match ho with
       | None -> false
       | Some h ->
-        Value_types.Callstack.Hashtbl.fold (fun _cs state acc ->
-          acc || Cvalue.Model.is_reachable state) h false
+        try
+          Value_types.Callstack.Hashtbl.iter
+            (fun _cs state ->
+              if Cvalue.Model.is_reachable state
+              then raise Is_reachable) h;
+          false
+        with Is_reachable -> true
 
   let is_accessible ki =
     match ki with
@@ -660,6 +692,8 @@ module Value = struct
   exception Aborted
 
   let display = mk_fun "Value.display"
+
+  let emitter = ref Emitter.dummy
 
 end
 
@@ -1003,8 +1037,9 @@ module Properties = struct
 
   (** Interpretation and conversions of of formulas *)
     let code_annot = mk_fun "Properties.Interp.code_annot"
-    let lval = mk_fun "Properties.Interp.lval"
-    let expr = mk_fun "Properties.Interp.expr"
+    let term_lval = mk_fun "Properties.Interp.term_lval"
+    let term = mk_fun "Properties.Interp.term"
+    let predicate = mk_fun "Properties.Interp.predicate"
     let term_lval_to_lval = mk_resultfun "Properties.Interp.term_lval_to_lval"
     let term_to_exp = mk_resultfun "Properties.Interp.term_to_exp"
     let term_to_lval = mk_resultfun "Properties.Interp.term_to_lval"
@@ -1066,7 +1101,6 @@ module Impact = struct
   let compute_pragmas = mk_fun "Impact.compute_pragmas"
   let from_stmt = mk_fun "Impact.from_stmt"
   let from_nodes = mk_fun "Impact.from_nodes"
-  let slice = mk_fun "Impact.slice"
 end
 
 module Security = struct
@@ -1112,11 +1146,6 @@ module Constant_Propagation = struct
   let compute = mk_fun "Constant_Propagation.compute"
 end
 
-module Syntactic_Callgraph = struct
-  let dump = mk_fun "Syntactic_callgraph.dump"
-end
-
-
 module PostdominatorsTypes = struct
   exception Top
 
@@ -1153,22 +1182,6 @@ module PostdominatorsValue = struct
 end
 
 (* ************************************************************************* *)
-(** {2 Graphs} *)
-(* ************************************************************************* *)
-
-module Semantic_Callgraph = struct
-  let dump = mk_fun "Semantic_Callgraph.dump"
-  let topologically_iter_on_functions =
-    mk_fun "Semantic_Callgraph.topologically_iter_on_functions"
-  let iter_on_callers =
-    mk_fun "Semantic_Callgraph.iter_on_callers"
-  let accept_base =
-    ref (fun ~with_formals:_ ~with_locals:_ _ _ ->
-           raise (Extlib.Unregistered_function "Semantic_Callgraph.accept_base"))
-end
-
-
-(* ************************************************************************* *)
 (** {2 GUI} *)
 (* ************************************************************************* *)
 
@@ -1178,6 +1191,6 @@ exception Cancel
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

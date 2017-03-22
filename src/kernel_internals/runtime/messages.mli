@@ -48,6 +48,6 @@ val nb_messages: unit -> int
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

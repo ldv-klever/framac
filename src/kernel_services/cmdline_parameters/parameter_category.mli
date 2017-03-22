@@ -64,6 +64,6 @@ val get_mem: 'a t -> 'a -> bool
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

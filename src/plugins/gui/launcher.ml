@@ -119,7 +119,7 @@ let mk_text ~highlight text =
   let label = GMisc.label ~markup () in
   label#coerce
 
-let set_expander_text exp s ~tooltip highlight =
+let set_expander_text (exp: GBin.expander) s ~tooltip highlight =
   let text = mk_text ~highlight s in
   Gtk_helper.do_tooltip ?tooltip text;
   exp#set_label_widget text;
@@ -290,6 +290,6 @@ let show ?height ?width ~(host:basic_main) () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

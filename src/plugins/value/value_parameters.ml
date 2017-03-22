@@ -57,6 +57,8 @@ include Plugin.Register
  "automatically computes variation domains for the variables of the program"
     end)
 
+let () = Help.add_aliases [ "-val-h" ]
+
 module ForceValues =
   WithOutput
     (struct
@@ -154,6 +156,20 @@ let () =
        allocated@ to caches@ doubles@ with each@ increase.@ '2' is a good@ \
        starting point." Binary_cache.memory_footprint_var_name
     )
+
+(* ------------------------------------------------------------------------- *)
+(* --- Relational analyses                                               --- *)
+(* ------------------------------------------------------------------------- *)
+
+let () = Parameter_customize.set_group performance
+module ReusedExprs =
+  Bool
+    (struct
+       let option_name = "-val-reused-expressions"
+       let help = "undocumented"
+       let default = false
+     end)
+
 
 (* ------------------------------------------------------------------------- *)
 (* --- Non-standard alarms                                               --- *)
@@ -296,14 +312,38 @@ module AllocatedContextValid =
 let () = add_correctness_dep AllocatedContextValid.parameter
 
 let () = Parameter_customize.set_group initial_context
-let () = Parameter_customize.set_negative_option_name "-uninitialized-padding-globals"
+module InitializationPaddingGlobals =
+  String
+    (struct
+      let default = "yes"
+      let option_name = "-val-initialization-padding-globals"
+      let arg_name = "yes|no|maybe"
+      let help = "Specify how padding bits are initialized inside global \
+        variables. Possible values are <yes> (padding is fully initialized), \
+        <no> (padding is completely uninitialized), or <maybe> \
+        (padding may be uninitialized). Default is <yes>."
+     end)
+let () = InitializationPaddingGlobals.set_possible_values
+  ["yes"; "no"; "maybe"]
+let () = add_correctness_dep InitializationPaddingGlobals.parameter
+
+let () = Parameter_customize.set_group initial_context
+let () = Parameter_customize.set_negative_option_name
+  "-uninitialized-padding-globals"
+let () = Parameter_customize.is_invisible ()
 module InitializedPaddingGlobals =
   True
     (struct
        let option_name = "-initialized-padding-globals"
-       let help = "Padding in global variables is initialized to zero"
+       let help = "Padding in global variables is uninitialized"
      end)
 let () = add_correctness_dep InitializedPaddingGlobals.parameter
+let () = InitializedPaddingGlobals.add_update_hook
+  (fun _ v ->
+    warning "This option is deprecated. Use %s instead"
+      InitializationPaddingGlobals.name;
+    InitializationPaddingGlobals.set (if v then  "yes" else "no"))
+
 
 (* ------------------------------------------------------------------------- *)
 (* --- Tuning                                                            --- *)
@@ -392,31 +432,12 @@ module SplitReturnFunction =
       (* this type is ad-hoc: cannot use Kernel_function_multiple_map here *)
       include Split_strategy
       type key = Cil_types.kernel_function
-      let of_string =
-        let r = Str.regexp ":" in
-        fun ~key:_ ~prev:_ s ->
-          Extlib.opt_map
-            (fun s ->
-              if s = "" then NoSplit
-              else if s = "full" then FullSplit
-              else
-                let conv s =
-                  try Integer.of_string s
-                  with Failure _ ->
-                    raise (Cannot_build ("'" ^ s ^ "' is not an integer"))
-                in
-                SplitEqList (List.map conv (Str.split r s)))
-            s
+      let of_string ~key:_ ~prev:_ s =
+        try Extlib.opt_map Split_strategy.of_string s
+        with Split_strategy.ParseFailure s ->
+          raise (Cannot_build ("unknown split strategy " ^ s))
       let to_string ~key:_ v =
-        Extlib.opt_map
-          (function
-          | NoSplit -> ""
-          | FullSplit -> "full"
-          | SplitEqList l ->
-            Pretty_utils.sfprintf "%t"
-              (fun fmt ->
-                Pretty_utils.pp_list ~sep:":" Datatype.Integer.pretty fmt l))
-          v
+        Extlib.opt_map Split_strategy.to_string v
      end)
     (struct
        let option_name = "-val-split-return-function"
@@ -428,14 +449,43 @@ module SplitReturnFunction =
 let () = add_precision_dep SplitReturnFunction.parameter
 
 let () = Parameter_customize.set_group precision_tuning
+module SplitReturn =
+  String
+    (struct
+       let option_name = "-val-split-return"
+       let arg_name = "mode"
+       let default = ""
+       let help = "when 'mode' is a number, or 'full', this is equivalent \
+       to -val-split-return-function f:mode for all functions f. \
+       When mode is 'auto', automatically split states at the end \
+       of all functions, according to the function return code"
+     end)
+module SplitGlobalStrategy = State_builder.Ref (Split_strategy)
+    (struct
+       let default () = Split_strategy.NoSplit
+       let name = "Value_parameters.SplitGlobalStategy"
+       let dependencies = [SplitReturn.self]
+     end)
+let () =
+  SplitReturn.add_set_hook
+    (fun _ x -> SplitGlobalStrategy.set (Split_strategy.of_string x))
+let () = add_precision_dep SplitReturn.parameter
+
+let () = Parameter_customize.is_invisible ()
 module SplitReturnAuto =
   False
     (struct
        let option_name = "-val-split-return-auto"
-       let help = "Automatically split states at the end of functions, \
-                    according to the function return code"
+       let help = ""
      end)
-let () = add_precision_dep SplitReturnAuto.parameter
+let () =
+  SplitReturnAuto.add_set_hook
+    (fun _ b ->
+       warning "option \"-val-split-return-auto\" has been replaced by \
+         \"-val-split-return auto\"";
+       SplitGlobalStrategy.set
+         Split_strategy.(if b then SplitAuto else NoSplit))
+
 
 let () = Parameter_customize.set_group precision_tuning
 let () = Parameter_customize.argument_may_be_fundecl ()
@@ -465,7 +515,7 @@ module BuiltinsOverrides =
      end)
 let () = add_precision_dep BuiltinsOverrides.parameter
 
-let () = Parameter_customize.set_group precision_tuning
+let () = Parameter_customize.is_invisible ()
 module Subdivide_float_in_expr =
   Zero
     (struct
@@ -474,7 +524,24 @@ module Subdivide_float_in_expr =
       let help =
         "use <n> as number of subdivisions allowed for float variables in expressions (experimental, defaults to 0)"
     end)
-let () = add_precision_dep Subdivide_float_in_expr.parameter
+let () =
+  Subdivide_float_in_expr.add_set_hook
+    (fun _ _ ->
+     Kernel.abort "@[option -subdivide-float-var has been replaced by \
+                   -val-subdivide-non-linear@]")
+
+let () = Parameter_customize.set_group precision_tuning
+module LinearLevel =
+  Zero
+    (struct
+      let option_name = "-val-subdivide-non-linear"
+      let arg_name = "n"
+      let help =
+        "Improve precision when evaluating expressions in which a variable \
+         appears multiple times, by splitting its value at most n times. \
+         Experimental, defaults to 0."
+    end)
+let () = add_precision_dep LinearLevel.parameter
 
 let () = Parameter_customize.set_group precision_tuning
 module UsePrototype =
@@ -695,6 +762,6 @@ let parameters_tuning = !parameters_tuning
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

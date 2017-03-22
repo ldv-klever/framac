@@ -223,44 +223,6 @@ module Forwards(T : ForwardsTransfer) = struct
                             worklist) then
             Queue.add s worklist
 
-
-    (** Get the two successors of an If statement *)
-    let ifSuccs (s:stmt) : stmt * stmt =
-      let fstStmt blk = match blk.bstmts with
-          [] -> Cil.dummyStmt
-        | fst::_ -> fst
-      in
-      match s.skind with
-        If(_e, b1, b2, _) ->
-          let thenSucc = fstStmt b1 in
-          let elseSucc = fstStmt b2 in
-          let oneFallthrough () =
-            let fallthrough =
-              List.filter
-                (fun s' -> thenSucc != s' && elseSucc != s')
-                s.succs
-            in
-            match fallthrough with
-              [] ->
-		Kernel.fatal ~current:true
-		  "Bad CFG: missing fallthrough for If."
-            | [s'] -> s'
-            | _ ->
-	      Kernel.fatal ~current:true "Bad CFG: multiple fallthrough for If."
-          in
-          (* If thenSucc or elseSucc is Cil.dummyStmt, it's an empty block.
-             So the successor is the statement after the if *)
-          let stmtOrFallthrough s' =
-            if s' == Cil.dummyStmt then
-              oneFallthrough ()
-            else
-              s'
-          in
-          (stmtOrFallthrough thenSucc,
-           stmtOrFallthrough elseSucc)
-
-      | _-> Kernel.fatal ~current:true "ifSuccs on a non-If Statement."
-
     (** Process a statement *)
     let processStmt (s: stmt) : unit =
       CurrentLoc.set (Cil_datatype.Stmt.loc s);
@@ -323,7 +285,7 @@ module Forwards(T : ForwardsTransfer) = struct
                           (Kernel.debug "FF(%s): Not exploring branch to %d\n"
                              T.name succ.sid)
                   in
-                  let thenSucc, elseSucc = ifSuccs s  in
+                  let thenSucc, elseSucc = Cil.separate_if_succs s in
                   doBranch thenSucc thenGuard;
                   doBranch elseSucc elseGuard;
                 end

@@ -61,41 +61,68 @@ type lock =
 
 type terminal = {
   mutable lock : lock ;
+  mutable isatty : bool ;
+  mutable clean : bool ;
   mutable delayed : (terminal -> unit) list ;
-  mutable output : string -> int -> int -> unit ; (* Same as Format.make_formatter *)
-  mutable flush : unit -> unit ;  (* Same as Format.make_formatter *)
+  mutable output : string -> int -> int -> unit ;
+  (* Same as Format.make_formatter *)
+  mutable flush : unit -> unit ;  
+  (* Same as Format.make_formatter *)
 }
 
 let delayed_echo t =
   match t.lock with
-    | Locked -> true
-    | Ready | DelayedLock -> false
+  | Locked -> true
+  | Ready | DelayedLock -> false
 
 let is_locked t =
   match t.lock with
-    | Locked | DelayedLock -> true
-    | Ready -> false
+  | Locked | DelayedLock -> true
+  | Ready -> false
 
 let is_ready t =
   match t.lock with
-    | Locked | DelayedLock -> false
-    | Ready -> true
+  | Locked | DelayedLock -> false
+  | Ready -> true
 
-let set_terminal t output flush =
+let term_clean t = 
+  if t.isatty && not t.clean then
+    begin
+      let u = "\r\027[K" in
+      (* TERM escape commands:
+         "\r" is carriage return ;
+         "\027[K" is CSI command EL 'Erase in Line' ;
+         See https://en.wikipedia.org/wiki/ANSI_escape_code
+      *)
+      t.output u 0 (String.length u) ;
+      t.clean <- true ;
+    end
+
+let set_terminal t isatty output flush =
   begin
+    (* Ensures previous terminal state is clean *)
     assert (is_ready t) ;
+    term_clean t ;
+    (* Now reconfigure the terminal *)
+    t.isatty <- isatty ;
     t.output <- output ;
     t.flush <- flush ;
+    t.clean <- true ;
   end
 
 let stdout = {
   lock = Ready ;
+  clean = true ;
   delayed = [] ;
+  isatty = Unix.isatty Unix.stdout ;
   output = Pervasives.output Pervasives.stdout ;
   flush =  (fun () -> Pervasives.flush Pervasives.stdout);
 }
 
-let set_output = set_terminal stdout
+let clean () = term_clean stdout
+
+let set_output ?(isatty=false) output flush = 
+  set_terminal stdout isatty output flush
 
 (* -------------------------------------------------------------------------- *)
 (* --- Locked Formatter                                                   --- *)
@@ -109,6 +136,7 @@ let lock_terminal t =
   begin
     if is_locked t then
       failwith "Console is already locked" ;
+    term_clean t ;
     t.lock <- Locked ;
     Format.make_formatter t.output t.flush ;
   end
@@ -129,7 +157,7 @@ let print_on_output job =
   let fmt = lock_terminal stdout in
   try job fmt ; unlock_terminal stdout fmt
   with error -> unlock_terminal stdout fmt ; raise error
-    
+
 (* -------------------------------------------------------------------------- *)
 (* --- Delayed Lock until first write                                     --- *)
 (* -------------------------------------------------------------------------- *)
@@ -141,17 +169,17 @@ let delayed_terminal terminal =
   let d = ref (Delayed terminal) in
   let d_output d text k n =
     match !d with
-      | Delayed t ->
-          t.lock <- Locked ;
-          d := Formatter( t.output , t.flush ) ;
-          t.output text k n
-      | Formatter(out,_) ->
-          out text k n
+    | Delayed t ->
+        t.lock <- Locked ;
+        d := Formatter( t.output , t.flush ) ;
+        t.output text k n
+    | Formatter(out,_) ->
+        out text k n
   in
   let d_flush d () =
     match !d with
-      | Delayed _ -> () (* nothing to flush yet ! *)
-      | Formatter(_,flush) -> flush ()
+    | Delayed _ -> () (* nothing to flush yet ! *)
+    | Formatter(_,flush) -> flush ()
   in
   Format.make_formatter (d_output d) (d_flush d)
 
@@ -199,25 +227,25 @@ let truncate_text buffer size =
       let q = trim_end buffer in
       let n = q+1-p in
       if n <= 0 then
-	begin
-	  reduce_buffer buffer ;
-	  buffer.pos <- 0 ;
-	end
+        begin
+          reduce_buffer buffer ;
+          buffer.pos <- 0 ;
+        end
       else
-	if n <= size then
-	  begin
-	    String.blit buffer.text p buffer.text 0 n ;
-	    buffer.pos <- n ;
-	  end
-	else
-	  begin
-	    let n_left = size / 2 - 3 in
-	    let n_right = size - n_left - 5 in
-	    if p > 0 then String.blit buffer.text p buffer.text 0 n_left ;
-	    String.blit "[...]" 0 buffer.text n_left 5 ;
-	    String.blit buffer.text (q-n_right+1) buffer.text (n_left + 5) n_right ;
-	    buffer.pos <- size ;
-	  end
+      if n <= size then
+        begin
+          String.blit buffer.text p buffer.text 0 n ;
+          buffer.pos <- n ;
+        end
+      else
+        begin
+          let n_left = size / 2 - 3 in
+          let n_right = size - n_left - 5 in
+          if p > 0 then String.blit buffer.text p buffer.text 0 n_left ;
+          String.blit "[...]" 0 buffer.text n_left 5 ;
+          String.blit buffer.text (q-n_right+1) buffer.text (n_left + 5) n_right ;
+          buffer.pos <- size ;
+        end
     end
 
 let append_text buffer text k n =
@@ -270,8 +298,8 @@ let rec echo_indent output k =
 
 let echo_line output prefix text k n =
   match prefix with
-    | Prefix t | Label t -> output t 0 (String.length t) ; output text k n
-    | Indent m -> echo_indent output m ; output text k n
+  | Prefix t | Label t -> output t 0 (String.length t) ; output text k n
+  | Indent m -> echo_indent output m ; output text k n
 
 let rec echo_lines output text prefix p q =
   if p <= q then
@@ -289,6 +317,11 @@ let rec echo_lines output text prefix p q =
         echo_lines output text (next_line prefix) (t+1) q ;
       end
 
+let echo_firstline output text p q width =
+  let t = try String.index_from text p '\n' with Not_found -> succ q in
+  let n = min width (t-p) in
+  output text p n
+
 let echo_source output = function
   | None -> ()
   | Some src ->
@@ -302,20 +335,34 @@ let do_echo terminal source prefix text p q =
   if p <= q then
     if delayed_echo terminal then
       begin
-	let s = String.sub text p (q+1-p) in
-	let job t =
+        let s = String.sub text p (q+1-p) in
+        let job t =
+          term_clean t ;
           echo_source t.output source ;
           echo_lines t.output s prefix 0 (String.length s - 1) ;
           t.flush ()
-	in
-	terminal.delayed <- job :: terminal.delayed
+        in
+        terminal.delayed <- job :: terminal.delayed
       end
     else
       begin
+        term_clean terminal ;
         echo_source terminal.output source ;
         echo_lines terminal.output text prefix p q ;
         terminal.flush ()
       end
+
+let do_transient terminal source text p q =
+  if p <= q && not (delayed_echo terminal) then
+    begin
+      term_clean terminal ;
+      echo_source terminal.output source ;
+      echo_firstline terminal.output text p q 80 ;
+      if terminal.isatty
+      then terminal.clean <- false
+      else terminal.output "\n" 0 1 ;
+      terminal.flush () ;
+    end
 
 (* -------------------------------------------------------------------------- *)
 (* --- Channels                                                           --- *)
@@ -331,6 +378,15 @@ type emitter = {
   mutable listeners : (event -> unit) list ;
   mutable echo : bool ;
 }
+
+type ontty = [
+  | `Message   (* Normal message (default) *)
+  | `Feedback  (* Temporary visible on console, normal message otherwise *)
+  | `Transient (* Temporary visible, only on console *)
+  | `Silent    (* Not visible on console *)
+]
+
+let tty = ref (fun () -> false)
 
 type channel = {
   locked_buffer : buffer ; (* already allocated top-level buffer *)
@@ -355,8 +411,8 @@ let nth_kind = function
 let all_kinds = [| Result ; Feedback ; Debug ; Error ; Warning ; Failure |]
 
 let () = Array.iteri
-  (fun i k -> assert (i == nth_kind k))
-  all_kinds
+    (fun i k -> assert (i == nth_kind k))
+    all_kinds
 
 (* -------------------------------------------------------------------------- *)
 (* --- Channels                                                           --- *)
@@ -371,8 +427,8 @@ let new_emitters () =
 let get_emitters plugin =
   try
     match Hashtbl.find all_channels plugin with
-      | NotCreatedYet e -> e
-      | Created c -> c.emitters
+    | NotCreatedYet e -> e
+    | Created c -> c.emitters
   with Not_found ->
     let e = new_emitters () in
     Hashtbl.replace all_channels plugin (NotCreatedYet e) ; e
@@ -391,8 +447,8 @@ let new_channel plugin =
   in
   try
     match Hashtbl.find all_channels plugin with
-      | Created c -> c
-      | NotCreatedYet ems -> create_with_emitters plugin ems
+    | Created c -> c
+    | NotCreatedYet ems -> create_with_emitters plugin ems
   with Not_found ->
     let ems = new_emitters () in
     create_with_emitters plugin ems
@@ -411,21 +467,21 @@ let do_fire e f = f e
 
 let iter_kind ?kind f ems =
   match kind with
-    | None -> Array.iter f ems
-    | Some ks -> List.iter (fun k -> f ems.(nth_kind k)) ks
+  | None -> Array.iter f ems
+  | Some ks -> List.iter (fun k -> f ems.(nth_kind k)) ks
 
 let iter_plugin ?plugin ?kind f =
   match plugin with
-    | None ->
-        Hashtbl.iter
-          (fun _ s ->
-             match s with
-               | Created c -> iter_kind ?kind f c.emitters
-               | NotCreatedYet ems -> iter_kind ?kind f ems)
-          all_channels ;
-        iter_kind ?kind f default_emitters
-    | Some p ->
-        iter_kind ?kind f (get_emitters p)
+  | None ->
+      Hashtbl.iter
+        (fun _ s ->
+           match s with
+           | Created c -> iter_kind ?kind f c.emitters
+           | NotCreatedYet ems -> iter_kind ?kind f ems)
+        all_channels ;
+      iter_kind ?kind f default_emitters
+  | Some p ->
+      iter_kind ?kind f (get_emitters p)
 
 let add_listener ?plugin ?kind demon =
   iter_plugin ?plugin ?kind (fun em -> em.listeners <- em.listeners @ [demon])
@@ -457,11 +513,11 @@ let close_buffer c =
 
 let fire_listeners emitwith listeners event =
   match emitwith, listeners with
-    | None , [] -> ()
-    | None , fs -> List.iter (do_fire (Lazy.force event)) fs
-    | Some f , _ -> do_fire (Lazy.force event) f
+  | None , [] -> ()
+  | None , fs -> List.iter (do_fire (Lazy.force event)) fs
+  | Some f , _ -> do_fire (Lazy.force event) f
 
-let logtext c ~kind ~once ~prefix ~source ~append ~emitwith ~echo text =
+let logtext c ?(transient=false) ~kind ~once ~prefix ~source ~append ~emitwith ~echo text =
   let buffer = open_buffer c in
   Format.kfprintf
     (fun fmt ->
@@ -469,25 +525,28 @@ let logtext c ~kind ~once ~prefix ~source ~append ~emitwith ~echo text =
          (match append with None -> () | Some k -> k fmt) ;
          Format.pp_print_newline fmt () ;
          Format.pp_print_flush fmt () ;
-	 truncate_text buffer max_buffer ;
+         truncate_text buffer max_buffer ;
          let p = trim_begin buffer in
          let q = trim_end buffer in
          if p <= q then
-           begin
-             let event = lazy {
-               evt_kind = kind ;
-               evt_plugin = c.plugin ;
-               evt_message = String.sub buffer.text p (q+1-p) ;
-               evt_source = source ;
-             } in
-             if not once || !check_not_yet (Lazy.force event) then
-               begin
-                 let e = c.emitters.(nth_kind kind) in
-                 if echo && e.echo then
-                   do_echo c.terminal source prefix buffer.text p q ;
-                 fire_listeners emitwith e.listeners event
-               end
-           end ;
+           if transient then
+             do_transient c.terminal source buffer.text p q
+           else
+             begin
+               let event = lazy {
+                 evt_kind = kind ;
+                 evt_plugin = c.plugin ;
+                 evt_message = String.sub buffer.text p (q+1-p) ;
+                 evt_source = source ;
+               } in
+               if not once || !check_not_yet (Lazy.force event) then
+                 begin
+                   let e = c.emitters.(nth_kind kind) in
+                   if echo && e.echo then
+                     do_echo c.terminal source prefix buffer.text p q ;
+                   fire_listeners emitwith e.listeners event
+                 end
+             end ;
          close_buffer c
        with e ->
          close_buffer c ;
@@ -501,7 +560,7 @@ let logwith c ~kind ~prefix ~source ~append ~echo f text =
        try
          (match append with None -> () | Some k -> k fmt) ;
          Format.pp_print_flush fmt () ;
-	 truncate_text buffer max_buffer ;
+         truncate_text buffer max_buffer ;
          let p = trim_begin buffer in
          let q = trim_end buffer in
          let event = lazy {
@@ -530,26 +589,26 @@ let finally_do f e = f (Lazy.force e)
 (* -------------------------------------------------------------------------- *)
 
 type 'a pretty_printer =
-    ?current:bool -> ?source:Lexing.position ->
-    ?emitwith:(event -> unit) -> ?echo:bool -> ?once:bool ->
-    ?append:(Format.formatter -> unit) ->
-    ('a,formatter,unit) format -> 'a
+  ?current:bool -> ?source:Lexing.position ->
+  ?emitwith:(event -> unit) -> ?echo:bool -> ?once:bool ->
+  ?append:(Format.formatter -> unit) ->
+  ('a,formatter,unit) format -> 'a
 
 type ('a,'b) pretty_aborter =
-    ?current:bool -> ?source:Lexing.position -> ?echo:bool ->
-    ?append:(Format.formatter -> unit) ->
-    ('a,formatter,unit,'b) format4 -> 'a
+  ?current:bool -> ?source:Lexing.position -> ?echo:bool ->
+  ?append:(Format.formatter -> unit) ->
+  ('a,formatter,unit,'b) format4 -> 'a
 
 let get_prefix kind text = function
   | Some p -> p
   | None -> Label
-      begin
-        match kind with
-          | Result | Debug | Feedback -> Printf.sprintf "[%s] " text
-          | Warning -> Printf.sprintf "[%s] warning: " text
-          | Error   -> Printf.sprintf "[%s] user error: " text
-          | Failure -> Printf.sprintf "[%s] failure: " text
-      end
+              begin
+                match kind with
+                | Result | Debug | Feedback -> Printf.sprintf "[%s] " text
+                | Warning -> Printf.sprintf "[%s] warning: " text
+                | Error   -> Printf.sprintf "[%s] user error: " text
+                | Failure -> Printf.sprintf "[%s] failure: " text
+              end
 
 let get_source current = function
   | None -> if current then Some (!current_loc ()) else None
@@ -580,11 +639,11 @@ let with_log_channel channel f
 let echo e =
   try
     match Hashtbl.find all_channels e.evt_plugin with
-      | NotCreatedYet _ -> raise Not_found
-      | Created c ->
-          let n = String.length e.evt_message in
-          let prefix = get_prefix e.evt_kind e.evt_plugin None in
-          do_echo c.terminal e.evt_source prefix e.evt_message 0 (n-1)
+    | NotCreatedYet _ -> raise Not_found
+    | Created c ->
+        let n = String.length e.evt_message in
+        let prefix = get_prefix e.evt_kind e.evt_plugin None in
+        do_echo c.terminal e.evt_source prefix e.evt_message 0 (n-1)
   with Not_found ->
     let msg =
       Format.sprintf "[unknown channel %s]:%s"
@@ -613,7 +672,7 @@ sig
     ('a,formatter,unit) format -> 'a
 
   val result  : ?level:int -> ?dkey:category -> 'a pretty_printer
-  val feedback: ?level:int -> ?dkey:category -> 'a pretty_printer
+  val feedback: ?ontty:ontty -> ?level:int -> ?dkey:category -> 'a pretty_printer
   val debug   : ?level:int -> ?dkey:category -> 'a pretty_printer
   val debug0   : ?level:int -> ?dkey:category ->
     unit pretty_printer
@@ -670,12 +729,12 @@ sig
 end
 
 module Register
-  (P : sig
-     val channel : string
-     val label : string
-     val verbose_atleast : int -> bool
-     val debug_atleast : int -> bool
-   end) =
+    (P : sig
+       val channel : string
+       val label : string
+       val verbose_atleast : int -> bool
+       val debug_atleast : int -> bool
+     end) =
 struct
 
   include P
@@ -712,7 +771,7 @@ struct
     try Hashtbl.find categories s 
     with Not_found -> 
       (* returning [s] itself is required to get indirect kernel categories
-	 (e.g. project) to work. *) 
+		 (e.g. project) to work. *)
       Category_set.singleton s
 
   let get_all_categories () = get_category ""
@@ -725,7 +784,7 @@ struct
 
   let is_debug_key_enabled s = Category_set.mem s !debug_keys
 
-   let has_debug_key = function 
+  let has_debug_key = function
     | None -> true (* No key means to be displayed each time *)
     | Some k -> Category_set.mem k !debug_keys
 
@@ -738,8 +797,8 @@ struct
   let prefix_dkey = function
     | None -> if debug_atleast 1 then prefix_all else prefix_first
     | Some key -> 
-      let lab = (Printf.sprintf "[%s:%s] " label key) in
-      if debug_atleast 1 then Prefix lab else Label lab
+        let lab = (Printf.sprintf "[%s:%s] " label key) in
+        if debug_atleast 1 then Prefix lab else Label lab
 
   let prefix_for = function
     | Result | Feedback | Debug ->
@@ -749,40 +808,40 @@ struct
     | Failure -> prefix_failure
 
   let internal_register_tag_handlers _c (_ope,_close) = ()
-    (* BM->LOIC: I need to keep this code around to be able to handle
-       marks ands tags correctly.
-       Do you think we can emulate all other features of Log but without
-       using c.buffer at all?
-       Everything but ensure_unique_newline seems feasible.
-       See Design.make_slash to see a usefull example.
+  (* BM->LOIC: I need to keep this code around to be able to handle
+     marks ands tags correctly.
+     Do you think we can emulate all other features of Log but without
+     using c.buffer at all?
+     Everything but ensure_unique_newline seems feasible.
+     See Design.make_slash to see a usefull example.
 
-       let start_of_line= Printf.sprintf "\n[%s] " P.label in
-       let length= pred (String.length start_of_line) in
-       Format.pp_set_all_formatter_output_functions c.formatter
-       ~out:c.term.output
-       ~flush:c.term.flush
-       ~newline:(fun () -> c.term.output start_of_line 0 length)
-       ~spaces:(fun _ ->  ()(*TODO:correct margin*))
-       ;
-       Format.pp_set_tags c.formatter true;
-       Format.pp_set_mark_tags c.formatter true;
-       Format.pp_set_print_tags c.formatter false;
-       Format.pp_set_formatter_tag_functions c.formatter
-       {(Format.pp_get_formatter_tag_functions c.formatter ())
-       with
-       Format.mark_open_tag = ope;
-       mark_close_tag = close}
-    *)
+     let start_of_line= Printf.sprintf "\n[%s] " P.label in
+     let length= pred (String.length start_of_line) in
+     Format.pp_set_all_formatter_output_functions c.formatter
+     ~out:c.term.output
+     ~flush:c.term.flush
+     ~newline:(fun () -> c.term.output start_of_line 0 length)
+     ~spaces:(fun _ ->  ()(*TODO:correct margin*))
+     ;
+     Format.pp_set_tags c.formatter true;
+     Format.pp_set_mark_tags c.formatter true;
+     Format.pp_set_print_tags c.formatter false;
+     Format.pp_set_formatter_tag_functions c.formatter
+     {(Format.pp_get_formatter_tag_functions c.formatter ())
+     with
+     Format.mark_open_tag = ope;
+     mark_close_tag = close}
+  *)
 
   let register_tag_handlers h =
     internal_register_tag_handlers channel h
 
   let to_be_log verbose debug =
     match verbose , debug with
-      | 0 , 0 -> verbose_atleast 1
-      | v , 0 -> verbose_atleast v
-      | 0 , d -> debug_atleast d
-      | v , d -> verbose_atleast v || debug_atleast d
+    | 0 , 0 -> verbose_atleast 1
+    | v , 0 -> verbose_atleast v
+    | 0 , d -> debug_atleast d
+    | v , d -> verbose_atleast v || debug_atleast d
 
   let log ?(kind=Result)
       ?(verbose=0) ?(debug=0)
@@ -811,31 +870,53 @@ struct
         text
     else nullprintf text
 
+  let transient channel = channel.terminal.isatty && !tty ()
+
   let feedback
+      ?(ontty=`Message)
       ?(level=1) ?dkey ?(current=false) ?source
       ?emitwith ?(echo=true) ?(once=false) ?append text =
-    if verbose_atleast level && has_debug_key dkey then
-      logtext channel
-        ~kind:Feedback
-        ~prefix:(prefix_dkey dkey)
-        ~source:(get_source current source)
-        ~once ~emitwith ~echo ~append
-        text
-    else nullprintf text
+    let mode =
+      match ontty with
+      | `Feedback -> if transient channel then `Transient else `Message
+      | `Transient -> if transient channel then `Transient else `Silent
+      | `Silent -> if transient channel then `Silent else `Message
+      | `Message ->
+          if verbose_atleast level && has_debug_key dkey
+          then `Message
+          else `Silent
+    in match mode with
+    | `Message ->
+        logtext channel
+          ~kind:Feedback
+          ~prefix:(prefix_dkey dkey)
+          ~source:(get_source current source)
+          ~once ~emitwith ~echo ~append
+          text
+    | `Transient ->
+        logtext channel
+          ~transient:true
+          ~kind:Feedback
+          ~prefix:prefix_first
+          ~once:false ~echo:true
+          ~source:None ~emitwith:None ~append:None
+          text
+    | `Silent ->
+        nullprintf text
 
   let should_output_debug level dkey =
     match level, dkey with
-      | None, None -> debug_atleast 1
-      | Some l, None -> debug_atleast l
-      | None, Some _ -> has_debug_key dkey
-      | Some l, Some _ -> debug_atleast l && has_debug_key dkey
+    | None, None -> debug_atleast 1
+    | Some l, None -> debug_atleast l
+    | None, Some _ -> has_debug_key dkey
+    | Some l, Some _ -> debug_atleast l && has_debug_key dkey
 
   let debug
       ?level ?dkey ?(current=false) ?source
       ?emitwith ?(echo=true) ?(once=false) ?append text =
     if should_output_debug level dkey then
       logtext channel
-        ~kind:Feedback
+        ~kind:Debug
         ~prefix:(prefix_dkey dkey)
         ~source:(get_source current source)
         ~once ~emitwith ~echo ~append
@@ -1075,7 +1156,7 @@ struct
     begin
       let ofs = start+length-1 in
       if 0 <= ofs && ofs < String.length buffer then
-	bol := buffer.[ofs] = '\n' ;
+        bol := buffer.[ofs] = '\n' ;
       output buffer start length
     end
 
@@ -1083,35 +1164,35 @@ struct
       ?header ?prefix ?suffix text =
     if verbose_atleast level && has_debug_key dkey then
       begin
-	(* Header is a regular message *)
-	let header = match header with None -> noprint | Some h -> h in
-	logtext channel ~kind:Result 
-	  ~prefix:(prefix_dkey dkey) ~source:(get_source current source)
+        (* Header is a regular message *)
+        let header = match header with None -> noprint | Some h -> h in
+        logtext channel ~kind:Result
+          ~prefix:(prefix_dkey dkey) ~source:(get_source current source)
           ~emitwith:(Some noemit) ~echo:true ~append:None ~once:false
           "%t" header ;
-	let print_line = function
-	  | None -> ()
-	  | Some line ->
-	      stdout.output line 0 (String.length line) ;
-	      stdout.output "\n" 0 1 ;
-	      stdout.flush () ;
-	in
-	print_line prefix ;
-	let bol = ref true in
-	let stdout = { stdout with output = spynewline bol stdout.output } in
-	let fmt = delayed_terminal stdout in
-	try
-	  Format.kfprintf
-	    begin fun fmt ->
-	       append fmt ;
-	       Format.pp_print_flush fmt () ;
-	       unlock_terminal stdout fmt ;
-	       if not !bol then Format.pp_print_newline fmt () ;
-	       print_line suffix ;
-	    end
-	    fmt text
-	with error ->
-	  unlock_terminal stdout fmt ; raise error
+        let print_line = function
+          | None -> ()
+          | Some line ->
+              stdout.output line 0 (String.length line) ;
+              stdout.output "\n" 0 1 ;
+              stdout.flush () ;
+        in
+        print_line prefix ;
+        let bol = ref true in
+        let stdout = { stdout with output = spynewline bol stdout.output } in
+        let fmt = delayed_terminal stdout in
+        try
+          Format.kfprintf
+            begin fun fmt ->
+              append fmt ;
+              Format.pp_print_flush fmt () ;
+              unlock_terminal stdout fmt ;
+              if not !bol then Format.pp_print_newline fmt () ;
+              print_line suffix ;
+            end
+            fmt text
+        with error ->
+          unlock_terminal stdout fmt ; raise error
       end
     else 
       nullprintf text
@@ -1120,6 +1201,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

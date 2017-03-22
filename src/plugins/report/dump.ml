@@ -207,6 +207,6 @@ let create out = (new dumper out :> Scan.inspector)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

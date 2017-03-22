@@ -434,7 +434,7 @@ let flush_globals () =
              used in a global initializer: keep a declaration at this point
              to ensure ending up with a compilable C file in the end... *)
           let b =
-            if f.svar.vaddrof then GVarDecl(Cil.empty_funspec(),f.svar,loc) :: b
+            if f.svar.vaddrof then GFunDecl(Cil.empty_funspec(),f.svar,loc) :: b
             else b
           in
           b, func :: a
@@ -1686,6 +1686,6 @@ let all_actions_preds start state =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

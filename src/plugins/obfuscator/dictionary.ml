@@ -97,6 +97,6 @@ let is_computed () = Dictionary.is_computed ()
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

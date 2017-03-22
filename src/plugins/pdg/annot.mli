@@ -57,6 +57,6 @@ val find_fun_variant_nodes : PdgTypes.Pdg.t -> Cil_types.term ->
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

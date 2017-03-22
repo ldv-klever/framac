@@ -20,14 +20,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let sfprintf fmt =
+let ksfprintf f fmt =
   let b = Buffer.create 20 in
-  let return fmt = Format.pp_print_flush fmt (); Buffer.contents b in
+  let return fmt = Format.pp_print_flush fmt (); f (Buffer.contents b) in
   Format.kfprintf return (Format.formatter_of_buffer b) fmt
 
-let to_string pp x =
+let sfprintf fmt = ksfprintf Extlib.id fmt
+
+let to_string ?margin pp x =
   let b = Buffer.create 20 in
   let f = Format.formatter_of_buffer b in
+  Extlib.may (Format.pp_set_margin f) margin;
   pp f x ;
   Format.pp_print_flush f () ;
   Buffer.contents b
@@ -101,6 +104,13 @@ let pp_opt ?(pre=format_of_string "@[")  ?(suf=format_of_string "@]") pp_elt f =
 let pp_cond ?(pr_false=format_of_string "") cond f pr_true =
   Format.fprintf f "%(%)" (if cond then pr_true else pr_false)
 
+let pp_pair
+    ?(pre=format_of_string "@[")
+    ?(sep=format_of_string ",@,")
+    ?(suf=format_of_string "@]")
+    pp_a pp_b fmt (a, b) =
+  Format.fprintf fmt "%(%)%a%(%)%a%(%)" pre pp_a a sep pp_b b suf
+
 let escape_underscores = Str.global_replace (Str.regexp_string "_") "__"
 
 let pp_flowlist ?(left=format_of_string "(") ?(sep=format_of_string ",") ?(right=format_of_string ")") f out =
@@ -147,6 +157,6 @@ let pp_trail pp fmt x =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

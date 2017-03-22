@@ -55,6 +55,6 @@ let bool3_of_bool b = if b then True else False
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

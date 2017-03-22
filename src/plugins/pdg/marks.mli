@@ -74,6 +74,6 @@ module F_Proj (C : Config) :
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

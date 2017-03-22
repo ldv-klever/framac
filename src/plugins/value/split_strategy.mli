@@ -22,7 +22,15 @@
 
 type split_strategy =
   | NoSplit
+  | SplitAuto
   | SplitEqList of Datatype.Integer.t list
   | FullSplit
 
 include Datatype.S_with_collections with type t = split_strategy
+
+exception ParseFailure of string
+
+val of_string: string -> t
+(* @raise ParseFailure *)
+
+val to_string: t -> string

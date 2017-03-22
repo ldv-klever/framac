@@ -514,8 +514,13 @@ val mkCompInfo: bool ->      (* whether it is a struct or a union *)
                   constructing a recursive type.  *)
                attributes -> compinfo
 
-(** Makes a shallow copy of a {!Cil_types.compinfo} changing the name and the key.*)
-val copyCompInfo: compinfo -> string -> compinfo
+(** Makes a shallow copy of a {!Cil_types.compinfo} changing the name. It also
+    copies the fields, and makes sure that the copied field points back to the
+    copied compinfo.
+    If [fresh] is [true] (the default), it will also give a fresh id to the
+    copy. 
+*)
+val copyCompInfo: ?fresh:bool -> compinfo -> string -> compinfo
 
 (** This is a constant used as the name of an unnamed bitfield. These fields
     do not participate in initialization and their name is not printed. *)
@@ -527,8 +532,11 @@ val compFullName: compinfo -> string
 (** Returns true if this is a complete type.
    This means that sizeof(t) makes sense.
    Incomplete types are not yet defined
-   structures and empty arrays. *)
-val isCompleteType: typ -> bool
+   structures and empty arrays. 
+   @param allowZeroSizeArrays defaults to [false]. When [true], arrays of
+   size 0 (a gcc extension) are considered as complete
+*)
+val isCompleteType: ?allowZeroSizeArrays:bool -> typ -> bool
 
 (** Unroll a type until it exposes a non
  * [TNamed]. Will collect all attributes appearing in [TNamed]!!! *)
@@ -1182,8 +1190,17 @@ val typeAddAttributes: attribute list -> typ -> typ
 
 (** Remove all attributes with the given names from a type. Note that this
     does not remove attributes from typedef and tag definitions, just from
-    their uses *)
+    their uses (unfolding the type definition when needed).
+    It only removes attributes of topmost type, i.e. does not
+    recurse under pointers, arrays, ...
+*)
 val typeRemoveAttributes: string list -> typ -> typ
+
+(** same as above, but remove any existing attribute from the type. 
+
+ @since Magnesium-20151001
+*)
+val typeRemoveAllAttributes: typ -> typ
 
 val typeHasAttribute: string -> typ -> bool
 (** Does the type have the given attribute. Does
@@ -1558,15 +1575,14 @@ class type cilVisitor = object
       @plugin development guide *)
 
   method vvdec: varinfo -> varinfo visitAction
-    (** Invoked for each variable declaration. The subtrees to be traversed
-	are those corresponding to the type and attributes of the variable.
-	Note that variable declarations are all the [GVar], [GVarDecl], [GFun],
-	all the [varinfo] in formals of function types, and the formals and
-	locals for function definitions. This means that the list of formals
-	in a function definition will be traversed twice, once as part of the
-	function type and second as part of the formals in a function
-	definition.
-	@plugin development guide *)
+  (** Invoked for each variable declaration. The children to be traversed
+      are those corresponding to the type and attributes of the variable.
+      Note that variable declarations are [GVar], [GVarDecl], [GFun] and
+      [GFunDecl] globals, the formals of functions prototypes, and the
+      formals and locals of function definitions. This means that the list
+      of formals of a function may be traversed multiple times if there exists
+      both a declaration and a definition, or multiple declarations.
+      @plugin development guide *)
 
   method vvrbl: varinfo -> varinfo visitAction
   (** Invoked on each variable use. Here only the [SkipChildren] and
@@ -2291,6 +2307,6 @@ val pp_attributes_ref: (Format.formatter -> attribute list -> unit) ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

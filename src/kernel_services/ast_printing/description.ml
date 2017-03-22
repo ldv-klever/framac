@@ -392,6 +392,6 @@ let full_compare p q =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

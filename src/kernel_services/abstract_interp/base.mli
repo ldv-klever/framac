@@ -131,8 +131,9 @@ val bits_sizeof : t -> Int_Base.t
 
 exception Not_valid_offset
 val is_valid_offset : for_writing:bool -> Int.t -> t -> Ival.t -> unit
-(** Is the given bits-expressed offset guaranteed to be valid? Does nothing in
-    this case, and raises [Not_valid_offset] if the offset may be invalid. *)
+(** [is_valid_offset ~for_writing size b offset] checks that [offset]
+    (expressed in bits) plus [size] bits is valid in [b]. It does nothing
+    in this case, and raises [Not_valid_offset] if the offset may be invalid. *)
 
 val base_max_offset: t -> Ival.t
 (** Maximal valid offset (in bits) of the given base. Returns [Ival.bottom]
@@ -160,6 +161,6 @@ val register_memory_var : Cil_types.varinfo -> validity -> t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

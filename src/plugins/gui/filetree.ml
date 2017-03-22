@@ -39,7 +39,8 @@ let same_node n1 n2 = match n1, n2 with
 
 let _pretty_node fmt = function
   | File (s, _) -> Format.pp_print_string fmt (Filepath.pretty s)
-  | Global (GFun ({svar = vi},_) | GVar(vi,_,_) | GVarDecl(_, vi,_)) ->
+  | Global (GFun ({svar = vi},_) | GVar(vi,_,_) |
+            GFunDecl (_,vi,_) | GVarDecl(vi,_)) ->
     Format.fprintf fmt "%s" vi.vname
   | _ -> ()
 
@@ -55,6 +56,8 @@ class type t =  object
       (unit -> bool) * GMenu.check_menu_item
   method get_file_globals:
     string -> (string * bool) list
+  method find_visible_global:
+    string -> Cil_types.global option
   method add_select_function :
     (was_activated:bool -> activating:bool -> filetree_node -> unit) -> unit
   method append_pixbuf_column:
@@ -94,6 +97,7 @@ struct
     method! custom_flags = [`ITERS_PERSIST]
     val mutable num_roots : int = 0
     val mutable roots :  custom_tree array = [||]
+    method get_roots = roots
 
     method custom_get_iter (path:Gtk.tree_path) : custom_tree option =
       let indices: int array  = GTree.Path.get_indices path in
@@ -207,7 +211,6 @@ struct
   let custom_tree () = new custom_tree_class (new GTree.column_list)
 end
 
-
 module MYTREE = struct
   type storage = { mutable name : string;
                    mutable globals: global array;
@@ -240,13 +243,12 @@ module MYTREE = struct
   | MGlobal s -> s
 
   let is_function_global = function
-    | GFun _ -> true
-    | GVarDecl (_, vi, _) -> Cil.isFunctionType vi.vtype
+    | GFun _ | GFunDecl _ -> true
     | _ -> false
 
   let is_builtin_global = function
     | GFun ({svar={vattr=attrs}},_)
-    | GVarDecl (_, {vattr=attrs}, _) -> Cil.hasAttribute "FC_BUILTIN" attrs
+    | GFunDecl (_, {vattr=attrs}, _) -> Cil.hasAttribute "FC_BUILTIN" attrs
     | _ -> false
 
   let comes_from_share filename =
@@ -257,7 +259,8 @@ module MYTREE = struct
     | GAsm (_,(loc,_))
     | GPragma (_,(loc,_))
     | GAnnot (_,(loc,_))
-    | GVarDecl (_,_,(loc,_)) 
+    | GVarDecl (_,(loc,_)) 
+    | GFunDecl (_,_,(loc,_)) 
     | GVar (_,_,(loc,_)) 
     | GType (_,(loc,_)) 
     | GCompTag (_,(loc,_)) 
@@ -299,20 +302,12 @@ module MYTREE = struct
          appear in [sons] *)
       (fun acc glob ->
         match glob with
-          | GFun ({svar={vname=name}},_)
-          | GVar({vname=name},_,_) ->
-              if hide glob then acc
-              else MGlobal(default_storage (global_name name) [|glob|]) :: acc
-
-          | GVarDecl(_, vi,_) ->
-             (* we have a found the prototype, but there is a definition
-                somewhere else. Skip the prototype. *)
-              if hide glob ||
-                (Cil.isFunctionType vi.vtype &&
-                 Kernel_function.is_definition (Globals.Functions.get vi))
-              then acc
-              else
-                MGlobal(default_storage (global_name vi.vname) [|glob|]) :: acc
+          | GFun ({svar=vi},_) | GVar(vi,_,_)
+          | GVarDecl(vi,_) | GFunDecl (_, vi, _)->
+            (* Only display the last declaration/definition *)
+            if hide glob || (not (Ast.is_def_or_last_decl glob))
+            then acc
+            else MGlobal(default_storage (global_name vi.vname) [|glob|]) :: acc
 
           | GAnnot (ga, _) ->
             if hide glob
@@ -386,7 +381,8 @@ module State = struct
     | File (s, _) ->
         (try Some (Datatype.String.Hashtbl.find cache.cache_files s)
          with Not_found -> None)
-    | Global (GFun ({svar = vi},_) | GVar(vi,_,_) | GVarDecl(_, vi,_)) ->
+    | Global (GFun ({svar = vi},_) | GVar(vi,_,_) |
+              GVarDecl(vi,_) | GFunDecl (_,vi,_)) ->
         (try Some (Varinfo.Hashtbl.find cache.cache_vars vi)
          with Not_found -> None)
     | Global (GAnnot (ga, _)) ->
@@ -402,38 +398,12 @@ module State = struct
     | MYTREE.MGlobal storage ->
       match storage.MYTREE.globals with
         (* Only one element in this array by invariant: this is a leaf*)
-      | [| GFun ({svar=vi},_) | GVar(vi,_,_) | GVarDecl(_,vi,_) |] ->
+      | [| GFun ({svar=vi},_) | GVar(vi,_,_)
+         | GVarDecl(vi,_) | GFunDecl (_,vi,_)|] ->
         Varinfo.Hashtbl.add cache.cache_vars vi (path,row)
       | [| GAnnot (ga, _) |] ->
         Global_annotation.Hashtbl.add cache.cache_global_annot ga (path,row)
       | _ -> (* no cache for other globals yet *) ()
-
-  let default_filetree () =
-    let m1 = MODEL.custom_tree () in
-    m1,
-    default_cache (),
-    None
-
-  (* Reference containing, per project, the state of the filetree:
-     - GTK model of the filetree
-     - caching from nodes to paths
-     - node currently selected *)
-  module Ref = State_builder.Ref
-  (Datatype.Make
-     (struct
-         include Datatype.Undefined
-         type t =
-             MODEL.custom_tree_class * cache * filetree_node option
-         let name = "Filetree.FileTree_Datatype"
-           (**  Prevent serialization of this state containing closures *)
-         let reprs = [ default_filetree () ]
-         let mem_project = Datatype.never_any_project
-        end))
-    (struct
-       let name = "Filetree.State"
-       let dependencies = [ Ast.self; Globals.FileIndex.self ]
-       let default = default_filetree
-     end)
 
   (* Extract Cil globals. We remove builtins that are not used in this project,
      as well as files that do not contain anything afterwards *)
@@ -442,7 +412,8 @@ module State = struct
     let globals_of_file f =
       let name, all = Globals.FileIndex.find f in
       let is_unused = function
-        | GFun ({svar = vi},_) | GVarDecl (_, vi, _) | GVar (vi, _, _) ->
+        | GFun ({svar = vi},_) | GFunDecl (_, vi, _)
+        | GVar (vi, _, _) | GVarDecl (vi, _) ->
             Cil.is_unused_builtin vi
         | _ -> false
       in
@@ -455,8 +426,8 @@ module State = struct
   let compute hide_filters =
     Gui_parameters.debug "Resetting GUI filetree";
     let hide g = List.exists (fun filter -> filter g) hide_filters in
-    Ref.clear ();
-    let model, cache, _ = Ref.get () in
+    let model = MODEL.custom_tree () in
+    let cache = default_cache () in
     (* Let's fill up the model with all files and functions. *)
     let files = cil_files () in
     begin 
@@ -464,8 +435,13 @@ module State = struct
         let files =
         MYTREE.make_list_globals hide (List.concat (List.map snd files))
       in
-      model#set_tree (fill_cache cache) files;
+      model#set_tree (fill_cache cache) files
     else
+      let sorted_files = (List.sort (fun (s1, _) (s2, _) ->
+          let s1, s2 = Filepath.pretty s1, Filepath.pretty s2 in
+          (* compare in inverse order due to inversion by fold_left below *)
+          String.compare (String.lowercase s2) (String.lowercase s1)) files)
+      in
       let files = List.fold_left
         (fun acc v ->
           let name, globals = MYTREE.make_file hide v in
@@ -474,20 +450,17 @@ module State = struct
 	  then 
             (MYTREE.MFile (name, globals))::acc
           else acc)
-        []
-        (List.sort (fun (s1, _) (s2, _) -> String.compare s1 s2) files)
+        [] sorted_files
       in
-      model#set_tree (fill_cache cache) files
+      model#set_tree (fill_cache cache) files;
     end;
-    (* Let's build the table from globals to rows in the model *)
-    Ref.mark_as_computed ()
-
-  let get () =
-    if not (Ref.is_computed ())
-    then compute [] (* Failsafe: everything is shown *);
-    Ref.get ()
+    model, cache
 
 end
+
+(* Definitions related to 'Find text' using [visible_nodes] *)
+exception Found_global of Cil_types.global
+exception Global_not_found
 
 let make (tree_view:GTree.view) =
 
@@ -506,7 +479,7 @@ let make (tree_view:GTree.view) =
   let hide_annotations = MenusHide.hide key_hide_annotations in
   let initial_filter g =
     match g with
-      | GFun _ | GVarDecl _ when MYTREE.is_function_global g ->
+      | GFun _ | GFunDecl _->
           hide_functions () ||
             (if MYTREE.is_builtin_global g then hide_builtins () else false) ||
 	    (if MYTREE.is_stdlib_global g then hide_stdlib () else false)
@@ -533,8 +506,7 @@ let make (tree_view:GTree.view) =
     MenusHide.menu_item menu ~label:"Flat mode" ~key:key_flat_mode in
 
   (* Initial filetree nodes to display *)
-  State.compute [initial_filter];
-  let init_model, init_path_cache, _= State.get () in
+  let init_model, init_path_cache = State.compute [initial_filter] in
 
   let set_row model ?strikethrough ?text (path,raw_row) =
     let row = raw_row.MODEL.finfo in
@@ -547,23 +519,33 @@ let make (tree_view:GTree.view) =
 
   let myself = object(self)
 
-    val mutable reset_extensions = []
+    (* Invariant: the filetree is always completely rebuilt when the project
+       changes, because Design calls [reset] below. *)
 
-    val mutable select_functions = []
-    val mutable path_cache = init_path_cache
+    (* GTK model of the filetree *)
     val mutable model_custom = init_model
-      (* prevent double selection and restore activated path *)
-    val mutable hide_globals_filters = [initial_filter]
+    (* caching from nodes to paths *)
+    val mutable path_cache = init_path_cache
+    (* node currently selected *)
+    val mutable current_node = None
 
+    (* Extendable. See method register_reset_extension. *)
+    val mutable reset_extensions = []
+    (* Extendable. See method add_select_function. *)
+    val mutable select_functions = []
+    (* Extendable. See method add_global_filter *)
+    val mutable hide_globals_filters = [initial_filter]
+    (* Extendable. See method append_pixbuf_column. *)
+    val mutable columns_visibility = []
+
+    (* Should be we call the actions registered to be applied on a node,
+       even if the node is already selected. Used after 'reset' has been
+       called. *)
     val mutable force_selection = false
 
     (* Forward reference to the first column. Always set *)
     val mutable source_column = None
 
-    val mutable columns_visibility = []
-
-    method activated =
-      let _, _, n = State.get () in n
 
     method refresh_columns () =
       List.iter (fun f -> f `Visibility) columns_visibility
@@ -656,6 +638,70 @@ let make (tree_view:GTree.view) =
       with Not_found -> [] (* Some files may be hidden if they contain nothing
                               interesting *)
 
+    method find_visible_global text =
+      (* We perform up to two iterations in the list of globals, as follows:
+         1. First, we advance until the selected element (if any);
+         2. Then, we start searching for [text] until the end of the list;
+         3. If nothing was found, we start again, this time from the beginning
+            of the list until the selected global. *)
+      let regex = Str.regexp_case_fold text in
+      let name_matches name =
+        try
+          ignore (Str.search_forward regex name 0); true
+        with Not_found -> false
+      in
+      let found_selection = ref (current_node = None) in
+      let model = model_custom in
+      let get_global = function Global g -> g | _ -> assert false in
+      let is_current_node node =
+        match current_node with
+        | None -> false
+        | Some node' -> same_node node node'
+      in
+      (* Called when the currently selected node has been found. Either
+         the real search can start, or we abort because we have finished
+         wrapping around. *)
+      let node_found () =
+        if not !found_selection
+        then found_selection := true
+        else raise Global_not_found (* finished  *);
+      in
+      let rec aux text t =
+        match t.MODEL.finfo with
+        | MYTREE.MFile ({MYTREE.name},_) ->
+          (* search children *)
+          (* note: we avoid calling [storage_type] here because
+                   we do not need the child nodes *)
+          let fake_node = File (name,[]) in
+          if is_current_node fake_node then node_found ();
+          Array.iter (aux text) t.MODEL.sons
+        | MYTREE.MGlobal {MYTREE.name} as st ->
+          let node = MYTREE.storage_type st in
+          if is_current_node node then
+            node_found ()
+          else (* We never consider the current node as matching. This way, if
+               'foo' is selected, we can search for 'fo' and find it farther.*)
+            if !found_selection && name_matches name then
+              raise (Found_global (get_global node))
+      in
+      try
+        Array.iter (aux text) model#get_roots;
+        (* First search did not succeed, will try second search if
+           user wants to wrap around. *)
+        if current_node <> None &&
+           GToolbox.question_box ~title:"Not found"
+             (Printf.sprintf "No more occurrences for: %s\n\
+                              Search from beginning?" text)
+             ~buttons:["Yes"; "No"] = 1(*yes*) then
+          begin
+            assert (!found_selection);
+            (* try searching again *)
+            Array.iter (aux text) model#get_roots;
+          end;
+        None
+      with
+      | Found_global g -> Some g
+      | Global_not_found -> None
 
     method private enable_select_functions () =
       let select path path_currently_selected =
@@ -668,8 +714,7 @@ let make (tree_view:GTree.view) =
           let {MODEL.finfo=t} =
             Extlib.the (model_custom#custom_get_iter path) in
           let selected_node = MYTREE.storage_type t in
-
-          let was_activated = match self#activated with
+          let was_activated = match current_node with
             | None -> false
             | Some old_node -> same_node selected_node old_node
           in
@@ -679,7 +724,7 @@ let make (tree_view:GTree.view) =
             (*Format.printf "##Select %a: %b %b %b, %s@."
               pretty_node selected_node force_selection was_activated
               path_currently_selected (GTree.Path.to_string path) *)
-            State.Ref.set (model_custom, path_cache, Some selected_node);
+            current_node <- Some selected_node;
             let old_force_selection = force_selection in
             List.iter
               (fun f ->
@@ -705,40 +750,37 @@ let make (tree_view:GTree.view) =
 
     method private varinfo_of_global g =
       match g with
-        | GVar (vi, _, _)
-        | GVarDecl (_, vi, _)
-        | GFun ({svar = vi}, _) -> Some vi
+        | GVar (vi, _, _) | GVarDecl (vi, _)
+        | GFun ({svar = vi}, _) | GFunDecl (_, vi, _) -> Some vi
         | _ -> None
 
     method unselect =
       tree_view#selection#unselect_all ();
-      let model, cache, _= State.get () in
-      State.Ref.set (model, cache, None)
-      
+      current_node <- None
 
     (* Display a path of the gtk filetree, by expanding and centering the
        needed nodes *)
     method private show_path_in_tree path =
       expand_to_path tree_view path;
       tree_view#selection#select_path path;
-      tree_view#scroll_to_cell ~align:(0., 0.) path (Extlib.the source_column);
+      (* set_cursor updates the keyboard cursor and scrolls to the element *)
+      tree_view#set_cursor path (Extlib.the source_column);
       tree_view#misc#grab_focus ()
 
     (* TODO: keep the structure of the tree, ie. reexpand all the nodes that
        are currently expanded (not only the currently selected) *)
     method private reset_internal () =
-      (* Save the current selection, to restore it later *)
-      let _, _, prev_active = State.get () in
       (* We force a full recomputation using our filters for globals *)
-      State.compute hide_globals_filters;
-      let mc,cache,_ = State.get () in
+      let mc, cache = State.compute hide_globals_filters in
       tree_view#set_model (Some (mc:>GTree.model));
       model_custom <- mc;
       path_cache <- cache;
       List.iter (fun f -> f (self :> t)) reset_extensions;
-      State.Ref.set (mc, cache, prev_active);
       force_selection <- true;
-      (match prev_active with
+      (* Here, current_node may come from another project. This is not
+         a problem, as we only use it to do a basic search. Otherwise,
+         the solution would be to projectify it outside of the class. *)
+      (match current_node with
         | None -> ()
         | Some node ->
           match State.path_from_node path_cache node with
@@ -754,7 +796,7 @@ let make (tree_view:GTree.view) =
           true
 
     method selected_globals =
-      match self#activated with
+      match current_node with
       | None -> []
       | Some (File (_, g)) -> g
       | Some (Global g) -> [g]
@@ -835,6 +877,6 @@ let make (tree_view:GTree.view) =
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

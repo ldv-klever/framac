@@ -37,7 +37,9 @@ let compute_using_body (kf, f) ~call_kinstr ~with_formals =
   let with_locals =
     List.fold_left
       (fun acc local ->
-        Initial_state.add_unitialized acc (Locations.loc_of_varinfo local)
+        let loc = Locations.loc_of_varinfo local in
+        Cvalue.Model.add_initial_binding
+          acc loc Cvalue.V_Or_Uninitialized.uninitialized
       ) with_formals f.slocals
   in
   (* Remark: the pre-condition cannot talk about the locals. BUT
@@ -225,12 +227,17 @@ let compute_using_specification (kf, spec) ~call_kinstr ~with_formals () =
      multiplying the states instead -- or compute_assigns several times, while
      taking behaviors into account *)
   let (with_formals,trace) = State_set.join stateset in
+  let loc = CurrentLoc.get () in
+  (* We save the current location because the test performed by
+     Value_util.postconditions_mention_result uses visitors which
+     change the location. *)
   let return_used = match call_kinstr with
     | Kglobal -> true
     | Kstmt {skind = Instr (Call (lv, _, _, _))} ->
       lv <> None || Value_util.postconditions_mention_result spec
     | _ -> assert false
   in
+  CurrentLoc.set loc;
   let retres_vi, result_state, sclob =
     compute_assigns kf ab return_used ~with_formals
   in
@@ -622,6 +629,7 @@ let pre () =
 ;;
 
 let post_cleanup ~aborted =
+  Value_util.clear_call_stack ();
   (* Precompute consolidated states if required *)
   if Value_parameters.JoinResults.get () then
     Db.Value.Table_By_Callstack.iter
@@ -657,11 +665,12 @@ let force_compute () =
     Db.Value.mark_as_computed ();
     (* Mark unreachable and RTE statuses. Only do this there, not when the
        analysis was aborted (hence, not in post_cleanup), because the
-       propagation is incomplete. *)
-    if (Cvalue.Model.is_reachable (Db.Value.globals_state ())) then
-      (* Do not mark unreachable statutes if there is an alarm in the
-         initialisers, as we would mark the alarm as dead. *)
-      Eval_annots.mark_unreachable ();
+       propagation is incomplete. Also do not mark unreachable statutes if
+       there is an alarm in the initialisers (bottom initial state), as we
+       would end up marking the alarm as dead. *)
+    if (Cvalue.Model.is_reachable (Db.Value.globals_state ()))
+    then Eval_annots.mark_unreachable ()
+    else Eval_annots.mark_invalid_initializers ();
     (* Try to refine the 'Unknown' statuses that have been emitted during
        this analysis. *)
     Eval_annots.mark_green_and_red ();
@@ -690,6 +699,6 @@ let _self =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

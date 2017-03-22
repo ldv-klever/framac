@@ -55,6 +55,38 @@ let rec unroll_type ?(unroll_typedef=true) = function
   | Ctype ty when unroll_typedef -> Ctype (Cil.unrollType ty)
   | Linteger | Lreal | Lvar _ | Larrow _ | Ctype _ as ty  -> ty
 
+let is_instance_of vars t1 t2 =
+  let rec aux map t1 t2 =
+    match (unroll_type t1, unroll_type t2) with
+      | _, Lvar s when List.mem s vars ->
+          if Datatype.String.Map.mem s map then
+            Cil_datatype.Logic_type.equal t1 (Datatype.String.Map.find s map),
+            map
+          else
+            true, Datatype.String.Map.add s t1 map
+      | Ltype(ty1,prms1), Ltype(ty2,prms2) ->
+          if Cil_datatype.Logic_type_info.equal ty1 ty2 then
+            aux_list map prms1 prms2
+          else false, map
+      | Larrow(args1,rt1), Larrow(args2,rt2) ->
+          let flag,map as res = aux map rt1 rt2 in
+          if flag then aux_list map args1 args2 else res
+      | Ctype t1, Ctype t2 ->
+          Cil_datatype.Typ.equal
+            (Cil.typeDeepDropAllAttributes t1)
+            (Cil.typeDeepDropAllAttributes t2), 
+          map
+      | (Lvar _ | Ctype _ | Linteger | Lreal | Ltype _ | Larrow _), _ ->
+          Cil_datatype.Logic_type.equal t1 t2, map
+  and aux_list map l1 l2 =
+    match l1, l2 with
+      | [], [] -> true, map
+      | [], _ | _, [] -> false, map
+      | t1 :: tl1, t2 :: tl2 ->
+          let flag, map as res = aux map t1 t2 in
+          if flag then aux_list map tl1 tl2 else res
+  in fst (aux Datatype.String.Map.empty t1 t2)
+
 (* ************************************************************************* *)
 (** {1 From C to logic}*)
 (* ************************************************************************* *)
@@ -290,6 +322,27 @@ let string_to_float_lconstant str =
 	LReal { r_nearest = f.f_nearest ; r_upper = f.f_upper ; r_lower = f.f_lower ;
 		r_literal = str }
 
+let numeric_coerce ltyp t =
+  let coerce t =
+    Logic_const.term ~loc:t.term_loc (TLogic_coerce(ltyp, t)) ltyp
+  in
+  if Cil_datatype.Logic_type.equal (unroll_type t.term_type) ltyp then t
+  else match t.term_node with
+    | TLogic_coerce(_,e) -> coerce e
+    | TConst(Integer(i,_)) ->
+        (match t.term_type, ltyp with
+          | Ctype (TInt(ikind,_)), Linteger when Cil.fitsInInt ikind i ->
+              { t with term_type = Linteger }
+          | _ -> coerce t)
+    | TCastE(TInt (ikind,_), ({ term_node = TConst(Integer(i,_))} as t'))
+        when Cil.fitsInInt ikind i ->
+        (match t'.term_type with
+          | Linteger -> t'
+          | Ctype (TInt (ikind,_)) when Cil.fitsInInt ikind i ->
+              { t' with term_type = Linteger }
+          | _ -> coerce t')
+    | _ -> coerce t
+
 let rec expr_to_term ~cast e =
   let e_typ = unrollType (Cil.typeOf e) in
   let loc = e.eloc in
@@ -302,29 +355,41 @@ let rec expr_to_term ~cast e =
     | AddrOf lv -> TAddrOf (lval_to_term_lval ~cast lv)
     | CastE (ty,e) -> (mk_cast (unrollType ty) (expr_to_term ~cast e)).term_node
     | BinOp (op, l, r, _) ->
-      let is_arith_cmp = match op with
-	| Cil_types.Lt | Cil_types.Gt 
-	| Cil_types.Le | Cil_types.Ge 
-	| Cil_types.Eq | Cil_types.Ne -> true 
-	| _ -> false
+      let l' = expr_to_term_coerce ~cast l in
+      let r' = expr_to_term_coerce ~cast r in
+      (* type of the conversion of e in the logic. Beware that boolean
+         operators have boolean type. *)
+      let tcast =
+        match op, cast with
+        | ( Cil_types.Lt | Cil_types.Gt | Cil_types.Le | Cil_types.Ge 
+	  | Cil_types.Eq | Cil_types.Ne| Cil_types.LAnd | Cil_types.LOr),
+          _ -> Some Logic_const.boolean_type
+        | _, true -> Some (typ_to_logic_type e_typ)
+        | _, false -> None
       in
-      let nnode = TBinOp (op,expr_to_term ~cast l,expr_to_term ~cast r) in
-      if (cast && (Cil.isIntegralType e_typ || Cil.isFloatingType e_typ))
-        || is_arith_cmp (* BTS 1175 *)
-      then
-        let ty =
-          if is_arith_cmp then Logic_const.boolean_type
-          else typ_to_logic_type e_typ
-        in
-        (mk_cast e_typ (Logic_const.term nnode ty)).term_node
-      else nnode
-    | UnOp (op, e, _) ->
-      let nnode = TUnOp (op,expr_to_term ~cast e) in
-      if cast && (Cil.isIntegralType e_typ || Cil.isFloatingType e_typ)
-      then
-	(mk_cast e_typ
-           (Logic_const.term nnode (typ_to_logic_type e_typ))).term_node
-      else nnode
+      let tnode = TBinOp (op,l',r') in
+      (* if [cast], we add a cast. Otherwise, when [op] is an operator
+         returning a boolean, we need to cast the whole expression as an
+         integral type, because (1) the recursive subcalls expect an
+         integer/float/pointer here, and (2) there is no implicit conversion
+         Boolean -> integer. *)
+      begin match tcast with
+        | Some lt -> (mk_cast e_typ (Logic_const.term tnode lt)).term_node
+        | None -> tnode
+      end
+    | UnOp (op, u, _) ->
+      let u' = expr_to_term_coerce ~cast u in
+      (* See comments for binop case above. *)
+      let tcast = match op, cast with
+        | Cil_types.LNot, _ -> Some Logic_const.boolean_type
+        | _, true -> Some (typ_to_logic_type e_typ)
+        | _, false -> None
+      in
+      let tnode = TUnOp (op, u') in
+      begin match tcast with
+        | Some lt -> (mk_cast e_typ (Logic_const.term tnode lt)).term_node
+        | None -> tnode
+      end
     | AlignOfE e -> TAlignOfE (expr_to_term ~cast e)
     | AlignOf typ -> TAlignOf typ
     | Lval lv -> TLval (lval_to_term_lval ~cast lv)
@@ -333,21 +398,31 @@ let rec expr_to_term ~cast e =
   if cast then Logic_const.term ~loc result (Ctype e_typ)
   else
     match e.enode with
-    | Const(CStr _ | CWStr _ | CChr _ | CEnum _) | Lval(Var _, NoOffset) -> 
-      Logic_const.term ~loc result (Ctype e_typ)
+    | Const _ | Lval _ | CastE _ ->
+       (* all immediate values keep their C type by default, and are only lifted
+          to integer/real if needed. *)
+       Logic_const.term ~loc result (Ctype e_typ)
     | _ -> Logic_const.term ~loc result (typ_to_logic_type e_typ)
+
+and expr_to_term_coerce ~cast e =
+  let t = expr_to_term ~cast e in
+  match t.term_type with
+  | Ctype typ when Cil.isIntegralType typ || Cil.isFloatingType typ ->
+      let ltyp = typ_to_logic_type typ in
+      numeric_coerce ltyp t
+  | _ -> t
 
 and lval_to_term_lval ~cast (host,offset) =
   host_to_term_host ~cast host, offset_to_term_offset ~cast offset
 
 and host_to_term_host ~cast = function
   | Var s -> TVar (Cil.cvar_to_lvar s)
-  | Mem e -> TMem (expr_to_term ~cast e)
+  | Mem e -> TMem (expr_to_term ~cast e) (*no need of numeric coercion - pointer *)
 
 and offset_to_term_offset ~cast:cast = function
   | NoOffset -> TNoOffset
   | Index (e,off) ->
-    TIndex (expr_to_term ~cast e,offset_to_term_offset ~cast off)
+    TIndex (expr_to_term_coerce ~cast e,offset_to_term_offset ~cast off)
   | Field (fi,off) -> TField(fi,offset_to_term_offset ~cast off)
 
 
@@ -942,9 +1017,11 @@ let rec is_same_pl_type t1 t2 =
         s1 = s2 && is_same_list is_same_pl_type prms1 prms2
       | LTarrow(prms1,t1), LTarrow(prms2,t2) ->
         is_same_list is_same_pl_type prms1 prms2 && is_same_pl_type t1 t2
+      | LTattribute(t1,attr1), LTattribute(t2,attr2) ->
+	is_same_pl_type t1 t2 && attr1 = attr2
       | (LTvoid | LTinteger | LTreal | LTint _ | LTfloat _ | LTarrow _
         | LTarray _ | LTpointer _ | LTenum _
-        | LTunion _ | LTnamed _ | LTstruct _),_ ->
+        | LTunion _ | LTnamed _ | LTstruct _ | LTattribute _),_ ->
         false
 
 let is_same_quantifiers =
@@ -1888,18 +1965,27 @@ let pointer_comparable ?loc t1 t2 =
   let obj_ptr = Ctype Cil.voidPtrType in
   let discriminate t =
     let loc = t.term_loc in
-    match t.term_type with
+    match unroll_type t.term_type with
       | Ctype ty ->
-          (match Cil.unrollType ty with
+          (match Cil.unrollTypeDeep ty with
              | TPtr(TFun _,_) ->
-                 Logic_const.term ~loc (TCastE(cfct_ptr,t)) fct_ptr, fct_ptr
-             | TPtr _  -> t, obj_ptr
-             | TVoid _ | TInt _ | TFloat _ | TFun _ | TNamed _
-             | TComp _ | TEnum _ | TBuiltin_va_list _
-             | TArray _ ->
-                 Logic_const.term ~loc (TCastE(voidPtrType,t)) obj_ptr, obj_ptr
+               mk_cast ~loc cfct_ptr t, fct_ptr
+             | TPtr(TVoid _,_) -> t, obj_ptr
+             | TPtr _ | TInt _ | TFloat _ | TEnum _ ->
+               (* Value may emit pointer_comparable alarms on anything that
+                  may be compared. We cast scalar to void* to account for
+                  this *)
+               mk_cast ~loc Cil.voidPtrType t, obj_ptr
+             | TVoid _ | TFun _ | TNamed _ | TComp _ | TBuiltin_va_list _
+             | TArray _ (* in logic array do not decay implicitely 
+                           into pointers. *)
+               ->
+                 Kernel.fatal 
+                   "Trying to call \\pointer_comparable on non-pointer value"
           )
-      | _ -> Logic_const.term ~loc (TCastE(voidPtrType,t)) obj_ptr, obj_ptr
+      | _ ->
+          Kernel.fatal
+            "Trying to call \\pointer_comparable on non-C pointer type value"
   in
   let t1, ty1 = discriminate t1 in
   let t2, ty2 = discriminate t2 in

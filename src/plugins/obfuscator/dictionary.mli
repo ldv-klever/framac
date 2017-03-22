@@ -35,6 +35,6 @@ val is_computed: unit -> bool
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

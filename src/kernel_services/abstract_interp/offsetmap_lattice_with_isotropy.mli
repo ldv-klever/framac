@@ -70,6 +70,6 @@ val anisotropic_cast : size:Integer.t -> t -> t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

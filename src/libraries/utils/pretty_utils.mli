@@ -20,16 +20,31 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Pretty-printer utilities. *)
+(** Pretty-printer utilities.
+    @plugin development guide *)
 
 (* ********************************************************************** *)
 (** {2 pretty-printing to a string} *)
 (* ********************************************************************** *)
 
 val sfprintf: ('a,Format.formatter,unit,string) format4 -> 'a
-(** similar as Format.sprintf, but %a are allowed in the formatting string*)
+(** similar as Format.sprintf, but %a are allowed in the formatting string
+    
+    NB: Since 4.01, Format.asprintf provides the same feature. This function
+    should be deprecated when OCaml >= 4.01.0 becomes mandatory.
+ *)
 
-val to_string: (Format.formatter -> 'a -> unit) -> 'a -> string
+val ksfprintf:
+  (string -> 'b) -> ('a, Format.formatter, unit, 'b) format4 -> 'a
+(** similar to Format.kfprintf, but the continuation is given the result
+    string instead of a formatter.
+    @since Magnesium-20151001
+*)
+
+val to_string: ?margin:int -> (Format.formatter -> 'a -> unit) -> 'a -> string
+(** pretty-prints the supplied value into a string. [margin] is the
+  maximal width of the box before a line-break is inserted.
+  See {!Format.set_margin} *)
 
 (** {2 separators} *)
 
@@ -47,12 +62,12 @@ type 'a formatter = Format.formatter -> 'a -> unit
 type ('a,'b) formatter2 = Format.formatter -> 'a -> 'b -> unit
 
 val pp_list: ?pre:sformat -> ?sep:sformat -> ?last:sformat -> ?suf:sformat ->
+  'a formatter -> 'a list formatter
 (** pretty prints a list. The optional arguments stands for
     - the prefix to output before a non-empty list (default: open a box)
     - the separator between two elements (default: nothing)
     - the last separator to be put just before the last element (default:sep)
     - the suffix to output after a non-empty list (default: close box) *)
-  'a formatter -> 'a list formatter
 
 val pp_array: ?pre:sformat -> ?sep:sformat -> ?suf:sformat ->
   (int,'a) formatter2 -> 'a array formatter
@@ -79,6 +94,16 @@ val pp_cond: ?pr_false:sformat -> bool -> sformat formatter
 (** [pp_cond cond f s]  pretty-prints [s] if cond is [true] and the optional
     pr_false, which defaults to nothing, otherwise *)
 
+val pp_pair: ?pre:sformat -> ?sep:sformat -> ?suf:sformat ->
+  'a formatter -> 'b formatter -> ('a * 'b)  formatter
+(** [pp_pair ?pre ?sep ?suf pp_a pp_b (a,b)] pretty prints the pair [(a,b)],
+    using the pretty printers [pp_a] and [pp_b], with optional
+    prefix/separator/suffix, whose default values are:
+    - pre: open a box
+    - sep: print a comma character
+    - suf: close a box.
+    @since Magnesium-20151001 *)
+
 val pp_flowlist: 
   ?left:sformat -> ?sep:sformat -> ?right:sformat -> 'a formatter -> 
   'a list formatter
@@ -95,6 +120,6 @@ val pp_trail : 'a formatter -> 'a formatter
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -65,6 +65,6 @@ val replace_call_precondition: Property.t -> stmt -> Property.t -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

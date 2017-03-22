@@ -26,11 +26,11 @@ val on_update : (unit -> unit) -> unit
 val reload : unit -> unit
 val on_reload : (unit -> unit) -> unit
 
-val run_and_prove : 
+val run_and_prove :
   Design.main_window_extension_points -> GuiSource.selection -> unit
 
-val register : 
-  main:Design.main_window_extension_points -> 
+val register :
+  main:Design.main_window_extension_points ->
   available_provers:GuiConfig.provers ->
   enabled_provers:GuiConfig.provers ->
   configure_provers:(unit -> unit) -> unit

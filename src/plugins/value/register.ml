@@ -26,6 +26,8 @@ open Eval_exprs
 
 (** Function of the value plugin registered in the kernel *)
 
+let dkey_card = Value_parameters.register_category "cardinal"
+
 let display ?fmt kf =
   (* Do not pretty Cil-generated variables or out-of scope local variables *)
   let filter_generated_and_locals base =
@@ -47,11 +49,21 @@ let display ?fmt kf =
     if Cvalue.Model.is_reachable fst_values
       && not (Cvalue.Model.is_top fst_values)
     then begin
+      let print_cardinal = Value_parameters.is_debug_key_enabled dkey_card in
+      let estimate =
+        if print_cardinal
+        then Cvalue.Model.cardinal_estimate values
+        else Cvalue.CardinalEstimate.one
+      in
       let outs = !Db.Outputs.get_internal kf in
       let outs = Zone.filter_base filter_generated_and_locals outs in
       let header fmt =
-        Format.fprintf fmt "Values at end of function %a:"
+        Format.fprintf fmt "Values at end of function %a:%t"
           Kernel_function.pretty kf
+          (fun fmt ->
+            if print_cardinal then
+              Format.fprintf fmt " (~%a states)"
+                Cvalue.CardinalEstimate.pretty estimate)
       in
       let body fmt =
         Format.fprintf fmt "@[%t@]@[  %t@]"
@@ -71,7 +83,7 @@ let display ?fmt kf =
 let display_results () =
   if Db.Value.is_computed () && Value_parameters.verbose_atleast 1 then begin
     Value_parameters.result "====== VALUES COMPUTED ======";
-    !Db.Semantic_Callgraph.topologically_iter_on_functions display;
+    Callgraph.Uses.iter_in_rev_order display;
     Value_parameters.result "%t" Value_perf.display
   end
 
@@ -82,6 +94,7 @@ let main () =
   if Value_parameters.ForceValues.get () then begin
     !Db.Value.compute ();
     Value_parameters.ForceValues.output display_results;
+    if Value_parameters.ReusedExprs.get () then Mem_lvalue.compute ();
   end
 
 let () = Db.Main.extend main
@@ -128,12 +141,18 @@ let lval_to_precise_loc_with_deps_state =
 
 let lval_to_zone kinstr ~with_alarms lv =
   Valarms.start_stmt kinstr;
-  let state = Db.Value.noassert_get_state kinstr in
-  let _, r =
-    lval_to_precise_loc_with_deps_state_alarm ~with_alarms state ~deps:None lv
+  let state_to_joined_zone state acc =
+    let _, r =
+      lval_to_precise_loc_with_deps_state_alarm ~with_alarms state ~deps:None lv
+    in
+    let zone = Precise_locs.enumerate_valid_bits ~for_writing:false r in
+    Zone.join acc zone
+  in
+  let zone = Db.Value.fold_state_callstack
+    state_to_joined_zone Zone.bottom ~after:false kinstr
   in
   Valarms.end_stmt ();
-  Precise_locs.enumerate_valid_bits ~for_writing:false r
+  zone
 
 let lval_to_zone_state state lv =
   let _, r = lval_to_precise_loc_with_deps_state state ~deps:None lv in
@@ -157,10 +176,18 @@ let expr_to_kernel_function_state ~with_alarms state ~deps exp =
 
 let expr_to_kernel_function kinstr ~with_alarms ~deps exp =
   Valarms.start_stmt kinstr;
-  let state = Db.Value.noassert_get_state kinstr in
-  (* Format.printf "STATE IS %a@\n" Cvalue.Model.pretty state;*)
-  let r =
-    expr_to_kernel_function_state  ~with_alarms state ~deps exp
+  let state_to_joined_kernel_function state (z_acc, kf_acc) =
+    let z, kf =
+      expr_to_kernel_function_state ~with_alarms state ~deps exp
+    in
+    Zone.join z z_acc,
+    Kernel_function.Hptset.union kf kf_acc
+  in
+  let r = Db.Value.fold_state_callstack
+    state_to_joined_kernel_function
+    ((match deps with None -> Zone.bottom | Some z -> z),
+     Kernel_function.Hptset.empty)
+    ~after:false kinstr
   in
   Valarms.end_stmt ();
   r
@@ -331,6 +358,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

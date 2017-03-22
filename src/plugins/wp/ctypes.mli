@@ -102,7 +102,7 @@ val sub_c_int: c_int -> c_int -> bool
 
 val sub_c_float : c_float -> c_float -> bool
 
-val sizeof_typ : typ -> int
+val sizeof_defined : c_object -> bool
 val sizeof_object : c_object -> int
 val field_offset : fieldinfo -> int
 

@@ -31,20 +31,20 @@ open Cil_datatype
 (* -------------------------------------------------------------------------- *)
 
 let find_call env loc f =
-  try env.find_var f 
-  with Not_found -> 
+  try env.find_var f
+  with Not_found ->
     env.error loc "Unknown function '%s'" f ; assert false
 
 let typecheck cmd ~typing_context ~loc bhv ps =
-  let fs = 
+  let fs =
     List.map
       (fun p ->
          let loc = p.lexpr_loc in
          match p.lexpr_node with
-         | PLvar f -> 
+         | PLvar f ->
              let fv = find_call typing_context loc f in
              Logic_const.term ~loc (TLval(TVar fv,TNoOffset)) fv.lv_type
-         | _ -> 
+         | _ ->
              typing_context.error loc "Function name expected for calls" ;
              assert false
       ) ps in
@@ -65,7 +65,7 @@ let rec either loc = function
   | [p] -> p
   | p::ps -> Logic_const.por ~loc (p,either loc ps)
 
-let get_called_kf (p : identified_predicate) : kernel_function list = 
+let get_called_kf (p : identified_predicate) : kernel_function list =
   try
     match p.ip_content with
     | Pseparated ts -> List.map get_call ts
@@ -74,22 +74,22 @@ let get_called_kf (p : identified_predicate) : kernel_function list =
     let source = fst p.ip_loc in
     Wp_parameters.failure ~source "Calls annotation not well-formed" ; []
 
-let get_calls ecmd bhvs : (string * Kernel_function.t list) list = 
+let get_calls ecmd bhvs : (string * Kernel_function.t list) list =
   List.fold_right
     (fun bhv calls ->
        let fs = ref [] in
        List.iter
-         (function 
+         (function
            | cmd,_,ps when cmd = ecmd ->
                List.iter (fun p -> fs := !fs @ get_called_kf p) ps
            | _ -> ())
          bhv.b_extended ;
-       let fs = !fs in 
+       let fs = !fs in
        if fs <> [] then (bhv.b_name , fs) :: calls else calls
     ) bhvs []
 
 let pp_calls fmt calls =
-  List.iter 
+  List.iter
     (fun kf -> Format.fprintf fmt "@ %a" Kernel_function.pretty kf)
     calls
 
@@ -100,9 +100,9 @@ let pp_calls fmt calls =
 module PInfo = struct let module_name = "Dyncall.Point" end
 module Point = Datatype.Pair_with_collections(Datatype.String)(Stmt)(PInfo)
 module Calls = Datatype.List(Kernel_function)
-module CInfo = 
-struct 
-  let name = "Dyncall.CallPoints" 
+module CInfo =
+struct
+  let name = "Dyncall.CallPoints"
   let dependencies = [Ast.self]
   let size = 63
 end
@@ -130,7 +130,7 @@ class dyncall =
 
     method count = count
 
-    method private stmt = 
+    method private stmt =
       match self#current_stmt with None -> assert false | Some stmt -> stmt
 
     method! vfunc _ =
@@ -149,7 +149,7 @@ class dyncall =
                     if Wp_parameters.has_dkey "calls" then
                       let source = snd (Stmt.loc stmt) in
                       if Cil.default_behavior_name = bhv then
-                        Wp_parameters.result ~source 
+                        Wp_parameters.result ~source
                           "@[<hov 2>Calls%a@]" pp_calls kfs
                       else
                         Wp_parameters.result ~source
@@ -166,7 +166,7 @@ class dyncall =
             List.iter
               (fun (bhv,kfs) ->
                  Wp_parameters.result
-                   "@[<hov 2>%a for %s instance of%a" 
+                   "@[<hov 2>%a for %s instance of%a"
                    Kernel_function.pretty kf bhv pp_calls kfs)
               calls
         end ;
@@ -174,7 +174,7 @@ class dyncall =
 
     method! vinst = function
       | Call( _ , fct , _ , _ ) when Kernel_function.get_called fct = None ->
-          scope <- self#stmt :: scope ; 
+          scope <- self#stmt :: scope ;
           SkipChildren
       | _ -> SkipChildren
 

@@ -34,7 +34,7 @@ class printer fmt title =
   let bar = String.make 50 '-' in
   object(self)
     val mutable lastpar = true
-    initializer 
+    initializer
       begin
         Format.fprintf fmt "(* ----%s---- *)@\n" bar ;
         Format.fprintf fmt "(* --- %-50s --- *)@\n" title ;
@@ -53,7 +53,7 @@ class printer fmt title =
     method section s =
       self#paragraph ;
       Format.fprintf fmt "(* --- %-20s --- *)@\n" s
-    method printf : 'a. ('a,Format.formatter,unit) format -> 'a = 
+    method printf : 'a. ('a,Format.formatter,unit) format -> 'a =
       fun msg -> Format.fprintf fmt msg
   end
 
@@ -61,7 +61,7 @@ class printer fmt title =
 (* --- Buffer Validation                                                  --- *)
 (* -------------------------------------------------------------------------- *)
 
-class type pattern = 
+class type pattern =
   object
     method get_after : ?offset:int -> int -> string
     method get_string : int -> string
@@ -76,23 +76,23 @@ class group text =
 
     method next = Str.match_end ()
 
-    method get_after ?(offset=0) k = 
+    method get_after ?(offset=0) k =
       try
         let n = String.length text in
         let p = Str.group_end k + offset + 1 in
         if p >= n then "" else String.sub text p (n-p)
       with Not_found -> ""
     method get_string k = try Str.matched_group k text with Not_found -> ""
-    method get_int k = 
+    method get_int k =
       try int_of_string (Str.matched_group k text)
       with Not_found | Failure _ -> 0
-    method get_float k = 
+    method get_float k =
       try float_of_string (Str.matched_group k text)
       with Not_found | Failure _ -> 0.0
   end
 
 let rec validate_pattern ((re,all,job) as p) group pos =
-  group#search re pos ; 
+  group#search re pos ;
   job (group :> pattern) ;
   if all then validate_pattern p group group#next
 
@@ -100,7 +100,7 @@ let validate_buffer buffer validers =
   let text = Buffer.contents buffer in
   let group = new group text in
   List.iter
-    (fun pattern -> 
+    (fun pattern ->
        try validate_pattern pattern group 0
        with Not_found -> ()
     ) validers
@@ -109,7 +109,7 @@ let dump_buffer buffer = function
   | None -> ()
   | Some log ->
       let n = Buffer.length buffer in
-      if n > 0 then 
+      if n > 0 then
         Command.write_file log (fun out -> Buffer.output_buffer out buffer)
       else if Wp_parameters.is_out () then
         Extlib.safe_remove log
@@ -117,7 +117,7 @@ let dump_buffer buffer = function
 let echo_buffer buffer =
   let n = Buffer.length buffer in
   if n > 0 then
-    Log.print_on_output 
+    Log.print_on_output
       (fun fmt ->
          Format.pp_print_string fmt (Buffer.contents buffer) ;
          Format.pp_print_flush fmt () ;
@@ -147,10 +147,10 @@ let pp_file ~message ~file =
 (* -------------------------------------------------------------------------- *)
 
 let p_group p = Printf.sprintf "\\(%s\\)" p
-let p_int = "\\([0-9]+\\)" 
-let p_float = "\\([0-9.]+\\)" 
-let p_string = "\"\\([^\"]*\\)\"" 
-let p_until_space = "\\([^ \t\n]*\\)" 
+let p_int = "\\([0-9]+\\)"
+let p_float = "\\([0-9.]+\\)"
+let p_string = "\"\\([^\"]*\\)\""
+let p_until_space = "\\([^ \t\n]*\\)"
 
 type logs = [ `OUT | `ERR | `BOTH ]
 
@@ -161,7 +161,7 @@ let is_opt a = String.length a > 0 && a.[0] = '-'
 
 let rec pp_args fmt = function
   | [] -> ()
-  | a::b::w when is_opt a && not (is_opt a) -> 
+  | a::b::w when is_opt a && not (is_opt a) ->
       Format.fprintf fmt "@ %s %s" a b ;
       pp_args fmt w
   | a::w ->
@@ -196,16 +196,16 @@ class command name =
     method add_float ~name ~value =
       param <- param @ [ name ; string_of_float value ]
 
-    method add_list ~name values = 
+    method add_list ~name values =
       List.iter (fun v -> param <- param @ [ name ; v ]) values
 
     method timeout t = timeout <- t
 
-    method validate_pattern ?(logs=`BOTH) ?(repeat=false) 
-        regexp (handler : pattern -> unit) = 
+    method validate_pattern ?(logs=`BOTH) ?(repeat=false)
+        regexp (handler : pattern -> unit) =
       begin
         let v = [regexp,repeat,handler] in
-        if is_out (logs:logs) then validout <- validout @ v ; 
+        if is_out (logs:logs) then validout <- validout @ v ;
         if is_err (logs:logs) then validerr <- validerr @ v ;
       end
 
@@ -282,14 +282,30 @@ let server () =
 (* --- Task Composition                                                   --- *)
 (* -------------------------------------------------------------------------- *)
 
-let spawn jobs =
-  let pool = ref [] in
-  let canceled = ref false in
-  let callback r = if not !canceled && r then
-      begin
-        canceled := true ;
-        List.iter Task.cancel !pool ;
-      end in
-  let server = server () in
-  pool := List.map (fun t -> t >>= Task.call callback) jobs ;
-  List.iter (Task.spawn server) !pool
+let silent _ = ()
+let spawn ?(monitor=silent) jobs =
+  begin
+    let pool = ref [] in
+    let step = ref 0 in
+    let canceled = ref false in
+    let callback a r =
+      if r then
+        begin if not !canceled then
+            begin
+              canceled := true ;
+              monitor (Some a) ;
+              List.iter Task.cancel !pool ;
+            end
+        end
+      else
+        begin
+          decr step ;
+          if not !canceled && !step = 0 then
+            monitor None ;
+        end in
+    let pack (a,t) = t >>= Task.call (callback a) in
+    let server = server () in
+    step := List.length jobs ;
+    pool := List.map pack jobs ;
+    List.iter (Task.spawn server) !pool ;
+  end

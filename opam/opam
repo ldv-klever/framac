@@ -1,11 +1,12 @@
 opam-version: "1.2.0"
-name: "frama-c"
-version: "20150201~rc2"
+name: "frama-c-base"
+version: "20151002"
 maintainer: "francois.bobot@cea.fr"
 authors: [
   "Patrick Baudin"
   "François Bobot"
   "Richard Bonichon"
+  "David Bühler"
   "Loïc Correnson"
   "Pascal Cuoq"
   "Zaynah Dargaye"
@@ -14,16 +15,21 @@ authors: [
   "Florent Kirchner"
   "Matthieu Lemerre"
   "Claude Marché"
+  "André Maroneze"
   "Benjamin Monate"
   "Yannick Moy"
   "Anne Pacalet"
+  "Valentin Perrelle"
+  "Guillaume Petiot"
   "Virgile Prevosto"
+  "Armand Puccetti"
+  "Muriel Roger"
   "Julien Signoles"
   "Boris Yakobowski"
 ]
 homepage: "http://frama-c.com/"
 license: "GNU Lesser General Public License version 2.1"
-doc: ["http://frama-c.com/download/user-manual-Fluorine-20130601.pdf"]
+doc: ["http://frama-c.com/download/user-manual-Sodium-20150201.pdf"]
 bug-reports: "https://bts.frama-c.com/"
 tags: [
   "deductive"
@@ -65,12 +71,25 @@ build-test: [
 
 depends: [
   "ocamlgraph" { = "1.8.5" | = "1.8.6" }
-  "lablgtk" { >= "2.18.2" } #for ocaml >= 4.02.1
-  "conf-gtksourceview"
-  "conf-gnomecanvas"
+  "ocamlfind"
 ]
 
-conflict: [
-  "why3" { < "0.85" }
+depopts: [
+  "zarith"
+  "lablgtk"
+  "conf-gtksourceview"
+  "conf-gnomecanvas"
+  "coq" { build }
 ]
-available: [ ocaml-version >= "3.12" & ocaml-version != "4.02.0" ]
+
+messages: [
+   "Why3 can be used by the WP plugin for running additional automatic solvers" { !why3:installed }
+   "Coq can be used with the WP plugin for proving interactively proof obligations" { !coq:installed }
+]
+
+conflicts: [
+  "why3" { < "0.85" }
+  "lablgtk" { < "2.18.2" } #for ocaml >= 4.02.1
+]
+
+available: [ ocaml-version >= "4.00.1" & ocaml-version != "4.02.0" & ocaml-version != "4.02.2" ]

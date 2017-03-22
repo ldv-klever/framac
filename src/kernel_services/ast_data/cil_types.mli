@@ -121,13 +121,20 @@ and global =
   (** Declares an enumeration tag. Use as a forward declaration. This is
       printed without the items.  *)
 
-  | GVarDecl of funspec * varinfo * location
-  (** A variable declaration (not a definition). If the variable has a
-      function type then this is a prototype. There can be several
-      declarations and at most one definition for a given variable. If both
-      forms appear then they must share the same varinfo structure. A
-      prototype shares the varinfo with the fundec of the definition. Either
-      has storage Extern or there must be a definition in this file *)
+  | GVarDecl of varinfo * location
+  (** A variable declaration (not a definition) for a variable with object
+      type. There can be several declarations and at most one definition for
+      a given variable. If both forms appear then they must share the same
+      varinfo structure. Either has storage Extern or there must be a
+      definition in this file *)
+
+  | GFunDecl of funspec * varinfo * location
+  (** A variable declaration (not a definition) for a function, i.e. a
+      prototype. There can be several declarations and at most one definition
+      for a given function. If both forms appear then they must share the same
+      varinfo structure. A prototype shares the varinfo with the fundec of the
+      definition. Either has storage Extern or there must be a definition in
+      this file. *)
 
   | GVar  of varinfo * initinfo * location
   (** A variable definition. Can have an initializer. The initializer is
@@ -485,8 +492,9 @@ and typeinfo = {
 
 (** Each local or global variable is represented by a unique
     {!Cil_types.varinfo} structure. A global {!Cil_types.varinfo} can be
-    introduced with the [GVarDecl] or [GVar] or [GFun] globals. A local varinfo
-    can be introduced as part of a function definition {!Cil_types.fundec}.
+    introduced with the [GVarDecl] or [GVar], [GFunDecl] or [GFun] globals.
+    A local varinfo can be introduced as part of a function definition
+    {!Cil_types.fundec}.
 
     All references to a given global or local variable must refer to the same
     copy of the [varinfo]. Each [varinfo] has a globally unique identifier that
@@ -584,7 +592,8 @@ and varinfo = {
       Those variables do *not* have an associated {!GVar} or {!GVarDecl}. *)
 
   mutable vlogic_var_assoc: logic_var option
-(** logic variable representing this variable in the logic world*)
+  (** Logic variable representing this variable in the logic world. Do not
+      access this field directly. Instead, call {!Cil.cvar_to_lvar}. *)
 }
 
 (** Storage-class information *)
@@ -1042,8 +1051,9 @@ and stmtkind =
       @plugin development guide *)
 
   | If of exp * block * block * location
-  (** A conditional. Two successors, the "then" and the "else" branches. Both
-      branches fall-through to the successor of the If statement.
+  (** A conditional. Two successors, the "then" and the "else" branches (in 
+      this order).
+      Both branches fall-through to the successor of the If statement.
       @plugin development guide *)
 
   | Switch of exp * block * (stmt list) * location
@@ -1099,6 +1109,7 @@ and stmtkind =
       In case you do not care about this feature just handle it
       like a block (see {!Cil.block_from_unspecified_sequence}).
       @plugin development guide *)
+
   | Throw of (exp * typ) option * location
       (** Throws an exception, C++ style.
           We keep the type of the expression, to match
@@ -1107,6 +1118,7 @@ and stmtkind =
           the exception: we keep normal and exceptional control-flow
           completely separate, as in Jo and Chang, ICSSA 2004.
        *)
+
   | TryCatch of block * (catch_binder * block) list * location
 
   | TryFinally of block * block * location
@@ -1133,19 +1145,19 @@ and stmtkind =
     exception. The location corresponds to the try keyword.
     @plugin development guide *)
 
-(** Kind of exceptions that are catched by a given clause. *)
+(** Kind of exceptions that are caught by a given clause. *)
 and catch_binder =
   | Catch_exn of varinfo * (varinfo * block) list
       (** catch exception of given type(s). 
           If the list is empty, only exceptions with the same type as the
-          varinfo can be catched. If the list is non-empty, only exceptions
-          matching one of the type of a varinfo in the list are catched.
+          varinfo can be caught. If the list is non-empty, only exceptions
+          matching one of the type of a varinfo in the list are caught.
           The associated block contains the operations necessary to transform
           the matched varinfo into the principal one. 
           Semantics is by value (i.e. the varinfo is bound to a copy of the
-          catched object).
+          caught object).
        *)
-  | Catch_all (** default catch clause: all exceptions are catched. *)
+  | Catch_all (** default catch clause: all exceptions are caught. *)
 
 (** Instructions. They may cause effects directly but may not have control
     flow.*)
@@ -1457,13 +1469,6 @@ and predicate =
   (** predicate refers to a particular program point. *)
   | Pvalid_read of logic_label * term   (** the given locations are valid for reading. *)
   | Pvalid of logic_label * term   (** the given locations are valid. *)
-  (** | Pvalid_index of term * term
-      {b deprecated:} Use [Pvalid(TBinOp(PlusPI,p,i))] instead.
-          [Pvalid_index(p,i)] indicates that accessing the [i]th element
-          of [p] is valid.
-      | Pvalid_range of term * term * term
-       {b deprecated:} Use [Pvalid(TBinOp(PlusPI(p,Trange(i1,i2))))] instead.
-          similar to [Pvalid_index] but for a range of indices.*)
   | Pinitialized of logic_label * term   (** the given locations are initialized. *)
   | Pdangling of logic_label * term (** the given locations contain dangling
                                         adresses. *)
@@ -1731,6 +1736,6 @@ type mach = {
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

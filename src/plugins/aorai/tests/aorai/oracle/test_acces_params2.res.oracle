@@ -18,16 +18,14 @@ int rr = 1;
 /*@ global invariant inv: 0 ≤ rr ≤ 5000;
  */
 /*@ ghost enum aorai_ListOper aorai_CurOperation = op_main; */
-/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called;
-*/
+/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called; */
 /*@ ghost int S1 = 1; */
 /*@ ghost int S2 = 0; */
 /*@ ghost int S3 = 0; */
 /*@ ghost int S4 = 0; */
 /*@ ghost int S5 = 0; */
 /*@ ghost int S6 = 0; */
-/*@ ghost int S7 = 0;
-*/
+/*@ ghost int S7 = 0; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_opa;
     assigns aorai_CurOpStatus, aorai_CurOperation, S1, S2, S3, S4, S5, S6,

@@ -67,11 +67,12 @@ let () =
           Cmdline.parse_and_boot
             on_from_name (fun () -> !Db.Toplevel.run) run_plugins)
     ~at_normal_exit:Cmdline.run_normal_exit_hook
-    ~quit:true
     ~on_error:Cmdline.run_error_exit_hook;
+
+(* Implicit exit 0 if we haven't exited yet *)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -27,14 +27,17 @@ open VCS
 (* -------------------------------------------------------------------------- *)
 
 val prove : Wpo.t ->
-  ?mode:mode -> 
+  ?mode:mode ->
+  ?start:(Wpo.t -> unit) ->
   ?callin:(Wpo.t -> prover -> unit) ->
   ?callback:(Wpo.t -> prover -> result -> unit) ->
   prover -> bool Task.task
 
 val spawn : Wpo.t ->
+  ?start:(Wpo.t -> unit) ->
   ?callin:(Wpo.t -> prover -> unit) ->
   ?callback:(Wpo.t -> prover -> result -> unit) ->
+  ?success:(Wpo.t -> prover option -> unit) ->
   (mode * prover) list -> unit
 
 val wp_why3ide:

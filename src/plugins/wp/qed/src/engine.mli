@@ -48,7 +48,7 @@ type callstyle =
   | CallVoid (** Call is [f(x,...)] ; in [f()], [()] is mandatory *)
   | CallApply (** Call is [f x ...] *)
 
-type mode = 
+type mode =
   | Mpositive  (** Current scope is [Prop] in positive position. *)
   | Mnegative  (** Current scope is [Prop] in negative position. *)
   | Mterm      (** Current scope is [Term]. *)
@@ -116,12 +116,12 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     method pp_farray : 'tau printer2 (** For [k->a] arrays *)
 
     method pp_tvar : int printer (** Type variables. *)
-    method pp_datatype : 'adt -> 'tau list printer 
+    method pp_datatype : 'adt -> 'tau list printer
 
     method pp_tau : 'tau printer (** Without parentheses. *)
     method pp_subtau : 'tau printer (** With parentheses if non-atomic. *)
 
-    (** {3 Current Mode} 
+    (** {3 Current Mode}
 
         The mode represents the expected type for a
         term to printed.  A requirement for all term printers in the
@@ -151,7 +151,7 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
 
     method pp_var : string printer
 
-    (** {3 Calls} 
+    (** {3 Calls}
 
         These printers only applies to connective, operators and
         functions that are morphisms {i w.r.t} current mode.
@@ -161,7 +161,7 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     method pp_fun : cmode -> 'logic -> 'term list printer
     method pp_apply : cmode -> 'term -> 'term list printer
 
-    (** {3 Arithmetics Operators} *) 
+    (** {3 Arithmetics Operators} *)
 
     method op_real_of_int : op
     method op_add : amode -> op
@@ -174,7 +174,7 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     method pp_times : formatter -> 'z -> 'term -> unit
     (** Defaults to [self#op_minus] or [self#op_mul] *)
 
-    (** {3 Comparison Operators} *) 
+    (** {3 Comparison Operators} *)
 
     method op_equal : cmode -> op
     method op_noteq : cmode -> op
@@ -243,15 +243,15 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     (** {3 Top Level} *)
 
     method pp_term : 'term printer
-    (** Prints in {i term} mode. 
+    (** Prints in {i term} mode.
         	Default uses [self#pp_shared] with mode [Mterm] inside an [<hov>] box. *)
 
     method pp_prop : 'term printer
-    (** Prints in {i prop} mode. 
+    (** Prints in {i prop} mode.
         	Default uses [self#pp_shared] with mode [Mprop] inside an [<hv>] box. *)
 
     method pp_expr : 'tau -> 'term printer
-    (** Prints in {i term}, {i arithemtic} or {i prop} mode with 
+    (** Prints in {i term}, {i arithemtic} or {i prop} mode with
         	respect to provided type. *)
 
     method declare_type : formatter -> 'adt -> int -> ('tau,'field,'logic) ftypedef -> unit

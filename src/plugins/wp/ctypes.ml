@@ -65,8 +65,8 @@ let make_c_int signed = function
   | size -> WpLog.not_yet_implemented "%d-bits integers" size
 
 let is_char = function
-  | UInt8 -> Cil.theMachine.Cil.theMachine.char_is_unsigned 
-  | SInt8 -> not Cil.theMachine.Cil.theMachine.char_is_unsigned 
+  | UInt8 -> Cil.theMachine.Cil.theMachine.char_is_unsigned
+  | SInt8 -> not Cil.theMachine.Cil.theMachine.char_is_unsigned
   | UInt16 | SInt16
   | UInt32 | SInt32
   | UInt64 | SInt64 -> false
@@ -109,7 +109,7 @@ let c_int_bounds =
     | UInt64 -> uint64
     | SInt64 -> sint64
 
-let c_int_all =   
+let c_int_all =
   [ UInt8 ; SInt8 ; UInt16 ; SInt16 ; UInt32 ; SInt32 ; UInt64 ; SInt64 ]
 
 let c_bool () = c_int IInt
@@ -314,24 +314,24 @@ let object_of_array_elem = function
   | o -> Wp_parameters.fatal ~current:true
            "object_of_array_elem called on non-array %a." pp_object o
 
-let rec object_of_logic_type t = 
+let rec object_of_logic_type t =
   match Logic_utils.unroll_type t with
   | Ctype ty -> object_of ty
   | Ltype({lt_name="set"},[t]) -> object_of_logic_type t
-  | t -> Wp_parameters.fatal ~current:true 
+  | t -> Wp_parameters.fatal ~current:true
            "@[<hov 2>c-object of logic type@ (%a)@]"
            Printer.pp_logic_type t
 
-let rec object_of_logic_pointed t = 
+let rec object_of_logic_pointed t =
   match Logic_utils.unroll_type t with
   | Ctype ty -> object_of_pointed (object_of ty)
   | Ltype({lt_name="set"},[t]) -> object_of_logic_pointed t
-  | t -> Wp_parameters.fatal ~current:true 
+  | t -> Wp_parameters.fatal ~current:true
            "@[<hov 2>pointed of logic type@ (%a)@]"
            Printer.pp_logic_type t
 
-let no_infinite_array = function 
-  | C_array {arr_flat = None} -> false 
+let no_infinite_array = function
+  | C_array {arr_flat = None} -> false
   | _ -> true
 
 let array_dim arr =
@@ -363,6 +363,10 @@ let dimension_of_object = function
 let int64_max a b =
   if Int64.compare a b < 0 then b else a
 
+let sizeof_defined = function
+  | C_array { arr_flat = None } -> false
+  | _ -> true
+
 let rec sizeof_object = function
   | C_int i -> i_bytes i
   | C_float f -> f_bytes f
@@ -372,11 +376,11 @@ let rec sizeof_object = function
       (Cil.bitsSizeOf ctype / 8)
   | C_array ainfo ->
       match ainfo.arr_flat with
-      | Some a -> 
+      | Some a ->
           let csize = Cil.integer ~loc:Cil.builtinLoc a.arr_cell_nbr in
           let ctype = TArray(a.arr_cell,Some csize,Cil.empty_size_cache(),[]) in
           (Cil.bitsSizeOf ctype / 8)
-      | None -> 
+      | None ->
           if WpLog.ExternArrays.get () then
             max_int
           else
@@ -384,20 +388,19 @@ let rec sizeof_object = function
 
 let sizeof_typ t = Cil.bitsSizeOf t / 8
 
-let field_offset fd = 
+let field_offset fd =
   let ctype = TComp(fd.fcomp,Cil.empty_size_cache(),[]) in
   let offset = Field(fd,NoOffset) in
   fst (Cil.bitsOffset ctype offset) / 8
 
-
-(* Conforms to @ C-ISO § 6.3.1.8    *)
+(* Conforms to C-ISO 6.3.1.8        *)
 (* If same sign => greater rank.    *)
 (* If different:                    *)
 (* Case 1:                          *)
 (*   rank(unsigned) >= rank(signed) *)
 (*   then convert to unsigned       *)
 (* Case 2:                          *)
-(*   domain(unsigend) contains      *)
+(*   domain(unsigned) contains      *)
 (*   domain(signed)                 *)
 (*   then convert to signed         *)
 (* Otherwise:                       *)
@@ -434,7 +437,7 @@ module AinfoComparable = struct
   let equal a b =
     let obj_a = object_of a.arr_element in
     let obj_b = object_of b.arr_element in
-    (!cmp obj_a obj_b = 0) && 
+    (!cmp obj_a obj_b = 0) &&
     (match a.arr_flat , b.arr_flat with
      | Some a , Some b -> a.arr_size = b.arr_size
      | None , None -> true
@@ -484,10 +487,10 @@ let compare a b =
     | _ , C_comp _ -> 1
     | C_array a , C_array a' -> AinfoComparable.compare a a'
 
-let () = 
+let () =
   begin
     hsh := hash ;
-    cmp := compare ; 
+    cmp := compare ;
   end
 
 let merge a b =
@@ -559,13 +562,12 @@ let rec compare_ptr_conflated a b =
     | C_array a , C_array a' -> compare_array_ptr_conflated a a'
 
 and compare_array_ptr_conflated a b =
-    let obj_a = object_of a.arr_element in
-    let obj_b = object_of b.arr_element in
-    let c = compare_ptr_conflated obj_a obj_b in
-    if c <> 0 then c
-    else match a.arr_flat , b.arr_flat with
-      | Some a , Some b -> Pervasives.compare a.arr_size b.arr_size
-      | None , Some _ -> (-1)
-      | Some _ , None -> 1
-      | None , None -> 0
-
+  let obj_a = object_of a.arr_element in
+  let obj_b = object_of b.arr_element in
+  let c = compare_ptr_conflated obj_a obj_b in
+  if c <> 0 then c
+  else match a.arr_flat , b.arr_flat with
+    | Some a , Some b -> Pervasives.compare a.arr_size b.arr_size
+    | None , Some _ -> (-1)
+    | Some _ , None -> 1
+    | None , None -> 0

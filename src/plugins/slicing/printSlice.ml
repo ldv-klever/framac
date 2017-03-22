@@ -338,6 +338,6 @@ let print_fct_stmts fmt (_proj, kf) =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -28,3 +28,4 @@ include Memory.Model
 
 type pointer = NoCast | Fits | Unsafe
 val pointer : pointer Context.value
+

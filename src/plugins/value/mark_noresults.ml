@@ -43,6 +43,6 @@ let no_memoization_enabled () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

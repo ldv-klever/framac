@@ -51,10 +51,10 @@ Remark Zlt_bool_true_Zlt: forall (b:bool) (x y: Z),
 Proof.
   intros.
   split; case_lt x y; intros; try rewrite H0.
-    split; intro G; auto.
-    split; intro G; [discriminate G| omega].
-    auto.
-    destruct b; try auto.
+  + split; intro G; auto.
+  + split; intro G; [discriminate G| omega].
+  + auto.
+  + destruct b; try auto.
     destruct H0. assert (x < y) by (by (apply H0)).
     omegaContradiction.
 Qed.
@@ -70,7 +70,9 @@ Proof.
 Qed.
 
 (** * Link between Bit extraction and bitwise operators *)
+(** ** Some properties of bit extration *)
 (** ** Logical operators *)
+								  
 (* Why3 goal *)
 Lemma bit_test_extraction : forall (x:Z) (k:Z), (0%Z <= k)%Z ->
   ((~ ((Cint.land x (Cint.lsl 1%Z k)) = 0%Z)) <-> (Cint.bit_test x k)).
@@ -85,13 +87,13 @@ Proof.
   pose (i:= (Z.abs_nat k)); fold i.
   split.
   (** 1st impl *)
-    intro NEQ.
+  + intro NEQ.
     apply Bool.not_false_is_true.
     contradict NEQ.
     rewrite Zbits.Zbit_extraction.
     assumption.
   (** 2sd impl *)
-    intro EQ.
+  + intro EQ.
     contradict EQ.
     rewrite Bool.not_true_iff_false.
     rewrite <- Zbits.Zbit_extraction.
@@ -129,9 +131,9 @@ Proof.
   rewrite <- lsl_1_0.
   intro.
   apply bit_test_extraction.
-    omega.
-  rewrite Zbits.land_commut.
-  auto.
+  + omega.
+  + rewrite Zbits.land_commut.
+    auto.
 Qed.
 
 (* Why3 goal *)
@@ -230,6 +232,19 @@ Proof.
   destruct H; contradiction H; auto.
   discriminate H0.
   destruct H; apply H0; discriminate.
+Qed.
+
+(** ** Shift operators *)
+  
+(* Why3 goal *)
+Lemma lsl_1_two_power : forall (n:Z), (0%Z <= n)%Z -> ((Cint.lsl 1%Z
+  n) = (Cint.two_power_abs n)).
+Proof.
+  intros n h1.
+  unfold Cint.lsl. rewrite Zbits.lsl_pos by auto. 
+  unfold Zbits.lsl_def. rewrite Zbits.lsl_arithmetic_shift. 
+  unfold Zbits.lsl_arithmetic_def.
+  unfold Cint.two_power_abs. ring.
 Qed.
 
 (* Why3 goal *)
@@ -363,12 +378,12 @@ Proof.
 
   case_eq i j.
   (** i = j *)
-    intro EQ; rewrite EQ; rewrite <- beq_nat_refl.  
+  + intro EQ; rewrite EQ; rewrite <- beq_nat_refl.  
     symmetry. apply Qed.eqb1 ; auto.
   (** i <> j *)
-    intro NEQ.
+  + intro NEQ.
     assert (Qed.eqb i j = false) as EQB.
-    apply Qed.eqb_false. assumption.
+    { apply Qed.eqb_false. assumption. }
     rewrite EQB.
     rewrite -> beq_nat_false_iff.
     contradict NEQ.
@@ -397,64 +412,129 @@ Proof.
   replace (1 * two_power_nat (Z.abs_nat i)) with (two_power_nat (Z.abs_nat i)) by ring.
   intros.
   rewrite Zbits.bit_testb_pos ; auto.
-  assert (HB:(Bits.Zbit x (Z.abs_nat j) = false)).
-    (apply (Zbits.Zbit_unsigned_trail  (Z.abs_nat i) (Z.abs_nat j) x); auto).
-     apply Zabs_nat_le; omega.      
+  + assert (HB:(Bits.Zbit x (Z.abs_nat j) = false)).
+    {(apply (Zbits.Zbit_unsigned_trail  (Z.abs_nat i) (Z.abs_nat j) x); auto).
+      apply Zabs_nat_le; omega. }     
     unfold Zbits.zbit_test_def.
+    rewrite HB; discriminate.
+  + omega.
+Qed.
 
-  rewrite HB; discriminate.
-  omega.
+(* Why3 goal *)
+Lemma pos_extraction_sup_inv : forall (x:Z) (i:Z), (0%Z <= i)%Z ->
+  ((forall (j:Z), (i <= j)%Z -> ~ (Cint.bit_test x j)) -> ((0%Z <= x)%Z /\
+  (x < (Cint.lsl 1%Z i))%Z)).
+Proof.
+  intros x i h1 h2.
+  unfold Cint.lsl.
+  rewrite Zbits.lsl_pos; auto.
+  unfold Zbits.lsl_def.
+  rewrite Zbits.lsl_arithmetic_shift.
+  unfold Zbits.lsl_arithmetic_def.
+  replace (1 * two_power_nat (Z.abs_nat i)) with (two_power_nat (Z.abs_nat i)) by ring.
+  apply Zbits.Zbit_unsigned_trail_inv.
+  intros k h.
+  generalize (h2 (Z.of_nat k)); clear h2; intro h2.
+  unfold Cint.bit_test in h2; rewrite Zbits.bit_testb_pos in h2.
+  + assert (Zbits.zbit_test_def x (Z.of_nat k) <> true) as h3.
+    { apply h2. clear h2. rewrite <- (Zabs2Nat.id k) in h. 
+      rewrite <- Zabs2Nat.inj_le in h; auto.
+      apply Zle_0_nat. } 
+    clear h2.
+    unfold Zbits.zbit_test_def in h3. rewrite Zabs2Nat.id in h3. 
+    destruct (Bits.Zbit x k).
+    * contradiction h3. auto.
+    * auto.
+  + apply Zle_0_nat.
 Qed.
 
 (** * Link between Bit extraction and C type conversions *)
-(** Tacticals *)
-Local Ltac naturalize_int_extraction_inf_bool n vn vz :=
-  intros x i (h1,h2); unfold_bit_testb h1; unfold Zbits.zbit_test_def;
-  assert (Z.abs_nat i < vn)%nat as A by
-    (assert (vn = Z.abs_nat vz) as B by (auto with arith);
-     rewrite B;
-     apply Zabs_nat_lt; omega);
-  clear h1; clear h2;
-  pose (n:= (Z.abs_nat i)); fold n; fold n in A.
-					   
-Local Ltac int_extraction_inf int_extraction_inf_bool :=
-  intros x i (h1,h2);
+(** ** Unsigned conversions *)
+	
+(* Why3 goal *)
+Lemma to_uint_extraction_sup : forall (n:Z) (x:Z) (i:Z), ((0%Z <= n)%Z /\
+  (n <= i)%Z) -> ((Cint.is_uint n x) -> ~ (Cint.bit_test x i)).
+Proof.
+  intros n x i h1 h2.
+  assert (H:(Bits.Zbit x (Z.abs_nat i) = false)).
+  { unfold Cint.is_uint in h2.
+    apply (Zbits.Zbit_unsigned_trail (Z.abs_nat n) (Z.abs_nat i) x).
+    + apply Zabs_nat_le. omega.
+    + unfold Cint.two_power_abs in h2.
+      trivial. }
+  assert (I:(0 <= i)) by omega;
+  unfold Cint.bit_test; unfold_bit_testb I; unfold Zbits.zbit_test_def.
+  rewrite H; discriminate.
+Qed.
+
+(* Why3 goal *)
+Lemma to_uint_extraction_inf_bool : forall (n:Z) (x:Z) (i:Z),
+  ((0%Z <= i)%Z /\ (i < n)%Z) -> ((Cint.bit_testb (Cint.to_uint n x)
+  i) = (Cint.bit_testb x i)).
+Proof.
+  intros n x i (h1,h2); unfold_bit_testb h1; unfold Zbits.zbit_test_def.
+  pose (k:= (Z.abs_nat i)); fold k.
+  unfold Cint.to_uint; unfold Cint.to_range.
+  simpl.
+  replace (x - 0) with x by (auto with zarith).
+  unfold Cint.two_power_abs. 
+  rewrite Zbits.Zbit_uint_mod_two_power_nat.
+  rewrite (leb_correct_conv k (Z.abs_nat n)).
+  + trivial.
+  + apply Zabs_nat_lt; omega.
+Qed.
+
+(* Why3 goal *)
+Lemma to_uint_extraction_inf : forall (n:Z) (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < n)%Z) -> ((Cint.bit_test (Cint.to_uint n x) i) <-> (Cint.bit_test x
+  i)).
+Proof.
+  intros n x i (h1,h2);
   unfold Cint.bit_test;
-  rewrite int_extraction_inf_bool by auto;
+  rewrite to_uint_extraction_inf_bool by auto;
   pose (xb:=Cint.bit_testb x i); fold xb;
   destruct xb; simpl; split; intro G; auto; destruct G; auto.
-				       
-(** ** Unsigned conversions *)
-(** Tacticals *)
-Local Ltac uint_extraction_inf m x to_uint n vz :=
-  unfold to_uint; unfold Cint.to_range;
-  simpl;
-  (replace (x - 0) with x by (auto with zarith));
-  (replace vz with (two_power_nat n) by (auto with zarith));
-  (replace n with ((n-m)+m)%nat by (auto with zarith));
-  rewrite Zbits.Zbit_uint_mod_two_power_nat;
-  (rewrite (leb_correct_conv 0 (n - m)); auto);
-  apply ArithProp.lt_minus_O_lt;
-  auto.
-							 
-Local Ltac uint_extraction_sup is_uint vn vz :=
-  intros x i h1 h2;
-  assert (H:(Bits.Zbit x (Z.abs_nat i) = false)) by
-    (unfold is_uint in h2;
-     (apply (Zbits.Zbit_unsigned_trail vn (Z.abs_nat i) x); auto);
-     (replace vn with (Z.abs_nat vz)%nat by (auto with arith));
-     apply Zabs_nat_le;
-     omega);
-  assert (I:(0 <= i)) by omega;
-  unfold Cint.bit_test; unfold_bit_testb I; unfold Zbits.zbit_test_def;
-  rewrite H; discriminate.
-						   
+Qed.
+
+(* Why3 goal *)
+Lemma is_uint_ext : forall (n:Z) (x:Z) (y:Z), (0%Z <= n)%Z -> ((Cint.is_uint
+  n x) -> ((Cint.is_uint n y) -> ((forall (i:Z), ((0%Z <= i)%Z /\
+  (i < n)%Z) -> ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y)))).
+Proof.
+  intros n x y h1 h2 h3 h4.
+  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
+  { intros.
+    case_lt i n; intro.
+    + apply h4; omega.
+    + assert (~ Cint.bit_test x i).
+      { apply (to_uint_extraction_sup n). omega. auto. }
+      assert (~ Cint.bit_test y i).
+      { apply (to_uint_extraction_sup n). omega. auto. }
+     intuition. }
+  clear h1; clear h2; clear h3; clear h4.
+  unfold Cint.bit_test in H.
+  unfold Cint.bit_testb in H.
+  apply Zbits.bit_testb_ext; intros.
+  rewrite <- Zbits.bool2_eq_true.
+  apply H; auto.
+Qed.
+
+Local Ltac uint_extraction_inf_bool to_uint :=
+  intros; rewrite to_uint; 
+  apply to_uint_extraction_inf_bool;
+  omega.
+  
+Local Ltac uint_extraction_inf to_uint :=
+  intros; rewrite to_uint; 
+  apply to_uint_extraction_inf;
+  omega.
+						 
 (** *** Cast to uint8 C type *)
 (* Why3 goal *)
 Lemma to_uint8_extraction_sup : forall (x:Z) (i:Z), (8%Z <= i)%Z ->
   ((Cint.is_uint8 x) -> ~ (Cint.bit_test x i)).
 Proof.
-  uint_extraction_sup Cint.is_uint8 8%nat 8.
+  intros; apply (to_uint_extraction_sup 8); (auto with zarith).
 Qed.
 
 (* Why3 goal *)
@@ -462,8 +542,7 @@ Lemma to_uint8_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 8%Z)%Z) -> ((Cint.bit_testb (Cint.to_uint8 x) i) = (Cint.bit_testb x
   i)).
 Proof.
-  naturalize_int_extraction_inf_bool n 8%nat 8.
-  uint_extraction_inf n x Cint.to_uint8 8%nat 256.
+  uint_extraction_inf_bool Cint.to_uint_8.
 Qed.
 
 (* Why3 goal *)
@@ -471,7 +550,7 @@ Lemma to_uint8_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 8%Z)%Z) -> ((Cint.bit_test (Cint.to_uint8 x) i) <-> (Cint.bit_test x
   i)).
 Proof.
-  int_extraction_inf to_uint8_extraction_inf_bool.
+  uint_extraction_inf Cint.to_uint_8.
 Qed.
 
 (* Why3 goal *)
@@ -480,22 +559,7 @@ Lemma is_uint8_ext : forall (x:Z) (y:Z), (Cint.is_uint8 x) -> ((Cint.is_uint8
   i) <-> (Cint.bit_test y i))) -> (x = y))).
 Proof.
   intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-     intros.
-     case_leq i 7; intro.
-       apply h3; omega.
-     assert (~ Cint.bit_test x i).
-       apply to_uint8_extraction_sup. omega. auto.
-     assert (~ Cint.bit_test y i).
-      apply to_uint8_extraction_sup. omega. auto.
-     intuition.
-    clear h1; clear h2; clear h3.
- 
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
+  apply (is_uint_ext 8); (auto with zarith).
 Qed.
 
 (** *** Cast to uint16 C type *)
@@ -503,7 +567,7 @@ Qed.
 Lemma to_uint16_extraction_sup : forall (x:Z) (i:Z), (16%Z <= i)%Z ->
   ((Cint.is_uint16 x) -> ~ (Cint.bit_test x i)).
 Proof.
-  uint_extraction_sup Cint.is_uint16 16%nat 16.
+   intros; apply (to_uint_extraction_sup 16); (auto with zarith).
 Qed.
 
 (* Why3 goal *)
@@ -511,8 +575,7 @@ Lemma to_uint16_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 16%Z)%Z) -> ((Cint.bit_testb (Cint.to_uint16 x) i) = (Cint.bit_testb x
   i)).
 Proof.
-  naturalize_int_extraction_inf_bool n 16%nat 16.
-  uint_extraction_inf n x Cint.to_uint16 16%nat 65536.
+  uint_extraction_inf_bool Cint.to_uint_16.
 Qed.
 
 (* Why3 goal *)
@@ -520,7 +583,7 @@ Lemma to_uint16_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 16%Z)%Z) -> ((Cint.bit_test (Cint.to_uint16 x) i) <-> (Cint.bit_test x
   i)).
 Proof.
-  int_extraction_inf to_uint16_extraction_inf_bool.
+  uint_extraction_inf Cint.to_uint_16.
 Qed.
 
 (* Why3 goal *)
@@ -529,22 +592,7 @@ Lemma is_uint16_ext : forall (x:Z) (y:Z), (Cint.is_uint16 x) ->
   ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
 Proof.
   intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-     intros.
-     case_leq i 15; intro.
-       apply h3; omega.
-     assert (~ Cint.bit_test x i).
-       apply to_uint16_extraction_sup. omega. auto.
-     assert (~ Cint.bit_test y i).
-      apply to_uint16_extraction_sup. omega. auto.
-     intuition.
-    clear h1; clear h2; clear h3.
- 
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
+  apply (is_uint_ext 16); (auto with zarith).
 Qed.
 
 (** *** Cast to uint32 C type *)
@@ -552,7 +600,7 @@ Qed.
 Lemma to_uint32_extraction_sup : forall (x:Z) (i:Z), (32%Z <= i)%Z ->
   ((Cint.is_uint32 x) -> ~ (Cint.bit_test x i)).
 Proof.
-  uint_extraction_sup Cint.is_uint32 32%nat 32.
+  intros; apply (to_uint_extraction_sup 32); (auto with zarith).
 Qed.
 
 (* Why3 goal *)
@@ -560,8 +608,7 @@ Lemma to_uint32_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 32%Z)%Z) -> ((Cint.bit_testb (Cint.to_uint32 x) i) = (Cint.bit_testb x
   i)).
 Proof.
-  naturalize_int_extraction_inf_bool n 32%nat 32.
-  uint_extraction_inf n x Cint.to_uint32 32%nat 4294967296.
+  uint_extraction_inf_bool Cint.to_uint_32.
 Qed.
 
 (* Why3 goal *)
@@ -569,7 +616,7 @@ Lemma to_uint32_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 32%Z)%Z) -> ((Cint.bit_test (Cint.to_uint32 x) i) <-> (Cint.bit_test x
   i)).
 Proof.
-  int_extraction_inf to_uint32_extraction_inf_bool.
+  uint_extraction_inf Cint.to_uint_32.
 Qed.
 
 (* Why3 goal *)
@@ -578,22 +625,7 @@ Lemma is_uint32_ext : forall (x:Z) (y:Z), (Cint.is_uint32 x) ->
   ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
 Proof.
   intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-     intros.
-     case_leq i 31; intro.
-       apply h3; omega.
-     assert (~ Cint.bit_test x i).
-       apply to_uint32_extraction_sup. omega. auto.
-     assert (~ Cint.bit_test y i).
-      apply to_uint32_extraction_sup. omega. auto.
-     intuition.
-    clear h1; clear h2; clear h3.
- 
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
+  apply (is_uint_ext 32); (auto with zarith).
 Qed.
 
 (** *** Cast to uint64 C type *)
@@ -601,7 +633,7 @@ Qed.
 Lemma to_uint64_extraction_sup : forall (x:Z) (i:Z), (64%Z <= i)%Z ->
   ((Cint.is_uint64 x) -> ~ (Cint.bit_test x i)).
 Proof.
-  uint_extraction_sup Cint.is_uint64 64%nat 64.
+  intros; apply (to_uint_extraction_sup 64); (auto with zarith).
 Qed.
 
 (* Why3 goal *)
@@ -609,8 +641,7 @@ Lemma to_uint64_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 64%Z)%Z) -> ((Cint.bit_testb (Cint.to_uint64 x) i) = (Cint.bit_testb x
   i)).
 Proof.
-  naturalize_int_extraction_inf_bool n 64%nat 64.
-  uint_extraction_inf n x Cint.to_uint64 64%nat 18446744073709551616.
+  uint_extraction_inf_bool Cint.to_uint_64.
 Qed.
 
 (* Why3 goal *)
@@ -618,7 +649,7 @@ Lemma to_uint64_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
   (i < 64%Z)%Z) -> ((Cint.bit_test (Cint.to_uint64 x) i) <-> (Cint.bit_test x
   i)).
 Proof.
-  int_extraction_inf to_uint64_extraction_inf_bool.
+   uint_extraction_inf Cint.to_uint_64.
 Qed.
 
 (* Why3 goal *)
@@ -627,25 +658,87 @@ Lemma is_uint64_ext : forall (x:Z) (y:Z), (Cint.is_uint64 x) ->
   ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
 Proof.
   intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-     intros.
-     case_leq i 63; intro.
-       apply h3; omega.
-     assert (~ Cint.bit_test x i).
-       apply to_uint64_extraction_sup. omega. auto.
-     assert (~ Cint.bit_test y i).
-      apply to_uint64_extraction_sup. omega. auto.
-     intuition.
-    clear h1; clear h2; clear h3.
- 
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
+  apply (is_uint_ext 64); (auto with zarith).
 Qed.
 
 (** ** Signed conversions *)
+(* Why3 goal *)
+Lemma to_sint_extraction_sup : forall (n:Z) (x:Z) (i:Z), ((0%Z <= n)%Z /\
+  (n <= i)%Z) -> ((Cint.is_sint n x) -> ((Cint.bit_test x i) <->
+  (x < 0%Z)%Z)).
+Proof.
+  intros n x i h1.
+  unfold Cint.is_sint.
+  intro h2;
+  assert (H:(0 <= i)) by omega;
+  unfold Cint.bit_test; unfold_bit_testb H; unfold Zbits.zbit_test_def.
+  assert (Z.abs_nat n <= Z.abs_nat i)%nat.
+  { apply (Zabs_nat_le); omega. }
+  rewrite <- Zlt_bool_true_Zlt; 
+  apply (Zbits.Zbit_trail (Z.abs_nat n) (Z.abs_nat i) x); auto.
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint_extraction_inf_bool : forall (n:Z) (x:Z) (i:Z),
+  ((0%Z <= i)%Z /\ (i < n)%Z) -> ((Cint.bit_testb (Cint.to_sint n x)
+  i) = (Cint.bit_testb x i)).
+Proof.
+  intros n x i (h1,h2); unfold_bit_testb h1; unfold Zbits.zbit_test_def.
+  pose (k:= (Z.abs_nat i)); fold k.
+  unfold Cint.to_sint; unfold Cint.to_range.
+  rewrite Z.sub_opp_r; rewrite Z.sub_opp_r.
+  rewrite Z.add_opp_l.
+  replace (Cint.two_power_abs n + Cint.two_power_abs n) with (2 * Cint.two_power_abs n) by (auto with zarith).
+  unfold Cint.two_power_abs.
+  replace n with ((n-i)+i) by (auto with zarith).
+  rewrite Zabs2Nat.inj_add by omega.
+  apply Zbits.Zbit_sint_mod_two_power_nat.
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint_extraction_inf : forall (n:Z) (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < n)%Z) -> ((Cint.bit_test (Cint.to_sint n x) i) <-> (Cint.bit_test x
+  i)).
+Proof.
+  intros n x i (h1,h2).
+  unfold Cint.bit_test;
+  rewrite to_sint_extraction_inf_bool by auto.
+  pose (xb:=Cint.bit_testb x i); fold xb;
+  destruct xb; simpl; split; intro G; auto; destruct G; auto.
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint_ext : forall (n:Z) (x:Z) (y:Z), (0%Z <= n)%Z -> ((Cint.is_sint
+  n x) -> ((Cint.is_sint n y) -> ((forall (i:Z), ((0%Z <= i)%Z /\
+  (i <= n)%Z) -> ((Cint.bit_test x i) <-> (Cint.bit_test y i))) ->
+  (x = y)))).
+Proof. 
+  intros n x y h1 h2 h3 h4.
+  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
+  { intros.
+    case_leq i n; intro.
+    + apply h4; omega.
+    + assert (0<=n<=n) by omega.
+      specialize ((h4 n) H1).
+      generalize ((to_sint_extraction_sup n x n) H1 h2).
+      generalize ((to_sint_extraction_sup n y n) H1 h3).
+      clear H1; intros.
+      rewrite h4 in H2. rewrite H2 in H1. clear H2.
+      assert ((Cint.bit_test x i) <-> x < 0).
+      { apply (to_sint_extraction_sup n); [omega | auto]. }
+      assert ((Cint.bit_test y i) <-> y < 0).
+      { apply (to_sint_extraction_sup n); [omega | auto]. }
+      rewrite H2.
+      rewrite H3.
+      auto. }
+  clear h1; clear h2; clear h3; clear h4.
+  unfold Cint.bit_test in H.
+  unfold Cint.bit_testb in H.
+  apply Zbits.bit_testb_ext; intros.
+  rewrite <- Zbits.bool2_eq_true.
+  apply H; auto.
+Qed.
+
 (** Tactical *)
 Local Ltac sint_extraction_sup is_sint vn vz :=
   intros x i h1;
@@ -659,22 +752,6 @@ Local Ltac sint_extraction_sup is_sint vn vz :=
   rewrite <- Zlt_bool_true_Zlt; 
   apply (Zbits.Zbit_trail vn (Z.abs_nat i) x); auto.
 
-(** *** To sint8 C type*)
-Local Ltac sint_extraction_inf m x to_sint n vz wz:=
-  unfold to_sint; unfold Cint.to_range;
-  (replace (vz - wz) with (2 * two_power_nat n) by (auto with zarith));
-  (replace (x - wz) with (x + two_power_nat n) by (auto with zarith));
-  (replace (wz) with (- two_power_nat n) by (auto with zarith));
-  rewrite Z.add_opp_l;
-  (replace n with ((n-m)+m)%nat by (auto with zarith));
-  rewrite Zbits.Zbit_sint_mod_two_power_nat;
-  auto.
-  
-(** *** To sint16 C type*)
-(** *** To sint32 C type *)
-(** *** To sint64 C type *)
-(** * Some C-Integer Bits Conversions are identity *)
-(** Tacticals *)
 Local Ltac unfold_hyp h :=
   match goal with 
     | h:(?X1) |- _ => unfold X1 in h
@@ -684,7 +761,146 @@ Local Ltac unfold_hyp h :=
     | h:(?X1 _ _ _ _) |- _ => unfold X1 in h
     | _ => idtac
   end.
-(** ** Unsigned conversions *)
+
+Local Ltac sint_extraction_inf_bool to_sint :=
+  intros; rewrite to_sint; 
+  apply to_sint_extraction_inf_bool;
+  omega.
+  
+Local Ltac sint_extraction_inf to_sint :=
+  intros; rewrite to_sint; 
+  apply to_sint_extraction_inf;
+  omega.
+						 
+(** *** Cast to sint8 C type *)
+(* Why3 goal *)
+Lemma to_sint8_extraction_sup : forall (x:Z) (i:Z), (7%Z <= i)%Z ->
+  ((Cint.is_sint8 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
+Proof.
+  intros; apply (to_sint_extraction_sup 7); (auto with zarith).
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint8_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 7%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint8 x) i) = (Cint.bit_testb x
+  i)).
+Proof.
+  sint_extraction_inf_bool Cint.to_sint_8.
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint8_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 7%Z)%Z) -> ((Cint.bit_test (Cint.to_sint8 x) i) <-> (Cint.bit_test x
+  i)).
+Proof.
+  sint_extraction_inf Cint.to_sint_8.
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint8_ext : forall (x:Z) (y:Z), (Cint.is_sint8 x) -> ((Cint.is_sint8
+  y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 7%Z)%Z) -> ((Cint.bit_test x
+  i) <-> (Cint.bit_test y i))) -> (x = y))).
+Proof.
+  intros. apply (is_sint_ext 7) ; (auto with zarith).
+Qed.
+
+(** *** Cast to sint16 C type *)
+(* Why3 goal *)
+Lemma to_sint16_extraction_sup : forall (x:Z) (i:Z), (15%Z <= i)%Z ->
+  ((Cint.is_sint16 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
+Proof.
+  intros; apply (to_sint_extraction_sup 15); (auto with zarith).
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint16_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 15%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint16 x) i) = (Cint.bit_testb x
+  i)).
+Proof.
+  sint_extraction_inf_bool Cint.to_sint_16.
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint16_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 15%Z)%Z) -> ((Cint.bit_test (Cint.to_sint16 x) i) <-> (Cint.bit_test x
+  i)).
+Proof.
+  sint_extraction_inf Cint.to_sint_16.
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint16_ext : forall (x:Z) (y:Z), (Cint.is_sint16 x) ->
+  ((Cint.is_sint16 y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 15%Z)%Z) ->
+  ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
+Proof.
+  intros. apply (is_sint_ext 15) ; (auto with zarith).
+Qed.
+
+(** *** Cast to uint32 C type *)
+(* Why3 goal *)
+Lemma to_sint32_extraction_sup : forall (x:Z) (i:Z), (31%Z <= i)%Z ->
+  ((Cint.is_sint32 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
+Proof.
+  intros; apply (to_sint_extraction_sup 31); (auto with zarith).
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint32_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 31%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint32 x) i) = (Cint.bit_testb x
+  i)).
+Proof.
+  sint_extraction_inf_bool Cint.to_sint_32.
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint32_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 31%Z)%Z) -> ((Cint.bit_test (Cint.to_sint32 x) i) <-> (Cint.bit_test x
+  i)).
+Proof.
+  sint_extraction_inf Cint.to_sint_32.
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint32_ext : forall (x:Z) (y:Z), (Cint.is_sint32 x) ->
+  ((Cint.is_sint32 y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 31%Z)%Z) ->
+  ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
+Proof.
+  intros. apply (is_sint_ext 31) ; (auto with zarith).
+Qed.
+
+(** *** Cast to uint64 C type *)
+(* Why3 goal *)
+Lemma to_sint64_extraction_sup : forall (x:Z) (i:Z), (63%Z <= i)%Z ->
+  ((Cint.is_sint64 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
+Proof.
+  intros; apply (to_sint_extraction_sup 63); (auto with zarith).
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint64_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 63%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint64 x) i) = (Cint.bit_testb x
+  i)).
+Proof.
+  sint_extraction_inf_bool Cint.to_sint_64.
+Qed.
+
+(* Why3 goal *)
+Lemma to_sint64_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
+  (i < 63%Z)%Z) -> ((Cint.bit_test (Cint.to_sint64 x) i) <-> (Cint.bit_test x
+  i)).
+Proof.
+  sint_extraction_inf Cint.to_sint_64.
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint64_ext : forall (x:Z) (y:Z), (Cint.is_sint64 x) ->
+  ((Cint.is_sint64 y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 63%Z)%Z) ->
+  ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
+Proof.
+  intros; apply (is_sint_ext 63); (auto with zarith).
+Qed.
+
+(** * Some C-Integer Bits Conversions are distributive *)
 (** Tacticals *)
 Local Ltac is_uint_bitwise f n :=
   intros x y Rx Ry; unfold_hyp Rx; unfold_hyp Ry; apply Cint.id_to_range;
@@ -696,359 +912,173 @@ Local Ltac lsr_in_uint_range n :=
   [ (apply (Zbits.lsr_lower_bound 0 _ _ Ry); omega)
   | (apply (Zbits.lsr_upper_bound n _ _ Ry); omega)].
 
-Local Ltac naturalize_uint_lsl1_inf n vn vz :=
-  intros y (h1,h2);
+(** ** Unsigned conversions *)
+  
+(* Why3 goal *)
+Lemma to_uint_lor : forall (n:Z) (x:Z) (y:Z), ((Cint.to_uint n (Cint.lor x
+  y)) = (Cint.lor (Cint.to_uint n x) (Cint.to_uint n y))).
+Proof.
+  intros n x y.
+  apply Zbits.zbit_test_ext. intro.
+  rewrite Zbits.lor_extraction.
+  unfold Cint.to_uint; unfold Cint.to_range; Cint.simplify_to_range_unfolding.
+  unfold Cint.two_power_abs.
+  repeat (rewrite Zbits.uint_mod_two_power_extraction).
+  rewrite Zbits.lor_extraction.
+  pose (c:=(leb (Z.abs_nat n) (Z.abs_nat n0))); fold c.
+  destruct c; auto.
+Qed.
+
+(** *** Cast to uint8 C type *)
+(* Why3 goal *)
+Lemma to_uint8_lor : forall (x:Z) (y:Z), ((Cint.to_uint8 (Cint.lor x
+  y)) = (Cint.lor (Cint.to_uint8 x) (Cint.to_uint 8%Z y))).
+Proof.
+  intros x y; rewrite Cint.to_uint_8; apply to_uint_lor.
+Qed.
+
+(** ***  Cast to uint16 C type *)
+(* Why3 goal *)
+Lemma to_uint16_lor : forall (x:Z) (y:Z), ((Cint.to_uint16 (Cint.lor x
+  y)) = (Cint.lor (Cint.to_uint16 x) (Cint.to_uint16 y))).
+Proof.
+  intros x y; rewrite Cint.to_uint_16; apply to_uint_lor.
+Qed.
+
+(** ***  Cast to uint32 C type *)
+(* Why3 goal *)
+Lemma to_uint32_lor : forall (x:Z) (y:Z), ((Cint.to_uint32 (Cint.lor x
+  y)) = (Cint.lor (Cint.to_uint32 x) (Cint.to_uint32 y))).
+Proof.
+  intros x y; rewrite Cint.to_uint_32; apply to_uint_lor.
+Qed.
+
+(** ***  Cast to uint64 C type *)
+(* Why3 goal *)
+Lemma to_uint64_lor : forall (x:Z) (y:Z), ((Cint.to_uint64 (Cint.lor x
+  y)) = (Cint.lor (Cint.to_uint64 x) (Cint.to_uint64 y))).
+Proof.
+  intros x y; rewrite Cint.to_uint_64; apply to_uint_lor.
+Qed.
+
+(** * Some C-Integer Bits Conversions are identity *)
+(** ** Unsigned conversions *)
+(* Why3 goal *)
+Lemma is_uint_lor : forall (n:Z) (x:Z) (y:Z), (Cint.is_uint n x) ->
+  ((Cint.is_uint n y) -> ((Cint.to_uint n (Cint.lor x y)) = (Cint.lor x y))).
+Proof.
+  intro n; is_uint_bitwise orb (Zabs_nat n). 
+Qed.
+
+(* Why3 goal *)
+Lemma is_uint_land : forall (n:Z) (x:Z) (y:Z), (Cint.is_uint n x) ->
+  ((Cint.is_uint n y) -> ((Cint.to_uint n (Cint.land x y)) = (Cint.land x
+  y))).
+Proof.
+  intro n; is_uint_bitwise andb (Zabs_nat n). 
+Qed.
+
+(* Why3 goal *)
+Lemma is_uint_lsr : forall (n:Z) (x:Z) (y:Z), (0%Z <= y)%Z -> ((Cint.is_uint
+  n x) -> ((Cint.to_uint n (Cint.lsr x y)) = (Cint.lsr x y))).
+Proof.
+  intro n; lsr_in_uint_range (Cint.two_power_abs n).
+Qed.
+
+(* Why3 goal *)
+Lemma is_uint_lsl1_inf : forall (n:Z) (y:Z), ((0%Z <= y)%Z /\ (y < n)%Z) ->
+  ((Cint.to_uint n (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
+Proof.
+  intros n y (h1,h2);
   (assert (0 <= y) as Ry by omega);
   unfold Cint.lsl; unfold Zbits.lsl; rewrite (Zle_imp_le_bool _ _ Ry);
   unfold Zbits.lsl_def;
-  rewrite Zbits.lsl_arithmetic_shift; unfold Zbits.lsl_arithmetic_def;
+  rewrite Zbits.lsl_arithmetic_shift; unfold Zbits.lsl_arithmetic_def.
   (replace (1 * two_power_nat (Z.abs_nat y))
-    with (two_power_nat (Z.abs_nat y)) by (ring;forward));
-  clear Ry;
+    with (two_power_nat (Z.abs_nat y)) by (auto with zarith));
+  clear Ry.
 
-  assert ((Z.abs_nat y < vn)%nat) as A by
-   ((replace vn with (Z.abs_nat vz) by (auto with arith));
-    apply Zabs_nat_lt; omega);
+  assert (Z.abs_nat y < (Z.abs_nat n))%nat as A by
+   (apply Zabs_nat_lt; omega);
   clear h1; clear h2;
-  pose (n := Z.abs_nat y); fold n; fold n in A.
-    
-Local Ltac uint_lsl1_inf n to_uint vn vnpred bz :=
-  unfold to_uint;
-  unfold Cint.to_range;
-  (replace (0 + (two_power_nat n - 0) mod (bz - 0))
-   with ((two_power_nat n) mod bz) by (auto with zarith));
-  rewrite Zmod_small ; [auto|];
-  split ; 
-  [ assert (0 < two_power_nat n) as P by apply Bits.two_power_nat_is_positive;
-    pose (i:= two_power_nat n); fold i; fold i in P; 
-    omega |];
+  pose (M := Z.abs_nat y); fold M; fold M in A.
 
-  (replace bz with (two_power_nat vn) by (compute;forward));
-  (replace vn with (vnpred+1)%nat by (compute;forward));
-  rewrite Bits.two_power_nat_plus;
-
-  rewrite (le_plus_minus n vnpred) by
-    (rewrite (lt_n_Sm_le n vnpred); auto);
-  rewrite Bits.two_power_nat_plus;
-
-  (assert (0 < two_power_nat n) as P by 
-     apply Bits.two_power_nat_is_positive);
-  pose (a:=(two_power_nat n)); fold a; fold a in P;
-  (assert (0 < two_power_nat (vnpred - n)) as Q by
-     apply Bits.two_power_nat_is_positive);
-  pose (b:=(two_power_nat (vnpred - n)%nat)); fold b; fold b in Q;
-  (replace (two_power_nat 1%nat) with 2 by (compute;forward));
-
-  (replace a with (a*1) by (auto with zarith));
-  (replace (a*1*b*2) with (a*(b*2)) by ring);
-  apply (Zmult_gt_0_lt_compat_l 1 (b * 2) a);
+  unfold Cint.to_uint; unfold Cint.to_range; Cint.simplify_to_range_unfolding.
+  rewrite Zmod_small; trivial.
+  unfold Cint.two_power_abs; pose (N:=(Z.abs_nat n)); fold N; fold N in A.
+  generalize (Bits.two_power_nat_is_positive M); intro Pos.
+  generalize (Bits.two_power_nat_increase_strict M N A) ; intro.
   omega.
-    
-Local Ltac naturalize_uint_lsl1_sup n vn vz :=
-  intros y h1;
-  assert (0 <= y) as Ry by omega;
+Qed.
+
+(* Why3 goal *)
+Lemma is_uint_lsl1_sup : forall (n:Z) (y:Z), ((0%Z <= n)%Z /\ (n <= y)%Z) ->
+  ((Cint.to_uint n (Cint.lsl 1%Z y)) = 0%Z).
+Proof.
+  intros n y h1.
+  (assert (0 <= y) as Ry by omega);
   unfold Cint.lsl; unfold Zbits.lsl; rewrite (Zle_imp_le_bool _ _ Ry);
   unfold Zbits.lsl_def;
-  rewrite Zbits.lsl_arithmetic_shift; unfold Zbits.lsl_arithmetic_def;
+  rewrite Zbits.lsl_arithmetic_shift; unfold Zbits.lsl_arithmetic_def.
   (replace (1 * two_power_nat (Z.abs_nat y))
-    with (two_power_nat (Z.abs_nat y)) by ring);
-  clear Ry;
-  assert ((vn <= Z.abs_nat y)%nat) as A by
-   ((replace vn with (Z.abs_nat vz) by (auto with arith));
-    apply Zabs_nat_le; omega);
+    with (two_power_nat (Z.abs_nat y)) by (auto with zarith));
+  clear Ry.
+
+  assert (Z.abs_nat n <= (Z.abs_nat y))%nat as A by
+   (apply Zabs_nat_le; omega);
   clear h1;
-  pose (n := Z.abs_nat y); fold n; fold n in A.
+  pose (M := Z.abs_nat y); fold M; fold M in A.
+  unfold Cint.to_uint; unfold Cint.to_range; Cint.simplify_to_range_unfolding.
+  
+  rewrite (le_plus_minus (Z.abs_nat n) M A).
+  replace (Z.abs_nat n + (M - Z.abs_nat n))%nat with ((M - Z.abs_nat n) + Z.abs_nat n)%nat by (auto with zarith).
+  rewrite Bits.two_power_nat_plus.
 
-Local Ltac uint_lsl1_sup n to_uint vn bz :=
-  (rewrite (le_plus_minus vn n) by auto);
-  pose (i := (n - vn)%nat); fold i;
-  rewrite Bits.two_power_nat_plus;
-
-  unfold to_uint;
-  unfold Cint.to_range;
-  (replace ((two_power_nat vn) * two_power_nat i - 0)
-   with (two_power_nat i * (two_power_nat vn)) by (ring;forward));
-  (replace (two_power_nat vn) with bz by (compute;forward));
-  (replace (bz - 0) with bz by (compute;forward));
-  (replace (0 + (two_power_nat i * bz) mod bz)
-   with ((two_power_nat i * bz) mod bz)
-   by (auto with zarith));
   apply Z_mod_mult. 
+Qed.
 
 (** *** Cast to uint8 C type *)
-(** *** Cast to uint16 C type *)
-(** *** Cast to uint32 C type *)
-(** *** Cast to uint64 C type *)
-(* Why3 goal *)
-Lemma to_sint8_extraction_sup : forall (x:Z) (i:Z), (7%Z <= i)%Z ->
-  ((Cint.is_sint8 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
-Proof.
-  sint_extraction_sup Cint.is_sint8 7%nat 7.
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint8_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 7%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint8 x) i) = (Cint.bit_testb x
-  i)).
-Proof.
-  naturalize_int_extraction_inf_bool n 7%nat 7.
-  sint_extraction_inf n x Cint.to_sint8 7%nat 128 (-128).
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint8_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 7%Z)%Z) -> ((Cint.bit_test (Cint.to_sint8 x) i) <-> (Cint.bit_test x
-  i)).
-Proof.
-  int_extraction_inf to_sint8_extraction_inf_bool.
-Qed.
-
-(* Why3 goal *)
-Lemma is_sint8_ext : forall (x:Z) (y:Z), (Cint.is_sint8 x) -> ((Cint.is_sint8
-  y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 7%Z)%Z) -> ((Cint.bit_test x
-  i) <-> (Cint.bit_test y i))) -> (x = y))).
-Proof.
-  intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-    intros.
-    case_lt i 8; intro.
-      apply h3; omega.
-    assert (0<=7<=7) by omega.
-    specialize ((h3 7) H1); clear H1.
-    assert (7<=7) by omega.
-    generalize ((to_sint8_extraction_sup x 7) H1 h1).
-    generalize ((to_sint8_extraction_sup y 7) H1 h2).
-    clear H1; intros.
-    rewrite h3 in H2. rewrite H2 in H1. clear H2.
-    assert ((Cint.bit_test x i) <-> x < 0).
-      apply to_sint8_extraction_sup. omega. auto.
-    assert ((Cint.bit_test y i) <-> y < 0).
-      apply to_sint8_extraction_sup. omega. auto.
-    rewrite H2.
-    rewrite H3.
-    auto.
-    clear h1; clear h2; clear h3.
-
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint16_extraction_sup : forall (x:Z) (i:Z), (15%Z <= i)%Z ->
-  ((Cint.is_sint16 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
-Proof.
-  sint_extraction_sup Cint.is_sint16 15%nat 15.
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint16_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 15%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint16 x) i) = (Cint.bit_testb x
-  i)).
-Proof.
-  naturalize_int_extraction_inf_bool n 16%nat 16.
-  sint_extraction_inf n x Cint.to_sint16 15%nat 32768 (-32768).
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint16_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 15%Z)%Z) -> ((Cint.bit_test (Cint.to_sint16 x) i) <-> (Cint.bit_test x
-  i)).
-Proof.
-  int_extraction_inf to_sint16_extraction_inf_bool.
-Qed.
-
-(* Why3 goal *)
-Lemma is_sint16_ext : forall (x:Z) (y:Z), (Cint.is_sint16 x) ->
-  ((Cint.is_sint16 y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 15%Z)%Z) ->
-  ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
-Proof.
-  intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-    intros.
-    case_lt i 16; intro.
-      apply h3; omega.
-    assert (0<=15<=15) by omega.
-    specialize ((h3 15) H1); clear H1.
-    assert (15<=15) by omega.
-    generalize ((to_sint16_extraction_sup x 15) H1 h1).
-    generalize ((to_sint16_extraction_sup y 15) H1 h2).
-    clear H1; intros.
-    rewrite h3 in H2. rewrite H2 in H1. clear H2.
-    assert ((Cint.bit_test x i) <-> x < 0).
-      apply to_sint16_extraction_sup. omega. auto.
-    assert ((Cint.bit_test y i) <-> y < 0).
-      apply to_sint16_extraction_sup. omega. auto.
-    rewrite H2.
-    rewrite H3.
-    auto.
-    clear h1; clear h2; clear h3.
-
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint32_extraction_sup : forall (x:Z) (i:Z), (31%Z <= i)%Z ->
-  ((Cint.is_sint32 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
-Proof.
-  sint_extraction_sup Cint.is_sint32 31%nat 31.
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint32_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 31%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint32 x) i) = (Cint.bit_testb x
-  i)).
-Proof.
-  naturalize_int_extraction_inf_bool n 32%nat 32.
-  sint_extraction_inf n x Cint.to_sint32 31%nat 2147483648 (-2147483648).
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint32_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 31%Z)%Z) -> ((Cint.bit_test (Cint.to_sint32 x) i) <-> (Cint.bit_test x
-  i)).
-Proof.
-  int_extraction_inf to_sint32_extraction_inf_bool.
-Qed.
-
-(* Why3 goal *)
-Lemma is_sint32_ext : forall (x:Z) (y:Z), (Cint.is_sint32 x) ->
-  ((Cint.is_sint32 y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 31%Z)%Z) ->
-  ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
-Proof.
-  intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-    intros.
-    case_lt i 31; intro.
-      apply h3; omega.
-    assert (0<=31<=31) by omega.
-    specialize ((h3 31) H1); clear H1.
-    assert (31<=31) by omega.
-    generalize ((to_sint32_extraction_sup x 31) H1 h1).
-    generalize ((to_sint32_extraction_sup y 31) H1 h2).
-    clear H1; intros.
-    rewrite h3 in H2. rewrite H2 in H1. clear H2.
-    assert ((Cint.bit_test x i) <-> x < 0).
-      apply to_sint32_extraction_sup. omega. auto.
-    assert ((Cint.bit_test y i) <-> y < 0).
-      apply to_sint32_extraction_sup. omega. auto.
-    rewrite H2.
-    rewrite H3.
-    auto.
-    clear h1; clear h2; clear h3.
-
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint64_extraction_sup : forall (x:Z) (i:Z), (63%Z <= i)%Z ->
-  ((Cint.is_sint64 x) -> ((Cint.bit_test x i) <-> (x < 0%Z)%Z)).
-Proof.
-  sint_extraction_sup Cint.is_sint64 63%nat 63.
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint64_extraction_inf_bool : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 63%Z)%Z) -> ((Cint.bit_testb (Cint.to_sint64 x) i) = (Cint.bit_testb x
-  i)).
-Proof.
-  naturalize_int_extraction_inf_bool n 64%nat 64.
-  sint_extraction_inf n x Cint.to_sint64 63%nat 9223372036854775808 (-9223372036854775808).
-Qed.
-
-(* Why3 goal *)
-Lemma to_sint64_extraction_inf : forall (x:Z) (i:Z), ((0%Z <= i)%Z /\
-  (i < 63%Z)%Z) -> ((Cint.bit_test (Cint.to_sint64 x) i) <-> (Cint.bit_test x
-  i)).
-Proof.
-  int_extraction_inf to_sint64_extraction_inf_bool.
-Qed.
-
-(* Why3 goal *)
-Lemma is_sint64_ext : forall (x:Z) (y:Z), (Cint.is_sint64 x) ->
-  ((Cint.is_sint64 y) -> ((forall (i:Z), ((0%Z <= i)%Z /\ (i <= 63%Z)%Z) ->
-  ((Cint.bit_test x i) <-> (Cint.bit_test y i))) -> (x = y))).
-Proof.
-  intros x y h1 h2 h3.
-  assert (forall i: int, (0 <= i)%Z -> (Cint.bit_test x i <-> Cint.bit_test y i)).
-    intros.
-    case_lt i 64; intro.
-      apply h3; omega.
-    assert (0<=63<=63) by omega.
-    specialize ((h3 63) H1); clear H1.
-    assert (63<=63) by omega.
-    generalize ((to_sint64_extraction_sup x 63) H1 h1).
-    generalize ((to_sint64_extraction_sup y 63) H1 h2).
-    clear H1; intros.
-    rewrite h3 in H2. rewrite H2 in H1. clear H2.
-    assert ((Cint.bit_test x i) <-> x < 0).
-      apply to_sint64_extraction_sup. omega. auto.
-    assert ((Cint.bit_test y i) <-> y < 0).
-      apply to_sint64_extraction_sup. omega. auto.
-    rewrite H2.
-    rewrite H3.
-    auto.
-    clear h1; clear h2; clear h3.
-
-    unfold Cint.bit_test in H.
-    unfold Cint.bit_testb in H.
-    apply Zbits.bit_testb_ext; intros.
-    rewrite <- Zbits.bool2_eq_true.
-    apply H; auto.
-Qed.
-
 (* Why3 goal *)
 Lemma is_uint8_lor : forall (x:Z) (y:Z), (Cint.is_uint8 x) -> ((Cint.is_uint8
   y) -> ((Cint.to_uint8 (Cint.lor x y)) = (Cint.lor x y))).
-Proof. 
-  is_uint_bitwise orb 8%nat. 
+Proof.
+  intros; rewrite Cint.to_uint_8; apply is_uint_lor; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint8_land : forall (x:Z) (y:Z), (Cint.is_uint8 x) ->
   ((Cint.is_uint8 y) -> ((Cint.to_uint8 (Cint.land x y)) = (Cint.land x y))).
 Proof.
-  is_uint_bitwise andb 8%nat. 
+  intros; rewrite Cint.to_uint_8; apply is_uint_land; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint8_lsr : forall (x:Z) (y:Z), (0%Z <= y)%Z -> ((Cint.is_uint8
   x) -> ((Cint.to_uint8 (Cint.lsr x y)) = (Cint.lsr x y))).
 Proof.	
-  lsr_in_uint_range 256.
+  intros; rewrite Cint.to_uint_8; apply is_uint_lsr; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint8_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 8%Z)%Z) ->
   ((Cint.to_uint8 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_uint_lsl1_inf n 8%nat 8. 
-  uint_lsl1_inf n Cint.to_uint8 8%nat 7%nat 256.
+  intros; rewrite Cint.to_uint_8; apply is_uint_lsl1_inf; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint8_lsl1_sup : forall (y:Z), (8%Z <= y)%Z ->
   ((Cint.to_uint8 (Cint.lsl 1%Z y)) = 0%Z).
 Proof.
-  naturalize_uint_lsl1_sup n 8%nat 8.
-  uint_lsl1_sup n Cint.to_uint8 8%nat 256.
+  intros; rewrite Cint.to_uint_8; apply is_uint_lsl1_sup; omega.
 Qed.
 
+(** ***  Cast to uint16 C type *)
 (* Why3 goal *)
 Lemma is_uint16_lor : forall (x:Z) (y:Z), (Cint.is_uint16 x) ->
   ((Cint.is_uint16 y) -> ((Cint.to_uint16 (Cint.lor x y)) = (Cint.lor x y))).
 Proof. 
-  is_uint_bitwise orb 16%nat. 
+  intros; rewrite Cint.to_uint_16; apply is_uint_lor; trivial.
 Qed.
 
 (* Why3 goal *)
@@ -1056,37 +1086,36 @@ Lemma is_uint16_land : forall (x:Z) (y:Z), (Cint.is_uint16 x) ->
   ((Cint.is_uint16 y) -> ((Cint.to_uint16 (Cint.land x y)) = (Cint.land x
   y))).
 Proof. 
-  is_uint_bitwise andb 16%nat. 
+  intros; rewrite Cint.to_uint_16; apply is_uint_land; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint16_lsr : forall (x:Z) (y:Z), (0%Z <= y)%Z -> ((Cint.is_uint16
   x) -> ((Cint.to_uint16 (Cint.lsr x y)) = (Cint.lsr x y))).
 Proof.
-  lsr_in_uint_range 65536.
+  intros; rewrite Cint.to_uint_16; apply is_uint_lsr; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint16_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 16%Z)%Z) ->
-  ((Cint.lsl 1%Z y) = (Cint.to_uint16 (Cint.lsl 1%Z y))).
+  ((Cint.to_uint16 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_uint_lsl1_inf n 16%nat 16.
-  uint_lsl1_inf n Cint.to_uint16 16%nat 15%nat 65536.
+  intros; rewrite Cint.to_uint_16. apply is_uint_lsl1_inf; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint16_lsl1_sup : forall (y:Z), (16%Z <= y)%Z ->
   ((Cint.to_uint16 (Cint.lsl 1%Z y)) = 0%Z).
 Proof.
-  naturalize_uint_lsl1_sup n 16%nat 16.
-  uint_lsl1_sup n Cint.to_uint16 16%nat 65536.
+  intros; rewrite Cint.to_uint_16; apply is_uint_lsl1_sup; omega.
 Qed.
 
+(** *** Cast to uint32 C type *)
 (* Why3 goal *)
 Lemma is_uint32_lor : forall (x:Z) (y:Z), (Cint.is_uint32 x) ->
   ((Cint.is_uint32 y) -> ((Cint.to_uint32 (Cint.lor x y)) = (Cint.lor x y))).
 Proof.
-  is_uint_bitwise orb 32%nat. 
+  intros; rewrite Cint.to_uint_32; apply is_uint_lor; trivial.
 Qed.
 
 (* Why3 goal *)
@@ -1094,37 +1123,36 @@ Lemma is_uint32_land : forall (x:Z) (y:Z), (Cint.is_uint32 x) ->
   ((Cint.is_uint32 y) -> ((Cint.to_uint32 (Cint.land x y)) = (Cint.land x
   y))).
 Proof. 
-  is_uint_bitwise andb 32%nat. 
+  intros; rewrite Cint.to_uint_32; apply is_uint_land; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint32_lsr : forall (x:Z) (y:Z), (0%Z <= y)%Z -> ((Cint.is_uint32
   x) -> ((Cint.to_uint32 (Cint.lsr x y)) = (Cint.lsr x y))).
 Proof.
-  lsr_in_uint_range 4294967296.  
+  intros; rewrite Cint.to_uint_32; apply is_uint_lsr; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint32_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 32%Z)%Z) ->
-  ((Cint.lsl 1%Z y) = (Cint.to_uint32 (Cint.lsl 1%Z y))).
+  ((Cint.to_uint32 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_uint_lsl1_inf n 32%nat 32.
-  uint_lsl1_inf n Cint.to_uint32 32%nat 31%nat 4294967296.
+  intros; rewrite Cint.to_uint_32; apply is_uint_lsl1_inf; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint32_lsl1_sup : forall (y:Z), (32%Z <= y)%Z ->
   ((Cint.to_uint32 (Cint.lsl 1%Z y)) = 0%Z).
 Proof.
-  naturalize_uint_lsl1_sup n 32%nat 32 .
-  uint_lsl1_sup n Cint.to_uint32 32%nat 4294967296.
+  intros; rewrite Cint.to_uint_32; apply is_uint_lsl1_sup; omega.
 Qed.
 
+(** *** Cast to uint64 C type *)
 (* Why3 goal *)
 Lemma is_uint64_lor : forall (x:Z) (y:Z), (Cint.is_uint64 x) ->
   ((Cint.is_uint64 y) -> ((Cint.to_uint64 (Cint.lor x y)) = (Cint.lor x y))).
 Proof.
-  is_uint_bitwise orb 64%nat. 
+  intros; rewrite Cint.to_uint_64; apply is_uint_lor; trivial.
 Qed.
 
 (* Why3 goal *)
@@ -1132,30 +1160,28 @@ Lemma is_uint64_land : forall (x:Z) (y:Z), (Cint.is_uint64 x) ->
   ((Cint.is_uint64 y) -> ((Cint.to_uint64 (Cint.land x y)) = (Cint.land x
   y))).
 Proof. 
-  is_uint_bitwise andb 64%nat. 
+  intros; rewrite Cint.to_uint_64; apply is_uint_land; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint64_lsr : forall (x:Z) (y:Z), (0%Z <= y)%Z -> ((Cint.is_uint64
   x) -> ((Cint.to_uint64 (Cint.lsr x y)) = (Cint.lsr x y))).
 Proof.
-  lsr_in_uint_range 18446744073709551616.  
+  intros; rewrite Cint.to_uint_64; apply is_uint_lsr; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint64_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 64%Z)%Z) ->
   ((Cint.to_uint64 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_uint_lsl1_inf n 64%nat 64.
-  uint_lsl1_inf n Cint.to_uint64 64%nat 63%nat 18446744073709551616.
+  intros; rewrite Cint.to_uint_64; apply is_uint_lsl1_inf; trivial.
 Qed.
 
 (* Why3 goal *)
 Lemma is_uint64_lsl1_sup : forall (y:Z), (64%Z <= y)%Z ->
   ((Cint.to_uint64 (Cint.lsl 1%Z y)) = 0%Z).
 Proof. 
-  naturalize_uint_lsl1_sup n 64%nat 64. 
-  uint_lsl1_sup n Cint.to_uint64 64%nat 18446744073709551616.
+  intros; rewrite Cint.to_uint_64; apply is_uint_lsl1_sup; omega.
 Qed.
 
 (** ** Signed conversions *)
@@ -1174,78 +1200,91 @@ Local Ltac lsr_in_sint_range n :=
   [ (apply (Zbits.lsr_lower_bound (-n) _ _ Ry); omega)
   | (apply (Zbits.lsr_upper_bound n _ _ Ry); omega)].
 
-Local Ltac naturalize_sint_lsl1_inf n vn vz :=
-  intros y (h1,h2);
+(* Why3 goal *)
+Lemma is_sint_lnot : forall (n:Z) (x:Z), (Cint.is_sint n x) ->
+  ((Cint.to_sint n (Cint.lnot x)) = (Cint.lnot x)).
+Proof.
+  intros n; is_sint_lnot (Cint.two_power_abs n).
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint_lxor : forall (n:Z) (x:Z) (y:Z), (Cint.is_sint n x) ->
+  ((Cint.is_sint n y) -> ((Cint.to_sint n (Cint.lxor x y)) = (Cint.lxor x
+  y))).
+Proof.
+  intro n; is_sint_bitwise xorb (Zabs_nat n). 
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint_lor : forall (n:Z) (x:Z) (y:Z), (Cint.is_sint n x) ->
+  ((Cint.is_sint n y) -> ((Cint.to_sint n (Cint.lor x y)) = (Cint.lor x y))).
+Proof.
+  intro n; is_sint_bitwise orb (Zabs_nat n). 
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint_land : forall (n:Z) (x:Z) (y:Z), (Cint.is_sint n x) ->
+  ((Cint.is_sint n y) -> ((Cint.to_sint n (Cint.land x y)) = (Cint.land x
+  y))).
+Proof.
+  intro n; is_sint_bitwise andb (Zabs_nat n). 
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint_lsr : forall (n:Z) (x:Z) (y:Z), (0%Z <= y)%Z -> ((Cint.is_sint
+  n x) -> ((Cint.to_sint n (Cint.lsr x y)) = (Cint.lsr x y))).
+Proof.
+  intro n; lsr_in_sint_range (Cint.two_power_abs n).
+Qed.
+
+(* Why3 goal *)
+Lemma is_sint_lsl1_inf : forall (n:Z) (y:Z), ((0%Z <= y)%Z /\ (y < n)%Z) ->
+  ((Cint.to_sint n (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
+Proof.
+  intros n y (h1,h2).
+  apply Cint.id_sint.
   unfold Cint.lsl; unfold Zbits.lsl; rewrite (Zle_imp_le_bool _ _ h1);
   unfold Zbits.lsl_def;
   rewrite Zbits.lsl_arithmetic_shift; unfold Zbits.lsl_arithmetic_def;
   (replace (1 * two_power_nat (Z.abs_nat y))
-   with (two_power_nat (Z.abs_nat y)) by (ring;forward));
-  assert ((Z.abs_nat y < vn)%nat) as A by
-   ((replace vn with (Z.abs_nat vz) by (auto with arith));
-    apply Zabs_nat_lt; omega);
-  clear h1; clear h2;
-  pose (n := Z.abs_nat y); fold n; fold n in A.
- 					    
-Local Ltac sint_lsl1_inf n is_sint vnpred bz :=
-  unfold is_sint;
-  unfold Cint.to_range;
-  assert (0 < two_power_nat n) as P by apply Bits.two_power_nat_is_positive;
-  split;
-  [ pose (i:= two_power_nat n); fold i; fold i in P; 
-    omega |];
-  (replace bz with (two_power_nat (vnpred + 1)%nat) by (compute;forward));
-  rewrite Bits.two_power_nat_plus;
-  (replace (two_power_nat 1%nat) with 2 by (compute;forward));
+   with (two_power_nat (Z.abs_nat y)) by (auto with zarith)).
+  unfold Cint.is_sint.
+  generalize (Cint.two_power_abs_is_positive y);
+  generalize (Cint.two_power_abs_is_positive n);
+  unfold Cint.two_power_abs; intros.
+  split; [omega|].
+  apply Bits.two_power_nat_increase_strict.
+  apply Zabs_nat_lt; omega.
+Qed.
 
-  (rewrite (le_plus_minus n vnpred) by
-      (rewrite (lt_n_Sm_le n vnpred); auto));
-  rewrite Bits.two_power_nat_plus;
-  pose (a := two_power_nat n); fold a; fold a in P;
-  (assert (0 < two_power_nat (vnpred - n)) as Q by
-     apply Bits.two_power_nat_is_positive);
-  pose (b:=(two_power_nat (vnpred - n)%nat)); fold b; fold b in Q;
-  (replace a with (a*1) by (auto with zarith));
-  (replace (a*1*b*2) with (a*(b*2)) by ring);
-  apply (Zmult_gt_0_lt_compat_l 1 (b * 2) a);
-  omega.
-						      
-Local Ltac naturalize_sint_lsl1_sup n vn vz :=
-  intros y h1;
+(* Why3 goal *)
+Lemma is_sint_lsl1_sup : forall (n:Z) (y:Z), ((0%Z <= n)%Z /\ (n < y)%Z) ->
+  ((Cint.to_sint n (Cint.lsl 1%Z y)) = 0%Z).
+Proof.
+  intros n y h1.
   assert (0 <= y) as Ry by omega;
   unfold Cint.lsl; unfold Zbits.lsl; rewrite (Zle_imp_le_bool _ _ Ry);
   unfold Zbits.lsl_def;
   rewrite Zbits.lsl_arithmetic_shift; unfold Zbits.lsl_arithmetic_def;
   (replace (1 * two_power_nat (Z.abs_nat y))
-    with (two_power_nat (Z.abs_nat y)) by (ring;forward));
-  clear Ry;
+    with (two_power_nat (Z.abs_nat y)) by (auto with zarith)).
+  pose (M := two_power_nat (Z.abs_nat y)); fold M.
+  unfold Cint.to_sint; unfold Cint.to_range; Cint.simplify_to_range_unfolding.
+  pose (N:=(Cint.two_power_abs n)); fold N.
 
-  assert ((vn <= Z.abs_nat y)%nat) as A by
-   ((replace vn with (Z.abs_nat vz) by (auto with arith));
-    apply Zabs_nat_le; omega);
-  clear h1;
-  pose (n := Z.abs_nat y); fold n; fold n in A.
-					      
-Local Ltac sint_lsl1_sup n to_sint vn vnpred az bz :=
-  unfold to_sint;
-  unfold Cint.to_range;
- 
-  (replace (bz - az)
-   with (two_power_nat vn) by (compute;forward));
-  (replace (two_power_nat n - az)
-   with (two_power_nat n +bz) by (auto with zarith));
-  (replace bz with (two_power_nat vnpred) by (compute;forward));
-  (replace az with (- two_power_nat vnpred) by (compute;forward));
-  rewrite <- (Z.mod_unique_pos (two_power_nat n + two_power_nat vnpred)
-                               (two_power_nat vn) (two_power_nat (n-vn))
-                               (two_power_nat vnpred));
-  [(compute; auto)
-  |(compute ; split; [discriminate | auto])
-  |];
-  rewrite <- Bits.two_power_nat_plus;
-  (replace (vn + (n - vn))%nat with n by (auto with zarith));
-  auto.
-					     
+  rewrite <- (Z.mod_unique_pos (M + N) (N + N)
+                               (Cint.two_power_abs (y - (n + 1)))
+                                N).
+  + auto with zarith.
+  + generalize (Cint.two_power_abs_is_positive n); fold N; omega.
+  + rewrite Z.add_cancel_r. 
+    replace (N + N) with (2 * N) by (auto with zarith); unfold N. 
+    rewrite <- Cint.two_power_abs_plus_one by omega.
+    rewrite <- Cint.two_power_abs_plus_pos by omega.
+    replace (n + 1 + (y - (n + 1))) with y by ring.
+    auto.
+Qed.
+
 (** *** Cast to sint8 C type *)
 (* Why3 goal *)
 Lemma is_sint8_lnot : forall (x:Z), (Cint.is_sint8 x) ->
@@ -1290,18 +1329,16 @@ Qed.
 
 (* Why3 goal *)
 Lemma is_sint8_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 7%Z)%Z) ->
-  (Cint.is_sint8 (Cint.lsl 1%Z y)).
+  ((Cint.to_sint8 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_sint_lsl1_inf n 7%nat 7.
-  sint_lsl1_inf n Cint.is_sint8 6%nat 128.
+  intros; rewrite Cint.to_sint_8; apply is_sint_lsl1_inf; omega.
 Qed.
 
 (* Why3 goal *)
 Lemma is_sint8_lsl1_sup : forall (y:Z), (8%Z <= y)%Z ->
   ((Cint.to_sint8 (Cint.lsl 1%Z y)) = 0%Z).
 Proof.
-  naturalize_sint_lsl1_sup n 8%nat 8.
-  sint_lsl1_sup n Cint.to_sint8 8%nat 7%nat (-128) 128.
+  intros; rewrite Cint.to_sint_8; apply is_sint_lsl1_sup; omega.
 Qed.
 
 (** *** Cast to sint16 C type *)
@@ -1350,18 +1387,16 @@ Qed.
 
 (* Why3 goal *)
 Lemma is_sint16_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 15%Z)%Z) ->
-  (Cint.is_sint16 (Cint.lsl 1%Z y)).
+  ((Cint.to_sint16 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_sint_lsl1_inf n 15%nat 15.
-  sint_lsl1_inf n Cint.is_sint16 14%nat 32768.
+  intros; rewrite Cint.to_sint_16; apply is_sint_lsl1_inf; omega.
 Qed.
 
 (* Why3 goal *)
 Lemma is_sint16_lsl1_sup : forall (y:Z), (16%Z <= y)%Z ->
   ((Cint.to_sint16 (Cint.lsl 1%Z y)) = 0%Z).
 Proof.
-  naturalize_sint_lsl1_sup n 16%nat 16.
-  sint_lsl1_sup n Cint.to_sint16 16%nat 15%nat (-32768) 32768.
+  intros; rewrite Cint.to_sint_16; apply is_sint_lsl1_sup; omega.
 Qed.
 
 (** *** Cast to sint32 C type *)
@@ -1410,19 +1445,16 @@ Qed.
 
 (* Why3 goal *)
 Lemma is_sint32_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 31%Z)%Z) ->
-  (Cint.is_sint32 (Cint.lsl 1%Z y)).
+  ((Cint.to_sint32 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_sint_lsl1_inf n 31%nat 31.
-  sint_lsl1_inf n Cint.is_sint32 30%nat 2147483648.
+   intros; rewrite Cint.to_sint_32; apply is_sint_lsl1_inf; omega.
 Qed.
 
 (* Why3 goal *)
 Lemma is_sint32_lsl1_sup : forall (y:Z), (32%Z <= y)%Z ->
   ((Cint.to_sint32 (Cint.lsl 1%Z y)) = 0%Z).
 Proof.
-  naturalize_sint_lsl1_sup n 32%nat 32.
-  sint_lsl1_sup n Cint.to_sint32 32%nat 31%nat
-                (-2147483648) 2147483648.
+  intros; rewrite Cint.to_sint_32; apply is_sint_lsl1_sup; omega.
 Qed.
 
 (** *** Cast to sint64 C type *)
@@ -1471,18 +1503,123 @@ Qed.
 
 (* Why3 goal *)
 Lemma is_sint64_lsl1_inf : forall (y:Z), ((0%Z <= y)%Z /\ (y < 63%Z)%Z) ->
-  (Cint.is_sint64 (Cint.lsl 1%Z y)).
+  ((Cint.to_sint64 (Cint.lsl 1%Z y)) = (Cint.lsl 1%Z y)).
 Proof.
-  naturalize_sint_lsl1_inf n 63%nat 63.
-  sint_lsl1_inf n Cint.is_sint64 62%nat 9223372036854775808.
+  intros; rewrite Cint.to_sint_64; apply is_sint_lsl1_inf; omega.
 Qed.
 
 (* Why3 goal *)
 Lemma is_sint64_lsl1_sup : forall (y:Z), (64%Z <= y)%Z ->
   ((Cint.to_sint64 (Cint.lsl 1%Z y)) = 0%Z).
 Proof.
-  naturalize_sint_lsl1_sup n 64%nat 64.
-  sint_lsl1_sup n Cint.to_sint64 64%nat 63%nat
-                (-9223372036854775808) 9223372036854775808.
+  intros; rewrite Cint.to_sint_64; apply is_sint_lsl1_sup; omega.
+Qed.
+
+(** * Range of some bitwise operations *)
+(* Why3 goal *)
+Lemma uint_land_range : forall (x:Z) (y:Z), (0%Z <= x)%Z ->
+  ((0%Z <= (Cint.land x y))%Z /\ ((Cint.land x y) <= x)%Z).
+Proof.
+  intros x y h1.
+  apply Zbits.uint_land_range; trivial.
+Qed.
+
+(* Why3 goal *)
+Lemma uint_lor_inf : forall (x:Z) (y:Z), ((-1%Z)%Z <= x)%Z ->
+  ((0%Z <= y)%Z -> (x <= (Cint.lor x y))%Z).
+Proof.
+  intros x y h1 h2.
+  case_leq 0 x; intro.
+  + apply Zbits.uint_lor_inf; trivial.
+  + replace x with (-1).
+    { rewrite Zbits.lor_1; omega. }
+    omega.
+Qed.
+
+(* Why3 goal *)
+Lemma sint_land_inf : forall (x:Z) (y:Z), (x <= 0%Z)%Z -> ((y < 0%Z)%Z ->
+  ((Cint.land x y) <= x)%Z).
+Proof.
+  intros x y h1 h2.
+  cut (-(x+1) <= -((Cint.land x y)+1)).
+  { omega. }
+  fold (Bits.zlnot x).
+  fold (Bits.zlnot (Cint.land x y)).
+  repeat (rewrite <- Zbits.lnot_zlnot_equiv).
+  rewrite Zbits.lnot_land_de_morgan.
+  repeat (rewrite Zbits.lnot_zlnot_equiv).
+  apply (uint_lor_inf (Bits.zlnot x)); unfold Bits.zlnot; try omega.
+Qed.
+
+(* Why3 goal *)
+Lemma sint_lor_range : forall (x:Z) (y:Z), (x < 0%Z)%Z -> ((x <= (Cint.lor x
+  y))%Z /\ ((Cint.lor x y) < 0%Z)%Z).
+Proof.
+  intros x y h1.
+  cut (0 <= -((Cint.lor x y)+1) <= -(x+1)).
+  { omega. }
+  fold (Bits.zlnot x).
+  fold (Bits.zlnot (Cint.lor x y)).
+  rewrite <- Zbits.lnot_zlnot_equiv.
+  rewrite Zbits.lnot_lor_de_morgan.
+  rewrite Zbits.lnot_zlnot_equiv.
+  apply (uint_land_range (Bits.zlnot x)).
+  unfold Bits.zlnot; omega.
+Qed.
+
+(* Why3 goal *)
+Lemma is_uint_lor_distrib : forall (n:Z) (x:Z) (y:Z), (Cint.is_uint n
+  (Cint.lor x y)) <-> ((Cint.is_uint n x) /\ (Cint.is_uint n y)).
+Proof.
+  intros n x y; split.
+  + unfold Cint.is_uint ; intros.
+    destruct H.
+    rewrite <- Zbits.lor_sign in H.
+    destruct H.
+    generalize H0; clear H0.
+    assert (h1:((-1) <= x)) by omega.
+    generalize (uint_lor_inf x y h1 H1).
+    rewrite Zbits.lor_commut.
+    assert (h2:((-1) <= y)) by omega.
+    generalize (uint_lor_inf y x h2 H).
+    unfold Cint.lor;
+    pose (z:=(Zbits.lor y x)); fold z; intros.
+    omega.
+  + intro H; destruct H.
+    rewrite <- (is_uint_lor n) by trivial.
+    apply Cint.is_to_uint.
+Qed.
+
+(** * Link between bitwise operators and addition *)
+  
+(* Why3 goal *)
+Lemma lor_addition : forall (x:Z) (y:Z), ((Cint.land x y) = 0%Z) ->
+  ((x + y)%Z = (Cint.lor x y)).
+Proof.
+  intros x y h1.
+  apply Zbits.lor_addition; trivial.
+Qed.
+
+(* Why3 goal *)
+Lemma lxor_addition : forall (x:Z) (y:Z), ((Cint.land x y) = 0%Z) ->
+  ((x + y)%Z = (Cint.lxor x y)).
+Proof.
+  intros x y h1.
+  apply Zbits.lxor_addition; trivial.
+Qed.
+
+(** * Link between land and cast operator *)
+(* Why3 goal *)
+Lemma to_uint_land_edge : forall (x:Z) (n:Z), (0%Z <= n)%Z ->
+  ((Cint.to_uint n x) = (Cint.land ((Cint.lsl 1%Z n) - 1%Z)%Z x)).
+Proof.
+  intros x n h1.
+  unfold Cint.to_uint; unfold Cint.to_range; Cint.simplify_to_range_unfolding.
+  unfold Cint.two_power_abs.
+  rewrite Zbits.pos_mod_two_power_nat_land_edge.
+  unfold Cint.land; f_equal.
+  unfold Cint.lsl; rewrite Zbits.lsl_pos by omega; unfold Zbits.lsl_def. 
+  rewrite Zbits.lsl_arithmetic_shift; unfold Zbits.lsl_arithmetic_def.
+  auto with zarith.
 Qed.
 

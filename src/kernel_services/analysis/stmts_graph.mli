@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Statements graph.
-    @plugin development guide *)
+(** Statements graph. *)
 
 open Cil_types
 open Cil_datatype
@@ -93,6 +92,6 @@ val loop_preds : stmt -> stmt list * stmt list
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

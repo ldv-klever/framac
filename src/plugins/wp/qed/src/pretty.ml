@@ -46,7 +46,7 @@ struct
     | 4 -> pp_print_string fmt "'e"
     | n -> fprintf fmt "?%d" (n-4)
 
-  let pp_tau fmt t = 
+  let pp_tau fmt t =
     let n = Kind.degree_of_tau t in
     if 0<=n && n<5
     then Kind.pp_tau pp_alpha Field.pretty ADT.pretty fmt t
@@ -81,10 +81,10 @@ struct
 
   let empty = {
     bound = Intmap.empty ;
-    named = Tmap.empty ; 
-    index = Idx.empty ; 
-    known = Ids.empty ; 
-  }    
+    named = Tmap.empty ;
+    index = Idx.empty ;
+    known = Ids.empty ;
+  }
 
   let copy env = {
     bound = env.bound ;
@@ -100,16 +100,16 @@ struct
   let freshname env base =
     let rec scan env base k =
       let a = Printf.sprintf "%s_%d" base k in
-      if Ids.mem a env.known 
-      then scan env base (succ k) 
+      if Ids.mem a env.known
+      then scan env base (succ k)
       else (env.index <- Idx.add base (succ k) env.index ; a) in
-    scan env base 
+    scan env base
       (try Idx.find base env.index with Not_found -> 0)
 
   let known env xs =
     let env = copy env in
     Vars.iter
-      (fun x -> 
+      (fun x ->
          let x = Plib.to_string Var.pretty x in
          env.known <- Ids.add x env.known
       ) xs ; env
@@ -123,7 +123,7 @@ struct
     env.known <- Ids.add x env.known ;
     env
 
-  let fresh env t = 
+  let fresh env t =
     let env = copy env in
     let x = freshname env (T.basename t) in
     env.named <- Tmap.add t x env.named ;
@@ -135,7 +135,7 @@ struct
     env.known <- Ids.add x env.known ;
     env.bound <- Intmap.add k x env.bound ; x
 
-  let find_var env k = 
+  let find_var env k =
     try Intmap.find k env.bound
     with Not_found -> Printf.sprintf "#%d" k
 
@@ -155,7 +155,7 @@ struct
 
   let rec group_binders k = function
     | [] -> []
-    | (q,t)::qts -> group_collect q (succ k) (group_var t k) qts 
+    | (q,t)::qts -> group_collect q (succ k) (group_var t k) qts
 
   and group_collect q k kts = function
     | [] -> [q,kts]
@@ -219,8 +219,8 @@ struct
     | Or  es -> Vbox("\\/",es)
     | Not e -> Unop("not ",e)
     | Imply(hs,p) ->Vbox("->",hs@[p])
-    | Eq(a,b) -> 
-        if T.sort e = Sprop 
+    | Eq(a,b) ->
+        if T.sort e = Sprop
         then Vbox("<->",[a;b])
         else Hbox("=",[a;b])
     | Lt(a,b) -> Hbox("<",[a;b])
@@ -233,7 +233,7 @@ struct
     | Aset(a,b,c) -> Update(a,b,c)
     | Logic.Bind(q,x,e) -> abstraction [q,x] (lc_repr e)
     | Rget(e,f) -> GetField(e,f)
-    | Rdef fvs -> Record 
+    | Rdef fvs -> Record
                     begin
                       match T.record_with fvs with
                       | None -> fields fvs
@@ -242,13 +242,13 @@ struct
 
   let named_out env e =
     try Atom(Tmap.find e env.named)
-    with Not_found -> out e 
+    with Not_found -> out e
 
   (* -------------------------------------------------------------------------- *)
   (* --- Atom printer                                                       --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let rec pp_atom (env:env) (fmt:formatter) e = 
+  let rec pp_atom (env:env) (fmt:formatter) e =
     pp_atom_out env fmt (named_out env e)
 
   and pp_atom_out env fmt = function
@@ -263,9 +263,9 @@ struct
     | Cond c -> fprintf fmt "@[<hv 1>(%a)@]" (pp_cond env) c
     | Closure(e,es) -> pp_closure env fmt e es
     | Abstraction(qts,abs) -> fprintf fmt "@[<v 1>(%t)@]" (pp_abstraction env qts abs)
-    | Access(a,b) -> fprintf fmt "@[<hov 2>%a@,[%a]@]" 
+    | Access(a,b) -> fprintf fmt "@[<hov 2>%a@,[%a]@]"
                        (pp_atom env) a (pp_free env) b
-    | Update(a,b,c) -> fprintf fmt "@[<hov 2>%a@,[%a@,->%a]@]" 
+    | Update(a,b,c) -> fprintf fmt "@[<hov 2>%a@,[%a@,->%a]@]"
                          (pp_atom env) a (pp_atom env) b (pp_free env) c
     | GetField(e,f) -> fprintf fmt "%a.%a" (pp_atom env) e Field.pretty f
     | Record fs -> pp_fields env fmt fs
@@ -287,13 +287,13 @@ struct
   and pp_fields (env:env) (fmt:formatter) fs =
     fprintf fmt "@[<hv 0>{@[<hv 2>" ;
     List.iter
-      (function 
+      (function
         | With r ->
             fprintf fmt "@ %a with" (pp_atom env) r
         | Field (f,v) ->
             fprintf fmt "@ @[<hov 2>%a =@ %a ;@]" Field.pretty f (pp_free env) v
         | Last (f,v) ->
-            fprintf fmt "@ @[<hov 2>%a =@ %a@]" Field.pretty f (pp_free env) v	       
+            fprintf fmt "@ @[<hov 2>%a =@ %a@]" Field.pretty f (pp_free env) v
       ) fs ;
     fprintf fmt "@]@ }@]"
 
@@ -310,7 +310,7 @@ struct
 
   and pp_call (env:env) (fmt:formatter) f = function
     | [] -> Fun.pretty fmt f
-    | es -> 
+    | es ->
         fprintf fmt "@[<hov 2>(%a" Fun.pretty f ;
         List.iter (fun e -> fprintf fmt "@ %a" (pp_atom env) e) es ;
         fprintf fmt ")@]"
@@ -325,16 +325,16 @@ struct
            | Times(k,n) when Z.equal k Z.minus_one -> (ps,n::ns)
            | Kint k when Z.lt k Z.zero -> (ps,e_zint (Z.neg k) :: ns)
            | Kreal r when R.negative r -> (ps,e_real (R.opp r) :: ns)
-           | _ -> e::ps , ns) 
-        es ([],[]) 
+           | _ -> e::ps , ns)
+        es ([],[])
     in match ps , ns with
     | [] , [] -> pp_print_string fmt "0"
-    | [] , _ -> 
+    | [] , _ ->
         if free
         then fprintf fmt "(%a)" (pp_factor env "-") ns
         else pp_factor env "-" fmt ns
-    | p::ps , ns -> fprintf fmt "%a%a%a" 
-                      (pp_atom env) p 
+    | p::ps , ns -> fprintf fmt "%a%a%a"
+                      (pp_atom env) p
                       (pp_factor env "+") ps
                       (pp_factor env "-") ns
 
@@ -355,7 +355,7 @@ struct
 
   and pp_vbox (env:env) (sep:string) (fmt:formatter) = function
     | [] -> ()
-    | e::es -> 
+    | e::es ->
         pp_atom env fmt e ;
         List.iter (fun e -> fprintf fmt "@ %s %a" sep (pp_atom env) e) es
 
@@ -367,9 +367,9 @@ struct
     fprintf fmt "%a@ %s %a" (pp_atom env) a op (pp_atom env) b
 
   and pp_cond (env:env) (fmt:formatter) (c,a,b) =
-    fprintf fmt "if %a@ then %a@ else %a" 
-      (pp_atom env) c 
-      (pp_atom env) a 
+    fprintf fmt "if %a@ then %a@ else %a"
+      (pp_atom env) c
+      (pp_atom env) a
       (pp_atom env) b
 
   and pp_closure (env:env) (fmt:formatter) e es =
@@ -389,7 +389,7 @@ struct
     List.iter
       (fun (q,m) ->
          match q with
-         | Forall -> fprintf fmt "@[<hov 4>forall %a.@]@ " (pp_group env last) m 
+         | Forall -> fprintf fmt "@[<hov 4>forall %a.@]@ " (pp_group env last) m
          | Exists -> fprintf fmt "@[<hov 4>exists %a.@]@ " (pp_group env last) m
          | Lambda -> fprintf fmt "@[<hov 4>fun %a ->@]@ " (pp_group env last) m
       ) groups ;
@@ -420,7 +420,7 @@ struct
       fprintf fmt "@[<hv 0>" ;
       let shared t = Tmap.mem t env.named in
       let ts = T.shared ~shareable ~shared [t] in
-      let env = 
+      let env =
         List.fold_left
           (fun env t ->
              let x,env_x = fresh env t in

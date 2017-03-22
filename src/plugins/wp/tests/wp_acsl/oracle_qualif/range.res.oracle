@@ -6,14 +6,13 @@
 [wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
 [wp] 4 goals scheduled
-[wp] [Alt-Ergo] Goal typed_test_post_P1_ok : Valid
-[wp] [Alt-Ergo] Goal typed_test_post_P2_ok : Valid
+[wp] [Qed] Goal typed_test_post_P1_ok : Valid
+[wp] [Qed] Goal typed_test_post_P2_ok : Valid
 [wp] [Qed] Goal typed_test_call_val_assigns_p_pre_HP_ok : Valid
 [wp] [Qed] Goal typed_test_call_val_assigns_q_pre_HQ_ok : Valid
 [wp] Proved goals:    4 / 4
-     Qed:             2 
-     Alt-Ergo:        2
+     Qed:             4
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
-test                 2      2 (21)     4       100%
+test                 4     -           4       100%
 ----------------------------------------------------------

@@ -30,10 +30,12 @@ type localizable =
   | PStmt of (kernel_function * stmt)
   | PLval of (kernel_function option * kinstr * lval)
   | PExp of (kernel_function option * kinstr * exp)
-  | PTermLval of (kernel_function option * kinstr * term_lval)
+  | PTermLval of (kernel_function option * kinstr * Property.t * term_lval)
   | PVDecl of (kernel_function option * varinfo)
       (** Declaration and definition of variables and function. Check the type
-          of the varinfo to distinguish between the various possibilities. *)
+          of the varinfo to distinguish between the various possibilities.
+          If the varinfo is a global or a local, the kernel_function is the
+          one in which the variable is declared. *)
   | PGlobal of global (** all globals but variable declarations and function
                          definitions. *)
   | PIP of Property.t
@@ -73,14 +75,15 @@ val localizable_from_locs :
       This function is inefficient as it iterates on all the current
       [Locs.state]. *)
 
-val loc_to_localizable: Lexing.position -> localizable option
+val loc_to_localizable: ?precise_col:bool -> Lexing.position -> localizable option
   (** return the (hopefully) most precise localizable that contains the given
-      Lexing.position.
+      Lexing.position. If [precise_col] is [true], takes the column number into
+      account (possibly a more precise, but costly, result).
     @since Nitrogen-20111001 *)
 
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

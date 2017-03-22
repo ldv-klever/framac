@@ -43,12 +43,12 @@ class popup : unit ->
     method on_click : (selection -> unit) -> unit
     method on_prove : (selection -> unit) -> unit
     method register :
-      GMenu.menu GMenu.factory -> 
-      Design.main_window_extension_points -> 
+      GMenu.menu GMenu.factory ->
+      Design.main_window_extension_points ->
       button:int -> Pretty_source.localizable -> unit
   end
 
-class highlighter : Design.main_window_extension_points -> 
+class highlighter : Design.main_window_extension_points ->
   object
 
     method set : Wpo.t option -> unit

@@ -39,49 +39,6 @@ let wrap_float d = Some (offsetmap_of_v ~typ:Cil.floatType d)
 let wrap_size_t i =
   Some (offsetmap_of_v ~typ:(Cil.theMachine.Cil.typeOfSizeOf) i)
 
-let is_bitfield typlv =
-  match Cil.unrollType typlv with
-    | TInt (_, attrs) | TEnum (_, attrs) ->
-        (match Cil.findAttribute Cil.bitfield_attribute_name attrs with
-           | [AInt _] -> true
-           | _ -> false)
-    | _ -> false
-
-let sizeof_lval_typ typlv =
-  match Cil.unrollType typlv with
-    | TInt (_, attrs) | TEnum (_, attrs) as t ->
-        (match Cil.findAttribute Cil.bitfield_attribute_name attrs with
-           | [AInt i] -> Int_Base.Value i
-           | _ -> Bit_utils.sizeof t)
-    | t -> Bit_utils.sizeof t
-
-
-(* TODO: this should probably be also put directly in reinterpret_int *)
-let cast_lval_if_bitfield typlv size v =
-  match size with
-    | Int_Base.Top -> v (* Bitfields have known sizes *)
-    | Int_Base.Value size ->
-      if is_bitfield typlv then begin
-        try
-          ignore (V.project_ival v);
-          let signed = Bit_utils.is_signed_int_enum_pointer typlv in
-          let v, _ok = Cvalue.V.cast ~size ~signed v in
-          v (* TODO: handle not ok case as a downcast *)
-        with
-        | V.Not_based_on_null (* from [project_ival] *) ->
-          (* [v] is a pointer: check there are enough bits in
-             the bit-field to contain it. *)
-          if Int.ge size (Int.of_int (Bit_utils.sizeofpointer ())) ||
-            V.is_imprecise v
-          then v
-          else begin
-            Value_parameters.result
-              "casting address to a bit-field of %s bits: \
-                this is smaller than sizeof(void*)" (Int.to_string size);
-            V.topify_arith_origin v
-          end
-      end
-      else v
 
 let reinterpret_int ~with_alarms ikind v =
   let size = Int.of_int (Cil.bitsSizeOfInt ikind) in
@@ -89,7 +46,7 @@ let reinterpret_int ~with_alarms ikind v =
   let v', ok = V.cast ~signed ~size v in
   if not ok then
     Valarms.do_warn with_alarms.CilE.imprecision_tracing
-      (fun _ ->
+      (fun () ->
          Kernel.warning ~once:true ~current:true
            "@[casting address@ to a type@ smaller@ than sizeof(void*):@ \
                   @[%a@]@]" V.pretty v
@@ -98,10 +55,10 @@ let reinterpret_int ~with_alarms ikind v =
 
 let reinterpret_float ~with_alarms fkind v =
   let conv = match Value_util.float_kind fkind with
-    | Ival.Float_abstract.Float32 ->
+    | Fval.Float32 ->
         let rounding_mode = Value_util.get_rounding_mode () in
         Cvalue.V.cast_float ~rounding_mode
-    | Ival.Float_abstract.Float64 -> Cvalue.V.cast_double
+    | Fval.Float64 -> Cvalue.V.cast_double
   in
   let addresses, overflow, r = conv v in
   if overflow || addresses
@@ -121,7 +78,7 @@ let reinterpret ~with_alarms t v =
       reinterpret_float ~with_alarms fkind v
   | TBuiltin_va_list _ ->
       (Valarms.do_warn with_alarms.CilE.imprecision_tracing 
-	 (fun _ ->
+	 (fun () ->
            Value_util.warning_once_current
              "cast to __builtin_va_list is not precisely implemented yet%t"
              Value_util.pp_callstack)
@@ -137,12 +94,12 @@ let reinterpret ~with_alarms t v =
 
 
 let v_uninit_of_offsetmap ~with_alarms ~typ offsm =
-  let size = Bit_utils.sizeof typ in
+  let size = Eval_typ.sizeof_lval_typ typ in
   match size with
     | Int_Base.Top -> V_Offsetmap.find_imprecise_everywhere offsm
     | Int_Base.Value size ->
       let validity = Base.Known (Integer.zero, Integer.pred size) in
-      let offsets = Ival.singleton_zero in
+      let offsets = Ival.zero in
       let alarm, r =
         V_Offsetmap.find ~validity ~conflate_bottom:false ~offsets ~size offsm
       in
@@ -170,7 +127,7 @@ let do_promotion ~with_alarms rounding_mode ~src_typ ~dst_typ v msg =
       Warn.warn_float ~with_alarms ~non_finite ~addr (Some fkind) msg;
       if overflows <> (false, false)
       then begin
-        let dst_range = Ival.create_all_values ~modu:Int.one ~signed ~size in
+        let dst_range = Ival.create_all_values ~signed ~size in
         let mn, mx = Ival.min_and_max dst_range in
         let mn = if fst overflows then mn else None in
         let mx = if snd overflows then mx else None in
@@ -248,8 +205,9 @@ let eval_binop_float ~with_alarms round flkind ev1 op ev2 =
   let conv v = 
     try Ival.project_float (V.project_ival v)
     with
-      | V.Not_based_on_null | Ival.Float_abstract.Nan_or_infinite ->
-          Ival.Float_abstract.top
+      | V.Not_based_on_null
+      | Ival.Nan_or_infinite (* raised by project_ival. probably useless *) ->
+          Fval.top
   in
   let f1 = conv ev1 in
   let f2 = conv ev2 in
@@ -257,48 +215,45 @@ let eval_binop_float ~with_alarms round flkind ev1 op ev2 =
     try
       let alarm, f = f round f1 f2 in
       if alarm then
-        Valarms.warn_nan_infinite
-          with_alarms flkind (fun fmt -> Ival.Float_abstract.pretty fmt f);
+        Valarms.warn_nan_infinite with_alarms
+          flkind (fun fmt -> Fval.pretty_overflow fmt f);
       V.inject_ival (Ival.inject_float f)
     with
-      | Ival.Float_abstract.Nan_or_infinite ->
+      | Fval.Non_finite ->
           Valarms.warn_nan_infinite with_alarms flkind (pp_v V.top_int);
-          V.top_float
-      | Ival.Float_abstract.Bottom ->
-          Valarms.warn_nan_infinite with_alarms flkind (pp_v V.bottom);
           V.bottom
   in
   match op with
-    | PlusA ->   binary_float_floats "+." Ival.Float_abstract.add
-    | MinusA ->  binary_float_floats "-." Ival.Float_abstract.sub
-    | Mult ->    binary_float_floats "*." Ival.Float_abstract.mul
-    | Div ->     binary_float_floats "/." Ival.Float_abstract.div
+    | PlusA ->   binary_float_floats "+." Fval.add
+    | MinusA ->  binary_float_floats "-." Fval.sub
+    | Mult ->    binary_float_floats "*." Fval.mul
+    | Div ->     binary_float_floats "/." Fval.div
     | Eq ->
         let contains_zero, contains_non_zero =
-          Ival.Float_abstract.equal_float_ieee f1 f2
+          Fval.equal_float_ieee f1 f2
         in
         V.interp_boolean ~contains_zero ~contains_non_zero
     | Ne ->
         let contains_non_zero, contains_zero =
-          Ival.Float_abstract.equal_float_ieee f1 f2
+          Fval.equal_float_ieee f1 f2
         in
         V.interp_boolean ~contains_zero ~contains_non_zero
     | Lt ->
         V.interp_boolean
-          ~contains_zero:(Ival.Float_abstract.maybe_le_ieee_float f2 f1)
-          ~contains_non_zero:(Ival.Float_abstract.maybe_lt_ieee_float f1 f2)
+          ~contains_zero:(Fval.maybe_le_ieee_float f2 f1)
+          ~contains_non_zero:(Fval.maybe_lt_ieee_float f1 f2)
     | Le ->
         V.interp_boolean
-          ~contains_zero:(Ival.Float_abstract.maybe_lt_ieee_float f2 f1)
-          ~contains_non_zero:(Ival.Float_abstract.maybe_le_ieee_float f1 f2)
+          ~contains_zero:(Fval.maybe_lt_ieee_float f2 f1)
+          ~contains_non_zero:(Fval.maybe_le_ieee_float f1 f2)
     | Gt ->
         V.interp_boolean
-          ~contains_zero:(Ival.Float_abstract.maybe_le_ieee_float f1 f2)
-          ~contains_non_zero:(Ival.Float_abstract.maybe_lt_ieee_float f2 f1)
+          ~contains_zero:(Fval.maybe_le_ieee_float f1 f2)
+          ~contains_non_zero:(Fval.maybe_lt_ieee_float f2 f1)
     | Ge ->
         V.interp_boolean
-          ~contains_zero:(Ival.Float_abstract.maybe_lt_ieee_float f1 f2)
-          ~contains_non_zero:(Ival.Float_abstract.maybe_le_ieee_float f2 f1)
+          ~contains_zero:(Fval.maybe_lt_ieee_float f1 f2)
+          ~contains_non_zero:(Fval.maybe_le_ieee_float f2 f1)
     | _ -> assert false
 
 let eval_minus_pp ~with_alarms ~te1 ev1 ev2 =
@@ -352,7 +307,7 @@ let eval_binop_int ~with_alarms ~te1 ev1 op ev2 =
         let signed = Bit_utils.is_signed_int_enum_pointer te1 in
         V.bitwise_and ~size ~signed ev1 ev2
     | Eq | Ne | Ge | Le | Gt | Lt ->
-      let warn = Warn.check_not_comparable op ev1 ev2 in
+      let warn = not (Warn.are_comparable op ev1 ev2) in
       if warn then Valarms.warn_pointer_comparison with_alarms;
       if warn && Value_parameters.UndefinedPointerComparisonPropagateAll.get ()
       then V.zero_or_one
@@ -374,7 +329,7 @@ let eval_binop_int ~with_alarms ~te1 ev1 op ev2 =
     match r, ev1, ev2 with
     | V.Top _, V.Map _, V.Map _ ->
       Valarms.do_warn with_alarms.CilE.imprecision_tracing
-        (fun _ -> Value_parameters.warning ~once:true ~current:true
+        (fun () -> Value_parameters.warning ~once:true ~current:true
 	  "Operation %a %a %a incurs a loss of precision"
 	  V.pretty ev1 Printer.pp_binop op V.pretty ev2)
     | _ -> ()
@@ -387,17 +342,20 @@ and eval_uneg ~with_alarms v t =
   match Cil.unrollType t with
   | TFloat (fkind, _) ->
       (try
-          let v = V.project_ival v in
+          let v = V.project_ival_bottom v in
           let f = Ival.project_float v in
           V.inject_ival
-            (Ival.inject_float (Ival.Float_abstract.neg f))
+            (Ival.inject_float (Fval.neg f))
         with
         | V.Not_based_on_null ->
             Warn.warn_float ~with_alarms ~addr:true (Some fkind) (pp_v v);
             V.topify_arith_origin v
-	| Ival.Float_abstract.Nan_or_infinite ->
+        | Ival.Nan_or_infinite (* raised by project_float; probably useless*) ->
+          if V.is_bottom v then v
+          else begin
             Warn.warn_float ~with_alarms ~non_finite:true (Some fkind) (pp_v v);
             V.top_float
+          end
       )
   | _ ->
       try
@@ -422,7 +380,7 @@ let eval_unop ~check_overflow ~with_alarms v t op =
 
   | LNot ->
       (* TODO:  on float, LNot is equivalent to == 0.0 *)
-      let warn = Warn.check_not_comparable Eq V.singleton_zero v in
+      let warn = not (Warn.are_comparable Eq V.singleton_zero v) in
       if warn then Valarms.warn_pointer_comparison with_alarms;
       if (warn &&
              Value_parameters.UndefinedPointerComparisonPropagateAll.get ())
@@ -446,7 +404,7 @@ let inv_binop_rel = function
 
 let reduce_rel_int positive binop cond_expr value =
   if (Value_parameters.UndefinedPointerComparisonPropagateAll.get())
-    && Warn.check_not_comparable binop value cond_expr
+    && not (Warn.are_comparable binop value cond_expr)
   then value
   else
     match positive,binop with
@@ -487,21 +445,24 @@ let eval_float_constant ~with_alarms f fkind fstring =
       parsed_f.Floating_point.f_lower, parsed_f.Floating_point.f_upper
     | None | Some _ -> f, f
   in
-  let fl = Ival.F.of_float fl in
-  let fu = Ival.F.of_float fu in
+  let fl = Fval.F.of_float fl in
+  let fu = Fval.F.of_float fu in
   try
-    let non_finite, af = Ival.Float_abstract.inject_r fl fu in
+    let non_finite, af = Fval.inject_r fl fu in
     let v = V.inject_ival (Ival.inject_float af) in
     if non_finite then begin
       Warn.warn_float ~with_alarms ~non_finite (Some fkind) (pp_v v)
     end;
     v
-  with Ival.Float_abstract.Bottom ->
+  with Fval.Non_finite ->
     Warn.warn_float ~with_alarms ~non_finite:true (Some fkind)
       (fun fmt -> Format.pp_print_string fmt "INFINITY");
-    Value_parameters.result ~current:true
-      "Floating-point literal (or constant expression) is not \
-      finite. This path is assumed to be dead.";
+    Valarms.do_warn with_alarms.CilE.others
+      (fun _ ->
+        Value_parameters.result ~current:true
+          "Floating-point literal (or constant expression) is not \
+          finite. This path is assumed to be dead.";
+      );
     V.bottom
 
 let make_volatile ?typ v =
@@ -648,6 +609,21 @@ let reduce_by_valid_loc ~positive ~for_writing loc typ state =
     end
   with Exit -> state
 
+let make_loc_contiguous loc =
+  try
+    let base, offset =
+      Locations.Location_Bits.find_lonely_key loc.Locations.loc
+    in
+    match offset, loc.Locations.size with
+    | Ival.Top (Some min, Some max, _rem, modu), Int_Base.Value size
+         when Int.equal modu size ->
+       let size' = Int.add (Int.sub max min) modu in
+       let i = Ival.inject_singleton min in
+       let loc_bits = Locations.Location_Bits.inject base i in
+       Locations.make_loc loc_bits (Int_Base.inject size')
+    | _ -> loc
+  with Not_found -> loc
+
 let apply_on_all_locs f loc state =
   match loc.Locations.size with
   | Int_Base.Top -> state
@@ -668,7 +644,7 @@ let write_abstract_value ~with_alarms state lv typ_lv loc_lv v =
       make_volatile v (* Do not cast further, the offsetmap layer
                          prefers this form. *)
     else
-      cast_lval_if_bitfield typ_lv loc_lv.Locations.size v
+      Eval_typ.cast_lval_if_bitfield typ_lv loc_lv.Locations.size v
   in
   match loc_lv.Locations.loc with
   | Locations.Location_Bits.Top (Base.SetLattice.Top, orig) ->
@@ -684,10 +660,22 @@ let write_abstract_value ~with_alarms state lv typ_lv loc_lv v =
     Valarms.set_syntactic_context (Valarms.SyMem lv);
     add_binding ~with_alarms ~exact state loc_lv v
 
-
+(* Display [o] as a single value, when this is more readable and more precise
+   than the standard display. *)
+let pretty_stitched_offsetmap fmt typ o =
+  if Cil.isArithmeticOrPointerType typ &&
+     not (Cvalue.V_Offsetmap.is_single_interval o)
+  then
+    let v =
+      v_uninit_of_offsetmap ~with_alarms:CilE.warn_none_mode ~typ o
+    in
+    if not (Cvalue.V_Or_Uninitialized.is_isotropic v)
+    then
+      Format.fprintf fmt "@\nThis amounts to: %a"
+        Cvalue.V_Or_Uninitialized.pretty v
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

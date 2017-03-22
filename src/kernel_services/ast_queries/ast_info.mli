@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** AST manipulation utilities.
-    @plugin development guide *)
+(** AST manipulation utilities. *)
 
 open Cil_types
 
@@ -132,6 +131,10 @@ val mkassign_statement: lval -> exp -> location -> stmt
 (** determines if a var is local to a block. *)
 val is_block_local: varinfo -> block -> bool
 
+val block_of_local: fundec -> varinfo -> block
+(** [local_block f vi] returns the block of [f] in which [vi] is declared.
+    [vi] must be a variable of [f]. *)
+
 (* ************************************************************************** *)
 (** {2 Types} *)
 (* ************************************************************************** *)
@@ -184,6 +187,6 @@ val is_frama_c_builtin : string -> bool
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

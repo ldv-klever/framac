@@ -97,6 +97,6 @@ let trim_by_validity ?(origin=Origin.Unknown) ival size validity =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

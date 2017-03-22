@@ -140,6 +140,6 @@ let warn ?source fmt = warning ?source ~current:true ~once:true fmt
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

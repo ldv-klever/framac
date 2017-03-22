@@ -26,7 +26,7 @@
 
 let with_current_loc loc phi x =
   let tmp = Cil_const.CurrentLoc.get () in
-  try 
+  try
     Cil_const.CurrentLoc.set loc ;
     let y = phi x in
     Cil_const.CurrentLoc.set tmp ; y

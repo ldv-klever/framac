@@ -255,6 +255,6 @@ let output_dot_automata (states_l,trans_l) fichier =
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

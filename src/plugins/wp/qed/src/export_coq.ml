@@ -68,14 +68,14 @@ struct
         | Data _ -> false
         | Record _ -> true
 
-      method pp_array fmt t = 
+      method pp_array fmt t =
         fprintf fmt "array %a" self#pp_subtau t
 
-      method pp_farray fmt a b = 
+      method pp_farray fmt a b =
         fprintf fmt "farray %a %a" self#pp_subtau a self#pp_subtau b
 
-      method pp_tvar fmt k = 
-        if 1 <= k && k <= 26 then 
+      method pp_tvar fmt k =
+        if 1 <= k && k <= 26 then
           let c = int_of_char 'A' + (k-1) in
           pp_print_char fmt (char_of_int c)
         else
@@ -159,13 +159,18 @@ struct
       (* -------------------------------------------------------------------------- *)
 
       method pp_conditional fmt a b c =
-        match Export.cmode self#mode with
-        | Cprop -> 
+        match Export.pmode self#mode with
+        | Negative ->
+            begin
+              fprintf fmt "branch@ %a@ %a@ %a"
+                self#pp_atom a self#pp_atom b self#pp_atom c ;
+            end
+        | Positive ->
             begin
               fprintf fmt "itep@ %a@ %a@ %a"
                 self#pp_atom a self#pp_atom b self#pp_atom c ;
             end
-        | Cterm ->
+        | Boolean ->
             begin
               fprintf fmt "@[<hov 0>if " ;
               self#with_mode Mterm (fun _ -> self#pp_atom fmt a) ;
@@ -178,7 +183,7 @@ struct
       (* --- Arrays                                                             --- *)
       (* -------------------------------------------------------------------------- *)
 
-      method pp_array_get fmt m k = 
+      method pp_array_get fmt m k =
         fprintf fmt "%a.[ %a ]" self#pp_atom m self#pp_flow k
 
       method pp_array_set fmt m k v =
@@ -198,7 +203,7 @@ struct
           fprintf fmt "@[<hov 2>{|" ;
           Plib.iteri
             (fun i (f,v) -> match i with
-               | Ifirst | Imiddle -> 
+               | Ifirst | Imiddle ->
                    fprintf fmt "@ @[<hov 2>%s := %a ;@]" (self#field f) self#pp_flow v
                | Isingle | Ilast ->
                    fprintf fmt "@[<hov 2>%s := %a@]" (self#field f) self#pp_flow v
@@ -244,16 +249,16 @@ struct
         | x::xs ->
             fprintf fmt "@[<hov 2>forall (%a" self#pp_var x ;
             List.iter (fun y -> fprintf fmt "@ %a" self#pp_var y) xs ;
-            fprintf fmt "@ : %a),@]" self#pp_tau tau 
+            fprintf fmt "@ : %a),@]" self#pp_tau tau
 
       method pp_exists tau fmt = function
         | [] -> ()
         | x::xs ->
-            fprintf fmt "@[<hov 2>exists %a : %a@]," 
+            fprintf fmt "@[<hov 2>exists %a : %a@],"
               self#pp_var x self#pp_tau tau ;
             List.iter
               (fun x ->
-                 fprintf fmt "@ @[<hov 2>exists %a : %a@]," 
+                 fprintf fmt "@ @[<hov 2>exists %a : %a@],"
                    self#pp_var x self#pp_tau tau) xs
 
       method pp_lambda fmt xs =
@@ -328,16 +333,16 @@ struct
         end
 
       method declare_definition fmt f xs t e =
-        self#global 
+        self#global
           begin fun () ->
             fprintf fmt "@[<hov 4>Definition %s" (link_name (self#link f)) ;
             List.iter
-              (fun x -> 
+              (fun x ->
                  let a = self#bind x in
                  let t = T.tau_of_var x in
                  fprintf fmt "@ (%a : %a)" self#pp_var a self#pp_tau t
               ) xs ;
-            fprintf fmt "@ : %a :=@ " self#pp_tau t ; 
+            fprintf fmt "@ : %a :=@ " self#pp_tau t ;
             fprintf fmt "@[<hov 2>%a@]@].@\n" (self#pp_expr t) e ;
           end
 

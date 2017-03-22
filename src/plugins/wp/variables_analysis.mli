@@ -23,39 +23,39 @@
 (**
    This analysis performs a classification of the variables of the input
    program. The aim of this classification is to optimize the translation
-   of variables by WP: 
-    1) optimization of the by-reference call and 
-    2) functional variables. 
+   of variables by WP:
+    1) optimization of the by-reference call and
+    2) functional variables.
  **)
 
 (**
-   At the end, the analysis associates an [var_kind] information to each 
-   variables: 
+   At the end, the analysis associates an [var_kind] information to each
+   variables:
      1) [Fvar] functional variable, variable such as its address is never
         taken,
 
-     2) [PRarg] by_pointer_reference argument, variable such as its 
+     2) [PRarg] by_pointer_reference argument, variable such as its
         address is only taken in by reference calls (one or more),
 
-     3) [ARarg] by_array_reference argument, variable such as its 
-        address is only taken in by array reference calls (one or more), 
+     3) [ARarg] by_array_reference argument, variable such as its
+        address is only taken in by array reference calls (one or more),
 
-     4) [PRpar n] by_pointer_reference parameter of arity , 
+     4) [PRpar n] by_pointer_reference parameter of arity ,
         variable which is a formal parameter use for a by reference call
         and can be invoked in a chain of by reference call such as their
-        arity are less or equal than n, 
+        arity are less or equal than n,
 
-     5) [ARpar n] by_array_reference parameter of arity , 
+     5) [ARpar n] by_array_reference parameter of arity ,
         variable which is a formal parameter use for a by array reference
         call and can be invoked in a chain of by array reference call
-        such as their arity are less or equal than n, 
+        such as their arity are less or equal than n,
 
      6) [Cvar] other variable.
 
  **)
 
-type var_kind = 
-    Fvar | Cvar | PRarg | ARarg | PRpar of int | ARpar of int 
+type var_kind =
+    Fvar | Cvar | PRarg | ARarg | PRpar of int | ARpar of int
 
 
 (** [dispatch_cvar v] returns the var_kind associated to the C variable [v]
@@ -66,19 +66,19 @@ val dispatch_cvar: Cil_types.varinfo -> var_kind
     according the current optimisations activated.*)
 val dispatch_lvar: Cil_types.logic_var -> var_kind
 
-(** [is_to_scope v] returns true if [v] has to been scoped into the inner 
+(** [is_to_scope v] returns true if [v] has to been scoped into the inner
     memory model : cvar of ref*)
 val is_to_scope : Cil_types.varinfo -> bool
 
-(** [precondition_compute ()] adds warnings and precondition suitable 
+(** [precondition_compute ()] adds warnings and precondition suitable
     to the current optimisations which are activated *)
 val precondition_compute : unit -> unit
 
 (** [brackets_typ typ] returns the numbre of brackets of the type [typ].*)
-val brackets_typ : Cil_types.typ -> int 
+val brackets_typ : Cil_types.typ -> int
 
-(** [is_user_formal_in_builtins lv] tests if the address 
-    of the by-reference formal [lv] of user definition is an argument 
-    of (one or more) ACSL builtin predicate(s) or function : 
+(** [is_user_formal_in_builtins lv] tests if the address
+    of the by-reference formal [lv] of user definition is an argument
+    of (one or more) ACSL builtin predicate(s) or function :
       valid and family, separated, block_length, initialized*)
 val is_user_formal_in_builtin : Cil_types.logic_var -> bool

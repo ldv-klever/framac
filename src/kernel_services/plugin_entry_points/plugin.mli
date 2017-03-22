@@ -136,6 +136,11 @@ val get_from_name: string -> plugin
 (** Get a plug-in from its name.
     @since Oxygen-20120901 *)
 
+val is_present: string -> bool
+(** Whether a plug-in already exists.
+    Plugins are identified by their short name.
+    @since Magnesium-20151001 *)
+
 val get: string -> plugin
 (** Get a plug-in from its name.
     @deprecated since Oxygen-20120901 *)
@@ -162,6 +167,6 @@ val config_ref: (unit -> string) ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

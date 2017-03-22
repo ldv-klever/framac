@@ -57,7 +57,6 @@ let theory_name_of_cluster c =
 let theory_name_of_pid fmt pid =
   Format.fprintf fmt "VC%s" (WpPropId.get_propid pid)
 
-
 (* -------------------------------------------------------------------------- *)
 (* --- Exporting Formulae to Why3                                         --- *)
 (* -------------------------------------------------------------------------- *)
@@ -401,10 +400,10 @@ let assemble_check wpo vck =
   let id = Printf.sprintf "Qed-%d-%d" (Lang.F.id vck.qed) (Lang.F.id vck.raw) in
   let goal = cluster ~id () in
   let file = cluster_file goal in
-  Command.print_file file 
+  Command.print_file file
     (assemble_goal ~title:"Qed Check" ~id ~pid ~axioms:None vck.goal) ;
   let dir = Model.directory () in
-  [dir], { 
+  [dir], {
     gfile = file ;
     gtheory = Pretty_utils.to_string theory_name_of_pid pid ;
     ggoal = why3_goal_name ;
@@ -428,7 +427,7 @@ let assemble_wpo wpo =
 open ProverTask
 
 let p_goal = p_until_space ^ " " ^ p_until_space ^ " " ^ p_until_space ^ " : "
-let p_valid = p_goal ^ "Valid (" ^ p_float ^ "s)"
+let p_valid = p_goal ^ "Valid (" ^ p_float ^ "s\\(,[^)]*\\)?)"
 let p_unknown = p_goal ^ "Unknown (" ^ p_float ^ "s)"
 let p_limit = p_goal ^ "Timeout"
 let p_error = "File " ^ p_string ^ ", line " ^ p_int ^ ", characters "
@@ -538,7 +537,7 @@ class why3 ~prover ~pid ~file ~includes ~logout ~logerr =
       why#add_list ~name:"-L" includes;
       why#add ["-L";Wp_parameters.Share.file "why3"];
       why#validate_time why#time ;
-      (* The order is important. Warning are detected as error 
+      (* The order is important. Warning are detected as error
          which they are not. *)
       why#validate_pattern ~logs:`OUT re_limit why#limit ;
       why#validate_pattern ~logs:`ERR re_error why#error ;
@@ -562,8 +561,8 @@ let prove_prop ~prover ~wpo =
   match assemble_wpo wpo with
   | None -> Task.return VCS.no_result
   | Some (includes,file) ->
-    Wp_parameters.print_generated file.gfile;
-      if Wp_parameters.Generate.get () 
+      Wp_parameters.print_generated file.gfile;
+      if Wp_parameters.Generate.get ()
       then Task.return VCS.no_result
       else
         let model = wpo.po_model in
@@ -619,7 +618,7 @@ let find name dps =
   with Not_found ->
     let name = String.lowercase name in
     try List.find (fun d -> String.lowercase d.dp_name = name) dps
-    with Not_found -> 
+    with Not_found ->
       { dp_prover = name ; dp_name = name ; dp_version = "default" }
 
 let parse spec =
@@ -643,14 +642,14 @@ class why3detect job =
 
     val mutable dps = []
 
-    method result st = 
+    method result st =
       job (if st = 0 then Some (List.rev dps) else None)
 
     method prover p =
       begin
         let dp_name = p#get_string 1 in
         let dp_version = p#get_string 2 in
-        Wp_parameters.debug ~level:1 
+        Wp_parameters.debug ~level:1
           "Prover %S, version %s detected." dp_name dp_version ;
         let dp_prover = Printf.sprintf "%s:%s" dp_name dp_version in
         for i = String.length dp_name + 1 to String.length dp_prover - 1 do
@@ -671,5 +670,5 @@ class why3detect job =
   end
 
 let detect_why3 job = Task.run ((new why3detect job)#detect)
-let detect_provers job = 
+let detect_provers job =
   detect_why3 (function None -> job [] | Some dps -> job dps)

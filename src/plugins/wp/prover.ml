@@ -32,7 +32,7 @@ open Wpo
 let dispatch wpo mode prover =
   begin
     match prover with
-    | AltErgo -> ProverErgo.prove mode wpo 
+    | AltErgo -> ProverErgo.prove mode wpo
     | Coq -> ProverCoq.prove mode wpo
     | Why3 prover -> ProverWhy3.prove ~prover wpo
     | Qed -> Task.return VCS.unknown
@@ -43,6 +43,11 @@ let qed_time wpo =
   match wpo.po_formula with
   | GoalCheck _ | GoalLemma _ -> 0.0
   | GoalAnnot vcq -> GOAL.qed_time vcq.VC_Annot.goal
+
+let started ?start wpo =
+  match start with
+  | None -> ()
+  | Some f -> f wpo
 
 let signal ?callin wpo prover =
   match callin with
@@ -55,7 +60,8 @@ let update ?callback wpo prover result =
   | None -> ()
   | Some f -> f wpo prover result
 
-let run_prover wpo ?(mode=BatchMode) ?callback prover =
+let run_prover wpo ?(mode=BatchMode) ?callin ?callback prover =
+  signal ?callin wpo prover ;
   dispatch wpo mode prover >>>
   fun status ->
   let result = match status with
@@ -70,17 +76,17 @@ let run_prover wpo ?(mode=BatchMode) ?callback prover =
 
 let resolve wpo =
   match wpo.po_formula with
-  | GoalAnnot vcq -> VC_Annot.resolve vcq 
+  | GoalAnnot vcq -> VC_Annot.resolve vcq
   | GoalLemma vca -> VC_Lemma.is_trivial vca
   | GoalCheck _ -> false
 
-let simplify ?callin ?callback wpo prover =
+let simplify ?start ?callback wpo =
   Task.call
     (fun wpo ->
        let r = Wpo.get_result wpo VCS.Qed in
        VCS.( r.verdict == Valid ) ||
        begin
-         signal ?callin wpo prover ;
+         started ?start wpo ;
          if resolve wpo then
            let time = qed_time wpo in
            let result = VCS.result ~time VCS.Valid in
@@ -89,18 +95,27 @@ let simplify ?callin ?callback wpo prover =
        end)
     wpo
 
-let prove wpo ?mode ?callin ?callback prover =
-  simplify ?callin ?callback wpo prover >>= fun succeed -> 
-  if succeed 
+let prove wpo ?mode ?start ?callin ?callback prover =
+  simplify ?start ?callback wpo >>= fun succeed ->
+  if succeed
   then Task.return true
-  else (run_prover wpo ?mode ?callback prover)
+  else (run_prover wpo ?mode ?callin ?callback prover)
 
-let spawn wpo ?callin ?callback provers =
-  ProverTask.spawn 
+let spawn wpo ?start ?callin ?callback ?success provers =
+  let do_monitor f wpo = function
+    | None -> f wpo None
+    | Some p ->
+        let r = Wpo.get_result wpo VCS.Qed in
+        let p = if VCS.( r.verdict == Valid ) then VCS.Qed else p in
+        f wpo (Some p) in
+  let monitor = match success with
+    | None -> None
+    | Some f -> Some (do_monitor f wpo) in
+  ProverTask.spawn ?monitor
     begin
       List.map
         (fun (mode,prover) ->
-           prove wpo ~mode ?callin ?callback prover)
+           prover , prove wpo ~mode ?start ?callin ?callback prover)
         provers
     end
 
@@ -169,15 +184,15 @@ let wp_why3ide ?callback iter =
     begin
       ProverWhy3.call_ide ~includes ~files ~session >>=
       fun ok -> begin
-      if ok then begin
-        try update_wpo_from_session ?callback ~goals ~session ()
-        with Why3_session.LoadError ->
-          Wp_parameters.error
-            "[WP] why3session: can't import back why3 results because of \
-             previous error"
-      end;
-      Task.return ()
-    end
+        if ok then begin
+          try update_wpo_from_session ?callback ~goals ~session ()
+          with Why3_session.LoadError ->
+            Wp_parameters.error
+              "[WP] why3session: can't import back why3 results because of \
+               previous error"
+        end;
+        Task.return ()
+      end
     end
 
 let wp_why3ide ?callback iter =

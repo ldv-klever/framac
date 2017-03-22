@@ -20,30 +20,29 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Register
 open Dgraph
 
 let ($) f x = f x
 
 type service_id = int
 
-module View = DGraphContainer.Make(Service.TP)
+module View = DGraphContainer.Make(Callgraph.Services.Graphviz_attributes)
 
 class ['v, 'e, 'c] services_view view = object (self)
 
   val services:
     (service_id,
-     bool ref * Service.CallG.V.t DGraphViewItem.view_item list ref)
+     bool ref * Callgraph.Services.G.V.t DGraphViewItem.view_item list ref)
     Hashtbl.t
     = Hashtbl.create 10
 
-  method is_root (n:'v DGraphViewItem.view_item) = n#item.Service.is_root
+  method is_root (n:'v DGraphViewItem.view_item) = n#item.Service_graph.is_root
 
   method is_deployed id =
     try !(fst (Hashtbl.find services id)) with Not_found -> assert false
 
   method edge_kind (e: 'e DGraphViewItem.view_item) =
-    Service.CallG.E.label e#item
+    Callgraph.Services.G.E.label e#item
 
   method deploy node =
     assert (self#is_root node);
@@ -58,10 +57,10 @@ class ['v, 'e, 'c] services_view view = object (self)
          if not (self#is_root n) then n#show ();
          view#iter_succ_e
            (fun e -> match self#edge_kind e with
-            | Service.Inter_functions | Service.Both ->
+            | Service_graph.Inter_functions | Service_graph.Both ->
                 e#compute ();
                 e#show ()
-            | Service.Inter_services ->
+            | Service_graph.Inter_services ->
                 e#hide ())
            n)
       !nodes
@@ -78,12 +77,13 @@ class ['v, 'e, 'c] services_view view = object (self)
          if not (self#is_root n) then n#hide ();
          view#iter_succ_e
            (fun e -> match self#edge_kind e with
-            | Service.Inter_services | Service.Both -> e#show ()
-            | Service.Inter_functions -> e#hide ())
+            | Service_graph.Inter_services | Service_graph.Both -> e#show ()
+            | Service_graph.Inter_functions -> e#hide ())
            n)
       !nodes
 
-  method service n = n#item.Service.root.Service.node.Callgraph.cnid
+  method service n =
+    Kernel_function.get_id n#item.Service_graph.root.Service_graph.node
 
   initializer
   let add_in_service n s =
@@ -110,17 +110,17 @@ class ['v, 'e, 'c] services_view view = object (self)
        if self#is_root n then connect_trigger_to_node n else n#hide ());
   view#iter_edges_e
     (fun e -> match self#edge_kind e with
-     | Service.Inter_services | Service.Both -> e#show ()
-     | Service.Inter_functions -> e#hide ())
+     | Service_graph.Inter_services | Service_graph.Both -> e#show ()
+     | Service_graph.Inter_functions -> e#hide ())
 
 end
 
 (* Constructor copied from dGraphView *)
 let services_view model =
-  let delay_node v = not v.Service.is_root in
-  let delay_edge e = match Service.CallG.E.label e with
-    | Service.Inter_services | Service.Both -> false
-    | Service.Inter_functions -> true
+  let delay_node v = not v.Service_graph.is_root in
+  let delay_edge e = match Callgraph.Services.G.E.label e with
+    | Service_graph.Inter_services | Service_graph.Both -> false
+    | Service_graph.Inter_functions -> true
   in
   let view = View.GView.view ~aa:true ~delay_node ~delay_edge model in
   view#set_zoom_padding 0.025;
@@ -134,9 +134,9 @@ let make_graph_view ~packing () =
   let _, view = 
     View.from_graph_with_commands
       ~packing
-      ?root:(Service.entry_point ())
+      ?root:(Callgraph.Services.entry_point ())
       ~mk_global_view:services_view
-      (Register.get ())
+      (Callgraph.Services.get ())
   in view
 
 let main (window: Design.main_window_extension_points) =
@@ -146,7 +146,7 @@ let main (window: Design.main_window_extension_points) =
            (Menu_manager.Unit_callback (fun () -> 
 	     Service_graph.frama_c_display true;
 	     Gtk_helper.graph_window
-	       ~parent:window#main_window ~title:"Syntactic Callgraph"
+               ~parent:window#main_window ~title:"Callgraph"
 	       make_graph_view))
        ])
 

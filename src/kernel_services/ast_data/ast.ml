@@ -161,32 +161,38 @@ module LastDecl =
       let size = 47
      end)
 
-let compute_last_decl () =
+let compute_last_def_decl () =
   (* Only meaningful when we have definitely computed the AST. *)
   if is_computed () && not (LastDecl.is_computed ()) then begin
     let globs = (get ()).globals in
     let update_one_global g =
       match g with
-        | GVarDecl(_,v,_) when Cil.isFunctionType v.vtype ->
+        | GVarDecl(v,_) | GFunDecl(_,v,_) | GVar (v,_,_) | GFun ({svar=v},_) ->
           LastDecl.replace v g
-        | GFun (f,_) -> LastDecl.replace f.svar g
         | _ -> ()
     in
     List.iter update_one_global globs;
     LastDecl.mark_as_computed ()
   end
 
-let is_last_decl g =
-  (* Not_found mainly means that the information is irrelevant at this stage,
-     not that there is a dangling varinfo.
-   *)
+let is_def_or_last_decl g =
   let is_eq v =
-    compute_last_decl ();
-    try (LastDecl.find v == g) with Not_found -> false
+    compute_last_def_decl ();
+    try
+      (** using [(==)] is the only way to fulfill the spec (do not use
+          [Cil_datatype.Global.equal] here): if a variable is declared several
+          times in the program, each declaration are equal wrt
+          [Cil_datatype.Global.equal] but only one is [(==)] (and exactly one if
+          [g] comes from the AST). *)
+      LastDecl.find v == g
+    with Not_found ->
+      (* [Not_found] mainly means that the information is irrelevant at this
+         stage, not that there is a dangling varinfo. *)
+      false
   in
   match g with
-    | GVarDecl(_,v,_) -> is_eq v
-    | GFun(f,_) -> is_eq f.svar
+    | GVarDecl(v,_) | GFunDecl (_,v,_) -> is_eq v
+    | GVar _ | GFun _ -> true
     | _ -> false
 
 let clear_last_decl () =
@@ -199,6 +205,6 @@ let () = add_hook_on_update Cil_datatype.clear_caches
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

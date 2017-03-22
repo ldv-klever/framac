@@ -24,44 +24,59 @@ theory Cint
 use bool.Bool as Bool
 use int.Int as Int
 
+function max_uint8 : int = 256
+
+function max_sint8 : int = 128
+
+function max_uint16 : int = 65536
+
+function max_sint16 : int = 32768
+
+function max_uint32 : int = 4294967296
+
+function max_sint32 : int = 2147483648
+
+function max_uint64 : int = 18446744073709551616
+
+function max_sint64 : int = 9223372036854775808
+
 predicate is_uint8 int
 
 axiom is_uint8_def : forall x:int [is_uint8 x]. is_uint8 x <->
-  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (256))
+  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (max_uint8))
 
 predicate is_sint8 int
 
 axiom is_sint8_def : forall x:int [is_sint8 x]. is_sint8 x <->
-  (Int.(<=) ((Int.(-_) (128))) (x)) /\ (Int.(<) (x) (128))
+  (Int.(<=) ((Int.(-_) (max_sint8))) (x)) /\ (Int.(<) (x) (max_sint8))
 
 predicate is_uint16 int
 
 axiom is_uint16_def : forall x:int [is_uint16 x]. is_uint16 x <->
-  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (65536))
+  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (max_uint16))
 
-predicate is_sint16 (x:int) = (Int.(<=) ((Int.(-_) (32768))) (x)) /\
-  (Int.(<) (x) (32768))
+predicate is_sint16 (x:int) = (Int.(<=) ((Int.(-_) (max_sint16))) (x)) /\
+  (Int.(<) (x) (max_sint16))
 
 predicate is_uint32 int
 
 axiom is_uint32_def : forall x:int [is_uint32 x]. is_uint32 x <->
-  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (4294967296))
+  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (max_uint32))
 
 predicate is_sint32 int
 
 axiom is_sint32_def : forall x:int [is_sint32 x]. is_sint32 x <->
-  (Int.(<=) ((Int.(-_) (2147483648))) (x)) /\ (Int.(<) (x) (2147483648))
+  (Int.(<=) ((Int.(-_) (max_sint32))) (x)) /\ (Int.(<) (x) (max_sint32))
 
 predicate is_uint64 int
 
 axiom is_uint64_def : forall x:int [is_uint64 x]. is_uint64 x <->
-  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (18446744073709551616))
+  (Int.(<=) (0) (x)) /\ (Int.(<) (x) (max_uint64))
 
 predicate is_sint64 int
 
 axiom is_sint64_def : forall x:int [is_sint64 x]. is_sint64 x <->
-  (Int.(<=) ((Int.(-_) (9223372036854775808))) (x)) /\
-  (Int.(<) (x) (9223372036854775808))
+  (Int.(<=) ((Int.(-_) (max_sint64))) (x)) /\ (Int.(<) (x) (max_sint64))
 
 function to_uint8 int : int
 
@@ -78,6 +93,18 @@ function to_sint32 int : int
 function to_uint64 int : int
 
 function to_sint64 int : int
+
+function two_power_abs int : int
+
+predicate is_uint (n:int) (x:int) = (Int.(<=) (0) (x)) /\
+  (Int.(<) (x) (two_power_abs n))
+
+predicate is_sint (n:int) (x:int) = (Int.(<=) ((Int.(-_) (two_power_abs
+  n))) (x)) /\ (Int.(<) (x) (two_power_abs n))
+
+function to_uint int int : int
+
+function to_sint int int : int
 
 axiom is_to_uint8 : forall x:int [is_uint8 (to_uint8 x)]. is_uint8 (to_uint8
   x)
@@ -104,32 +131,44 @@ axiom is_to_sint64 : forall x:int [is_sint64 (to_sint64 x)]. is_sint64
   (to_sint64 x)
 
 axiom id_uint8 : forall x:int [to_uint8 x]. (Int.(<=) (0) (x)) /\
-  (Int.(<) (x) (256)) -> ((to_uint8 x) = (x))
+  (Int.(<) (x) (max_uint8)) -> ((to_uint8 x) = (x))
 
 axiom id_sint8 : forall x:int [to_sint8 x].
-  (Int.(<=) ((Int.(-_) (128))) (x)) /\ (Int.(<) (x) (128)) -> ((to_sint8
-  x) = (x))
+  (Int.(<=) ((Int.(-_) (max_sint8))) (x)) /\ (Int.(<) (x) (max_sint8)) ->
+  ((to_sint8 x) = (x))
 
 axiom id_uint16 : forall x:int [to_uint16 x]. (Int.(<=) (0) (x)) /\
-  (Int.(<) (x) (65536)) -> ((to_uint16 x) = (x))
+  (Int.(<) (x) (max_uint16)) -> ((to_uint16 x) = (x))
 
 axiom id_sint16 : forall x:int [to_sint16 x].
-  (Int.(<=) ((Int.(-_) (32768))) (x)) /\ (Int.(<) (x) (32768)) -> ((to_sint16
-  x) = (x))
+  (Int.(<=) ((Int.(-_) (max_sint16))) (x)) /\ (Int.(<) (x) (max_sint16)) ->
+  ((to_sint16 x) = (x))
 
 axiom id_uint32 : forall x:int [to_uint32 x]. (Int.(<=) (0) (x)) /\
-  (Int.(<) (x) (4294967296)) -> ((to_uint32 x) = (x))
+  (Int.(<) (x) (max_uint32)) -> ((to_uint32 x) = (x))
 
 axiom id_sint32 : forall x:int [to_sint32 x].
-  (Int.(<=) ((Int.(-_) (2147483648))) (x)) /\ (Int.(<) (x) (2147483648)) ->
+  (Int.(<=) ((Int.(-_) (max_sint32))) (x)) /\ (Int.(<) (x) (max_sint32)) ->
   ((to_sint32 x) = (x))
 
 axiom id_uint64 : forall x:int [to_uint64 x]. (Int.(<=) (0) (x)) /\
-  (Int.(<) (x) (18446744073709551616)) -> ((to_uint64 x) = (x))
+  (Int.(<) (x) (max_uint64)) -> ((to_uint64 x) = (x))
 
 axiom id_sint64 : forall x:int [to_sint64 x].
-  (Int.(<=) ((Int.(-_) (9223372036854775808))) (x)) /\
-  (Int.(<) (x) (9223372036854775808)) -> ((to_sint64 x) = (x))
+  (Int.(<=) ((Int.(-_) (max_sint64))) (x)) /\ (Int.(<) (x) (max_sint64)) ->
+  ((to_sint64 x) = (x))
+
+axiom proj_int8 : forall x:int [to_sint8 (to_uint8 x)]. ((to_sint8 (to_uint8
+  x)) = (to_sint8 x))
+
+axiom proj_int16 : forall x:int [to_sint16 (to_uint16 x)]. ((to_sint16
+  (to_uint16 x)) = (to_sint16 x))
+
+axiom proj_int32 : forall x:int [to_sint32 (to_uint32 x)]. ((to_sint32
+  (to_uint32 x)) = (to_sint32 x))
+
+axiom proj_int64 : forall x:int [to_sint64 (to_uint64 x)]. ((to_sint64
+  (to_uint64 x)) = (to_sint64 x))
 
 function lnot int : int
 

@@ -24,9 +24,9 @@
 (* --- Fast Report for WP                                                 --- *)
 (* -------------------------------------------------------------------------- *)
 
-let ladder = [| 1.0 ; 2.0 ; 3.0 ; 5.0 ; 10.0 ; 15.0 ; 
+let ladder = [| 1.0 ; 2.0 ; 3.0 ; 5.0 ; 10.0 ; 15.0 ;
                 20.0 ; 30.0 ; 40.0 ;
-                60.0 ; 90.0 ; 120.0 ; 180.0 ;    (* 1', 1'30, 2', 3' *)  
+                60.0 ; 90.0 ; 120.0 ; 180.0 ;    (* 1', 1'30, 2', 3' *)
                 300.0 ; 600.0 ; 900.0 ; 1800.0 ; (* 5', 10', 15', 30' *)
                 3600.0 |]                        (* 1h *)
 
@@ -37,7 +37,7 @@ let ladder = [| 1.0 ; 2.0 ; 3.0 ; 5.0 ; 10.0 ; 15.0 ;
 type res = VALID | UNSUCCESS | INCONCLUSIVE | NORESULT
 
 let result (r:VCS.result) = match r.VCS.verdict with
-  | VCS.NoResult | VCS.Computing _ -> NORESULT
+  | VCS.NoResult | VCS.Checked | VCS.Computing _ -> NORESULT
   | VCS.Failed -> INCONCLUSIVE
   | VCS.Invalid | VCS.Unknown | VCS.Timeout | VCS.Stepout -> UNSUCCESS
   | VCS.Valid -> VALID
@@ -63,7 +63,7 @@ let add_stat (r:res) (st:int) (tm:float) (s:stats) =
   begin
     s.total <- succ s.total ;
     match r with
-    | VALID -> 
+    | VALID ->
         if tm > s.time then s.time <- tm ;
         if st > s.steps then s.steps <- st ;
         s.valid <- succ s.valid
@@ -106,11 +106,11 @@ let add_results (plist:pstats list) (wpo:Wpo.t) =
        let ts = r.VCS.solver_time in
        if re <> NORESULT then
          begin
-           List.iter 
+           List.iter
              (fun fs -> add_stat re st tc (get_prover fs p))
              plist ;
            if p <> VCS.Qed && ts > 0.0 then
-             List.iter 
+             List.iter
                (fun fs -> add_qedstat ts (get_prover fs VCS.Qed))
                plist ;
          end ;
@@ -153,7 +153,7 @@ let dstats () = {
 (* --- Stats WP                                                           --- *)
 (* -------------------------------------------------------------------------- *)
 
-type entry = 
+type entry =
   | Global of string (* [JS 2012/11/27] unused *)
   | Axiom of string
   | Fun of Kernel_function.t
@@ -208,13 +208,13 @@ let add_goal (gs:fcstat) wpo =
     in
     let ds : dstats = get_section gs section in
     let (ok,prop) = Wpo.get_proof wpo in
-    let ps : pstats = get_property ds prop in  
+    let ps : pstats = get_property ds prop in
     add_results [gs.global ; ds.dstats ; ps] wpo ;
     add_cover gs.gcoverage ok prop ;
     add_cover ds.dcoverage ok prop ;
   end
 
-let fcstat () = 
+let fcstat () =
   let fcstat : fcstat = {
     global = pstats () ;
     gcoverage = coverage () ;
@@ -232,7 +232,7 @@ type istat = {
   chapters : (string * (entry * dstats) list) list;
 }
 
-(** start chapter stats *)    
+(** start chapter stats *)
 let start_stat4chap fcstat =
   let chapter = ref "" in
   let decode_chapter e =
@@ -241,13 +241,13 @@ let start_stat4chap fcstat =
     if is_new_code then
       chapter := code;
     is_new_code
-  in 
+  in
   let close_chapter (na,ca,ga) =
     if ca = [] then !chapter,[],ga
-    else !chapter,[],((na,List.rev ca)::ga) 
+    else !chapter,[],((na,List.rev ca)::ga)
   in
-  let (_,_,ga) = 
-    let acc = 
+  let (_,_,ga) =
+    let acc =
       Smap.fold
         (fun entry ds acc ->
            let is_new_chapter = decode_chapter entry in
@@ -264,28 +264,28 @@ let start_stat4chap fcstat =
             }
 
 (** next chapters stats *)
-let next_stat4chap istat = 
+let next_stat4chap istat =
   match istat.chapters with
   | ([] | _::[]) -> None
   | _::l -> Some { istat with chapters = l }
 
 type cistat = {
   cfcstat: fcstat;
-  chapter : string; 
+  chapter : string;
   sections : (entry * dstats) list;
 }
 
 (** start section stats of a chapter*)
-let start_stat4sect istat = 
+let start_stat4sect istat =
   match istat.chapters with
   | [] -> None
   | (c,s)::_ -> Some { cfcstat = istat.fcstat;
-                       chapter = c; 
+                       chapter = c;
                        sections = s;
                      }
 
 (** next section stats *)
-let next_stat4sect cistat = 
+let next_stat4sect cistat =
   match cistat.sections with
   | ([] | _::[]) -> None
   | _::l -> Some { cistat with sections = l }
@@ -298,19 +298,19 @@ type sistat = {
 }
 
 (** start property stats of a section *)
-let start_stat4prop cistat = 
+let start_stat4prop cistat =
   match cistat.sections with
   | [] -> None
-  | ((_,ds) as s)::_ -> 
+  | ((_,ds) as s)::_ ->
       Some { sfcstat = cistat.cfcstat;
              schapter = cistat.chapter;
              section = s;
-             properties = List.rev (Property.Map.fold 
+             properties = List.rev (Property.Map.fold
                                       (fun p ps acc -> (p,ps)::acc) ds.dmap []);
            }
 
 (** next property stats *)
-let next_stat4prop sistat = 
+let next_stat4prop sistat =
   match sistat.properties with
   | ([] | _::[]) -> None
   | _::l -> Some { sfcstat = sistat.sfcstat;
@@ -327,13 +327,13 @@ let iter_stat ?first ?sep ?last ~from start next=
       begin
         let apply v = function
           | None -> ()
-          | Some app -> app v 
+          | Some app -> app v
         in
-        let next app = 
+        let next app =
           let item = (Extlib.the !items) in
           apply item app;
           items := next item
-        in 
+        in
         next first;
         if sep<>None || last <> None then
           begin
@@ -372,7 +372,7 @@ let pp_zero ~config fmt =
   then Format.fprintf fmt "%4s" config.zero
   else Format.pp_print_string fmt config.zero
 
-let percent ~config fmt number total = 
+let percent ~config fmt number total =
   if total <= 0 || number < 0
   then pp_zero ~config fmt
   else
@@ -382,11 +382,11 @@ let percent ~config fmt number total =
     let ratio = float_of_int number /. float_of_int total in
     Format.fprintf fmt "%4.1f" (100.0 *. ratio)
 
-let number ~config fmt k = 
+let number ~config fmt k =
   if k = 0
   then pp_zero ~config fmt
-  else 
-  if config.console 
+  else
+  if config.console
   then Format.fprintf fmt "%4d" k
   else Format.pp_print_int fmt k
 
@@ -402,8 +402,8 @@ let stat ~config fmt s = function
   | "total" -> number config fmt s.total
   | "valid" | "" -> number config fmt s.valid
   | "failed" -> number config fmt (s.unsuccess + s.inconclusive)
-  | "status" -> 
-      let msg = 
+  | "status" ->
+      let msg =
         if s.inconclusive > 0 then config.status_inconclusive else
         if s.unsuccess > 0 then config.status_failed else
         if s.valid >= s.total then config.status_passed else
@@ -411,13 +411,13 @@ let stat ~config fmt s = function
       in Format.pp_print_string fmt msg
   | "inconclusive" -> number config fmt s.inconclusive
   | "unsuccess" -> number config fmt s.unsuccess
-  | "time" -> 
+  | "time" ->
       if s.time > 0.0 then
         Rformat.pp_time_range ladder fmt s.time
-  | "perf" -> 
-      if s.time > Rformat.epsilon then 
+  | "perf" ->
+      if s.time > Rformat.epsilon then
         Format.fprintf fmt "(%a)" Rformat.pp_time s.time
-  | "steps" -> 
+  | "steps" ->
       if s.steps > 0 then Format.fprintf fmt "(%d)" s.steps
   | _ -> raise Exit
 
@@ -449,19 +449,19 @@ let env_toplevel ~config gstat fmt cmd arg =
   try
     pcstats config fmt (gstat.global, gstat.gcoverage) cmd arg
   with Exit ->
-    if arg="" 
-    then Wp_parameters.error ~once:true "Unknown toplevel-format '%%%s'" cmd 
+    if arg=""
+    then Wp_parameters.error ~once:true "Unknown toplevel-format '%%%s'" cmd
     else Wp_parameters.error ~once:true "Unknown toplevel-format '%%%s:%s'" cmd arg
 
 let env_chapter chapter_name fmt cmd arg =
   try
     match cmd with
     | "chapter" | "name"  ->
-        Format.pp_print_string fmt chapter_name	      
+        Format.pp_print_string fmt chapter_name
     | _ -> raise Exit
   with Exit ->
-    if arg="" 
-    then Wp_parameters.error ~once:true "Unknown chapter-format '%%%s'" cmd 
+    if arg=""
+    then Wp_parameters.error ~once:true "Unknown chapter-format '%%%s'" cmd
     else Wp_parameters.error ~once:true "Unknown chapter-format '%%%s:%s'" cmd arg
 
 let env_section ~config ~name sstat fmt cmd arg =
@@ -470,13 +470,13 @@ let env_section ~config ~name sstat fmt cmd arg =
       | section_item::_others -> section_item
       | _ -> raise Exit
     in match cmd with
-    | "chapter" -> 
+    | "chapter" ->
         let chapter = match entry with
           | Global _ -> config.global_section
           | Axiom _ -> config.axiomatic_section
           | Fun _ ->  config.function_section
         in Format.pp_print_string fmt chapter
-    | "name" | "section" | "global" | "axiomatic" | "function" -> 
+    | "name" | "section" | "global" | "axiomatic" | "function" ->
         if cmd <> "name" &&  cmd <> "section" && name <> cmd then
           Wp_parameters.error "Invalid section-format '%%%s' inside a section %s" cmd name;
         let prefix,name = match entry with
@@ -485,11 +485,11 @@ let env_section ~config ~name sstat fmt cmd arg =
           | Axiom a -> config.axiomatic_prefix,a
           | Fun kf -> config.function_prefix, ( Kernel_function.get_name kf)
         in Format.fprintf fmt "%s%s" prefix name
-    | _ -> 
+    | _ ->
         pcstats config fmt (ds.dstats, ds.dcoverage) cmd arg
   with Exit ->
-    if arg="" 
-    then Wp_parameters.error ~once:true "Unknown section-format '%%%s'" cmd 
+    if arg=""
+    then Wp_parameters.error ~once:true "Unknown section-format '%%%s'" cmd
     else Wp_parameters.error ~once:true "Unknown section-format '%%%s:%s'" cmd arg
 
 let env_property ~config ~name pstat fmt cmd arg =
@@ -499,13 +499,13 @@ let env_property ~config ~name pstat fmt cmd arg =
       | property_item::_others -> property_item
       | _ -> raise Exit
     in match cmd with
-    | "chapter" -> 
+    | "chapter" ->
         let chapter = match entry with
           | Global _ -> config.global_section
           | Axiom _ -> config.axiomatic_section
           | Fun _ ->  config.function_section
         in Format.pp_print_string fmt chapter
-    | "section" | "global" | "axiomatic" | "function" -> 
+    | "section" | "global" | "axiomatic" | "function" ->
         if cmd <> "section" && name <> cmd then
           Wp_parameters.error "Invalid property-format '%%%s' inside a section %s" cmd name;
         let prefix,name = match entry with
@@ -514,16 +514,16 @@ let env_property ~config ~name pstat fmt cmd arg =
           | Axiom a -> config.axiomatic_prefix,a
           | Fun kf -> config.function_prefix, ( Kernel_function.get_name kf)
         in Format.fprintf fmt "%s%s" prefix name
-    | "name" -> 
-        Format.fprintf fmt "%s%s" config.property_prefix 
+    | "name" ->
+        Format.fprintf fmt "%s%s" config.property_prefix
           (Property.Names.get_prop_name_id p)
     | "property" ->
         Description.pp_local fmt p
-    | _ -> 
+    | _ ->
         pstats config fmt stat cmd arg
   with Exit ->
-    if arg="" 
-    then Wp_parameters.error ~once:true "Unknown property-format '%%%s'" cmd 
+    if arg=""
+    then Wp_parameters.error ~once:true "Unknown property-format '%%%s'" cmd
     else Wp_parameters.error ~once:true "Unknown property-format '%%%s:%s'" cmd arg
 
 (* -------------------------------------------------------------------------- *)
@@ -546,10 +546,10 @@ let print_chapter (cstat:istat) ~config ~chap ~sect ~glob ~axio ~func ~prop fmt 
     | _ -> raise Exit
   in let section_name = fst chapter_item
   in let section,chapter_name = match section_name with
-    | "global"    -> glob,config.global_section
-    | "axiomatic" -> axio,config.axiomatic_section
-    | "function"  -> func,config.function_section
-    | _ -> sect,""
+      | "global"    -> glob,config.global_section
+      | "axiomatic" -> axio,config.axiomatic_section
+      | "function"  -> func,config.function_section
+      | _ -> sect,""
   in let section,section_name = if section <> "" then section,section_name else sect,""
   in
   if chap <> "" then
@@ -580,7 +580,7 @@ type section = END | HEAD | TAIL
 
 let export gstat specfile =
   let config = {
-    console = false ; 
+    console = false ;
     zero = "-" ;
 
     status_passed = "  Ok  " ;
@@ -616,13 +616,13 @@ let export gstat specfile =
         let line = input_line cin in
         match Rformat.command line with
         | Rformat.ARG("AXIOMATIC_PREFIX",f) -> config.axiomatic_prefix <- f
-        | Rformat.ARG("FUNCTION_PREFIX",f) -> config.function_prefix <- f 
-        | Rformat.ARG("PROPERTY_PREFIX",f) -> config.property_prefix <- f	     
-        | Rformat.ARG("LEMMA_PREFIX",f) -> config.lemma_prefix <- f 
+        | Rformat.ARG("FUNCTION_PREFIX",f) -> config.function_prefix <- f
+        | Rformat.ARG("PROPERTY_PREFIX",f) -> config.property_prefix <- f
+        | Rformat.ARG("LEMMA_PREFIX",f) -> config.lemma_prefix <- f
 
         | Rformat.ARG("GLOBAL_SECTION",f) -> config.global_section <- f
         | Rformat.ARG("AXIOMATIC_SECTION",f) -> config.axiomatic_section <- f
-        | Rformat.ARG("FUNCTION_SECTION",f) -> config.function_section <- f 
+        | Rformat.ARG("FUNCTION_SECTION",f) -> config.function_section <- f
 
         | Rformat.ARG("PASSED",s) -> config.status_passed <- s
         | Rformat.ARG("FAILED",s) -> config.status_failed <- s
@@ -631,7 +631,7 @@ let export gstat specfile =
 
         | Rformat.ARG("ZERO",z) -> config.zero <- z
         | Rformat.ARG("FILE",f) -> file := Some f
-        | Rformat.ARG("SUFFIX",e) -> 
+        | Rformat.ARG("SUFFIX",e) ->
             let basename = Wp_parameters.ReportName.get () in
             let filename = basename ^ e in
             file := Some filename
@@ -650,7 +650,7 @@ let export gstat specfile =
 
         | Rformat.CMD "PROPERTY" -> section := PROPERTY
 
-        | Rformat.CMD a | Rformat.ARG(a,_) -> 
+        | Rformat.CMD a | Rformat.ARG(a,_) ->
             Wp_parameters.error "Report '%s': unknown command '%s'" specfile a
         | Rformat.TEXT ->
             if !section <> END then
@@ -662,12 +662,12 @@ let export gstat specfile =
                 | AXIO_SECTION -> axio
                 | FUNC_SECTION -> func
                 | PROPERTY -> sect_prop
-                | TAIL|END  -> tail 
+                | TAIL|END  -> tail
               in
               Buffer.add_string text line ;
               Buffer.add_char text '\n' ;
       done
-    with 
+    with
     | End_of_file -> close_in cin
     | err -> close_in cin ; raise err
   end ;
@@ -688,7 +688,7 @@ let export gstat specfile =
       let fout = Format.formatter_of_out_channel cout in
       try
         print gstat ~config
-          ~head:(Buffer.contents head) ~tail:(Buffer.contents tail) 
+          ~head:(Buffer.contents head) ~tail:(Buffer.contents tail)
           ~chap:(Buffer.contents chap)
           ~sect:(Buffer.contents sect)
           ~glob:(Buffer.contents glob)

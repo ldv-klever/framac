@@ -37,6 +37,6 @@ exception Error of location * string
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

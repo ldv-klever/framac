@@ -207,10 +207,6 @@ module Varinfo: sig
     val self: State.t
   end
   val dummy: t
-  val pretty_vname: Format.formatter -> t -> unit
-  (** Pretty print the name of the varinfo.
-      @since Nitrogen-20111001 *)
-  (**/**)
   val pretty_ref: (Format.formatter -> t -> unit) ref
   val internal_pretty_code_ref:
     (Type.precedence -> Format.formatter -> t -> unit) ref
@@ -331,6 +327,6 @@ val clear_caches: unit -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -3,8 +3,10 @@
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
 (*  Copyright (C) 2007-2015                                               *)
-(*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
-(*         alternatives)                                                  *)
+(*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
+(*           alternatives)                                                *)
+(*    INRIA (Institut National de Recherche en Informatique et en         *)
+(*           Automatique)                                                 *)
 (*                                                                        *)
 (*  you can redistribute it and/or modify it under the terms of the GNU   *)
 (*  Lesser General Public License as published by the Free Software       *)
@@ -199,10 +201,8 @@ object
   | GFun(f,_) ->
     annotate_fun f.svar;
     SkipChildren
-  | GVarDecl(_,v,_)
-  | GVar(v,_,_) (*as g*) ->
-    if isFunctionType v.vtype && not v.vdefined then
-      annotate_fun v;
+  | GFunDecl(_,v,_) ->
+    if not v.vdefined then annotate_fun v;
     SkipChildren
   (* )
      else
@@ -227,7 +227,7 @@ object
    *)
   | GAnnot _ -> DoChildren
   | GCompTag _ | GType _ | GCompTagDecl _ | GEnumTagDecl _
-  | GEnumTag _ | GAsm _ | GPragma _ | GText _ ->
+  | GEnumTag _ | GAsm _ | GPragma _ | GText _ | GVar _ | GVarDecl _ ->
     SkipChildren
 end
 
@@ -243,6 +243,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

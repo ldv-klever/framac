@@ -25,7 +25,7 @@
 (* -------------------------------------------------------------------------- *)
 
 type mheap = Hoare | Typed of MemTyped.pointer
-type mvar = Raw | Var | Ref
+type mvar = Raw | Var | Ref | Caveat
 
 type setup = {
   mvar : mvar ;

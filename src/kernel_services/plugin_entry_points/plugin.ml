@@ -113,7 +113,8 @@ let iter_on_plugins f =
   in
   List.iter f (List.sort cmp !plugins)
 
-let get_from_name s = List.find (fun p -> p.p_name = s) !plugins ;;
+let is_present s = List.exists (fun p -> p.p_shortname = s) !plugins
+let get_from_name s = List.find (fun p -> p.p_name = s) !plugins
 let get_from_shortname s = List.find (fun p -> p.p_shortname = s) !plugins
 let get s = 
   Cmdline.Kernel_log.deprecated
@@ -495,6 +496,6 @@ end (* Register *)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -85,6 +85,6 @@ let cardinal_zero_or_one = function
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -54,7 +54,7 @@ let image = function Sarray s -> s | _ -> Sdata
 let rec merge_list f s = function
   | [] -> s
   | x::xs ->
-      if s = Sprop then Sprop 
+      if s = Sprop then Sprop
       else merge_list f (merge s (f x)) xs
 
 let pretty fmt = function
@@ -77,7 +77,7 @@ let rec degree_of_tau = function
   | Int | Real | Bool | Prop -> 0
   | Data(_,ts) -> degree_of_list ts
   | Array(a,b) -> max (degree_of_tau a) (degree_of_tau b)
-  | Record fts -> 
+  | Record fts ->
       List.fold_left
         (fun r (_,t) -> max r (degree_of_tau t)) 0 fts
 
@@ -98,13 +98,13 @@ let rec tmap xs = function
   | Record fts -> Record(List.map (fun (f,t) -> f,tmap xs t) fts)
 
 let type_params n =
-  let rec vars k n = if k <= n then Tvar k :: vars (succ k) n else [] 
+  let rec vars k n = if k <= n then Tvar k :: vars (succ k) n else []
   in vars 1 n
 
 let pp_data pdata ptau fmt a = function
   | [] -> pdata fmt a
   | [t] -> Format.fprintf fmt "%a %a" ptau t pdata a
-  | t::ts -> 
+  | t::ts ->
       Format.fprintf fmt "@[(@[<hov 2>%a" ptau t ;
       List.iter
         (fun t -> Format.fprintf fmt ",@,%a" ptau t) ts ;
@@ -124,10 +124,10 @@ let rec pp_tau pvar pfield pdata fmt = function
   | Bool -> Format.pp_print_string fmt "bool"
   | Prop -> Format.pp_print_string fmt "prop"
   | Tvar x -> pvar fmt x
-  | Array(Int,te) -> 
+  | Array(Int,te) ->
       Format.fprintf fmt "%a[]" (pp_tau pvar pfield pdata) te
   | Array(tk,te) ->
-      Format.fprintf fmt "%a[%a]" 
+      Format.fprintf fmt "%a[%a]"
         (pp_tau pvar pfield pdata) te (pp_tau pvar pfield pdata) tk
   | Data(a,ts) -> pp_data pdata (pp_tau pvar pfield pdata) fmt a ts
   | Record fts -> pp_record pfield (pp_tau pvar pfield pdata) fmt fts
@@ -138,20 +138,20 @@ let rec hash_tau hfield hadt = function
   | Bool -> 2
   | Prop -> 3
   | Tvar k -> 4+k
-  | Array(tk,te) -> 
+  | Array(tk,te) ->
       7 * Hcons.hash_pair (hash_tau hfield hadt tk) (hash_tau hfield hadt te)
-  | Data(a,te) -> 
+  | Data(a,te) ->
       11 * Hcons.hash_list (hash_tau hfield hadt) (hadt a) te
   | Record fts ->
       Hcons.hash_list (hash_field hfield hadt) 13 fts
 
-and hash_field hfield hadt (f,t) = 
+and hash_field hfield hadt (f,t) =
   Hcons.hash_pair (hfield f) (hash_tau hfield hadt t)
 
 let rec eq_tau cfield cadt t1 t2 =
   match t1 , t2 with
   | (Bool|Int|Real|Prop|Tvar _) , (Bool|Int|Real|Prop|Tvar _) -> t1 = t2
-  | Array(ta,tb) , Array(ta',tb') -> 
+  | Array(ta,tb) , Array(ta',tb') ->
       eq_tau cfield cadt ta ta' && eq_tau cfield cadt tb tb'
   | Array _ , _  | _ , Array _ -> false
   | Data(a,ts) , Data(b,ts') ->
@@ -180,7 +180,7 @@ let rec compare_tau cfield cadt t1 t2 =
   | Tvar k , Tvar k' -> Pervasives.compare k k'
   | Tvar _ , _ -> (-1)
   | _ , Tvar _ -> 1
-  | Array(ta,tb) , Array(ta',tb') -> 
+  | Array(ta,tb) , Array(ta',tb') ->
       let c = compare_tau cfield cadt ta ta' in
       if c = 0 then compare_tau cfield cadt tb tb' else c
   | Array _ , _ -> (-1)
@@ -199,17 +199,17 @@ let rec compare_tau cfield cadt t1 t2 =
 
 module MakeTau(F : Field)(A : Data) =
 struct
-  
+
   type t = (F.t,A.t) datatype
 
   let equal = eq_tau F.equal A.equal
   let compare = compare_tau F.compare A.compare
   let hash = hash_tau F.hash A.hash
-  let pretty = pp_tau 
-    (fun fmt k -> Format.fprintf fmt "`%d" k)
-    F.pretty A.pretty
+  let pretty = pp_tau
+      (fun fmt k -> Format.fprintf fmt "`%d" k)
+      F.pretty A.pretty
 
-  let debug f = 
+  let debug f =
     let buffer = Buffer.create 80 in
     let fmt = Format.formatter_of_buffer buffer in
     pretty fmt f ;

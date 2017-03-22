@@ -171,6 +171,6 @@ let replace_call_precondition ip stmt ip_at_call =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -856,6 +856,7 @@ module Computer
   ;;
 
   let join a b = fst (join_and_is_included a b)
+  let is_included a b = snd (join_and_is_included a b)
 
   (** Compute the new state after 'instr' starting from state before 'state'.
     *)
@@ -1028,6 +1029,6 @@ let compute_pdg kf =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -104,8 +104,8 @@ let returned_value kf state =
           | TInt _ | TEnum _ -> V.top_int
           | TFloat (fk, _) -> begin
             match Value_util.float_kind fk with
-            | Ival.Float_abstract.Float32 -> V.top_single_precision_float
-            | Ival.Float_abstract.Float64 -> V.top_float
+            | Fval.Float32 -> V.top_single_precision_float
+            | Fval.Float64 -> V.top_float
           end
           | _ ->
               let origin = Origin.current Origin.K_Leaf in
@@ -123,7 +123,7 @@ let returned_value kf state =
       let returned_base =
         Location_Bytes.inject
           new_base
-          (Ival.create_all_values
+          (Ival.create_all_values_modu
              ~signed:false ~modu:size_v ~size:(sizeofpointer()-1))
       in
       let returned_value = V.join V.top_int returned_base in
@@ -146,6 +146,6 @@ let returned_value kf state =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

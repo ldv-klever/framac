@@ -57,7 +57,7 @@ struct
     | [] , _ | _ , [] -> raise Not_found
     | p::ps , e::es -> unify s p e ; unify_all s ps es
 
-  and unify s p e = 
+  and unify s p e =
     match p , T.repr e with
     | Pvar k , _ -> assign s k e
     | Pguard(k,f) , _ when f e -> assign s k e

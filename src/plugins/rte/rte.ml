@@ -540,6 +540,6 @@ let float_to_int_assertion ~remove_trivial ~warning kf kinstr (ty, exp) =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

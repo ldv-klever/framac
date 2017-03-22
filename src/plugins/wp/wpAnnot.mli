@@ -29,7 +29,7 @@ open Cil_types
 (*----------------------------------------------------------------------------*)
 
 (** splits a prop_id goals into prop_id parts for each sub-goals *)
-val split : ( WpPropId.prop_id -> 'a -> unit ) -> WpPropId.prop_id -> 
+val split : ( WpPropId.prop_id -> 'a -> unit ) -> WpPropId.prop_id ->
   'a Bag.t -> unit
 
 (** A proof accumulator for a set of related prop_id *)
@@ -64,13 +64,13 @@ val get_called_assigns : kernel_function -> Property.t list
 
 type asked_assigns = NoAssigns | OnlyAssigns | WithAssigns
 
-val get_id_prop_strategies : 
+val get_id_prop_strategies :
   ?assigns:asked_assigns -> Property.t -> WpStrategy.strategy list
 
 val get_call_pre_strategies : stmt -> WpStrategy.strategy list
 
-val get_function_strategies : 
-  ?assigns:asked_assigns -> 
+val get_function_strategies :
+  ?assigns:asked_assigns ->
   ?bhv:string list ->
   ?prop:string list ->
   Kernel_function.t -> WpStrategy.strategy list

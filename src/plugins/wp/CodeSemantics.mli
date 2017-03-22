@@ -55,7 +55,10 @@ sig
   val return : sigma -> typ -> exp -> term
 
   val is_zero : sigma -> c_object -> loc -> pred
-  val is_zero_range : sigma -> loc -> c_object -> term -> term -> pred
+  val is_exp_range :
+    sigma -> loc -> c_object -> term -> term ->
+    value option -> (** None means equal to zero/null *)
+    pred
 
   val instance_of : loc -> kernel_function -> pred
 

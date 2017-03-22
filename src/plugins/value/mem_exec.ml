@@ -122,21 +122,72 @@ let new_counter, current_counter =
   (fun () -> cur := SaveCounter.next (); !cur),
   (fun () -> !cur)
 
+(** [diff_base_full_zone bases zones] remove from the set of bases [bases]
+    those of which all bits are present in [zones] *)
+let diff_base_full_zone =
+  let cache = Hptmap_sig.PersistentCache "Mem_exec.diff_base_full_zone" in
+  let empty_left _ = Base.Hptset.empty (* nothing left to clear *) in
+  let empty_right v = v (* return all bases unchanged *) in
+  (* Check whether [range] covers the validity of [b]. If so, remove [b]
+     (hence, return an empty set). Otherwise, keep [b]. *)
+  let both b range = begin
+    match Base.valid_range (Base.validity b) with
+    | None -> assert false
+    | Some (min, max) ->
+      match Int_Intervals.project_singleton range with
+      | Some (min', max') ->
+        if Integer.equal min min' && Integer.equal max max' then
+          Base.Hptset.empty
+        else
+          Base.Hptset.singleton b
+      | None -> Base.Hptset.singleton b
+  end in
+  let join = Base.Hptset.union in
+  let empty = Base.Hptset.empty in
+  let f = Base.Hptset.fold2_join_heterogeneous
+    ~cache ~empty_left ~empty_right ~both ~join ~empty
+  in
+  fun bases z ->
+    match z with
+    | Locations.Zone.Map m -> f bases (Locations.Zone.shape m)
+    | Locations.Zone.Top _ -> bases (* Never happens anyway *)
+
 let store_computed_call (callsite: Value_types.call_site) input_state actuals callres =
   if callres.Value_types.c_cacheable = Value_types.Cacheable then
-  match ResultFromCallback.get_option () with
+    match ResultFromCallback.get_option () with
     | None -> ()
     | Some (_stack, inout) ->
       try
         let kf, _ki = callsite in
         let input_bases = bases inout.Inout_type.over_inputs
         and output_bases = bases inout.Inout_type.over_outputs_if_termination in
-        (* TODO. add only outputs that are not completely overwritten *)
-        let input_bases = Base.Hptset.union input_bases output_bases in
-        let state_input =  filter_state input_bases input_state in
+        (* There are two strategies to compute the 'inputs' for a memexec
+           function: either we take all inputs_bases+outputs_bases
+           (outputs_bases are important because of weak updates), or we
+           remove the sure outputs from the outputs, as sure outputs by
+           definition strong updated. The latter will enable memexec to fire
+           more often, but requires more computations. *)
+        let remove_sure_outputs = true in
+        let input_bases =
+          if remove_sure_outputs then
+            let uncertain_output_bases =
+              (* Remove outputs whose base is completely overwritten *)
+              diff_base_full_zone
+                output_bases inout.Inout_type.under_outputs_if_termination
+            in
+            Base.Hptset.union input_bases uncertain_output_bases
+          else
+            Base.Hptset.union input_bases output_bases
+        in
+        let state_input = filter_state input_bases input_state in
         (* Outputs bases, that is bases that are copy-pasted, also include
            input bases. Indeed, those may get reduced during the call. *)
-        let clear state = filter_state input_bases state in
+        let all_output_bases =
+          if remove_sure_outputs
+          then Base.Hptset.union input_bases output_bases
+          else input_bases
+        in
+        let clear state = filter_state all_output_bases state in
         let outputs = map_to_outputs clear callres.Value_types.c_values in
         let call_number = current_counter () in
         let map_a =
@@ -265,6 +316,6 @@ let reuse_previous_call (kf, _ as _callsite: Value_types.call_site) state actual
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

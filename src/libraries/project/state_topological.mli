@@ -13,7 +13,7 @@
 (*  MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.                  *)
 (*                                                                        *)
 (*  See the GNU Library General Public License version 2.1 for more       *)
-(*  details (enclosed in the file licences/LGPLv2.1).                     *)
+(*  details (enclosed in the file licenses/LGPLv2.1).                     *)
 (*                                                                        *)
 (*  File modified by CEA (Commissariat à l'énergie atomique et aux        *)
 (*                        énergies alternatives).                         *)
@@ -57,6 +57,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

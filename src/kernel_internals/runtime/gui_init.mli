@@ -21,11 +21,10 @@
 (**************************************************************************)
 
 (** Very early initialisation step required by any GUI.
-    This interface should be empty. 
-    @plugin development guide *)
+    This interface should be empty. *)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

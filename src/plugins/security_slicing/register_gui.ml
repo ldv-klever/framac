@@ -84,6 +84,6 @@ let () = Design.register_extension main
 
 (*
   Local Variables:
-  compile-command: "LC_ALL=C make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

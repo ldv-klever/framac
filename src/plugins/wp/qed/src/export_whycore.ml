@@ -68,8 +68,8 @@ struct
       method t_bool = "bool"
       method t_prop = "prop"
 
-      method pp_tvar fmt k = 
-        if 1 <= k && k <= 26 
+      method pp_tvar fmt k =
+        if 1 <= k && k <= 26
         then fprintf fmt "'%c" (char_of_int (int_of_char 'a' + k - 1))
         else fprintf fmt "'_%d" k
 
@@ -83,10 +83,10 @@ struct
       (* --- Arrays                                                             --- *)
       (* -------------------------------------------------------------------------- *)
 
-      method pp_array_get fmt a k = 
+      method pp_array_get fmt a k =
         fprintf fmt "@[<hov 2>%a[%a]@]" self#pp_atom a self#pp_flow k
 
-      method pp_array_set fmt a k v = 
+      method pp_array_set fmt a k v =
         fprintf fmt "@[<hov 2>%a[%a@ <- %a]@]"
           self#pp_atom a self#pp_atom k self#pp_flow v
 
@@ -96,30 +96,30 @@ struct
 
       method virtual op_record : string * string
 
-      method pp_get_field fmt r f = 
+      method pp_get_field fmt r f =
         fprintf fmt "%a.%s" self#pp_atom r (self#field f)
 
       method pp_def_fields fmt fvs =
-        let base,fvs = match T.record_with fvs with 
+        let base,fvs = match T.record_with fvs with
           | None -> None,fvs | Some(r,fvs) -> Some r,fvs in
         begin
           let (left,right) = self#op_record in
           fprintf fmt "@[<hov 2>%s" left ;
           Plib.iteri
-            (fun i (f,v) -> 
-               ( match i , base with 
-                 | (Isingle | Ifirst) , Some r -> 
+            (fun i (f,v) ->
+               ( match i , base with
+                 | (Isingle | Ifirst) , Some r ->
                      fprintf fmt "@ %a with" self#pp_flow r
                  | _ -> () ) ;
                ( match i with
                  | Ifirst | Imiddle ->
-                     fprintf fmt "@ @[<hov 2>%s = %a ;@]" 
+                     fprintf fmt "@ @[<hov 2>%s = %a ;@]"
                        (self#field f) self#pp_flow v
                  | Isingle | Ilast ->
                      fprintf fmt "@ @[<hov 2>%s = %a@]"
                        (self#field f) self#pp_flow v )
             ) fvs ;
-          fprintf fmt "@ %s@]" right ; 
+          fprintf fmt "@ %s@]" right ;
         end
 
       (* -------------------------------------------------------------------------- *)
@@ -148,13 +148,13 @@ struct
       method virtual pp_declare_sum : formatter -> ADT.t -> int -> (Fun.t * tau list) list -> unit
 
       method declare_type fmt adt n = function
-        | Tabs -> 
+        | Tabs ->
             self#pp_declare_adt fmt adt n ;
             pp_print_newline fmt ()
-        | Tdef def -> 
+        | Tdef def ->
             self#pp_declare_def fmt adt n def ;
             pp_print_newline fmt ()
-        | Tsum cases -> 
+        | Tsum cases ->
             self#pp_declare_sum fmt adt n cases ;
             pp_print_newline fmt ()
         | Trec fts ->
@@ -166,9 +166,9 @@ struct
               Plib.iteri
                 (fun index (f,t) ->
                    match index with
-                   | Isingle | Ilast -> 
+                   | Isingle | Ilast ->
                        fprintf fmt "@ @[<hov 2>%s : %a@]" (self#field f) self#pp_tau t
-                   | Imiddle | Ifirst -> 
+                   | Imiddle | Ifirst ->
                        fprintf fmt "@ @[<hov 2>%s : %a@] ;" (self#field f) self#pp_tau t
                 ) fts ;
               fprintf fmt "@] %s@]@\n" right ;

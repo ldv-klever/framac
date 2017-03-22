@@ -121,7 +121,6 @@ let labels_fct_pre = function
   | LogicLabel (None, ("Pre" | "Here")) -> Logic_const.pre_label
   | l -> raise (LabelError l)
 
-
 let labels_fct_post = function
   | LogicLabel (None, "Init") -> Logic_const.init_label
   | LogicLabel (None, ("Pre" | "Old"))  -> Logic_const.pre_label
@@ -137,6 +136,7 @@ let labels_fct_assigns = function
 (* -------------------------------------------------------------------------- *)
 (* --- Statements Contracts                                               --- *)
 (* -------------------------------------------------------------------------- *)
+
 let labels_stmt_pre s = function
   | LogicLabel (None, "Init") -> Logic_const.init_label
   | LogicLabel (None, "Pre") -> Logic_const.pre_label (* fct pre-state *)

@@ -437,6 +437,6 @@ let pretty_sig = SigMarks.pretty
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

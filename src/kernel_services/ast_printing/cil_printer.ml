@@ -20,6 +20,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+(* Modified by TrustInSoft *)
+
 open Cil_types
 open Printer_api
 open Format
@@ -348,6 +350,15 @@ class cil_printer () = object (self)
 
   method reset () = ()
 
+  method pp_keyword fmt s = pp_print_string fmt s
+  method pp_acsl_keyword = self#pp_keyword
+  method pp_open_annotation ?(block=true) ?(pre=format_of_string "/*@@") fmt =
+    (if block then Pretty_utils.pp_open_block else Format.fprintf)
+      fmt "%(%)" pre
+  method pp_close_annotation ?(block=true) ?(suf=format_of_string "*/") fmt =
+    (if block then Pretty_utils.pp_close_block else Format.fprintf)
+      fmt "%(%)" suf
+
   method without_annot:
     'a. (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a -> unit =
     fun f fmt x ->
@@ -463,15 +474,13 @@ class cil_printer () = object (self)
 	FFloat -> "f"
       | FDouble -> ""
       | FLongDouble -> "L")
-  | CEnum {einame = s} -> fprintf fmt "%s" s
+  | CEnum {einame = s} -> self#varname fmt s
 
   (*** VARIABLES ***)
   method varname fmt v = pp_print_string fmt v
-
-  method private p_varstring v = Pretty_utils.sfprintf "%a" self#varinfo v
     
   (* variable use *)
-  method varinfo fmt v = Format.fprintf fmt "%a" self#varname v.vname
+  method varinfo fmt v = self#varname fmt v.vname
 
   (* variable declaration *)
   method vdecl fmt (v:varinfo) =
@@ -556,9 +565,19 @@ class cil_printer () = object (self)
 
     | CastE(t,e) ->
       fprintf fmt "(%a)%a" (self#typ None) t (self#exp_prec level) e
-    | SizeOf t -> fprintf fmt "sizeof(%a)" (self#typ None) t
-    | SizeOfE e -> fprintf fmt "sizeof(%a)" self#exp_non_decay e
-    | SizeOfStr s -> fprintf fmt "sizeof(%a)" self#constant (CStr s)
+    | SizeOf t ->
+        fprintf fmt "%a(%a)"
+          self#pp_keyword "sizeof" (self#typ None) t
+    | SizeOfE e ->
+        fprintf fmt "%a(%a)"
+          self#pp_keyword "sizeof" self#exp_non_decay e
+    | SizeOfStr s ->
+        fprintf fmt "%a(%a)"
+          self#pp_keyword "sizeof" self#constant (CStr s)
+    (* __alignof__ is a gcc extension, which seems to have a subtle
+       semantic difference with newer C11 _Alignof, as mentioned in
+       https://gcc.gnu.org/bugzilla/show_bug.cgi?id=52023
+       Neither cookie nor keyword for you. *)
     | AlignOf t -> fprintf fmt "__alignof__(%a)" (self#typ None) t
     | AlignOfE e -> fprintf fmt "__alignof__(%a)" self#exp_non_decay e
     | AddrOf lv -> fprintf fmt "& %a" (self#lval_prec Precedence.addrOfLevel) lv
@@ -633,8 +652,8 @@ class cil_printer () = object (self)
       | _ -> Kernel.fatal "Trying to print malformed initializer"
     in
     if not (Cil.isArrayType t) then
-      fprintf fmt
-        "{@[%a@]}" (Pretty_utils.pp_list ~sep:",@ " designated_init) initl
+      Pretty_utils.pp_list ~pre:"{@[<hv>" ~sep:",@ " ~suf:"@]}"
+                           designated_init fmt initl
     else begin
       let print_index prev_index (designator,init as di) =
         let curr_index =
@@ -654,7 +673,7 @@ class cil_printer () = object (self)
       let print_next_index prev_index di =
         Format.fprintf fmt ",@ "; print_index prev_index di
       in
-      Format.fprintf fmt "{@[";
+      Format.fprintf fmt "{@[<hv>";
       (match initl with
         | [] -> ()
         | i::tl ->
@@ -882,9 +901,9 @@ the arguments."
       has_annot <- true;
       if logic_printer_enabled then begin
 	self#line_directive ~forcefile:false fmt l;
-	Pretty_utils.pp_open_block fmt "/*@@ ";
+        Format.fprintf fmt "%t " (fun fmt -> self#pp_open_annotation fmt);
 	self#code_annotation fmt annot ;
-	Pretty_utils.pp_close_block fmt "*/";
+        Format.fprintf fmt "@ %t" (fun fmt -> self#pp_close_annotation fmt);
       end
 
   (** For variadic calls *)
@@ -916,8 +935,8 @@ the arguments."
   method label fmt = function
   | Label (s, _, b) when b || not verbose -> fprintf fmt "@[%s:@]" s
   | Label (s, _, _) -> fprintf fmt "@[%s: /* internal */@]" s
-  | Case (e, _) -> fprintf fmt "@[case %a:@]" self#exp e
-  | Default _ -> fprintf fmt "@[default:@]"
+  | Case (e, _) -> fprintf fmt "@[%a %a:@]" self#pp_keyword "case" self#exp e
+  | Default _ -> fprintf fmt "@[%a:@]" self#pp_keyword "default"
 
   (* number of opened ghost code *)
   val mutable is_ghost = false
@@ -935,12 +954,13 @@ the arguments."
       let display_ghost = s.ghost && not was_ghost in
       if display_ghost then begin
 	is_ghost <- true;
-        Pretty_utils.pp_open_block fmt "@[/*@@ ghost "
+        Format.fprintf fmt "%t %a "
+          (fun fmt -> self#pp_open_annotation fmt) self#pp_acsl_keyword "ghost"
       end;
       self#stmtkind next fmt s.skind ;
       if display_ghost then begin
 	is_ghost <- false;
-        Pretty_utils.pp_close_block fmt "*/@]"
+        self#pp_close_annotation fmt
       end
     end;
     pp_close_box fmt ();
@@ -982,10 +1002,16 @@ the arguments."
   method private vdecl_complete fmt v =
     let display_ghost = v.vghost && not is_ghost in
     Format.fprintf fmt "@[<hov 0>%t%a;%t@]"
-      (if display_ghost then fun fmt -> Format.fprintf fmt "/*@@ ghost@ "
+      (if display_ghost then (fun fmt ->
+        Format.fprintf fmt "%t %a@ "
+          (fun fmt -> self#pp_open_annotation ~block:false fmt)
+          self#pp_acsl_keyword "ghost")
        else ignore)
       self#vdecl v
-      (if display_ghost then fun fmt -> Format.fprintf fmt "@ */" else ignore)
+      (if display_ghost
+       then (fun fmt -> Format.fprintf fmt "@ %t"
+         (fun fmt -> self#pp_close_annotation ~block:false fmt))
+       else ignore)
 
   (* no box around the block *)
   method private unboxed_block ?(cut=true) ?braces ?has_annot fmt blk =
@@ -1043,7 +1069,6 @@ the arguments."
 
   (* Make sure that you only call self#line_directive on an empty line *)
   method line_directive ?(forcefile=false) fmt l =
-    Cil.CurrentLoc.set l;
     match state.line_directive_style with
     | None -> ()
     | Some _ when (fst l).Lexing.pos_lnum <= 0 -> ()
@@ -1091,64 +1116,76 @@ the arguments."
     in
     fprintf fmt "@[<v 2>{%t%a@;<1 -2>}@]"
       (if self#display_comment () then 
-	  fun fmt -> fprintf fmt "@ @[/*sequence*/@]"
+	  fun fmt -> fprintf fmt " @[/* sequence */@]"
        else ignore)
       iterblock seq;
 
   | Return(None, l) ->
-    fprintf fmt "@[%areturn;@]" (fun fmt -> self#line_directive fmt) l
+    fprintf fmt "@[%a%a;@]"
+      (fun fmt -> self#line_directive fmt) l
+      self#pp_keyword "return"
 
   | Return(Some e, l) ->
-    fprintf fmt "@[%a@[<hv 2>return@ %a;@]@]" 
+    fprintf fmt "@[%a@[<hv 2>%a@ %a;@]@]"
       (fun fmt -> self#line_directive fmt) l
+      self#pp_keyword "return"
       self#exp e
 
   | Goto (sref, l) -> begin
     match pickLabel !sref.labels with
     | Some lbl ->
-      fprintf fmt "@[%agoto %s;@]" 
+      fprintf fmt "@[%a%a %s;@]"
 	(fun fmt -> self#line_directive fmt) l 
+        self#pp_keyword "goto"
 	lbl
     | None ->
       Kernel.error "Cannot find label for target of goto: %a" 
 	(self#without_annot self#stmt) !sref;
-      fprintf fmt "@[goto@ __invalid_label;@]"
+      fprintf fmt "@[%a@ __invalid_label;@]" self#pp_keyword "goto"
   end
 
   | Break l ->
-    fprintf fmt "@[%a%s@]" (fun fmt -> self#line_directive fmt) l "break;"
+    fprintf fmt "@[%a%a;@]"
+      (fun fmt -> self#line_directive fmt) l
+      self#pp_keyword "break"
 
   | Continue l ->
-    fprintf fmt "@[%a%s@]" (fun fmt -> self#line_directive fmt) l "continue;"
+    fprintf fmt "@[%a%a;@]"
+      (fun fmt -> self#line_directive fmt) l
+      self#pp_keyword "continue"
 
   | Instr i -> 
     self#instr fmt i
 
   | If(be,t,{bstmts=[];battrs=[]},l) 
       when not state.print_cil_as_is ->
-    fprintf fmt "@[<hv>%a@[<v 2>if (%a) %a@]@]"
+    fprintf fmt "@[<hv>%a@[<v 2>%a (%a) %a@]@]"
       (fun fmt -> self#line_directive ~forcefile:false fmt) l
+      self#pp_keyword "if"
       self#exp be
       (fun fmt -> self#unboxed_block ~has_annot:false fmt) t
 
   | If(be,t,{bstmts=[{skind=Goto(gref,_);labels=[]}]; battrs=[]},l)
       when !gref == next && not state.print_cil_as_is ->
-    fprintf fmt "@[<hv>%a@[<v 2>if (%a) %a@]@]"
+    fprintf fmt "@[<hv>%a@[<v 2>%a (%a) %a@]@]"
       (fun fmt -> self#line_directive ~forcefile:false fmt) l
+      self#pp_keyword "if"
       self#exp be
       (fun fmt -> self#unboxed_block ~has_annot:false fmt) t
 
   | If(be,{bstmts=[];battrs=[]},e,l) 
       when not state.print_cil_as_is ->
-    fprintf fmt "@[<hv>%a@[<v 2>if (%a) %a@]@]"
+    fprintf fmt "@[<hv>%a@[<v 2>%a (%a) %a@]@]"
       (fun fmt -> self#line_directive ~forcefile:false fmt) l
+      self#pp_keyword "if"
       self#exp (Cil.dummy_exp(UnOp(LNot,be,Cil.intType)))
       (fun fmt -> self#unboxed_block ~has_annot:false fmt) e
 
   | If(be,{bstmts=[{skind=Goto(gref,_);labels=[]}]; battrs=[]},e,l)
       when !gref == next && not state.print_cil_as_is ->
-    fprintf fmt "@[<hv>%a@[<v 2>if (%a) %a@]@]"
+    fprintf fmt "@[<hv>%a@[<v 2>%a (%a) %a@]@]"
       (fun fmt -> self#line_directive ~forcefile:false fmt) l
+      self#pp_keyword "if"
       self#exp (Cil.dummy_exp(UnOp(LNot,be,Cil.intType)))
       (fun fmt -> self#unboxed_block ~has_annot:false fmt) e;
 
@@ -1165,27 +1202,30 @@ the arguments."
       || (* call to a function in both branches (for GUI' status bullets) *)
 	(force_brace && self#block_is_function t && self#block_is_function e)
     in
-    fprintf fmt "@[<v 2>if (%a) %a@]"
+    fprintf fmt "@[<v 2>%a (%a) %a@]"
+      self#pp_keyword "if"
       self#exp be
       (fun fmt -> self#unboxed_block ~has_annot:false ~braces:braces_then fmt) 
       t;
     if else_at_newline then fprintf fmt "@\n" else fprintf fmt "@ ";
-    fprintf fmt "@[<v 2>else %a@]" 
+    fprintf fmt "@[<v 2>%a %a@]"
+      self#pp_keyword "else"
       (fun fmt -> self#unboxed_block ~has_annot:false fmt) e;
     pp_close_box fmt ()
 
   | Switch(e,b,_,l) ->
-    fprintf fmt "@[%a@[<v 2>switch (%a) %a@]@]"
+    fprintf fmt "@[%a@[<v 2>%a (%a) %a@]@]"
       (fun fmt -> self#line_directive ~forcefile:false fmt) l
+      self#pp_keyword "switch"
       self#exp e
       (fun fmt -> self#unboxed_block ~has_annot:false fmt) b
 
   | Loop(a, b, l, _, _) ->
     Format.pp_open_hvbox fmt 0;
     if logic_printer_enabled && a <> [] then begin
-      Pretty_utils.pp_open_block fmt "/*@@ " ;
+      Format.fprintf fmt "%t " (fun fmt -> self#pp_open_annotation fmt);
       Pretty_utils.pp_list ~sep:"@\n" self#code_annotation fmt a;
-      Pretty_utils.pp_close_block fmt "@ */@\n" ;
+      Format.fprintf fmt "@ %t" (fun fmt -> self#pp_close_annotation fmt);
     end;
     ((* Maybe the first thing is a conditional. Turn it into a WHILE *)
       try
@@ -1222,13 +1262,15 @@ the arguments."
 	    [{ skind=Block b} as s ] when self#may_be_skipped s -> b
 	  | _ -> { b with bstmts = bodystmts }
 	in
-	Format.fprintf fmt "%a@[<v 2>while (%a) %a@]"
+	Format.fprintf fmt "%a@[<v 2>%a (%a) %a@]"
 	  (fun fmt -> self#line_directive fmt) l
+          self#pp_keyword "while"
 	  self#exp term
 	  (fun fmt -> self#unboxed_block ~has_annot:false fmt) b;
       with Not_found ->
-	Format.fprintf fmt "%a@[<v 2>while (1) %a@]"
+	Format.fprintf fmt "%a@[<v 2>%a (1) %a@]"
 	  (fun fmt -> self#line_directive fmt) l
+          self#pp_keyword "while"
 	  (fun fmt -> self#unboxed_block ~has_annot:false fmt) b);
     Format.pp_close_box fmt ()
 
@@ -1267,7 +1309,8 @@ the arguments."
 
   | Throw (e,_) ->
     let print_expr fmt (e,_) = self#exp fmt e in
-    fprintf fmt "@[<hov 2>throw@ %a;@]" 
+    fprintf fmt "@[<hov 2>%a@ %a;@]"
+      self#pp_keyword "throw"
       (Pretty_utils.pp_opt ~pre:"(" ~suf:")" print_expr) e
   | TryCatch(body,catch,_) ->
     let print_var_catch_all fmt v =
@@ -1281,11 +1324,13 @@ the arguments."
     in
     let braces = false in
     let print_one_catch fmt (v,b) =
-      fprintf fmt "@[<v 2>@[catch (@;%a@;)@] {@;%a@]@;}"
+      fprintf fmt "@[<v 2>@[%a (@;%a@;)@] {@;%a@]@;}"
+        self#pp_keyword "catch"
         print_var_catch_all v
         (self#block ~braces) b
     in
-    fprintf fmt "@[<v 2>try@ @[%a@]@]@\n@[<v 2>%a@]"
+    fprintf fmt "@[<v 2>%a@ @[%a@]@]@\n@[<v 2>%a@]"
+      self#pp_keyword "try"
       (self#block ~braces) body
       (Pretty_utils.pp_list ~sep:"@;" print_one_catch) catch
   (*** GLOBALS ***)
@@ -1316,7 +1361,8 @@ the arguments."
 
     | GType (typ, l) ->
       self#line_directive ~forcefile:true fmt l;
-      fprintf fmt "typedef %a;@\n"
+      fprintf fmt "%a %a;@\n"
+        self#pp_keyword "typedef"
 	(self#typ (Some (fun fmt -> self#varname fmt typ.tname))) typ.ttype
 
     | GEnumTag (enum, l) ->
@@ -1325,19 +1371,22 @@ the arguments."
         fprintf fmt "/* Following enum is equivalent to %a */@\n" 
           (self#typ None) 
           (TInt(enum.ekind,[]));
-      fprintf fmt "enum@[ %a {@\n%a@]@\n}%a;@\n"
+      fprintf fmt "%a@[ %a {@\n%a@]@\n}%a;@\n"
+        self#pp_keyword "enum"
 	self#varname enum.ename
 	(Pretty_utils.pp_list ~sep:",@\n"
 	   (fun fmt item ->
-	     fprintf fmt "%s = %a"
-	       item.einame
+	     fprintf fmt "%a = %a"
+	       self#varname item.einame
 	       self#exp item.eival))
 	enum.eitems
 	self#attributes enum.eattr
 
     | GEnumTagDecl (enum, l) -> (* This is a declaration of a tag *)
       self#line_directive fmt l;
-      fprintf fmt "enum %a;@\n" self#varname enum.ename
+      fprintf fmt "%a %a;@\n"
+        self#pp_keyword "enum"
+        self#varname enum.ename
 
     | GCompTag (comp, l) -> (* This is a definition of a tag *)
       let n = comp.cname in
@@ -1347,8 +1396,8 @@ the arguments."
       in
       let sto_mod, rest_attr = Cil.separateStorageModifiers comp.cattr in
       self#line_directive ~forcefile:true fmt l;
-      fprintf fmt "@[<3>%s%a %a {@\n%a@]@\n}%a;@\n"
-	su
+      fprintf fmt "@[<3>%a%a %a {@\n%a@]@\n}%a;@\n"
+        self#pp_keyword su
 	self#attributes sto_mod
 	self#varname n
 	(Pretty_utils.pp_list ~sep:"@\n" self#fieldinfo)
@@ -1357,36 +1406,41 @@ the arguments."
 
     | GCompTagDecl (comp, l) -> (* This is a declaration of a tag *)
       self#line_directive fmt l;
-      fprintf fmt "%s %a;@\n"
-        (if comp.cstruct then "struct" else "union")
+      fprintf fmt "%a %a;@\n"
+        self#pp_keyword (if comp.cstruct then "struct" else "union")
         self#varname comp.cname
     | GVar (vi, io, l) ->
       if print_var vi then begin
 	self#line_directive ~forcefile:true fmt l;
-        if vi.vghost then Format.fprintf fmt "/*@@ ghost@ ";
+        Format.fprintf fmt "@[<hov 2>";
+        if vi.vghost then
+          Format.fprintf fmt "%t %a@ "
+            (fun fmt -> self#pp_open_annotation ~block:false fmt)
+            self#pp_acsl_keyword "ghost";
 	self#vdecl fmt vi;
 	(match io.init with
 	  None -> ()
 	| Some i ->
-	  fprintf fmt " = ";
-	  let islong =
-	    match i with
-	      CompoundInit (_, il) when List.length il >= 8 -> true
-	    | _ -> false
-	  in
-	  if islong then begin
-	    self#line_directive fmt l;
-	    fprintf fmt "  @[@\n"
-	  end;
+	  fprintf fmt " =@ ";
 	  self#init fmt i;
-	  if islong then fprintf fmt "@]");
-	fprintf fmt ";%t@\n" 
-          (if vi.vghost then fun fmt -> Format.fprintf fmt "@ */" else ignore)
+        );
+	fprintf fmt ";";
+        if vi.vghost then
+          Format.fprintf fmt "@ %t"
+            (fun fmt -> self#pp_close_annotation ~block:false fmt);
+        fprintf fmt "@]@\n";
       end
-    (* print global variable 'extern' declarations, and function prototypes *)
-    | GVarDecl (funspec, vi, l) ->
+    (* print global variable 'extern' declarations *)
+    | GVarDecl (vi, l) ->
       if print_var vi then begin
-	if Cil.isFunctionType vi.vtype then self#in_current_function vi;
+	self#line_directive fmt l;
+	fprintf fmt "%a@\n@\n" self#vdecl_complete vi
+      end
+
+    (* print function prototypes *)
+    | GFunDecl (funspec, vi, l) ->
+      if print_var vi then begin
+        self#in_current_function vi;
 	self#opt_funspec fmt funspec;
 	if not state.print_cil_as_is && Cil.Builtin_functions.mem vi.vname 
 	then begin
@@ -1398,7 +1452,7 @@ the arguments."
 	  self#line_directive fmt l;
 	  fprintf fmt "%a@\n@\n" self#vdecl_complete vi
 	end;
-	if Cil.isFunctionType vi.vtype then self#out_current_function
+        self#out_current_function
       end
 
     | GAsm (s, l) ->
@@ -1445,8 +1499,10 @@ the arguments."
 
     | GAnnot (decl,l) ->
       self#line_directive fmt l;
-      fprintf fmt "/*@@@ %a@ */@\n"
+      fprintf fmt "%t@ %a@ %t@\n"
+        (fun fmt -> self#pp_open_annotation ~block:false fmt)
 	self#global_annotation decl
+        (fun fmt -> self#pp_close_annotation ~block:false fmt)
 
     | GText s  ->
       if s <> "//" then
@@ -1466,14 +1522,22 @@ the arguments."
 
   method private opt_funspec fmt funspec =
     if logic_printer_enabled && not (Cil.is_empty_funspec funspec) then
-      fprintf fmt "@[<hv 1>/*@@ %a@ */@]@\n" self#funspec funspec
+      (fprintf fmt "@[<hv 1>";
+       fprintf fmt "%t %a@ %t"
+         (fun fmt -> self#pp_open_annotation ~block:false fmt)
+         self#funspec funspec
+         (fun fmt -> self#pp_close_annotation ~block:false fmt);
+       fprintf fmt "@]@\n")
 
   method private fundecl fmt f =
     (* declaration. *)
     let was_ghost = is_ghost in
     let entering_ghost = f.svar.vghost && not was_ghost in
     fprintf fmt "@[%t%a@\n@[<v 2>"
-      (if entering_ghost then fun fmt -> Format.fprintf fmt "/*@@ ghost@ " 
+      (if entering_ghost then (fun fmt ->
+        Format.fprintf fmt "%t %a@ "
+          (fun fmt -> self#pp_open_annotation ~block:false fmt)
+          self#pp_acsl_keyword "ghost")
        else ignore)
       self#vdecl f.svar;
     (* We take care of locals in blocks. *)
@@ -1483,17 +1547,18 @@ the arguments."
     self#unboxed_block ~has_annot:false ~braces:true fmt f.sbody;
     if entering_ghost then is_ghost <- false;
     fprintf fmt "@]%t@]@."
-      (if entering_ghost then fun fmt -> Format.fprintf fmt "@ */" else ignore)
+      (if entering_ghost
+       then (fun fmt -> Format.fprintf fmt "@ %t"
+         (fun fmt -> self#pp_close_annotation ~block:false fmt))
+       else ignore)
 
   (***** PRINTING DECLARATIONS and TYPES ****)
 
-  method storage fmt c =
-    fprintf fmt "%s"
-      (match c with
-      | NoStorage -> ""
-      | Static ->  "static "
-      | Extern -> "extern "
-      | Register -> "register ")
+  method storage fmt = function
+  | NoStorage -> fprintf fmt ""
+  | Static -> fprintf fmt "%a " self#pp_keyword "static"
+  | Extern -> fprintf fmt "%a " self#pp_keyword "extern"
+  | Register -> fprintf fmt "%a " self#pp_keyword "register"
 
   method fkind fmt = function
   | FFloat -> fprintf fmt "float"
@@ -1545,15 +1610,16 @@ the arguments."
 
     | TComp (comp, _, a) -> (* A reference to a struct *)
       fprintf fmt
-	"%s %a%a%a"
-	(if comp.cstruct then "struct" else "union")
+	"%a %a%a%a"
+	self#pp_keyword (if comp.cstruct then "struct" else "union")
 	self#varname comp.cname
 	self#attributes a
 	pname true
 
     | TEnum (enum, a) ->
-      fprintf fmt "enum %a%a%a"
-	self#varname enum.ename
+      fprintf fmt "%a %a%a%a"
+        self#pp_keyword "enum"
+        self#varname enum.ename
 	self#attributes a
 	pname true
 
@@ -1672,11 +1738,11 @@ the arguments."
   | Attr(an, args) ->
     (* Recognize and take care of some known cases *)
     (match an, args with
-    | "const", [] -> fprintf fmt "const"; false
+    | "const", [] -> self#pp_keyword fmt "const"; false
     (* Put the aconst inside the attribute list *)
     | "aconst", [] when not (Cil.msvcMode ()) -> fprintf fmt "__const__"; true
     | "thread", [] when not (Cil.msvcMode ()) -> fprintf fmt "__thread"; false
-    | "volatile", [] -> fprintf fmt "volatile"; false
+    | "volatile", [] -> self#pp_keyword fmt "volatile"; false
     | "restrict", [] -> fprintf fmt "__restrict"; false
     | "missingproto", [] -> 
       if self#display_comment () then fprintf fmt "/* missing proto */"; 
@@ -1771,8 +1837,14 @@ the arguments."
       fprintf fmt "%s(%a)"
 	s
 	(Pretty_utils.pp_list ~sep:"" self#attrparam) al
-    | ASizeOfE a -> fprintf fmt "sizeof(%a)" self#attrparam a
-    | ASizeOf t -> fprintf fmt "sizeof(%a)" (self#typ None) t
+    | ASizeOfE a ->
+      fprintf fmt "%a(%a)"
+        self#pp_keyword "sizeof"
+        self#attrparam a
+    | ASizeOf t ->
+      fprintf fmt "%a(%a)"
+        self#pp_keyword "sizeof"
+        (self#typ None) t
     | AAlignOfE a -> fprintf fmt "__alignof__(%a)" self#attrparam a
     | AAlignOf t -> fprintf fmt "__alignof__(%a)" (self#typ None) t
     | AUnOp(u,a1) ->
@@ -1865,7 +1937,7 @@ the arguments."
       has 7 wide characters and the later has 3. *)
   | LChr(c) -> fprintf fmt "'%s'" (Escape.escape_char c)
   | LReal(r) -> fprintf fmt "%s" r.r_literal
-  | LEnum {einame = s} -> fprintf fmt "%s" s
+  | LEnum {einame = s} -> self#varname fmt s
 
 
   method logic_type name fmt =
@@ -2017,11 +2089,15 @@ the arguments."
 	(Pretty_utils.pp_list ~pre:"(@[" ~suf:"@])" ~sep:",@ " self#term) 
 	args
     | TLval lv -> fprintf fmt "%a" (self#term_lval_prec current_level) lv
-    | TSizeOf t -> fprintf fmt "sizeof(%a)" (self#typ None) t
-    | TSizeOfE e -> fprintf fmt "sizeof(%a)" self#term e
-    | TSizeOfStr s -> fprintf fmt "sizeof(%S)" s
-    | TAlignOf e -> fprintf fmt "alignof(%a)" (self#typ None) e
-    | TAlignOfE e -> fprintf fmt "alignof(%a)" self#term e
+    | TSizeOf t ->
+      fprintf fmt "%a(%a)" self#pp_acsl_keyword "sizeof" (self#typ None) t
+    | TSizeOfE e ->
+      fprintf fmt "%a(%a)" self#pp_acsl_keyword "sizeof" self#term e
+    | TSizeOfStr s -> fprintf fmt "%a(%S)" self#pp_acsl_keyword "sizeof" s
+    | TAlignOf e ->
+      fprintf fmt "%a(%a)" self#pp_acsl_keyword "alignof" (self#typ None) e
+    | TAlignOfE e ->
+      fprintf fmt "%a(%a)" self#pp_acsl_keyword "alignof" self#term e
     | TUnOp (op,e) -> fprintf fmt "%a%a"
       self#unop op (self#term_prec current_level) e
     | TBinOp (LAnd, l, r) when not Cil.miscState.Cil.printCilAsIs ->
@@ -2059,25 +2135,30 @@ the arguments."
 	| Some l -> l
 	| None -> Kernel.fatal "Cannot find label for \\at";
       in
-      fprintf fmt "@[\\at(@[@[%a@],@,@[%s@]@])@]" self#term t l
+      fprintf fmt "@[%a(@[@[%a@],@,@[%s@]@])@]"
+        self#pp_acsl_keyword "\\at" self#term t l
     | Tat (t,(LogicLabel (_, l) as lab)) ->
       let old_label = current_label in
       current_label <- lab;
       begin
 	if lab = Logic_const.old_label then
-	  fprintf fmt "@[\\old(@[%a@])@]" self#term t
+	  fprintf fmt "@[%a(@[%a@])@]" self#pp_acsl_keyword "\\old" self#term t
 	else
-	  fprintf fmt "@[\\at(@[@[%a@],@,@[%s@]@])@]" self#term t l
+	  fprintf fmt "@[%a(@[@[%a@],@,@[%s@]@])@]"
+            self#pp_acsl_keyword "\\at" self#term t l
       end;
       current_label <- old_label
 	
     | Toffset (l,t) -> 
-      fprintf fmt "\\offset%a(%a)" self#labels [l] self#term t
+      fprintf fmt "%a%a(%a)" self#pp_acsl_keyword "\\offset"
+        self#labels [l] self#term t
     | Tbase_addr (l,t) -> 
-      fprintf fmt "\\base_addr%a(%a)" self#labels [l] self#term t
+      fprintf fmt "%a%a(%a)" self#pp_acsl_keyword "\\base_addr"
+        self#labels [l] self#term t
     | Tblock_length (l,t) -> 
-      fprintf fmt "\\block_length%a(%a)" self#labels [l] self#term t
-    | Tnull -> fprintf fmt "\\null"
+      fprintf fmt "%a%a(%a)" self#pp_acsl_keyword "\\block_length"
+        self#labels [l] self#term t
+    | Tnull -> self#pp_acsl_keyword fmt "\\null"
     | TCoerce (e,ty) ->
       fprintf fmt "%a@ :>@ %a"
 	(self#term_prec current_level) e (self#typ None) ty
@@ -2085,22 +2166,28 @@ the arguments."
       fprintf fmt "%a :> %a"
 	(self#term_prec current_level) e (self#term_prec current_level) ce
     | TUpdate (t,toff,v) ->
-      fprintf fmt "{%a \\with %a = %a}"
+      fprintf fmt "{%a %a %a = %a}"
 	self#term t
+        self#pp_acsl_keyword "\\with"
 	self#term_offset toff
 	self#term v
     | Tlambda(prms,expr) ->
-      fprintf fmt "@[<2>\\lambda@ %a;@ %a@]"
+      fprintf fmt "@[<2>%a@ %a;@ %a@]"
+        self#pp_acsl_keyword "\\lambda"
 	self#quantifiers prms (self#term_prec current_level) expr
-    | Ttypeof t -> fprintf fmt "\\typeof(%a)" self#term t
-    | Ttype ty -> fprintf fmt "\\type(%a)" (self#typ None) ty
+    | Ttypeof t ->
+      fprintf fmt "%a(%a)" self#pp_acsl_keyword "\\typeof" self#term t
+    | Ttype ty ->
+      fprintf fmt "%a(%a)" self#pp_acsl_keyword "\\type" (self#typ None) ty
     | Tunion locs ->
-      fprintf fmt "@[<hov 2>\\union(@,%a)@]"
+      fprintf fmt "@[<hov 2>%a(@,%a)@]"
+        self#pp_acsl_keyword "\\union"
 	(Pretty_utils.pp_list ~sep:",@ " self#term) locs
     | Tinter locs ->
-      fprintf fmt "@[<hov 2>\\inter(@,%a)@]"
+      fprintf fmt "@[<hov 2>%a(@,%a)@]"
+        self#pp_acsl_keyword "\\inter"
 	(Pretty_utils.pp_list ~sep:",@ " self#term) locs
-    | Tempty_set -> pp_print_string fmt "\\empty"
+    | Tempty_set -> self#pp_acsl_keyword fmt "\\empty"
     | Tcomprehension(lv,quant,pred) ->
       fprintf fmt "{@[%a@ |@ %a%a@]}"
 	self#term lv self#quantifiers quant
@@ -2130,10 +2217,13 @@ the arguments."
 	| LBreads _ | LBinductive _ -> 
 	  Kernel.fatal "invalid logic local definition"
       in
-      fprintf fmt "@[\\let@ %a@ =@ %t%t;@ %a@]"
+      fprintf fmt "@[%a@ %a@ =@ %t%t;@ %a@]"
+        self#pp_acsl_keyword "\\let"
 	self#logic_var v
 	(fun fmt -> if args <> [] then
-	    fprintf fmt "@[<2>\\lambda@ %a;@]@ " self#quantifiers args)
+	    fprintf fmt "@[<2>%a@ %a;@]@ "
+              self#pp_acsl_keyword "\\lambda"
+              self#quantifiers args)
 	pp_defn
 	(self#term_prec current_level) body
     | TLogic_coerce(ty,t) ->
@@ -2149,7 +2239,8 @@ the arguments."
 
   method term_lval fmt lv = match lv with
   | TVar vi, o -> fprintf fmt "%a%a" self#logic_var vi self#term_offset o
-  | TResult _, o -> fprintf fmt "\\result%a" self#term_offset o
+  | TResult _, o ->
+    fprintf fmt "%a%a" self#pp_acsl_keyword "\\result" self#term_offset o
   | TMem e, TField(fi,o) ->
     fprintf fmt "%a->%a%a" (self#term_prec Precedence.arrowLevel) e
       self#varname fi.fname self#term_offset o
@@ -2247,8 +2338,8 @@ the arguments."
     let current_level = Precedence.getParenthLevelPred p in
     let term = self#term_prec current_level in
     match p with
-    | Pfalse -> pp_print_string fmt "\\false"
-    | Ptrue -> pp_print_string fmt "\\true"
+    | Pfalse -> self#pp_acsl_keyword fmt "\\false"
+    | Ptrue -> self#pp_acsl_keyword fmt "\\true"
     | Papp (p,labels,l) -> 
       fprintf fmt "@[%a%a%a@]"
 	self#logic_info p
@@ -2308,41 +2399,61 @@ the arguments."
 	  Kernel.fatal "invalid logic local definition"
       in
       Precedence.needIndent current_level p fmt
-      "@[<hov 2>\\let@ %a =@ %t%t;@]@ %a"
+      "@[<hov 2>%a@ %a =@ %t%t;@]@ %a"
+        self#pp_acsl_keyword "\\let"
 	self#logic_var v
 	(fun fmt ->
 	  if args <> [] then
-	    fprintf fmt "@[<hv 2>\\lambda@ %a;@]@ " self#quantifiers args)
+	    fprintf fmt "@[<hv 2>%a@ %a;@]@ "
+              self#pp_acsl_keyword "\\lambda"
+              self#quantifiers args)
 	pp_defn
 	self#pred_prec_named (current_level,p)
     | Pforall (quant,pred) ->
       Precedence.needIndent current_level pred fmt
-        "@[%s %a;@]@ %a"
-        (if Kernel.Unicode.get () then Utf8_logic.forall else "\\forall")
+        "@[%t %a;@]@ %a"
+        (fun fmt ->
+          if Kernel.Unicode.get () then pp_print_string fmt Utf8_logic.forall
+          else self#pp_acsl_keyword fmt "\\forall")
         self#quantifiers quant self#pred_prec_named (current_level,pred)
     | Pexists (quant,pred) ->
       Precedence.needIndent current_level pred fmt
-        "@[%s %a;@]@ %a"
-        (if Kernel.Unicode.get () then  Utf8_logic.exists else "\\exists")
+        "@[%t %a;@]@ %a"
+        (fun fmt ->
+          if Kernel.Unicode.get () then pp_print_string fmt Utf8_logic.exists
+          else self#pp_acsl_keyword fmt "\\exists")
         self#quantifiers quant self#pred_prec_named (current_level,pred)
     | Pfreeable (l,p) ->
-      fprintf fmt "@[\\freeable%a(@[%a@])@]" self#labels [l] self#term p
-    | Pallocable (l,p) ->
-      fprintf fmt "@[\\allocable%a(@[%a@])@]" self#labels [l] self#term p
-    | Pvalid (l,p) -> 
-      fprintf fmt "@[\\valid%a(@[%a@])@]" self#labels [l] self#term p
-    | Pvalid_read (l,p) ->
-      fprintf fmt "@[\\valid_read%a(@[%a@])@]" self#labels [l] self#term p
-    | Pinitialized (l,p) ->
-      fprintf fmt "@[\\initialized%a(@[%a@])@]" self#labels [l] self#term p
-    | Pdangling (l,p) ->
-      fprintf fmt "@[\\dangling%a(@[%a@])@]"
+      fprintf fmt "@[%a%a(@[%a@])@]"
+        self#pp_acsl_keyword "\\freeable"
         self#labels [l] self#term p
-    | Pfresh (l1,l2,e1,e2) -> 
-      fprintf fmt "@[\\fresh%a(@[%a@],@[%a@])@]" 
+    | Pallocable (l,p) ->
+      fprintf fmt "@[%a%a(@[%a@])@]"
+        self#pp_acsl_keyword "\\allocable"
+        self#labels [l] self#term p
+    | Pvalid (l,p) ->
+      fprintf fmt "@[%a%a(@[%a@])@]"
+        self#pp_acsl_keyword "\\valid"
+        self#labels [l] self#term p
+    | Pvalid_read (l,p) ->
+      fprintf fmt "@[%a%a(@[%a@])@]"
+        self#pp_acsl_keyword "\\valid_read"
+        self#labels [l] self#term p
+    | Pinitialized (l,p) ->
+      fprintf fmt "@[%a%a(@[%a@])@]"
+        self#pp_acsl_keyword "\\initialized"
+        self#labels [l] self#term p
+    | Pdangling (l,p) ->
+      fprintf fmt "@[%a%a(@[%a@])@]"
+        self#pp_acsl_keyword "\\dangling"
+        self#labels [l] self#term p
+    | Pfresh (l1,l2,e1,e2) ->
+      fprintf fmt "@[%a%a(@[%a@],@[%a@])@]"
+        self#pp_acsl_keyword "\\fresh"
 	self#labels [l1;l2] self#term e1 self#term e2
     | Pseparated seps ->
-      fprintf fmt "@[<hv 2>\\separated(@,%a@,)@]"
+      fprintf fmt "@[<hv 2>%a(@,%a@,)@]"
+        self#pp_acsl_keyword "\\separated"
 	(Pretty_utils.pp_list ~sep:",@ " self#term) seps
     | Pat (p,StmtLabel sref) ->
       let rec pickLabel = function
@@ -2351,43 +2462,58 @@ the arguments."
 	| _ :: rest -> pickLabel rest
       in
       let l = pickLabel !sref.labels in
-      fprintf fmt "@[\\at(@[@[%a@],@,@[%s@]@])@]"
+      fprintf fmt "@[%a(@[@[%a@],@,@[%s@]@])@]"
+        self#pp_acsl_keyword "\\at"
 	self#pred_prec_named (Precedence.upperLevel, p) l
     | Pat(p,(LogicLabel (_, s) as lab)) ->
       if lab = Logic_const.old_label then
-	fprintf fmt "@[\\old(@[%a@])@]" 
+	fprintf fmt "@[%a(@[%a@])@]"
+          self#pp_acsl_keyword "\\old"
 	  self#pred_prec_named (Precedence.upperLevel,p)
       else
-	fprintf fmt "@[\\at(@[@[%a@],@,%s@])@]"
+	fprintf fmt "@[%a(@[@[%a@],@,%s@])@]"
+          self#pp_acsl_keyword "\\at"
 	  self#pred_prec_named (Precedence.upperLevel,p) s
     | Psubtype (e,ce) ->
       fprintf fmt "@[%a@ <:@ %a@]" term e term ce
 	
   method private decrement kw fmt (t, rel) = match rel with
-  | None -> fprintf fmt "@[<2>%s@ %a;@]" kw self#term t
+  | None -> fprintf fmt "@[<2>%a@ %a;@]" self#pp_acsl_keyword kw self#term t
   | Some str ->
     (*TODO: replace this string with an interpreted variable*)
-    fprintf fmt "@[<2>%s@ %a@ for@ %s;@]" kw self#term t str
+    fprintf fmt "@[<2>%a@ %a@ %a@ %s;@]"
+      self#pp_acsl_keyword kw
+      self#term t
+      self#pp_acsl_keyword "for"
+      str
 
   method decreases fmt v = self#decrement "decreases" fmt v
   method variant fmt v = self#decrement "loop variant" fmt v
 
   method assumes fmt p =
-    fprintf fmt "@[<hov 2>assumes@ %a;@]" self#identified_predicate p
+    fprintf fmt "@[<hov 2>%a@ %a;@]"
+      self#pp_acsl_keyword "assumes"
+      self#identified_predicate p
       
   method requires fmt p =
-    fprintf fmt "@[<hov 2>requires@ %a;@]" self#identified_predicate p
+    fprintf fmt "@[<hov 2>%a@ %a;@]"
+      self#pp_acsl_keyword "requires"
+      self#identified_predicate p
       
   method post_cond fmt (k,p) =
     let kw = get_termination_kind_name k in
-    fprintf fmt "@[<hov 2>%s@ %a;@]" kw self#identified_predicate p
+    fprintf fmt "@[<hov 2>%a@ %a;@]"
+      self#pp_acsl_keyword kw
+      self#identified_predicate p
 
   method terminates fmt p =
-    fprintf fmt "@[<hov 2>terminates@ %a;@]" self#identified_predicate p
+    fprintf fmt "@[<hov 2>%a@ %a;@]"
+      self#pp_acsl_keyword "terminates"
+      self#identified_predicate p
       
   method private cd_behaviors fmt kind p =
-    fprintf fmt "@[%s behaviors %a;@]"
-      kind
+    fprintf fmt "@[%a %a;@]"
+      self#pp_acsl_keyword (kind^" behaviors")
       (Pretty_utils.pp_list ~pre:"@[<hv 0>" ~sep:",@ " pp_print_string)
       p
 
@@ -2397,14 +2523,15 @@ the arguments."
   method allocation ~isloop fmt = function
   | FreeAllocAny -> ()
   | FreeAlloc([],[]) -> 
-    fprintf fmt "@[%sallocates@ \\nothing;@]" (if isloop then "loop " else "")
+    fprintf fmt "@[%a@ %a;@]"
+      self#pp_acsl_keyword (if isloop then "loop allocates" else "allocates")
+      self#pp_acsl_keyword "\\nothing"
   | FreeAlloc(f,a) ->
     let pFreeAlloc kw fmt = function
       | [] -> ()
       | _ :: _ as af -> 
-	fprintf fmt "@[%s%s@ %a;@]"
-	  (if isloop then "loop " else "")
-	  kw
+	fprintf fmt "@[%a@ %a;@]"
+	  self#pp_acsl_keyword (if isloop then "loop "^kw else kw)
 	  (Pretty_utils.pp_list ~sep:",@ " self#identified_term) af
     in
     fprintf fmt "@[<v>%a%(%)%a@]" 
@@ -2414,15 +2541,17 @@ the arguments."
       
   method assigns kw fmt = function
   | WritesAny -> ()
-  | Writes [] -> fprintf fmt "@[%s \\nothing;@]" kw
+  | Writes [] -> fprintf fmt "@[%a %a;@]"
+      self#pp_acsl_keyword kw self#pp_acsl_keyword "\\nothing"
   | Writes l ->
     let without_result =
       List.filter
 	(function (a,_) -> not (Logic_const.is_exit_status a.it_content))
         l
     in
-    fprintf fmt "@[<h>%s%a@]"
-      (if without_result == [] then "" else kw ^ " ")
+    fprintf fmt "@[<h>%t%a@]"
+      (fun fmt -> if without_result <> [] then
+          Format.fprintf fmt "%a " self#pp_acsl_keyword kw)
       (Pretty_utils.pp_list ~sep:",@ " ~suf:";@]"
 	 (fun fmt (t, _) -> self#identified_term fmt t))
       without_result
@@ -2439,13 +2568,16 @@ the arguments."
   method from kw fmt (base,deps) = match deps with
   | FromAny -> ()
   | From [] ->
-    fprintf fmt "@[<hv 2>@[<h>%s@ %a@]@ @[<h>\\from \\nothing@];@]" 
-      kw
+    fprintf fmt "@[<hv 2>@[<h>%a@ %a@]@ @[<h>%a %a@];@]" 
+      self#pp_acsl_keyword kw
       self#identified_term base
+      self#pp_acsl_keyword "\\from"
+      self#pp_acsl_keyword "\\nothing"
   | From l ->
-    fprintf fmt "@[<hv 2>@[%s@ %a@]@ @[<h>\\from %a@];@]"
-      kw 
+    fprintf fmt "@[<hv 2>@[%a@ %a@]@ @[<h>%a %a@];@]"
+      self#pp_acsl_keyword kw
       self#identified_term base
+      self#pp_acsl_keyword "\\from"
       (Pretty_utils.pp_list ~sep:",@ " self#identified_term) l
       
   (* not enclosed in a box *)
@@ -2500,7 +2632,8 @@ the arguments."
     self#reset_current_behavior ()
       
   method behavior fmt b =
-    fprintf fmt "@[<v>behavior %s:@;<1 2>@[%a@]@]" 
+    fprintf fmt "@[<v>%a %s:@;<1 2>@[%a@]@]"
+      self#pp_acsl_keyword "behavior"
       b.b_name
       (self#behavior_contents ~extra_nl:false false
 	 ?terminates:None ?variant:None) 
@@ -2556,35 +2689,44 @@ the arguments."
   | Unroll_specs terms -> 
     fprintf fmt "UNROLL @[%a@]"
       (Pretty_utils.pp_list ~sep:",@ " self#term) terms
-      
+
   method private slice_pragma fmt = function
   |SPexpr t -> fprintf fmt "expr @[%a@]" self#term t
-  | SPctrl -> pp_print_string fmt "ctrl"
-  | SPstmt -> pp_print_string fmt "stmt"
+  | SPctrl -> Format.pp_print_string fmt "ctrl"
+  | SPstmt -> Format.pp_print_string fmt "stmt"
 
   method private impact_pragma fmt = function
   | IPexpr t -> fprintf fmt "expr @[%a@]" self#term t
-  | IPstmt -> pp_print_string fmt "stmt"
-    
+  | IPstmt -> Format.pp_print_string fmt "stmt"
+
   (* TODO: add the annot ID in debug mode?*)
   method code_annotation fmt ca = 
     let pp_for_behavs fmt l =
-      Pretty_utils.pp_list ~pre:"for @[" ~suf:"@]:@ " ~sep:",@ "
-	pp_print_string
-	fmt
-	l
+      match l with
+      | [] -> ()
+      | l ->
+        Format.fprintf fmt "%a @[%a@]:@ "
+          self#pp_acsl_keyword "for"
+          (Pretty_utils.pp_list ~sep:",@ " pp_print_string) l
     in
     match ca.annot_content with
     | AAssert (behav,p) ->
-      fprintf fmt "@[%aassert@ %a;@]"
+      fprintf fmt "@[%a%a@ %a;@]"
 	pp_for_behavs behav
+        self#pp_acsl_keyword "assert"
 	self#identified_pred p
     | APragma (Slice_pragma sp) ->
-      fprintf fmt "@[slice pragma@ %a;@]" self#slice_pragma sp
+      fprintf fmt "@[%a@ %a;@]"
+        self#pp_acsl_keyword "slice pragma"
+        self#slice_pragma sp
     | APragma (Impact_pragma sp) ->
-      fprintf fmt "@[impact pragma@ %a;@]" self#impact_pragma sp
+      fprintf fmt "@[%a@ %a;@]"
+        self#pp_acsl_keyword "impact pragma"
+        self#impact_pragma sp
     | APragma (Loop_pragma lp) ->
-      fprintf fmt "@[loop pragma@ %a;@]" self#loop_pragma lp
+      fprintf fmt "@[%a@ %a;@]"
+        self#pp_acsl_keyword "loop pragma"
+        self#loop_pragma lp
     | AStmtSpec(for_bhv, spec) ->
       fprintf fmt "@[<hv 2>%a%a@]"
 	pp_for_behavs for_bhv
@@ -2598,24 +2740,23 @@ the arguments."
 	pp_for_behavs behav
 	(self#allocation ~isloop:true) af
     | AInvariant(behav,true, i) ->
-      fprintf fmt "@[<2>%aloop invariant@ %a;@]"
+      fprintf fmt "@[<2>%a%a@ %a;@]"
 	pp_for_behavs behav
+        self#pp_acsl_keyword "loop invariant"
 	self#identified_pred i
     | AInvariant(behav,false,i) -> 
-      fprintf fmt "@[<2>%ainvariant@ %a;@]"
+      fprintf fmt "@[<2>%a%a@ %a;@]"
 	pp_for_behavs behav
+        self#pp_acsl_keyword "invariant"
 	self#identified_pred i
     | AVariant v -> 
       self#variant fmt v
-	
-  method private loopInv fmt p =
-    fprintf fmt "@[<2>loop invariant@ %a;@]" self#identified_pred p
 
   method private logicPrms fmt arg =
     let pvar fmt = self#logic_var fmt arg in
     self#logic_type (Some pvar) fmt arg.lv_type
       
-  method private typeKernel fmt tvars =
+  method private polyTypePrms fmt tvars =
     Pretty_utils.pp_list ~pre:"<@[" ~suf:"@]>" ~sep:",@ "
       pp_print_string fmt tvars
       
@@ -2644,13 +2785,15 @@ the arguments."
 	
   method model_info fmt mfi =
     let print_decl fmt = self#model_field fmt mfi in
-    fprintf fmt "@[model %a@ @[<2>{@ %a@ };@]"
+    fprintf fmt "@[%a %a@ @[<2>{@ %a@ };@]"
+      self#pp_acsl_keyword "model"
       (self#typ None) mfi.mi_base_type
       (self#logic_type (Some print_decl)) mfi.mi_field_type
 
   method global_annotation fmt = function
   | Dtype_annot (a,_) ->
-    fprintf fmt "@[<hv 2>@[type invariant %a%a=@]@ %a;@]@\n"
+    fprintf fmt "@[<hv 2>@[%a %a%a=@]@ %a;@]@\n"
+      self#pp_acsl_keyword "type invariant"
       self#logic_var a.l_var_info
       (Pretty_utils.pp_list ~pre:"@[(" ~suf:")@] " ~sep:",@ " 
 	 self#logicPrms) a.l_profile
@@ -2658,21 +2801,24 @@ the arguments."
   | Dmodel_annot (mfi,_) ->
     self#model_info fmt mfi
   | Dcustom_annot(_c, n ,_) ->
-    fprintf fmt "@[custom %s: <...>@]@\n" n
+    fprintf fmt "@[%a %s: <...>@]@\n"
+      self#pp_acsl_keyword "custom" n
   | Dinvariant (pred,_) ->
-    fprintf fmt "@[<hv 2>@[global invariant %a:@]@ %a;@]@\n"
+    fprintf fmt "@[<hv 2>@[%a %a:@]@ %a;@]@\n"
+      self#pp_acsl_keyword "global invariant"
       self#logic_var pred.l_var_info
       self#identified_pred (pred_body pred.l_body)
   | Dlemma(name, is_axiom, labels, tvars, pred,_) ->
-    fprintf fmt "@[<hv 2>@[<hov 1>%s %a%a%a:@]@ %a;@]@\n"
-      (if is_axiom then "axiom" else "lemma")
+    fprintf fmt "@[<hv 2>@[<hov 1>%a %a%a%a:@]@ %a;@]@\n"
+      self#pp_acsl_keyword (if is_axiom then "axiom" else "lemma")
       self#varname name
       self#labels labels
-      self#typeKernel tvars
+      self#polyTypePrms tvars
       self#identified_pred pred
   | Dtype (ti,_) ->
-    fprintf fmt "@[<hv 2>@[type %a%a%a;@]@\n"
-      self#varname ti.lt_name self#typeKernel ti.lt_params
+    fprintf fmt "@[<hv 2>@[%a %a%a%a;@]@\n"
+      self#pp_acsl_keyword "type"
+      self#varname ti.lt_name self#polyTypePrms ti.lt_params
       (fun fmt -> function
          | None -> fprintf fmt "@]"
          | Some d -> fprintf fmt " =@]@ %a" self#logic_type_def d)
@@ -2680,16 +2826,19 @@ the arguments."
   | Dfun_or_pred (li,_) ->
     (match li.l_type with
     | Some rt ->
-      fprintf fmt "@[<hov 2>@[logic %a"
+      fprintf fmt "@[<hov 2>@[%a %a"
+        self#pp_acsl_keyword "logic"
 	(self#logic_type None) rt
     | None ->
       (match li.l_body with
-      | LBinductive _ -> fprintf fmt "@[<hv 2>@[inductive"
-      | _ -> fprintf fmt "@[<hv 2>@[<hov 2>predicate"));
+      | LBinductive _ ->
+        fprintf fmt "@[<hv 2>@[%a" self#pp_acsl_keyword "inductive"
+      | _ ->
+        fprintf fmt "@[<hv 2>@[<hov 2>%a" self#pp_acsl_keyword "predicate"));
     fprintf fmt "@ %a@,%a@,%a@,%a"
       self#logic_var li.l_var_info
       self#labels li.l_labels
-      self#typeKernel li.l_tparams
+      self#polyTypePrms li.l_tparams
       (Pretty_utils.pp_list ~pre:"@[(" ~suf:")@] " ~sep:",@ "
 	 self#logicPrms)
       li.l_profile;
@@ -2698,11 +2847,12 @@ the arguments."
       fprintf fmt ";@]"
     | LBreads reads ->
       (match reads with
-      | [] -> fprintf fmt "@]@\n@[reads \\nothing;@]"
+      | [] -> fprintf fmt "@]@\n@[%a %a;@]"
+        self#pp_acsl_keyword "reads" self#pp_acsl_keyword "\\nothing"
       | _ ->
-	fprintf fmt "%a;"
+	fprintf fmt "@]@\n@[%a@ %a;@]"
+          self#pp_acsl_keyword "reads"
 	  (Pretty_utils.pp_list
-	     ~pre:"@]@\n@[reads@ "
 	     ~sep:",@ "
 	     (fun fmt x -> self#term fmt x.it_content)) reads)
     | LBpred def ->
@@ -2712,9 +2862,11 @@ the arguments."
       fprintf fmt "{@]@ %a}"
 	(Pretty_utils.pp_list ~pre:"@[<v 0>" ~suf:"@]@\n" ~sep:"@\n"
 	   (fun fmt (id,labels,tvars,p) ->
-	     Format.fprintf fmt "case %s%a%a: @[%a@];" id
+	     Format.fprintf fmt "%a %s%a%a: @[%a@];"
+               self#pp_acsl_keyword "case"
+               id
 	       self#labels labels
-	       self#typeKernel tvars
+	       self#polyTypePrms tvars
 	       self#identified_pred p)) indcases
     | LBterm def ->
       fprintf fmt "=@]@ %a;"
@@ -2725,14 +2877,17 @@ the arguments."
       | None -> () ;
       | Some vi -> fprintf fmt "@ %s %a" txt self#varinfo vi
     in
-    fprintf fmt "@[<hov 2>volatile@ %a%a%a;@]"
+    fprintf fmt "@[<hov 2>%a@ %a%a%a;@]"
+      self#pp_acsl_keyword "volatile"
       (Pretty_utils.pp_list ~sep:",@ "
 	 (fun fmt x -> self#term fmt x.it_content)) 
       tsets
       (pp_vol "reads") rvi_opt
       (pp_vol "writes") wvi_opt ;
   | Daxiomatic(id,decls,_) ->
-    fprintf fmt "@[<v 2>@[axiomatic %s {@]@\n%a}@]@\n" id
+    fprintf fmt "@[<v 2>@[%a %s {@]@\n%a}@]@\n"
+      self#pp_acsl_keyword "axiomatic"
+      id
       (Pretty_utils.pp_list ~pre:"@[<v 0>" ~suf:"@]@\n" ~sep:"@\n"
 	 self#global_annotation)
       decls
@@ -2767,6 +2922,6 @@ let () = Cil.pp_attributes_ref := pp_attributes
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

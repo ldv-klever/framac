@@ -21,7 +21,6 @@
 (**************************************************************************)
 
 open Cil_types (* vname, vaddrof *)
-open Cil_datatype
 ;;
 
 (* Formatting html with Format.formatters *)
@@ -76,6 +75,7 @@ module BasicMetrics = struct
     cptrs: int;
     cdecision_points: int;
     cglob_vars: int;
+    ccyclo: int;
   }
   ;;
 
@@ -93,6 +93,7 @@ module BasicMetrics = struct
       cptrs = 0;
       cdecision_points = 0;
       cglob_vars = 0;
+      ccyclo = 0;
     }
   ;;
 
@@ -125,10 +126,10 @@ module BasicMetrics = struct
 
   let incr_glob_vars metrics = { metrics with cglob_vars = succ metrics.cglob_vars ;} ;;
 
-
+  let set_cyclo metrics cyclo = { metrics with ccyclo = cyclo ;} ;;
 
   (* Compute cyclomatic complexity of a given metrics record *)
-  let cyclo metrics =
+  let compute_cyclo metrics =
     metrics.cdecision_points - metrics.cexits + 2
   ;;
 
@@ -145,7 +146,7 @@ module BasicMetrics = struct
       [ metrics.cslocs; metrics.cdecision_points; metrics.cglob_vars; metrics.cifs;
         metrics.cloops; metrics.cgotos; metrics.cassigns;
         metrics.cexits; metrics.cfuncs; metrics.ccalls;
-        metrics.cptrs; cyclo metrics;
+        metrics.cptrs; metrics.ccyclo;
       ]
   ;;
 
@@ -178,12 +179,10 @@ module BasicMetrics = struct
   type cell_type =
     | Classic
     | Entry
-    | Result
   ;;
 
   let cell_type_to_string = function
     | Entry -> "entry"
-    | Result -> "result"
     | Classic -> "classic"
   ;;
 
@@ -216,7 +215,7 @@ module BasicMetrics = struct
       (pp_cell_default pp_int) metrics.cgotos
       (pp_cell_default pp_int) metrics.cptrs
       (pp_cell_default pp_int) metrics.cexits
-      (pp_cell Result pp_int) (cyclo metrics)
+      (pp_cell_default pp_int) metrics.ccyclo
   ;;
 
 end (* End of BasicMetrics *)
@@ -254,26 +253,20 @@ let get_file_type filename =
        Metrics_parameters.fatal
          "File %s has no suffix. Cannot produce output.@." filename
 
-(** Map of varinfos sorted by name (and not by ids) *)
-module VInfoMap = struct
-  include FCMap.Make (
-    struct
-      let compare v1 v2 = Pervasives.compare v1.vname v2.vname;;
-      type t = Cil_types.varinfo
-    end
-  )
-
-  let to_varinfo_map vmap =
-    fold (fun k v mapacc -> Varinfo.Map.add k v mapacc) vmap Varinfo.Map.empty
-  ;;
+module VarinfoByName = struct
+  type t = Cil_types.varinfo
+  let compare v1 v2 = Pervasives.compare v1.vname v2.vname
 end
-;;
+
+(** Map and sets of varinfos sorted by name (and not by ids) *)
+module VInfoMap = FCMap.Make (VarinfoByName)
+module VInfoSet = FCSet.Make (VarinfoByName)
 
 
 (** Other pretty-printing and formatting utilities *)
-let pretty_set iter fmt s =
+let pretty_set fmt s =
   Format.fprintf fmt "@[";
-  iter
+  VInfoMap.iter
     (fun f n ->
       Format.fprintf fmt "%s %s(%d call%s);@ "
         f.Cil_types.vname
@@ -282,30 +275,32 @@ let pretty_set iter fmt s =
     s;
   Format.fprintf fmt "@]"
 
+let pretty_extern_vars fmt s =
+  Pretty_utils.pp_iter ~pre:"@[" ~suf:"@]" ~sep:";@ "
+    VInfoSet.iter Printer.pp_varinfo fmt s
+
+let is_in_libc (loc:location) =
+  let loc = fst loc in
+  Extlib.string_prefix (Filepath.normalize Config.datadir) loc.Lexing.pos_fname
+
 let is_entry_point vinfo times_called =
-  times_called = 0 && not vinfo.vaddrof
+  times_called = 0 && not vinfo.vaddrof && not (is_in_libc vinfo.vdecl)
 ;;
 
-let number_entry_points fold fs =
-  fold
+let number_entry_points fs =
+  VInfoMap.fold
     (fun fvinfo n acc -> if is_entry_point fvinfo n then succ acc else acc)
     fs 0
 ;;
 
-let pretty_entry_points iter fmt fs =
+let pretty_entry_points  fmt fs =
   let print fmt =
-    iter
+    VInfoMap.iter
       (fun fvinfo n  ->
         if is_entry_point fvinfo n
         then Format.fprintf fmt "%s;@ " fvinfo.vname)
   in
   Format.fprintf fmt "@[<hov 1>%a@]" print fs;
-;;
-
-let map_cardinal_varinfomap (map:'a Varinfo.Map.t) =
-    Varinfo.Map.fold
-      (fun _funcname _ cardinal -> succ cardinal)
-      map 0
 ;;
 
 (* Utilities for CIL ASTs *)
@@ -340,7 +335,10 @@ let consider_function vinfo =
   not (!Db.Value.mem_builtin vinfo.vname
        || Ast_info.is_frama_c_builtin vinfo.vname
        || Cil.is_unused_builtin vinfo
-  )
+  ) && (Metrics_parameters.Libc.get () || not (is_in_libc vinfo.vdecl))
+
+let consider_variable vinfo =
+  not (Cil.hasAttribute "FRAMA_C_MODEL" vinfo.vattr)
 
 let float_to_string f =
   let s = Format.sprintf "%F" f in
@@ -350,6 +348,6 @@ let float_to_string f =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

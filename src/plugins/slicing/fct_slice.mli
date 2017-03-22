@@ -86,6 +86,6 @@ val print_ff_sig : Format.formatter -> fct_slice -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -20,14 +20,13 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** AST's pretty-printer. 
-    @modify Fluorine-20130401 fully change this API 
-    @plugin development guide *)
+(** AST's pretty-printer.
+    @modify Fluorine-20130401 fully change this API *)
 
 include Printer_api.S
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

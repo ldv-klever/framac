@@ -82,7 +82,7 @@ struct
     | Fvar x -> TgVar x
     | Aget(a,k) -> TgGet(of_exp Cterm a,of_exp Cterm k)
     | Aset(a,k,v) -> TgSet(of_exp Cterm a,of_exp Cterm k,of_exp Cterm v)
-    | Fun(f,ts) -> 
+    | Fun(f,ts) ->
         let ts = List.map (of_exp Cterm) ts in
         begin
           match mode with
@@ -142,7 +142,7 @@ let compare_lemma a b = String.compare a.l_name b.l_name
 
 let () =
   begin
-    Symbol.callback 
+    Symbol.callback
       (fun _ f ->
          touch f.d_cluster ;
          f.d_cluster.c_symbols <- f :: f.d_cluster.c_symbols) ;
@@ -165,7 +165,7 @@ let define_type c t =
     c.c_types <- t :: c.c_types ;
   end
 
-let parameters f = 
+let parameters f =
   if Model.is_model_defined () then
     try List.map Lang.F.sort_of_var (Symbol.find f).d_params
     with Not_found -> []
@@ -200,7 +200,7 @@ let cluster ~id ?title ?position () =
   Cluster.memoize (fun id -> newcluster ~id ?title ?position ()) id
 
 let axiomatic ax =
-  Cluster.memoize 
+  Cluster.memoize
     (fun id ->
        let title = Printf.sprintf "Axiomatic '%s'" ax.ax_name in
        let position = ax.ax_position in
@@ -210,7 +210,7 @@ let axiomatic ax =
 
 let section = function
   | Toplevel 0 -> cluster ~id:"Axiomatic" ~title:"Global Definitions" ()
-  | Toplevel n -> 
+  | Toplevel n ->
       let id = "Axiomatic" ^ string_of_int n in
       let title = Printf.sprintf "Global Definitions (continued #%d)" n in
       cluster ~id ~title ()
@@ -219,11 +219,11 @@ let section = function
 let compinfo c =
   Cluster.memoize
     (fun id ->
-       let title = 
-         if c.cstruct 
+       let title =
+         if c.cstruct
          then Printf.sprintf "Struct '%s'" c.cname
          else Printf.sprintf "Union '%s'" c.cname in
-       let cluster = newcluster ~id ~title () 
+       let cluster = newcluster ~id ~title ()
        in cluster.c_records <- [c] ; cluster)
     (Lang.comp_id c)
 
@@ -283,7 +283,7 @@ class virtual visitor main =
 
     method private vtypedef = function
       | None -> ()
-      | Some (LTsum cs) -> 
+      | Some (LTsum cs) ->
           List.iter (fun c -> self#vadt (Lang.atype c.ctor_type)) cs
       | Some (LTsyn lt) -> self#vtau (Lang.tau_of_ltype lt)
 
@@ -298,10 +298,10 @@ class virtual visitor main =
               let def = match t.lt_def with
                 | None -> Qed.Engine.Tabs
                 | Some (LTsyn lt) -> Qed.Engine.Tdef (Lang.tau_of_ltype lt)
-                | Some (LTsum cs) -> 
+                | Some (LTsum cs) ->
                     let cases = List.map
                         (fun ct ->
-                           Lang.CTOR ct , 
+                           Lang.CTOR ct ,
                            List.map Lang.tau_of_ltype ct.ctor_params
                         ) cs in
                     Qed.Engine.Tsum cases
@@ -309,7 +309,7 @@ class virtual visitor main =
             end
         end
 
-    method vcomp r = 
+    method vcomp r =
       if not (DR.mem r comps) then
         begin
           comps <- DR.add r comps ;
@@ -320,7 +320,7 @@ class virtual visitor main =
                   (fun f ->
                      let t = Lang.tau_of_ctype f.ftype in
                      self#vtau t ; Cfield f , t
-                  ) r.cfields 
+                  ) r.cfields
               in self#on_comp r fts ;
             end
         end
@@ -342,7 +342,7 @@ class virtual visitor main =
 
     method vparam x = self#vtau (tau_of_var x)
 
-    method vterm t = 
+    method vterm t =
       if not (Tset.mem t terms) then
         begin
           terms <- Tset.add t terms ;
@@ -354,9 +354,9 @@ class virtual visitor main =
           | Fvar x -> self#vparam x
           | Bind(_,t,_) -> self#vtau t
           | True | False | Kint _ | Kreal _ | Bvar _
-          | Times _ | Add _ | Mul _ | Div _ | Mod _ 
-          | Eq _ | Neq _ | Leq _ | Lt _ 
-          | Aget _ | Aset _ 
+          | Times _ | Add _ | Mul _ | Div _ | Mod _
+          | Eq _ | Neq _ | Leq _ | Lt _
+          | Aget _ | Aset _
           | And _ | Or _ | Not _ | Imply _ | If _ | Apply _ -> ()
         end
 
@@ -413,7 +413,7 @@ class virtual visitor main =
             self#vtrigger v ;
           end
       | Qed.Engine.TgFun(f,tgs)
-      | Qed.Engine.TgProp(f,tgs) -> 
+      | Qed.Engine.TgProp(f,tgs) ->
           self#vsymbol f ; List.iter self#vtrigger tgs
 
     method private vdlemma a =

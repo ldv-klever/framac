@@ -52,6 +52,6 @@ val all_status: unit -> Db.RteGen.status_accessor list
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
  *)

@@ -46,62 +46,75 @@ let find_var kf x =
 module DefaultLT (X:
 sig
   val kf: Kernel_function.t
-  val stmt: stmt
+  val in_loop: bool (* Only useful for code annotations *)
 end) =
-    Logic_typing.Make
-      (struct
-         let anonCompFieldName = Cabs2cil.anonCompFieldName
-         let conditionalConversion = Cabs2cil.logicConditionalConversion
+  Logic_typing.Make
+    (struct
+      let anonCompFieldName = Cabs2cil.anonCompFieldName
+      let conditionalConversion = Cabs2cil.logicConditionalConversion
 
-         let is_loop () = Kernel_function.stmt_in_loop X.kf X.stmt
+      let is_loop () = X.in_loop
 
-         let find_macro _ = raise Not_found
+      let find_macro _ = raise Not_found
 
-         let find_var x = find_var X.kf x
+      let find_var x = find_var X.kf x
 
-         let find_enum_tag x =
-           try
-             Globals.Types.find_enum_tag x
-           with Not_found ->
-             (* The ACSL typer tries to parse a string, first as a variable,
-                then as an enum. We report the "Unbound variable" message
-                here, as it is nicer for the user. However, this short-circuits
-                the later stages of resolution, for example global logic
-                variables. *)
-             raise (Unbound ("Unbound variable " ^ x))
+      let find_enum_tag x =
+        try
+          Globals.Types.find_enum_tag x
+        with Not_found ->
+          (* The ACSL typer tries to parse a string, first as a variable,
+             then as an enum. We report the "Unbound variable" message
+             here, as it is nicer for the user. However, this short-circuits
+             the later stages of resolution, for example global logic
+             variables. *)
+          raise (Unbound ("Unbound variable " ^ x))
 
-         let find_comp_field info s =
-           let field = Cil.getCompField info s in
-           Field(field,NoOffset)
+      let find_comp_field info s =
+        let field = Cil.getCompField info s in
+        Field(field,NoOffset)
 
-         let find_type = Globals.Types.find_type
+      let find_type = Globals.Types.find_type
 
-         let find_label s = Kernel_function.find_label X.kf s
-         include Logic_env
+      let find_label s = Kernel_function.find_label X.kf s
+      include Logic_env
 
-         let add_logic_function =
-           add_logic_function_gen Logic_utils.is_same_logic_profile
+      let add_logic_function =
+        add_logic_function_gen Logic_utils.is_same_logic_profile
 
-         let integral_cast ty t =
-           raise
-             (Failure
-                (Pretty_utils.sfprintf
-                   "term %a has type %a, but %a is expected."
-                   Printer.pp_term t Printer.pp_logic_type Linteger Printer.pp_typ ty))
+      let integral_cast ty t =
+        raise
+          (Failure
+             (Pretty_utils.sfprintf
+                "term %a has type %a, but %a is expected."
+                Printer.pp_term t
+                Printer.pp_logic_type Linteger
+                Printer.pp_typ ty))
 
-       end)
+      let error loc msg =
+        Pretty_utils.ksfprintf (fun e -> raise (Error (loc, e))) msg
 
-let wrap f stmt =
+     end)
+
+(** Set up the parser for the infamous 'C hack' needed to parse typedefs *)
+let sync_typedefs () =
+  Logic_env.reset_typenames ();
+  Globals.Types.iter_types
+    (fun name _ ns ->
+      if ns = Logic_typing.Typedef then Logic_env.add_typename name)
+
+let wrap f loc =
   try f ()
-  with Unbound s -> raise (Error (Stmt.loc stmt, s))
+  with Unbound s -> raise (Error (loc, s))
 
 let code_annot kf stmt s =
+  sync_typedefs ();
   let module LT = DefaultLT(struct
     let kf = kf
-    let stmt = stmt
+    let in_loop = Kernel_function.stmt_in_loop kf stmt
   end) in
-  let loc = snd (Cabshelper.currentLoc ()) in
-  let pa = match snd (Logic_lexer.annot (loc, s)) with
+  let loc = Stmt.loc stmt in
+  let pa = match snd (Logic_lexer.annot (fst loc, s)) with
     | Logic_ptree.Acode_annot (_,a) -> a
     | _ ->
         raise (Error (Stmt.loc stmt,
@@ -113,25 +126,36 @@ let code_annot kf stmt s =
       (Logic_utils.get_behavior_names (Annotations.funspec kf))
       (Ctype (Kernel_function.get_return_type kf)) pa
   in
-  wrap parse stmt
+  wrap parse loc
 
-let expr kf stmt s =
+let default_term_env () =
+  Logic_typing.append_here_label (Logic_typing.Lenv.empty())
+
+let term kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
+  sync_typedefs ();
   let module LT = DefaultLT(struct
     let kf = kf
-    let stmt = stmt
+    let in_loop = false (* unused *)
   end) in
-  let (_,pa_expr) = Logic_lexer.lexpr (Lexing.dummy_pos, s) in
-  let parse () =
-    LT.term
-      (Logic_typing.append_here_label (Logic_typing.Lenv.empty()))
-      pa_expr
-  in
-  wrap parse stmt
+  let (_,pa_expr) = Logic_lexer.lexpr (fst loc, s) in
+  let parse () = LT.term env pa_expr in
+  wrap parse loc
 
-let lval kf stmt s =
-  match (expr kf stmt s).term_node with
+let term_lval kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
+  match (term kf ~loc ~env s).term_node with
   | TLval lv -> lv
-  | _ -> raise (Error (Stmt.loc stmt, "Syntax error (expecting an lvalue)"))
+  | _ -> raise (Error (loc, "Syntax error (expecting an lvalue)"))
+
+let predicate kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
+  sync_typedefs ();
+  let module LT = DefaultLT(struct
+    let kf = kf
+    let in_loop = false (* unused *)
+  end) in
+  let (_,pa_expr) = Logic_lexer.lexpr (fst loc, s) in
+  let parse () = LT.predicate env pa_expr in
+  wrap parse loc
+
 
 (* may raise [Invalid_argument "not an lvalue"] *)
 let error_lval () = invalid_arg "not an lvalue"
@@ -337,7 +361,7 @@ module To_zone : sig
   val mk_ctx_func_contrat: kernel_function -> state_opt:bool option -> ctx
   (** [mk_ctx_func_contrat] to define an interpretation context related to
       [kernel_function] contracts. 
-      The control point of the interpretation is defined as follow:
+      The control point of the interpretation is defined as follows:
       - pre-state if  [state_opt=Some true]
       - post-state if [state_opt=Some false]
       - pre-state with possible reference to the post-state if
@@ -347,7 +371,7 @@ module To_zone : sig
     kernel_function -> stmt -> state_opt:bool option -> ctx
   (** [mk_ctx_stmt_contrat] to define an interpretation context related to
       [stmt] contracts. 
-      The control point of the interpretation is defined as follow:
+      The control point of the interpretation is defined as follows:
       - pre-state if  [state_opt=Some true]
       - post-state if [state_opt=Some false]
       - pre-state with possible reference to the post-state if
@@ -985,8 +1009,10 @@ let to_result_from_pred p =
 
 let () =
   Db.Properties.Interp.code_annot := code_annot;
-  Db.Properties.Interp.lval := lval;
-  Db.Properties.Interp.expr := expr;
+  Db.Properties.Interp.term_lval := term_lval;
+  Db.Properties.Interp.term := term;
+  Db.Properties.Interp.predicate := predicate;
+
   Db.Properties.Interp.term_lval_to_lval := term_lval_to_lval;
   Db.Properties.Interp.term_to_exp := term_to_exp;
 
@@ -1016,6 +1042,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

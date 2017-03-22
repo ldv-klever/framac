@@ -43,7 +43,7 @@ module HistoryElt = struct
   (* Identify two elements that belong to the same function *)
   let in_same_fun e1 e2 =
     let f = function
-      | Global (GVarDecl (_, vi, _) | GFun ({svar = vi}, _)) ->
+      | Global (GFunDecl (_, vi, _) | GFun ({svar = vi}, _)) ->
           (try Some (Globals.Functions.get vi)
            with Not_found -> None)
       | Localizable l ->
@@ -157,10 +157,15 @@ let push cur =
   in
   CurrentHistory.set h'
 
-let apply_on_selected f =
+let set_forward els =
+  let h = CurrentHistory.get () in
+  let h' = { h with forward = els } in
+  CurrentHistory.set h'
+
+let selected_localizable () =
   match (CurrentHistory.get ()).current with
-    | None | Some (Global _) -> ()
-    | Some (Localizable loc) -> f loc
+    | None | Some (Global _) -> None
+    | Some (Localizable loc) -> Some loc
 
 let create_buttons (menu_manager : Menu_manager.menu_manager) =
   let refresh = menu_manager#refresh in
@@ -178,6 +183,13 @@ let create_buttons (menu_manager : Menu_manager.menu_manager) =
 
 
 exception Found_global of global
+
+(* We build a 'fake' global for [kf], so as to be able to search for it
+   in the AST. Do not use Kernel_function.get_global, as [kf] is no longer
+   in the proper project when kf_to_global is called, which leads to crashes. *)
+let kf_to_global kf = match kf.fundec with
+  | Definition (d, loc) -> GFun(d,loc)
+  | Declaration (spec, vi, _, loc) -> GFunDecl(spec, vi,loc)
 
 let translate_history_elt old_helt =
   let test_name_file old_name new_name old_loc new_loc =
@@ -200,8 +212,10 @@ let translate_history_elt old_helt =
          GCompTag(                   {corig_name = new_name},          new_loc))
       | (GCompTagDecl(               {corig_name = old_name},          old_loc),
          GCompTagDecl(               {corig_name = new_name},          new_loc))
-      | (GVarDecl(_,                 {vorig_name = old_name},          old_loc),
-         GVarDecl(_,                 {vorig_name = new_name},          new_loc))
+      | (GVarDecl(                     {vorig_name = old_name},          old_loc),
+         GVarDecl(                     {vorig_name = new_name},          new_loc))
+      | (GFunDecl(_,                 {vorig_name = old_name},          old_loc),
+         GFunDecl(_,                 {vorig_name = new_name},          new_loc))
       | (GVar(                       {vorig_name = old_name},_,        old_loc),
          GVar(                       {vorig_name = new_name},_,        new_loc))
       | (GFun({svar=                 {vorig_name = old_name}},         old_loc),
@@ -241,17 +255,20 @@ let translate_history_elt old_helt =
   | Global old_g -> global_Global old_g
   | Localizable (PGlobal old_g) -> global_Global old_g
   | Localizable(PVDecl(Some kf,_)) ->
-    global_Global (Kernel_function.get_global kf)
+    global_Global (kf_to_global kf)
   | Localizable ( PStmt(kf,_) | PLval(Some kf,_,_) | PExp(Some kf,_,_)
-                | PTermLval(Some kf,_,_) as loc) ->
-    begin match global (Kernel_function.get_global kf) with
+                | PTermLval(Some kf,_,_,_) as loc) ->
+    begin match global (kf_to_global kf) with
     | None ->
       (** The kernel function can't be found nothing to say *)
       None
     | Some g ->
       (** Try to stay at the same offset in the function *)
       let old_kf_loc = fst (Kernel_function.get_location kf) in
-      let old_loc = fst (Kinstr.loc (ki_of_localizable loc)) in
+      let old_loc = match ki_of_localizable loc with
+        | Kstmt s -> fst (Stmt.loc s)
+        | Kglobal -> (* fallback *) old_kf_loc
+      in
       let offset = old_loc.Lexing.pos_lnum - old_kf_loc.Lexing.pos_lnum in
       let new_kf_loc = fst (Global.loc g) in
       let new_loc = {new_kf_loc with
@@ -266,7 +283,7 @@ let translate_history_elt old_helt =
         begin match kf_of_localizable locali with
           | None -> (** not in a kf so return the start of the function *)
             Some (Global g)
-          | Some kf when not (Global.equal (Kernel_function.get_global kf) g) ->
+          | Some kf when not (Global.equal (kf_to_global kf) g) ->
             (** Fall in the wrong global, so return the start of the function *)
             Some (Global g)
           | _ ->
@@ -274,12 +291,12 @@ let translate_history_elt old_helt =
             Some (Localizable locali)
       end
     end
-  | Localizable (PLval(None,_,_) | PExp(None,_,_) | PTermLval(None,_,_)
+  | Localizable (PLval(None,_,_) | PExp(None,_,_) | PTermLval(None,_,_,_)
                 | PVDecl(None,_)) -> (** no names useful? *) None
   | Localizable (PIP _ ) -> (** no names available *) None
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

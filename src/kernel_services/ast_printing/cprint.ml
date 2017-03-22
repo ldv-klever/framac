@@ -599,7 +599,7 @@ and print_def fmt def =
         print_single_name proto print_block body
 
   | DECDEF (spec,names, _) ->
-      fprintf fmt "@[%a%a;@\n@]"
+      fprintf fmt "@[%a%a;@]@\n"
         (Pretty_utils.pp_opt ~pre:"/*@@ @[" ~suf:"@]@\n */@\n"
            (fun fmt (spec,_) -> Logic_print.print_spec fmt spec))
         spec

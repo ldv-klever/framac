@@ -55,6 +55,6 @@ val output_dot_automata : Promelaast.typed_automaton -> string -> unit
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -80,8 +80,8 @@ let pp_callstack fmt =
 
 let get_rounding_mode () =
   if Value_parameters.AllRoundingModes.get ()
-  then Ival.Float_abstract.Any
-  else Ival.Float_abstract.Nearest_Even
+  then Fval.Any
+  else Fval.Nearest_Even
 
 let stop_if_stop_at_first_alarm_mode () =
   if Stop_at_nth.incr()
@@ -99,7 +99,9 @@ let emitter =
     ~correctness:Value_parameters.parameters_correctness
     ~tuning:Value_parameters.parameters_tuning
 
-let warn_all_mode = CilE.warn_all_mode emitter pp_callstack
+let () = Db.Value.emitter := emitter
+
+let warn_all_mode = CilE.warn_all_mode
 
 let with_alarm_stop_at_first =
   let stop = 
@@ -114,7 +116,7 @@ let with_alarm_stop_at_first =
 
 let with_alarms_raise_exn exn =
   let raise_exn () = raise exn in
-  let stop = { CilE.a_log = None; CilE.a_call = raise_exn } in
+  let stop = { CilE.a_log = false; CilE.a_call = raise_exn } in
   { CilE.imprecision_tracing = CilE.a_ignore;
     defined_logic = stop;
     unspecified =   stop;
@@ -139,15 +141,6 @@ let set_loc kinstr =
   match kinstr with
   | Kglobal -> Cil.CurrentLoc.clear ()
   | Kstmt s -> Cil.CurrentLoc.set (Cil_datatype.Stmt.loc s)
-
-module Got_Imprecise_Value =
-  State_builder.Ref
-    (Datatype.Bool)
-    (struct
-       let name = "Eval.Got_Imprecise_Value"
-       let dependencies = [ Db.Value.self ]
-       let default () = false
-     end)
 
 let pretty_actuals fmt actuals =
   let pp fmt (e,x,_) = Cvalue.V.pretty_typ (Some (Cil.typeOf e)) fmt x in
@@ -201,13 +194,13 @@ let is_const_write_invalid typ =
   Kernel.ConstReadonly.get () && Cil.typeHasQualifier "const" typ
 
 let float_kind = function
-  | FFloat -> Ival.Float_abstract.Float32
-  | FDouble -> Ival.Float_abstract.Float64
+  | FFloat -> Fval.Float32
+  | FDouble -> Fval.Float64
   | FLongDouble ->
     if Cil.theMachine.Cil.theMachine.sizeof_longdouble <> 8 then
       Value_parameters.error ~once:true
         "type long double not implemented. Using double instead";
-    Ival.Float_abstract.Float64
+    Fval.Float64
 
 (** Find if a postcondition contains [\result] *)
 class postconditions_mention_result = object
@@ -265,8 +258,24 @@ module WrittenFormals =
 let written_formals = WrittenFormals.memo written_formals
 
 
+let bind_block_locals states b =
+  (* Bind [vi] in [states] *)
+  let bind_local_stateset states vi =
+    let b = Base.of_varinfo vi in
+    match Cvalue.Default_offsetmap.default_offsetmap b with
+    | `Bottom -> states
+    | `Map offsm ->
+       (* Bind [vi] in [state], and does not modify the trace *)
+       let bind_local_state (state, trace) =
+         (Cvalue.Model.add_base b offsm state, trace)
+       in
+       State_set.map bind_local_state states
+  in
+  List.fold_left bind_local_stateset states b.blocals
+
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

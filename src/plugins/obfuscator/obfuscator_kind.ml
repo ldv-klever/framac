@@ -81,6 +81,6 @@ include Datatype.Make_with_collections
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

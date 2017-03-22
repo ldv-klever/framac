@@ -145,6 +145,6 @@ val input_val: in_channel -> 'a t -> 'a
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

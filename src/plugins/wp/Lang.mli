@@ -102,21 +102,21 @@ val fields_of_field : field -> field list
 type balance = Nary | Left | Right
 
 val extern_s :
-  library:library -> 
+  library:library ->
   ?link:(Engine.link infoprover) ->
-  ?category:lfun category -> 
-  ?params:sort list -> 
-  ?sort:sort -> 
+  ?category:lfun category ->
+  ?params:sort list ->
+  ?sort:sort ->
   ?result:tau ->
   string -> lfun
 
 val extern_f :
-  library:library -> 
+  library:library ->
   ?link:(Engine.link infoprover) ->
   ?balance:balance ->
-  ?category:lfun category -> 
-  ?params:sort list -> 
-  ?sort:sort -> 
+  ?category:lfun category ->
+  ?params:sort list ->
+  ?sort:sort ->
   ?result:tau ->
   ('a,Format.formatter,unit,lfun) format4 -> 'a
 (** balance just give a default when link is not specified *)
@@ -131,8 +131,8 @@ val extern_p :
 val extern_fp : library:library -> ?params:sort list ->
   ?link:string infoprover -> string -> lfun
 
-val generated_f : ?category:lfun category -> 
-  ?params:sort list -> ?sort:sort -> ?result:tau -> 
+val generated_f : ?category:lfun category ->
+  ?params:sort list -> ?sort:sort -> ?result:tau ->
   ('a,Format.formatter,unit,lfun) format4 -> 'a
 
 val generated_p : string -> lfun
@@ -284,6 +284,7 @@ sig
   val pp_epred : env -> Format.formatter -> pred -> unit
 
   val pred : pred -> pred expression
+  val epred : pred -> term expression
 
   module Pmap : Qed.Idxmap.S with type key = pred
   module Pset : Qed.Idxset.S with type elt = pred
@@ -312,11 +313,11 @@ type gamma
 val new_pool : ?copy:pool -> unit -> pool
 val new_gamma : ?copy:gamma -> unit -> gamma
 
-val local : ?pool:pool -> ?gamma:gamma -> ('a -> 'b) -> 'a -> 'b 
+val local : ?pool:pool -> ?gamma:gamma -> ('a -> 'b) -> 'a -> 'b
 
 val freshvar : ?basename:string -> tau -> var
 val freshen : var -> var
-val assume : pred -> unit  
+val assume : pred -> unit
 val without_assume : ('a -> 'b) -> 'a -> 'b
 val epsilon : ?basename:string -> tau -> (term -> pred) -> term
 val hypotheses : gamma -> pred list

@@ -50,6 +50,6 @@ val set_compute_trace: bool -> unit;;
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

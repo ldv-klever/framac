@@ -100,6 +100,64 @@ Proof.
   nat_compare Inf EQ Sup i j.
 Qed.
 
+(** * remarks about two_power_nat *)
+Remark two_power_nat_is_positive: forall n,
+  (0 < two_power_nat n)%Z.
+Proof.
+  induction n. 
+  (** base *) 
+  + by compute.
+  (** ind. *) 
+  + rewrite two_power_nat_S.
+    apply Zmult_lt_0_compat.
+    by compute.
+    auto.
+Qed.
+
+Remark two_power_nat_plus: forall n m,
+  (two_power_nat (n+m) = (two_power_nat n)*(two_power_nat m))%Z.
+Proof.
+  induction m.
+  (replace (two_power_nat 0) with 1%Z by (compute;forward)).
+  (replace (n + 0) with n by (auto with zarith)).
+  ring.
+  rewrite two_power_nat_S.
+  replace (n + S m) with (S(n+m)) by (auto with zarith).
+  rewrite two_power_nat_S.
+  rewrite IHm.
+  ring.
+Qed.
+						      
+Remark two_power_nat_increase: forall n m,
+  n <= m -> (two_power_nat n <= two_power_nat m)%Z.
+Proof.
+  intros.
+  rewrite ((le_plus_minus n m) H).
+  rewrite two_power_nat_plus.
+  generalize (two_power_nat_is_positive (m - n)).
+  pose (K:=(two_power_nat (m - n))); fold K; intro.  
+  generalize (two_power_nat_is_positive n); intro.
+  rewrite <- (Z.mul_1_r (two_power_nat n)) at 1.
+  apply Zmult_le_compat_l; omega.
+Qed.
+						    
+Remark two_power_nat_increase_strict: forall n m,
+  n < m -> (two_power_nat n < two_power_nat m)%Z.
+Proof.
+  intros.
+  rewrite (le_plus_minus (n+1) m) by omega.
+  rewrite two_power_nat_plus.
+  generalize (two_power_nat_is_positive (m - (n+1))).
+  pose (K:=(two_power_nat (m - (n+1)))); fold K; intro.  
+  rewrite two_power_nat_plus.
+  replace (two_power_nat 1) with 2%Z by (compute; trivial).
+  generalize (two_power_nat_is_positive n); intro.
+  rewrite <- (Z.mul_1_r (two_power_nat n)) at 1.
+  replace (two_power_nat n * 2 * K)%Z with (two_power_nat n * (2 * K))%Z
+    by ring.
+  apply Zmult_gt_0_lt_compat_l; omega.
+Qed.
+						    
 (** {@trailing:} *)
 (** * Eventually constant functions *)
 (** The bits representation of [Z] integers are eventualy constant 
@@ -167,13 +225,12 @@ Proof.
   intros f b.
   cut (forall n m,  
     trailing f n b -> trailing f m b -> last f n b < last f m b -> False).
-  
-  intros ABSURD n m.
-  intros Hn Hm.
-  nat_compare INF EQ SUP (last f n b) (last f m b); auto.
-    (** INF *) apply False_ind; apply (ABSURD n m); auto.
-    (** SUP *) apply False_ind; apply (ABSURD m n); auto.
-
+  { intros ABSURD n m.
+    intros Hn Hm.
+    nat_compare INF EQ SUP (last f n b) (last f m b); auto.
+    (** INF *) * apply False_ind; apply (ABSURD n m); auto.
+    (** SUP *) * apply False_ind; apply (ABSURD m n); auto.
+  }
   intros n m Hn Hm.
   pose ( i := last f n b ). fold i.
   pose ( j := last f m b ). fold j.
@@ -186,9 +243,9 @@ Proof.
   generalize (last_null_or_flip f m b).
   intros [ Last_null | Last_flip ].
   (** Last is Null *)
-    fold j in Last_null. rewrite Last_null in Leq. omega.
+  + fold j in Last_null. rewrite Last_null in Leq. omega.
   (** Last if a flip *)
-    destruct Last_flip as [ k [ kj flip ] ].
+  + destruct Last_flip as [ k [ kj flip ] ].
     fold j in kj. 
     absurd (f k = b); auto.
     apply Range; omega.
@@ -393,21 +450,13 @@ Qed.
 Remark NxHpos_2x_p0: forall n:N,
   (0 < n)%N -> NxHpos (2 * n) = S (NxHpos n).
 Proof.
-  destruct n. 
-  (** zero *)
-    by compute.
-  (** positive *)
-    by simpl.  
+  destruct n; by simpl.  
 Qed.					      
 					      
 Remark NxHpos_2x_p1: forall n:N,
   NxHpos (2 * n + 1) = S (NxHpos n).
 Proof.
-  destruct n. 
-  (** zero *)
-    by compute.
-  (** positive *)
-    by simpl.  
+  destruct n ; by simpl.  
 Qed.					      
 					      
 Remark NxHpos_div2_p: forall n:N,
@@ -415,38 +464,11 @@ Remark NxHpos_div2_p: forall n:N,
 Proof.
   destruct n.
   (** zero *)
-    by compute.
+  + by compute.
   (** positive *)
-    by destruct p.
+  + by destruct p.
 Qed.					      
 		
-Remark two_power_nat_is_positive: forall n,
-  (0 < two_power_nat n)%Z.
-Proof.
-  induction n. 
-  (** base *) 
-    by compute.
-  (** ind. *) 
-    rewrite two_power_nat_S.
-    apply Zmult_lt_0_compat.
-    by compute.
-    auto.
-Qed.
-
-Remark two_power_nat_plus: forall n m,
-  (two_power_nat (n+m) = (two_power_nat n)*(two_power_nat m))%Z.
-Proof.
-  induction m.
-  (replace (two_power_nat 0) with 1%Z by (compute;forward)).
-  (replace (n + 0) with n by (auto with zarith)).
-  ring.
-  rewrite two_power_nat_S.
-  replace (n + S m) with (S(n+m)) by (auto with zarith).
-  rewrite two_power_nat_S.
-  rewrite IHm.
-  ring.
-Qed.
-						      
 (** Bits of a natural integer *)
 Definition N_decomp (x: N): Zfc :=
   match x with 
@@ -501,14 +523,14 @@ Proof.
   assert (NK : n0 = K1) by ( auto with arith ). rewrite NK in *.
   assert (B1 : f K1 = true) by ( destruct (f K1); auto ).
   assert (T1 : trailing f (S K1) false).
-    rewrite <- LAST. apply trailing_last. auto.
+  { rewrite <- LAST. apply trailing_last; auto. }
   destruct K1. 
-    rewrite B1 in *.
+  + rewrite B1 in *.
     split; auto. intro k; destruct k; apply T1; auto with arith.
-    simpl in XH.
+  + simpl in XH.
     destruct (f 0).
-    apply False_ind. discriminate.
-    apply False_ind. discriminate.
+    * apply False_ind. discriminate.
+    * apply False_ind. discriminate.
 Qed.
 
 (** Involution of Decomposition and Recomposition *)
@@ -520,33 +542,34 @@ Proof.
   generalize (last_null_or_flip f n false).
   intros [ ZERO | FLIP ].
   (** ZERO *)
-    rewrite ZERO. simpl. extensionality k. symmetry.
+  + rewrite ZERO. simpl. extensionality k. symmetry.
     cut (trailing f 0 false). intro H. apply H. omega.
     rewrite <- ZERO.
     apply trailing_last. auto.
   (** FLIP *)
-    destruct FLIP as [k [Last Flip]].
+  + destruct FLIP as [k [Last Flip]].
     rewrite Last. simpl.
     extensionality i.
     nat_compare Inf EQ Sup i k.
-      (** Inf *) apply P_decomp_recomp. auto.
-      (** Eq *) 
-         generalize (xHpos_P_recomp i f 0).
-         pose (x := P_recomp i f 0).
-         fold x.
-         intro xHi.
-         rewrite <- xHi.
-         rewrite P_decomp_xHpos.
-         rewrite xHi. rewrite EQ.
-         case_eqb FK (f k); auto; contradiction.
-      (** Sup *)
-         generalize (xHpos_P_recomp k f 0).
-         pose (x := P_recomp k f 0).
-         fold x.
-         intro xHk.
-         rewrite (P_decomp_limit x i); [|rewrite xHk;auto].
-         cut (trailing f (S k) false). intro H. symmetry. apply H. omega.
-         rewrite <- Last. apply trailing_last. auto.
+    (** Inf *) 
+    * apply P_decomp_recomp. auto.
+    (** Eq *) 
+    * generalize (xHpos_P_recomp i f 0).
+      pose (x := P_recomp i f 0).
+      fold x.
+      intro xHi.
+      rewrite <- xHi.
+      rewrite P_decomp_xHpos.
+      rewrite xHi. rewrite EQ.
+      case_eqb FK (f k); auto; contradiction.
+    (** Sup *)
+    * generalize (xHpos_P_recomp k f 0).
+      pose (x := P_recomp k f 0).
+      fold x.
+      intro xHk.
+      rewrite (P_decomp_limit x i); [|rewrite xHk;auto].
+      cut (trailing f (S k) false). intro H. symmetry. apply H. omega.
+      rewrite <- Last. apply trailing_last. auto.
 Qed.
 
 (** [NxHpos] of a recomposition *)
@@ -659,11 +682,11 @@ Proof.
   simpl. trivial.
   simpl. case_eqb H (Bool.eqb (f n) b). 
   (** TRUE *)
-     unfold fnot.
-     destruct (f n); destruct b; simpl in *; (discriminate || apply IHn).
+  + unfold fnot.
+    destruct (f n); destruct b; simpl in *; (discriminate || apply IHn).
   (** FALSE *)
-     unfold fnot.
-     destruct (f n); destruct b; simpl in *; ( discriminate || auto).
+  + unfold fnot.
+    destruct (f n); destruct b; simpl in *; ( discriminate || auto).
 Qed.
 
 (** ** Decomposition and Recomposition of integers *)
@@ -749,16 +772,16 @@ Proof.
     unfold N_recomp; 
     rewrite <- (last_trail_ext _ _ (bsize x) (bsize y)); auto.
   (** x<0 , trailing ~x |x| false *)
-    generalize (btrail x). rewrite SIGNX.
+  + generalize (btrail x). rewrite SIGNX.
     unfold trailing. intros T k R. unfold fnot. rewrite T; auto with arith.
   (** x<0 , trailing ~x |y| false *)
-    rewrite BEQ.
+  + rewrite BEQ.
     generalize (btrail y). rewrite SIGNX in SEQ. rewrite <- SEQ.
     unfold trailing. intros T k R. unfold fnot. rewrite T; auto with arith.
   (** x>0 , trailing x |x| false *)
-    generalize (btrail x). rewrite SIGNX. auto.
+  + generalize (btrail x). rewrite SIGNX. auto.
   (** x>0 , trailing x |y| false *)
-    generalize (btrail y). rewrite SIGNX in SEQ. rewrite <- SEQ. rewrite <- BEQ. auto.
+  + generalize (btrail y). rewrite SIGNX in SEQ. rewrite <- SEQ. rewrite <- BEQ. auto.
 Qed.
 
 (** Opposite [Zfc] leads to two's complement represented integers *)
@@ -779,18 +802,18 @@ Proof.
     unfold N_recomp; 
     rewrite <- (last_trail_ext _ _ (bsize x) (bsize y)); auto.
   (** x<0 , trailing ~x |x| false *)
-    rewrite BEQ2.
+  + rewrite BEQ2.
     generalize (btrail x). rewrite SIGNX.
     unfold trailing. intros T k R. unfold fnot. rewrite T; auto with arith.
   (** x<0 , trailing ~x |y| false *)
-    rewrite BEQ2.
+  + rewrite BEQ2.
     generalize (btrail y). rewrite <- BEQ2. rewrite SIGNX in SEQ2. rewrite SEQ2.
     replace (negb true) with false by auto.
     auto.
   (** x>0 , trailing x |x| false *)
-    generalize (btrail x). rewrite SIGNX. auto.
+  + generalize (btrail x). rewrite SIGNX. auto.
   (** x>0 , trailing x |y| false *)
-    generalize (btrail y). rewrite SIGNX in SEQ2. rewrite SEQ2. 
+  + generalize (btrail y). rewrite SIGNX in SEQ2. rewrite SEQ2. 
     replace (negb false) with true by auto. rewrite BEQ1.
     unfold trailing. intros T k R. unfold fnot. rewrite T; auto with arith.
 Qed.
@@ -806,13 +829,13 @@ Proof.
   unfold bits_of_Z.
   induction x; simpl.
   (** x = 0 *)
-    unfold Z_of_bits. simpl. unfold N_recomp. simpl. trivial.
+  + unfold Z_of_bits. simpl. unfold N_recomp. simpl. trivial.
   (** x = Zpos p *)
-    unfold Z_of_bits. simpl. unfold N_recomp.
+  + unfold Z_of_bits. simpl. unfold N_recomp.
     rewrite last_P_decomp; auto.
     rewrite P_recomp_decomp; auto.
   (** x = Zneg p *)
-    unfold Z_of_bits. simpl.
+  + unfold Z_of_bits. simpl.
     rewrite fnot_inv. 
     pose ( z := zlnot (Zneg p) ).
     fold z.
@@ -820,23 +843,21 @@ Proof.
     f_equal. fold z.
     assert (ZDEF: z = Zpos p - 1).
     (** ZDEF *)
-      unfold z. unfold zlnot. 
+    * unfold z. unfold zlnot. 
       pose (u := Zneg p). fold u.
       pose (v := Zpos p). fold v.
       replace u with (-v) by (unfold u; unfold v; simpl; trivial).
       omega.
     (** cont. *)
-    assert  (Q : z = 0 \/ exists q, z = Zpos q).
-    (** Q *)
-      destruct p. 
-        simpl in ZDEF. right. exists (p~1%positive - 1)%positive. trivial.
-        simpl in ZDEF. right. exists (p~0%positive - 1)%positive. trivial.
-        simpl in ZDEF. left. trivial.
-    (** cont. *)
+    * assert  (Q : z = 0 \/ exists q, z = Zpos q).
+      { destruct p. 
+        - simpl in ZDEF. right. exists (p~1%positive - 1)%positive. trivial.
+        - simpl in ZDEF. right. exists (p~0%positive - 1)%positive. trivial.
+        - simpl in ZDEF. left. trivial. }
       elim Q.
-        intro Z; rewrite Z; simpl.
+      - intro Z; rewrite Z; simpl.
         unfold N_recomp. simpl. trivial.
-      intros [q Z]. rewrite Z; simpl.
+      - intros [q Z]. rewrite Z; simpl.
       unfold N_recomp.
       rewrite last_P_decomp; auto.
       rewrite P_recomp_decomp; auto.
@@ -850,23 +871,23 @@ Proof.
   unfold Z_of_bits.
   destruct (bsign b) eqn:BSIGN ; unfold bits_of_Z.
   (** NEGATIVE SIGN *)
-    pose ( f := fnot (btest b) ). fold f.
+  + pose ( f := fnot (btest b) ). fold f.
     assert ( Fnot : btest b = fnot f). unfold f. rewrite fnot_inv. auto.
     pose ( x := N_recomp (bsize b) f ). fold x.
     assert ( Xpos : 0 <= x ) by ( apply N_recomp_pos; auto with zarith ).
     repeat rewrite zlnot_inv.
     case_leq 0 (zlnot x); intro SIGN; simpl.
     (** 0 <= zlnot x -> contradiction *) 
-      unfold zlnot in SIGN.
+    * unfold zlnot in SIGN.
       apply False_ind. omega.
     (** 0 > zlnot x *)
-      apply fnot_inj. rewrite fnot_inv. fold f. unfold x.
+    * apply fnot_inj. rewrite fnot_inv. fold f. unfold x.
       apply N_decomp_recomp. 
       apply trailing_fnot. 
       simpl. rewrite <- BSIGN. rewrite <- Fnot.
       apply (btrail b).
   (** POSITIVE SIGN *)
-    pose ( f := btest b ). fold f.
+  + pose ( f := btest b ). fold f.
     pose ( x := N_recomp (bsize b) f ). fold x.
     assert ( Xpos : 0 <= x ) by ( apply N_recomp_pos; auto with zarith ).
     case_leq 0 x; intro H; try (apply False_ind; omega; fail).
@@ -883,7 +904,7 @@ Proof.
   destruct (bsign b) eqn:BSIGN; unfold bits_of_Z;   
     (try rewrite zlnot_inv). 
   (** POSITIVE SIGN *)
-    pose ( f := fnot (btest b)). fold f.
+  + pose ( f := fnot (btest b)). fold f.
     pose ( x := N_recomp (bsize b) f ). fold x.
     assert ( Xpos : 0 <= x ) by ( apply N_recomp_pos; auto with zarith ).
     case_leq 0 x; intro H; try (apply False_ind; omega; fail).
@@ -895,16 +916,16 @@ Proof.
     rewrite <- BSIGN.
     apply (btrail b).
   (** NEGATIVE SIGN *)
-    pose ( f := fnot (btest b) ). fold f.
+  + pose ( f := fnot (btest b) ). fold f.
     assert ( Fnot : btest b = fnot f). unfold f. rewrite fnot_inv. auto.
     pose ( x := N_recomp (bsize b) (btest b) ). fold x.
     assert ( Xpos : 0 <= x) by ( apply N_recomp_pos; auto with zarith ).
     case_leq 0 (zlnot x); intro SIGN; simpl.
     (** 0 <= zlnot x -> contradiction *) 
-      unfold zlnot in SIGN.
+    * unfold zlnot in SIGN.
       apply False_ind. omega.
     (** 0 > zlnot x *)
-      unfold f. f_equal.
+    * unfold f. f_equal.
       apply N_decomp_recomp. 
       rewrite <- BSIGN.
       apply (btrail b).
@@ -930,6 +951,41 @@ Proof.
   apply btest_sign.
 Qed.
 
+(** Sign encoding *)
+Lemma Zsign_encoding: forall z:Z,
+  bsign (bits_of_Z z) = negb (Zle_bool 0 z).
+Proof.
+  intro z. unfold bits_of_Z. unfold bsign.
+  case_leq 0 z; auto.
+Qed.
+ 
+Lemma bsign_encoding: forall b:bits,
+  bsign b = negb (Zle_bool 0 (Z_of_bits b)).
+Proof.
+  intro b.
+  rewrite <- Zsign_encoding.
+  unfold Z_of_bits.
+  destruct (bsign b) eqn:BSIGN ; unfold bits_of_Z.
+  (** NEGATIVE SIGN *)
+  + pose ( f := fnot (btest b) ). fold f.
+    assert ( Fnot : btest b = fnot f). unfold f. rewrite fnot_inv. auto.
+    pose ( x := N_recomp (bsize b) f ). fold x.
+    assert ( Xpos : 0 <= x ) by ( apply N_recomp_pos; auto with zarith ).
+    repeat rewrite zlnot_inv.
+    case_leq 0 (zlnot x); intro SIGN; simpl.
+    (** 0 <= zlnot x -> contradiction *) 
+    * unfold zlnot in SIGN.
+      apply False_ind. omega.
+    (** 0 > zlnot x *)
+    * auto.
+  (** POSITIVE SIGN *)
+  + pose ( f := btest b ). fold f.
+    pose ( x := N_recomp (bsize b) f ). fold x.
+    assert ( Xpos : 0 <= x ) by ( apply N_recomp_pos; auto with zarith ).
+    case_leq 0 x; intro H; try (apply False_ind; omega; fail).
+    simpl. auto.
+Qed.
+ 
 (** {@Zbit:} *)	  
 (** * Characteristic Function of integers *)
 
@@ -956,11 +1012,11 @@ Proof.
   simpl.
   induction n; intro k.
   (** base *)
-    destruct k; simpl; auto.
+  + simpl; auto.
   (** ind. *)
-    unfold shift_nat. destruct k; simpl; auto.
+  + unfold shift_nat. destruct k; simpl; auto.
 Qed.
-  								
+
 (** The extensional unicity of [Zbit] for each integer *)
 Theorem Zbit_ext : 
   forall x y: Z, Zbit x = Zbit y -> x = y.
@@ -1011,7 +1067,7 @@ Proof.
   unfold Z_of_bits.
   destruct (bsign b) eqn:BSIGN.
   (** Negative *)
-    pose ( f := fnot (btest b)). fold f.
+  + pose ( f := fnot (btest b)). fold f.
     pose ( x := N_recomp (bsize b) f ). fold x.
     assert ( Xpos : 0 <= x ) by (apply N_recomp_pos; auto with zarith ).
     case_leq 0 (zlnot x); 
@@ -1024,7 +1080,7 @@ Proof.
     rewrite fnot_inv.
     by simpl.
   (** Positive *)
-    case_leq 0 (N_recomp (bsize b) (btest b)); intro N_recomp.
+  + case_leq 0 (N_recomp (bsize b) (btest b)); intro N_recomp.
     rewrite NxHpos_N_recomp_pos. trivial.
     generalize  (N_recomp_pos(bsize b) (btest b)).
     intros.  apply False_ind. omega.
@@ -1046,11 +1102,11 @@ Proof.
   intro. unfold ZxHpos.
   case_leq 0 (two_power_nat n); intro.
   (** 0 <=two_power_nat n *)
-    induction n.
+  + induction n.
     (** Base *)
-      by simpl.
+    * by simpl.
     (** cont. *)
-      rewrite two_power_nat_S.
+    * rewrite two_power_nat_S.
       rewrite two_power_nat_S in H.
       replace (Nabs (2 * two_power_nat n)) with (2 * Nabs (two_power_nat n))%N
         by by compute.
@@ -1058,7 +1114,7 @@ Proof.
         by rewrite IHn.
       by compute.
   (** 0 > two_power_nat n *)
-    generalize (two_power_nat_is_positive n). omega.
+  + generalize (two_power_nat_is_positive n). omega.
 Qed.
  
 (** Position of the highest significant bit of the predecesor of [two_power_nat]. *)
@@ -1068,23 +1124,23 @@ Proof.
   intro. unfold ZxHpos.
   case_leq 0 ((two_power_nat n) -1); intro.
   (** 0 <=(two_power_nat n) - 1 *)
-    induction n.
-     (** Base *)
-      by simpl.
+  + induction n.
+    (** Base *)
+    * by simpl.
     (** cont. *)
-      rewrite two_power_nat_S.
+    * rewrite two_power_nat_S.
       rewrite two_power_nat_S in H.
       assert ((Nabs (2 * two_power_nat n - 1) = 2 * Nabs (two_power_nat n - 1) +1)%N) as EQ.
-        generalize (two_power_nat_is_positive n); intro.
+      { generalize (two_power_nat_is_positive n); intro.
         assert (0 <= (two_power_nat n - 1)) as A0 by omega.
         assert (0 < 2 * (two_power_nat n - 1) + 1) as A1 by omega.
         replace (2 * two_power_nat n - 1) with (2 * (two_power_nat n - 1) + 1) by omega.
-        destruct (two_power_nat n - 1); by auto.
+        destruct (two_power_nat n - 1); by auto. }
       rewrite EQ.
       rewrite NxHpos_2x_p1.
-        by rewrite IHn.
+      by rewrite IHn.
   (** 0 > two_power_nat n *)
-    generalize (two_power_nat_is_positive n). omega.
+  + generalize (two_power_nat_is_positive n). omega.
 Qed.
  
 (** [ZxHpos] increases for positive input values *)  
@@ -1126,26 +1182,26 @@ Remark two_power_nat_of_ZxHpos: forall z: Z,
 Proof.
   destruct z.
   (** zero *) 
-    by compute.
+  + by compute.
   (** positive *) 
-    unfold ZxHpos. 
+  + unfold ZxHpos. 
     replace (Nabs (Zpos p)) with (Npos p) by forward.
     replace (Zpos p) with (Z_of_N (Npos p)) by forward.
     induction p.
     (** 2p+1 *)
-      simpl. simpl in IHp.
+    * simpl. simpl in IHp.
       replace (Zpos p~1) with (2*(Zpos p) + 1)%Z by (auto with zarith).
       rewrite two_power_nat_S.
       omega.
     (** 2p *)
-      simpl. simpl in IHp.
+    * simpl. simpl in IHp.
       replace (Zpos p~0) with (2*Zpos p)%Z by (auto with zarith).
       rewrite two_power_nat_S.
       omega.
     (** one *)
-      by compute.
+    * by compute.
   (** negative *)
-    assert (Zneg p  < 0)%Z by (by simpl).
+  + assert (Zneg p  < 0)%Z by (by simpl).
     generalize (two_power_nat_is_positive (ZxHpos (Zneg p))).
     omega.
 Qed.
@@ -1167,9 +1223,9 @@ Proof.
   intro. unfold ZxHbound.
   case_leq 0 z; intro.
   (** 0 <= z *)
-    generalize (two_power_nat_of_ZxHpos z). split; omega.
+  + generalize (two_power_nat_of_ZxHpos z). split; omega.
   (** 0 > z *)
-    generalize (two_power_nat_of_ZxHpos (-(z+1))).
+  + generalize (two_power_nat_of_ZxHpos (-(z+1))).
     rewrite <- (ZxHpos_sym z).
     unfold zlnot.
     split; omega.
@@ -1185,18 +1241,18 @@ Proof.
   generalize X Y.
   induction X0; intro.
   (** base *)
-    generalize (two_power_nat_is_positive Y0).
+  + generalize (two_power_nat_is_positive Y0).
     replace (two_power_nat 0) with 1 by (compute ; forward).
     omega.
   (** cont. *)
-    rewrite two_power_nat_S. 
+  + rewrite two_power_nat_S. 
     induction Y0.
     (** base *)
-      generalize (two_power_nat_is_positive X0).
+    * generalize (two_power_nat_is_positive X0).
       replace (two_power_nat 0) with 1 by (compute ; forward).
       omega.
     (** cont. *)
-      rewrite two_power_nat_S. 
+    * rewrite two_power_nat_S. 
       cut ((2 * two_power_nat X0) <= (2 * two_power_nat Y0) -> (S X0 <= S Y0)%nat). omega.
       generalize (IHX0 Y0).
       omega.
@@ -1213,18 +1269,18 @@ Proof.
   generalize X Y.
   induction X0; intro.
   (** base *)
-    generalize (two_power_nat_is_positive Y0).
+  + generalize (two_power_nat_is_positive Y0).
     replace (two_power_nat 0) with 1 by (compute ; forward).
     omega.
   (** cont. *)
-    rewrite two_power_nat_S. 
+  + rewrite two_power_nat_S. 
     induction Y0.
     (** base *)
-      generalize (two_power_nat_is_positive X0).
+    * generalize (two_power_nat_is_positive X0).
       replace (two_power_nat 0) with 1 by (compute ; forward).
       omega.
     (** cont. *)
-      intro.
+    * intro.
       rewrite two_power_nat_S. 
       cut ((2 * two_power_nat X0) <= (2 * two_power_nat Y0)). omega.
       apply (IHX0 Y0).
@@ -1242,18 +1298,18 @@ Proof.
   generalize X Y.
   induction X0; intro.
   (** base *)
-    generalize (two_power_nat_is_positive Y0).
+  + generalize (two_power_nat_is_positive Y0).
     replace (two_power_nat 0) with 1 by (compute ; forward).
     induction Y0; repeat rewrite two_power_nat_S; omega.
-   (** cont. *)
-    rewrite two_power_nat_S. 
+  (** cont. *)
+  + rewrite two_power_nat_S. 
     induction Y0.
     (** base *)
-      generalize (two_power_nat_is_positive X0).
+    * generalize (two_power_nat_is_positive X0).
       replace (two_power_nat 0) with 1 by (compute;forward).
       omega.
     (** cont. *)
-      intro.
+    * intro.
       rewrite two_power_nat_S. 
       apply (IHX0 Y0).
       omega.
@@ -1268,13 +1324,13 @@ Proof.
   destruct H.
   case_leq 0 z; intro.
   (** 0 <= z *)
-    clear H.
+  + clear H.
     replace (two_power_nat n - 1) with (z + ((two_power_nat n - 1) - z)) by auto with zarith.
     pose (d := ((two_power_nat n - 1) - z)); fold d.
     assert (0 <= d) as D by (unfold d; omega).
     by (apply ZxHpos_incr_for_positive).
   (** 0 > z *)
-    rewrite <- (ZxHpos_sym z).
+  + rewrite <- (ZxHpos_sym z).
     unfold zlnot.
     replace (two_power_nat n - 1) with (-(z+1) + (z+two_power_nat n)) by auto with zarith.
     pose (x := -(z+1)); fold x.

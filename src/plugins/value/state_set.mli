@@ -68,6 +68,6 @@ val to_list: t -> Cvalue.Model.t list
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

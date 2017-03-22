@@ -370,6 +370,6 @@ let are_consistent d1 d2 =
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
  *)

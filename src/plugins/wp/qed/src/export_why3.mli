@@ -27,7 +27,7 @@ open Engine
 
 (** Exportation Engine for Why-3.
 
-    Provides a full {{:Export.S.engine-c.html}engine} 
+    Provides a full {{:Export.S.engine-c.html}engine}
     from a {{:Export.S.linker-c.html}linker}. *)
 
 module Make(T : Term) :
@@ -52,7 +52,7 @@ sig
       method pp_declare_def : formatter -> ADT.t -> int -> tau -> unit
       method pp_declare_sum : formatter -> ADT.t -> int -> (Fun.t * tau list) list -> unit
       method declare_prop : kind:string -> formatter -> string -> T.var list -> trigger list list -> term -> unit
-      method declare_fixpoint : prefix:string -> 
+      method declare_fixpoint : prefix:string ->
         formatter -> Fun.t -> var list -> tau -> term -> unit
     end
 

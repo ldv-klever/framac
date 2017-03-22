@@ -161,8 +161,11 @@ let rec location = function
   | IPPropertyInstance (Some kf, ki, _)
   | IPDisjoint(kf,ki,_) -> loc_of_kf_ki kf ki
   | IPPropertyInstance (None, Kstmt s, _)
-  | IPReachable(None, Kstmt s, _)
-  | IPCodeAnnot (_,s,_) -> Cil_datatype.Stmt.loc s
+  | IPReachable(None, Kstmt s, _) -> Cil_datatype.Stmt.loc s
+  | IPCodeAnnot (_,s,ca) -> (
+    match Cil_datatype.Code_annotation.loc ca with
+    | None -> Cil_datatype.Stmt.loc s
+    | Some loc -> loc)
   | IPPropertyInstance (None, Kglobal, _)
   | IPReachable(None, Kglobal, _) -> Cil_datatype.Location.unknown
   | IPAssigns(kf,ki,_,a) ->
@@ -928,6 +931,6 @@ let ip_of_global_annotation_single a = match ip_of_global_annotation a with
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

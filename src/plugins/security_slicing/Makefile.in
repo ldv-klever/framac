@@ -35,7 +35,6 @@ PLUGIN_DYNAMIC:=@DYNAMIC_SECURITY_SLICING@
 PLUGIN_NAME:=Security_slicing
 PLUGIN_CMO:= security_slicing_parameters components
 PLUGIN_GUI_CMO:= register_gui
-PLUGIN_HAS_MLI:=yes
 PLUGIN_UNDOC:= analysis
 PLUGIN_DISTRIBUTED:=$(PLUGIN_ENABLE)
 PLUGIN_DISTRIB_EXTERNAL:= Makefile.in configure.ac configure

@@ -71,8 +71,8 @@ module type S = sig
 
   val add_assigns : t_env -> WpPropId.assigns_info -> t_prop -> t_prop
 
-  (** [use_assigns env hid kind assgn goal] performs the havoc on the goal.  
-   * [hid] should be [None] iff [assgn] is [WritesAny], 
+  (** [use_assigns env hid kind assgn goal] performs the havoc on the goal.
+   * [hid] should be [None] iff [assgn] is [WritesAny],
    * and tied to the corresponding identified_property otherwise.*)
   val use_assigns : t_env -> stmt option -> WpPropId.prop_id option ->
     WpPropId.assigns_desc -> t_prop -> t_prop
@@ -87,12 +87,13 @@ module type S = sig
   val init_value : t_env -> lval -> typ -> exp option -> t_prop -> t_prop
   (** init_value env lv t v_opt wp:
       put value of type t (or default if None) in lv *)
-  val init_range : t_env -> lval -> typ -> int64 -> int64 -> t_prop -> t_prop
+  val init_range : t_env -> lval -> typ ->
+    Integer.t -> Integer.t -> exp option -> t_prop -> t_prop
   (** init_range env lv t_elt a b wp :
       put default values of type t_elt in lv[k] with a <= k < b *)
 
   val init_const : t_env -> varinfo -> t_prop -> t_prop
-    (** the (entire) variable has its initial value *)
+  (** the (entire) variable has its initial value *)
 
   val loop_entry : t_prop -> t_prop
   val loop_step : t_prop -> t_prop
@@ -101,7 +102,7 @@ module type S = sig
   (* --- Call Rules                                                         --- *)
   (* -------------------------------------------------------------------------- *)
 
-  val call_dynamic : t_env -> stmt -> 
+  val call_dynamic : t_env -> stmt ->
     WpPropId.prop_id -> exp -> (kernel_function * t_prop) list -> t_prop
 
   val call_goal_precond : t_env -> stmt ->

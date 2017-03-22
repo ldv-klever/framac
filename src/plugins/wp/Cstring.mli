@@ -27,7 +27,7 @@
 open Lang
 open Lang.F
 
-type cst = 
+type cst =
   | C_str of string (** String Literal *)
   | W_str of int64 list (** Wide String Literal *)
 

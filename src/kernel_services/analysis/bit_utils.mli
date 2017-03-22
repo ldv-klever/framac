@@ -67,10 +67,10 @@ val sizeof_pointed_lval: lval -> Int_Base.t
   (** @return the size of the type pointed by a pointer type of the [lval] in
       bits. Never call it on a non pointer type [lval]. *)
 
-val max_bit_address : unit -> Abstract_interp.Int.t
+val max_bit_address : unit -> Integer.t
   (** @return the maximal possible offset in bits of a memory base. *)
 
-val max_bit_size : unit -> Abstract_interp.Int.t
+val max_bit_size : unit -> Integer.t
   (** @return the maximal possible size in bits of a memory base. *)
 
 (** {2 Pretty printing} *)
@@ -109,6 +109,6 @@ val find_offset:
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

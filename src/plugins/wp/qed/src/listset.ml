@@ -44,7 +44,7 @@ struct
   let empty = []
 
   (* used for better sharing between a list and a modified list *)
-  let rev_append_until i l1 l2 = 
+  let rev_append_until i l1 l2 =
     let rec aux acc = function
       | [] -> acc
       | i'::_ when i'==i -> acc
@@ -52,42 +52,42 @@ struct
     in aux l2 l1
 
   (* used for better sharing between a list and a modified list *)
-  let append_until i l1 l2 = 
+  let append_until i l1 l2 =
     List.rev_append (rev_append_until i l1 []) l2
 
-  (* good sharing *) 
+  (* good sharing *)
   let mapq f l =
     let rec aux ((res,rest) as acc) = function
       | [] -> List.rev_append res rest
-      | i :: resti -> 
+      | i :: resti ->
           (match f i with
            | None -> (* remove *) aux ((rev_append_until i rest res),resti) resti
-           | Some i' -> 
-               if i' = i then (* add idem *) aux acc resti 
+           | Some i' ->
+               if i' = i then (* add idem *) aux acc resti
                else (* add new *) aux ((i'::(rev_append_until i rest res)),resti) resti)
     in aux ([],l) l
 
-  (* good sharing *) 
-  (* idem List.filter, but returns l if no element is removed. *) 
+  (* good sharing *)
+  (* idem List.filter, but returns l if no element is removed. *)
   let filter f l =
     let rec aux ((res,rest) as acc) = function
       | [] -> List.rev_append res rest
-      | i :: resti -> 
-          if f i then aux acc resti 
+      | i :: resti ->
+          if f i then aux acc resti
           else aux ((rev_append_until i rest res),resti) resti
     in aux ([],l) l
 
-  (* good sharing *) 
+  (* good sharing *)
   let partition f l  =
     let rec aux ((res,rest) as acc) ((res',rest') as acc') = function
       | [] -> (List.rev_append res rest), (List.rev_append res' rest')
-      | i :: resti -> 
-          if f i then aux acc ((rev_append_until i rest' res'),resti) resti 
+      | i :: resti ->
+          if f i then aux acc ((rev_append_until i rest' res'),resti) resti
           else aux ((rev_append_until i rest res),resti) acc' resti
     in aux ([],l) ([],l) l
 
-  (* good sharing *) 
-  let add k l = 
+  (* good sharing *)
+  let add k l =
     let rec aux = function
       | [] -> l @ [k]
       | (k'::next) as w ->
@@ -97,8 +97,8 @@ struct
           else (* c > 0 *) aux next
     in aux l
 
-  (* good sharing *) 
-  let remove k l = 
+  (* good sharing *)
+  let remove k l =
     let rec aux = function
       | [] -> l
       | (k'::next) as w ->
@@ -118,7 +118,7 @@ struct
   let iter = List.iter
   let fold = List.fold_right
 
-  (* good sharing with w1 *) 
+  (* good sharing with w1 *)
   let union w1 w2 =
     let rec aux ((res,o1) as acc) w1 w2 =
       match w1 , w2 with
@@ -127,11 +127,11 @@ struct
       | a1::r1 , a2::r2 ->
           let c = E.compare a1 a2 in
           if c < 0 then (* adding a1 *) aux acc r1 w2
-          else if c = 0 then (* adding a1 *) aux acc r1 r2 
+          else if c = 0 then (* adding a1 *) aux acc r1 r2
           else (* c > 0 *) (* adding a2 *) aux ((a2::(rev_append_until a1 o1 res)),w1) w1 r2
     in aux ([],w1) w1 w2
 
-  (* good sharing with w1 *) 
+  (* good sharing with w1 *)
   let interf f w1 w2 =
     let rec aux ((res,o1) as acc) w1 w2 =
       match w1 , w2 with
@@ -142,12 +142,12 @@ struct
           if c < 0 then (* remove a1 *) aux ((rev_append_until a1 o1 res),r1) r1 w2
           else if c > 0 then (* skip a2 *) aux acc w1 r2
           else if not (f a1) then (* remove a1 *) aux ((rev_append_until a1 o1 res),r1) r1 r2
-          else (* adding a1 *) aux acc r1 r2 
+          else (* adding a1 *) aux acc r1 r2
     in aux ([],w1) w1 w2
 
   let inter = interf (fun _ -> true)
 
-  (* good sharing with w1 *) 
+  (* good sharing with w1 *)
   let diff w1 w2 =
     let rec aux ((res,o1) as acc) w1 w2 =
       match w1 , w2 with

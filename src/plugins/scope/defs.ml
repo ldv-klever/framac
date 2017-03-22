@@ -136,14 +136,11 @@ let rec add_caller_nodes z kf acc (undef, nodes) =
     in add_caller_nodes z kf (NSet.union caller_nodes acc) (acc_undef, caller_nodes)
   in List.fold_left add_one_caller_nodes acc (!Db.Value.callers kf)
 
-let compute_aux kf stmt lval =
+let compute_aux kf stmt zone =
   debug1 "[Defs.compute] for %a at sid:%d in '%a'@."
-    Printer.pp_lval lval stmt.sid Kernel_function.pretty kf;
+    Locations.Zone.pretty zone stmt.sid Kernel_function.pretty kf;
   try
     let pdg = !Db.Pdg.get kf in
-    let zone = !Db.Value.lval_to_zone (Kstmt stmt)
-                 ~with_alarms:CilE.warn_none_mode lval
-    in
     let nodes, undef =
       !Db.Pdg.find_location_nodes_at_stmt pdg stmt ~before:true zone
     in
@@ -171,13 +168,17 @@ let compute kf stmt lval =
     let defs = NSet.fold add_node nodes Stmt.Hptset.empty in
     (defs, undef)
   in
-  Extlib.opt_map extract (compute_aux kf stmt lval)
+  !Db.Value.compute ();
+  let zone =
+    !Db.Value.lval_to_zone (Kstmt stmt) ~with_alarms:CilE.warn_none_mode lval
+  in
+  Extlib.opt_map extract (compute_aux kf stmt zone)
 
 (* Variation of the function above. For each PDG node that has been found,
-   we find whether it directly modifies [lval] through an affectation
+   we find whether it directly modifies [zone] through an affectation
    (statements [Set] or [Call (lv, _)], or if the change is indirect
    through the body of a call. *)
-let compute_with_def_type kf stmt lval =
+let compute_with_def_type_zone kf stmt zone =
   let extract (nodes, undef) =
     let add_node node acc =
       let change stmt (direct, indirect) =
@@ -194,7 +195,7 @@ let compute_with_def_type kf stmt lval =
         | PdgIndex.Key.SigCallKey (s, sign) ->
           (match sign with
             | PdgIndex.Signature.Out (PdgIndex.Signature.OutRet) ->
-                change s (true, false) (* defined by affectation in 'v = ()' *)
+                change s (true, false) (* defined by affectation in 'v = f()' *)
             | PdgIndex.Signature.In _ ->
                 change s (true, false) (* defined by formal v in 'f(v)' *)
             | PdgIndex.Signature.Out (PdgIndex.Signature.OutLoc _) -> begin
@@ -216,8 +217,14 @@ let compute_with_def_type kf stmt lval =
     let stmts = NSet.fold add_node nodes Stmt.Map.empty in
     (stmts, undef)
   in
-  Extlib.opt_map extract (compute_aux kf stmt lval)
+  Extlib.opt_map extract (compute_aux kf stmt zone)
 
+let compute_with_def_type kf stmt lval =
+  !Db.Value.compute ();
+  let zone =
+    !Db.Value.lval_to_zone (Kstmt stmt) ~with_alarms:CilE.warn_none_mode lval
+  in
+  compute_with_def_type_zone kf stmt zone
 
 (*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*)
 

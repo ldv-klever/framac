@@ -42,6 +42,6 @@ val add_symbolic_dir: string -> string -> unit
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

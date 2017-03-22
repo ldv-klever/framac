@@ -20,15 +20,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
-val add_unitialized: Cvalue.Model.t -> Locations.location -> Cvalue.Model.t
+val initial_state_not_lib_entry: unit -> Cvalue.Model.t
+val initial_state_lib_entry: unit -> Cvalue.Model.t
 
-val initial_state_only_globals: unit -> Cvalue.Model.t
-val initial_state_contextfree_only_globals: unit -> Cvalue.Model.t
 val initialize_var_using_type:
   Cil_types.varinfo -> Cvalue.Model.t -> Cvalue.Model.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

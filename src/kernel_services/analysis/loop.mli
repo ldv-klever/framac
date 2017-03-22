@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Operations on (natural) loops.
-    @plugin development guide *)
+(** Operations on (natural) loops. *)
 
 open Cil_types
 
@@ -36,6 +35,6 @@ val back_edges : kernel_function -> stmt -> stmt list
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

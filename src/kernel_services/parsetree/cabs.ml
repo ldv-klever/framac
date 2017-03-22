@@ -41,12 +41,8 @@
 (*                          et Automatique).                                *)
 (****************************************************************************)
 
-(** This file was originally part of Hugues Casee's frontc 2.0, and has been
- * extensively changed since.
-**
-** 1.0	3.22.99	Hugues Cassé	First version.
-** 2.0  George Necula 12/12/00: Many extensions
- **)
+(** Untyped AST.
+    @plug-in development guide **)
 
 (*
 ** Types
@@ -349,6 +345,6 @@ and attribute = string * expression list
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -70,16 +70,16 @@ struct
 
       method t_atomic (_:tau) = true
 
-      method pp_array fmt data = 
+      method pp_array fmt data =
         fprintf fmt "%a farray" self#pp_tau data
 
-      method pp_farray fmt key data = 
+      method pp_farray fmt key data =
         fprintf fmt "(%a,%a) farray" self#pp_tau key self#pp_tau data
 
       method virtual get_typedef : ADT.t -> tau option
       method virtual set_typedef : ADT.t -> tau -> unit
 
-      method pp_datatype adt fmt ts = 
+      method pp_datatype adt fmt ts =
         match self#get_typedef adt with
         | Some def ->
             let t = Kind.tmap (Array.of_list ts) def in
@@ -88,7 +88,7 @@ struct
             match ts with
             | [] -> pp_print_string fmt (self#datatype adt)
             | [t] -> fprintf fmt "%a@ %s" self#pp_tau t (self#datatype adt)
-            | t::ts -> 
+            | t::ts ->
                 fprintf fmt "@[<hov 2>(%a" self#pp_tau t ;
                 List.iter (fun t -> fprintf fmt ",@,%a" self#pp_tau t) ts ;
                 fprintf fmt ")@ %s@]" (self#datatype adt)
@@ -107,14 +107,14 @@ struct
         | Aint -> pp_print_string fmt (Z.to_string z)
         | Areal -> fprintf fmt "%s.0" (Z.to_string z)
 
-      method pp_cst fmt cst = 
+      method pp_cst fmt cst =
         let open Numbers in
         match cst.sign , cst.base with
-        | Pos,Dec -> 
+        | Pos,Dec ->
             let man = if cst.man = "" then "0" else cst.man in
             let com = if cst.com = "" then "0" else cst.com in
             fprintf fmt "%s.%se%d" man com cst.exp
-        | Neg,Dec -> 
+        | Neg,Dec ->
             let man = if cst.man = "" then "0" else cst.man in
             let com = if cst.com = "" then "0" else cst.com in
             fprintf fmt "(-%s.%se%d)" man com cst.exp
@@ -184,7 +184,7 @@ struct
 
       method pp_conditional fmt a b c =
         match Export.pmode self#mode with
-        | Negative -> 
+        | Negative ->
             let cond = T.e_and [T.e_imply [a] b ; T.e_imply [T.e_not a] c] in
             self#pp_flow fmt cond
         | Positive ->
@@ -226,7 +226,7 @@ struct
       method typeof_setfield _ = raise Not_found
       method typeof_call _ = raise Not_found
 
-      method typecheck e = 
+      method typecheck e =
         match T.sort e with
         | Sint -> Int
         | Sreal -> Real
@@ -234,21 +234,26 @@ struct
         | Sprop -> raise Not_found
         | Sdata | Sarray _ ->
             match T.repr e with
+            | Bvar (_,ty) -> ty
             | Fvar x -> tau_of_var x
             | Aset(m,k,v) ->
                 (try self#typecheck m
                  with Not_found -> Array(self#typecheck k,self#typecheck v))
-            | Fun(f,_) -> 
+            | Fun(f,_) ->
                 (try tau_of_sort (Fun.sort f)
                  with Not_found -> self#typeof_call f)
-            | Aget(m,_) -> 
+            | Aget(m,_) ->
                 (try match self#typecheck m with
                    | Array(_,v) -> v
                    | _ -> raise Not_found
                  with Not_found -> tau_of_arraysort (T.sort m))
             | Rdef ((f,_)::_) -> self#typeof_setfield f
             | Rget (_,f) -> self#typeof_getfield f
-            | _ -> raise Not_found
+            | True | False | Kint _ | Kreal _ | Times _ | Add _
+            | Mul _ | Div _ | Mod _ | Eq _ | Neq _ | Leq _ | Lt _
+            | And _ | Or _ | Bind _
+              -> assert false (** absurd: Term give them a simple sort *)
+            | Not _ | Imply _ | If _ | Apply _ | Rdef [] -> raise Not_found
 
       (* -------------------------------------------------------------------------- *)
       (* --- Lets                                                               --- *)
@@ -267,12 +272,12 @@ struct
           | Negative when quantify_let ->
               fprintf fmt "@[<hov 4>exists %s : %a. %s = %a and@]@ "
                 x self#pp_tau tau x self#pp_flow e
-          | _ -> 
-              fprintf fmt "@[<hov 4>let %s = %a : %a in@]@ " 
+          | _ ->
+              fprintf fmt "@[<hov 4>let %s = %a : %a in@]@ "
                 x self#pp_atom e self#pp_tau tau
         with Not_found ->
-            fprintf fmt "@[<hov 4>let %s = %a in@]@ " 
-              x self#pp_flow e
+          fprintf fmt "@[<hov 4>let %s = %a in@]@ "
+            x self#pp_flow e
 
       (* -------------------------------------------------------------------------- *)
       (* --- Binders                                                            --- *)
@@ -299,7 +304,7 @@ struct
             List.iter (fun x -> fprintf fmt ",@,%a" self#pp_var x) xs ;
             fprintf fmt "@ : %a.@]" self#pp_tau tau ;
 
-      method pp_trigger fmt t = 
+      method pp_trigger fmt t =
         let rec pretty fmt = function
           | TgAny -> assert false
           | TgVar x -> self#pp_var fmt (self#find x)
@@ -329,14 +334,14 @@ struct
       method pp_declare_adt fmt adt = function
         | 0 -> fprintf fmt "type %s" (self#datatype adt)
         | 1 -> fprintf fmt "type %a %s" self#pp_tvar 1 (self#datatype adt)
-        | n -> 
+        | n ->
             begin
               fprintf fmt "type (%a" self#pp_tvar 1 ;
               for i=2 to n do fprintf fmt ",%a" self#pp_tvar i done ;
               fprintf fmt ") %s" (self#datatype adt) ;
             end
 
-      method pp_declare_def fmt adt n def = 
+      method pp_declare_def fmt adt n def =
         begin
           fprintf fmt "(* @[<hov 4>inlined type " ;
           self#pp_declare_adt fmt adt n ;
@@ -373,8 +378,8 @@ struct
             Plib.iterk
               (fun k (c,ts) ->
                  fprintf fmt "@[<hov 2>axiom %s_%d:@ " rank k ;
-                 let xs = Plib.mapk 
-                     (fun k t -> 
+                 let xs = Plib.mapk
+                     (fun k t ->
                         fprintf fmt "forall x%d:%a.@ " k self#pp_tau t ;
                         Printf.sprintf "x%d" k) ts
                  in
@@ -401,18 +406,18 @@ struct
           begin fun () ->
             let cmode = Export.ctau t in
             fprintf fmt "@[<hv 4>%a@,(" (self#pp_declare_symbol cmode) f ;
-            Plib.pp_listsep ~sep:"," 
+            Plib.pp_listsep ~sep:","
               (fun fmt x ->
                  let a = self#bind x in
                  let t = T.tau_of_var x in
                  fprintf fmt "%a:%a" self#pp_var a self#pp_tau t
               ) fmt xs ;
             match cmode with
-            | Cprop -> 
-                fprintf fmt ") =@ @[<hov 0>%a@]@]@\n" 
+            | Cprop ->
+                fprintf fmt ") =@ @[<hov 0>%a@]@]@\n"
                   self#pp_prop e
             | Cterm ->
-                fprintf fmt ") :@ %a =@ @[<hov 0>%a@]@]@\n" 
+                fprintf fmt ") :@ %a =@ @[<hov 0>%a@]@]@\n"
                   self#pp_tau t (self#pp_expr t) e
           end
 

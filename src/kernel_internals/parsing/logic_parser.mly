@@ -220,6 +220,8 @@
       let str = Str.global_replace regex1 "\\1\\\\3" str in
       Str.global_replace regex2 "\\1\\\\" str
 
+  let cv_const = Attr ("const", [])
+  let cv_volatile = Attr ("volatile", [])
 %}
 
 /*****************************************************************************/
@@ -292,7 +294,7 @@
 %type <Logic_ptree.annot> annot
 %start annot
 
-%type <Logic_ptree.spec * Cabs.cabsloc> spec
+%type <Logic_ptree.spec> spec
 %start spec
 
 %type <Logic_ptree.ext_spec> ext_spec
@@ -471,9 +473,9 @@ lexpr_inner:
 | OFFSET opt_label_1 LPAR lexpr RPAR { info (PLoffset ($2,$4)) }
 | ALLOCABLE opt_label_1 LPAR lexpr RPAR { info (PLallocable ($2,$4)) }
 | FREEABLE opt_label_1 LPAR lexpr RPAR { info (PLfreeable ($2,$4)) }
-| ALLOCATION opt_label_1 LPAR lexpr RPAR  { Format.eprintf "Warning: \\static not yet implemented." ;
+| ALLOCATION opt_label_1 LPAR lexpr RPAR  { Format.eprintf "Warning: \\allocation not yet implemented." ;
 	   (* TODO: *) raise Parse_error }
-| AUTOMATIC { Format.eprintf "Warning: \\static not yet implemented." ;
+| AUTOMATIC { Format.eprintf "Warning: \\automatic not yet implemented." ;
 	   (* TODO: *) raise Parse_error }
 | DYNAMIC { Format.eprintf "Warning: \\dynamic not yet implemented." ;
 	   (* TODO: *) raise Parse_error }
@@ -716,14 +718,14 @@ logic_type:
 ;
 
 cv:
-  CONST { }
-| VOLATILE { }
+  CONST { cv_const }
+| VOLATILE { cv_volatile }
 ;
 
 type_spec_cv:
      type_spec { $1 }
-|    cv type_spec { $2 }
-|    type_spec cv { $1 }
+|    cv type_spec { LTattribute ($2, $1) }
+|    type_spec cv { LTattribute ($1, $2) }
 
 cast_logic_type:
  | type_spec_cv abs_spec_cv_option { $2 $1 }
@@ -776,14 +778,14 @@ abs_spec_bis_cv:
 
 stars:
 | STAR          { fun t -> LTpointer t }
-| stars STAR    { fun t -> $1 (LTpointer t) }
+| stars STAR    { fun t -> (LTpointer ($1 t)) }
 ;
 
 stars_cv:
 | STAR          { fun t -> LTpointer t }
-| STAR cv       { fun t -> LTpointer t }
-| stars_cv STAR    { fun t -> $1 (LTpointer t) }
-| stars_cv STAR cv { fun t -> $1 (LTpointer t) }
+| STAR cv       { fun t -> LTattribute ((LTpointer t), $2) }
+| stars_cv STAR    { fun t -> (LTpointer ($1 t)) }
+| stars_cv STAR cv { fun t -> (LTattribute ((LTpointer ($1 t)), $3)) }
 ;
 
 tabs:
@@ -1002,7 +1004,7 @@ ext_at_stmt_markup:
 /*** function and statement contracts ***/
 
 spec:
-| contract EOF { $1 }
+| contract EOF { fst $1 }
 ;
 
 contract:

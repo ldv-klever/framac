@@ -29,8 +29,7 @@ Assume {
   (* Invariant 'Positive' (file tests/wp_acsl/axioms.i, line 31) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Positive': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_1<=i_0) -> (is_sint32 i_0)
-        -> (0<Mint_2[(shift_sint32 t_2 i_0)]).
+        (i_0<i_2) -> (a_1<=i_0) -> (0<Mint_2[(shift_sint32 t_2 i_0)]).
   (* Invariant 'Index' (file tests/wp_acsl/axioms.i, line 30) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Index': *)
   Have: (a_1<=i_2) /\ (i_2<=(1+b_1)).
@@ -61,8 +60,7 @@ Assume {
   (* Invariant 'Positive' (file tests/wp_acsl/axioms.i, line 31) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Positive': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_1<=i_0) -> (is_sint32 i_0)
-        -> (0<Mint_2[(shift_sint32 t_2 i_0)]).
+        (i_0<i_2) -> (a_1<=i_0) -> (0<Mint_2[(shift_sint32 t_2 i_0)]).
   (* Invariant 'Index' (file tests/wp_acsl/axioms.i, line 30) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Index': *)
   Have: (a_1<=i_2) /\ (i_2<=(1+b_1)).
@@ -95,8 +93,7 @@ Assume {
   (* Invariant 'Positive' (file tests/wp_acsl/axioms.i, line 31) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Positive': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (0<Mint_3[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (0<Mint_3[(shift_sint32 t_0 i_0)]).
   (* Invariant 'Index' (file tests/wp_acsl/axioms.i, line 30) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Index': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).
@@ -147,8 +144,7 @@ Assume {
   (* Invariant 'Positive' (file tests/wp_acsl/axioms.i, line 31) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Positive': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (0<Mint_1[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (0<Mint_1[(shift_sint32 t_0 i_0)]).
   (* Invariant 'Index' (file tests/wp_acsl/axioms.i, line 30) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Index': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).
@@ -196,8 +192,7 @@ Assume {
   (* Invariant 'Positive' (file tests/wp_acsl/axioms.i, line 31) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Positive': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (0<Mint_3[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (0<Mint_3[(shift_sint32 t_0 i_0)]).
   (* Invariant 'Index' (file tests/wp_acsl/axioms.i, line 30) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Index': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).
@@ -233,8 +228,7 @@ Assume {
   (* Invariant 'Positive' (file tests/wp_acsl/axioms.i, line 31) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Positive': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (0<Mint_3[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (0<Mint_3[(shift_sint32 t_0 i_0)]).
   (* Invariant 'Index' (file tests/wp_acsl/axioms.i, line 30) *)
   (* tests/wp_acsl/axioms.i:34: Invariant 'Index': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).

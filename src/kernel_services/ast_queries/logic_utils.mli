@@ -46,6 +46,13 @@ val instantiate :
   (string * logic_type) list ->
   logic_type -> logic_type
 
+(** [is_instance_of poly t1 t2] returns [true] if [t1] can be derived from [t2]
+    by instantiating some of the type variable in [poly]. 
+
+    @since Magnesium-20151001
+ *)
+val is_instance_of: string list -> logic_type -> logic_type -> bool
+
 (** expands logic type definitions. If the [unroll_typedef] flag is set to
     [true] (this is the default), C typedef will be expanded as well. *)
 val unroll_type : ?unroll_typedef:bool -> logic_type -> logic_type
@@ -114,6 +121,16 @@ val array_with_range: exp -> term -> term
 (** Removes TLogic_coerce at head of term. *)
 val remove_logic_coerce: term -> term
 
+(** [numeric_coerce typ t] returns a term with the same value as [t] and of type [typ].
+[typ] which should be [Linteger] or [Lreal]. [numeric_coerce] 
+tries to avoid unnecessary type conversions in [t]. In particular, 
+[numeric_coerce (int)cst Linteger], where [cst] fits in int will be directly [cst],
+without any coercion.
+
+@since Magnesium-20151001
+*)
+val numeric_coerce: logic_type -> term -> term
+
 (** {2 Predicates} *)
 
 (** \valid_index *)
@@ -132,12 +149,24 @@ val points_to_valid_string: ?loc:location -> term -> predicate named
 
 (** {3 Conversion from exp to term}*)
 (** translates a C expression into an "equivalent" logical term.
-    If cast is [true]: expressions with integral type are cast to corresponding
-    C type. If cast is [false]: no cast performed to C type, except for
-    constants since there are no logic integer constants for the time being =>
-    they keep their C type.
+    [cast] specifies how C arithmetic operators are translated. 
+    When [cast] is [true], the translation returns a logic [term] having the 
+    same semantics of the C [expr] by introducing casts (i.e. the C expr [a+b] 
+    can be translated as [(char)(((char)a)+(char)b)] to preserve the modulo 
+    feature of the C addition).
+    Otherwise, no such casts are introduced and the C arithmetic operators are 
+    translated into perfect mathematical operators (i.e. a floating point 
+    addition is translated into an addition of [real] numbers).
     @plugin development guide *)
 val expr_to_term : cast:bool -> exp -> term
+
+(** same as {!expr_to_term}, except that if the new term has an arithmetic
+    type, it is automatically coerced into real (or integer for integral types).
+
+    @since Magnesium-20151001
+*)
+val expr_to_term_coerce: cast:bool -> exp -> term
+
 val lval_to_term_lval : cast:bool -> lval -> term_lval
 val host_to_term_host : cast:bool -> lhost -> term_lhost
 val offset_to_term_offset :

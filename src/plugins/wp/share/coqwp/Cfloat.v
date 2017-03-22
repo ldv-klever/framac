@@ -70,6 +70,18 @@ Variable is_finite32: R -> Prop.
 Variable is_finite64: R -> Prop.
 
 (* Why3 goal *)
+Variable is_NaN: R -> Prop.
+
+(* Why3 goal *)
+Variable is_infinite: R -> Prop.
+
+(* Why3 goal *)
+Variable is_positive_infinite: R -> Prop.
+
+(* Why3 goal *)
+Variable is_negative_infinite: R -> Prop.
+
+(* Why3 goal *)
 Lemma float_32 : forall (x:R),
   ((to_float32 x) = (round_float NearestTiesToEven x)).
 Admitted.
@@ -149,4 +161,3 @@ Admitted.
 Lemma model_sqrt : forall (x:R),
   ((model (Reals.R_sqrt.sqrt x)) = (Reals.R_sqrt.sqrt (model x))).
 Admitted.
-

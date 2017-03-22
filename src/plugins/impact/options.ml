@@ -77,6 +77,6 @@ let is_on () = not (Pragma.is_empty ())
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

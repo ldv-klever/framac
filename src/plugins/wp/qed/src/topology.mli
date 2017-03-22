@@ -38,7 +38,7 @@ sig
   type root = (E.t -> unit) -> unit
   (** Iterator on the required roots *)
 
-  val components : succ:succ -> root:root -> ?size:int -> 
+  val components : succ:succ -> root:root -> ?size:int ->
     unit -> E.t list array
   (** The array of components.
       	For two elements [a in Ci] and [b in Cj] with [i<=j], then [a->*b]

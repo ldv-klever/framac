@@ -103,7 +103,7 @@ let print () =
       result "@[<v>====== DISPLAYING USERS ======@ %t\
                    ====== END OF USERS =========="
         (fun fmt ->
-           !Db.Semantic_Callgraph.topologically_iter_on_functions
+           Callgraph.Uses.iter_in_rev_order
              (fun kf ->
                let callees = !Db.Users.get kf in
                if not (Kernel_function.Hptset.is_empty callees) then
@@ -121,6 +121,6 @@ let () = Db.Main.extend print_once
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

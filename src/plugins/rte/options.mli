@@ -39,6 +39,6 @@ val warn: ?source:Lexing.position -> ('a, Format.formatter, unit) format -> 'a
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

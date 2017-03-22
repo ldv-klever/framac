@@ -46,8 +46,10 @@ module OutputFile: Parameter_sig.String
 module SyntacticallyReachable: Parameter_sig.Kernel_function_set
 (** Set of functions for which we compute the functions they may call *)
 
+module Libc: Parameter_sig.Bool
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

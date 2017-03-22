@@ -95,6 +95,6 @@ let get_mem c = c.mem
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
  *)

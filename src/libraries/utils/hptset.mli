@@ -40,6 +40,16 @@ module type S = sig
     (** [intersects s1 s2] returns [true] if and only if [s1] and [s2]
         have an element in common *)
 
+    type action = Neutral | Absorbing | Traversing of (elt -> bool)
+
+    val merge :
+      cache:Hptmap_sig.cache_type ->
+      symmetric:bool ->
+      idempotent:bool ->
+      decide_both:(elt -> bool) ->
+      decide_left:action ->
+      decide_right:action ->
+      t -> t -> t
 
     type 'a shape
     (** Shape of the set, ie. the unique shape of its OCaml value. *)
@@ -51,7 +61,7 @@ module type S = sig
     (** Build a set from another [elt]-indexed map or set. *)
 
     val fold2_join_heterogeneous:
-      cache:Hptmap.cache_type ->
+      cache:Hptmap_sig.cache_type ->
       empty_left:('a shape -> 'b) ->
       empty_right:(t -> 'b) ->
       both:(elt -> 'a -> 'b) ->
@@ -77,6 +87,6 @@ module Make(X: Hptmap.Id_Datatype)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -38,7 +38,8 @@ let ( %~ ) = Integer.pos_rem
 let succ = Integer.succ
 let pred = Integer.pred
 
-let dkey_caches = Kernel.register_category "offsetmap:caches"
+(*let dkey_caches = Kernel.register_category "offsetmap:caches"*)
+let msg_emitter = Lattice_messages.register "Offsetmap"
 
 (** Offsetmaps are unbalanced trees that map intervals to values, with
     the additional properties that the shape of the tree is entirely determined
@@ -282,7 +283,7 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
       if hashed_node == tentative_new_node
       then begin
          if current_counter = max_int 
-         then Kernel.fatal "Internal maximum exeeded";
+         then Kernel.fatal "Offsetmap(%s): internal maximum exeeded" V.name;
          counter := Pervasives.succ current_counter;
       end;
       hashed_node
@@ -721,7 +722,7 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
  let _check curr_off tree =
    try check_aux curr_off tree
    with Assert_failure _ as e ->
-     Kernel.result "INVALID@.%a@." _pretty_offset (curr_off, tree);
+     Kernel.error "INVALID@.%a@." _pretty_offset (curr_off, tree);
      raise e
 
 
@@ -1203,16 +1204,16 @@ module Make (V : module type of Offsetmap_lattice_with_isotropy) = struct
  let map2_on_values_offset cache decide (f: V.t -> V.t -> V.t) =
    let merge_cache =
      match cache with
-     | Hptmap.PersistentCache _ | Hptmap.TemporaryCache _ ->
+     | Hptmap_sig.PersistentCache _ | Hptmap_sig.TemporaryCache _ ->
        let module Map2Cache =
          Binary_cache.Arity_Two(Cacheable)(Cacheable)(Cacheable)
        in
        (match cache with
-       | Hptmap.PersistentCache _ ->
+       | Hptmap_sig.PersistentCache _ ->
          clear_caches_ref := Map2Cache.clear :: !clear_caches_ref
        | _ -> ());
        Map2Cache.merge
-     | Hptmap.NoCache -> fun f x y -> f x y
+     | Hptmap_sig.NoCache -> fun f x y -> f x y
    in
    let f' _abs_min _abs_max _rem1 _modu1 v1 _rem2 _modu2 v2 =
      Int.zero, Int.one, f v1 v2
@@ -1678,7 +1679,7 @@ let update_aux_tr_offsets ~exact ~offsets ~size v curr_off t =
         if size <~ period then
           (* We are going to write the locations that are between [size+1] and
              [period] unnecessarily, warn the user *)
-          Kernel.result ~current:true ~once:true
+          Lattice_messages.emit_approximation msg_emitter
             "more than %d(%a) %s. Approximating."
             plevel pretty_int number !imprecise_write_msg;
         let abs_max = pred (mx +~ size) in
@@ -1688,8 +1689,8 @@ let update_aux_tr_offsets ~exact ~offsets ~size v curr_off t =
             let origin = Origin.(current K_Misalign_read) in
             let v' = V.topify_with_origin origin v in
             if not (V.equal v v') then
-              Kernel.result ~current:true ~once:true
-                "approximating value to write.";
+              Lattice_messages.emit_approximation msg_emitter
+                 "approximating value to write.";
             v'
         in
         update_itv ~exact:false ~offset:mn ~abs_max ~size v curr_off t
@@ -1844,17 +1845,18 @@ let update_under ~validity ~exact ~offsets ~size v t =
     alarm, result
  ;;
 
- let fold_between ~entire (imin, imax) f t acc =
+ let fold_between ?(direction=`LTR) ~entire (imin, imax) f t acc =
    let rec aux curr_off t acc = match t with
      | Empty -> acc
      | Node (max, offl, subl, offr, subr, rem, modu, v, _) ->
          let abs_max = max +~ curr_off in
-         let acc =
+         (* fold on the left subtree *)
+         let acc_left acc =
            if imin <~ curr_off then (
              aux (offl +~ curr_off) subl acc)
            else acc
          in
-         let acc =
+         let acc_middle acc =
            if imax <~ curr_off || imin >~ abs_max
            then acc
            else
@@ -1870,9 +1872,15 @@ let update_under ~validity ~exact ~offsets ~size v t =
                in
                f (lmin, lmax) (v, modu, lrem) acc
          in
-         if imax >~ abs_max
-         then aux (offr +~ curr_off) subr acc
-         else acc
+         (* fold on the right subtree *)
+         let acc_right acc =
+           if imax >~ abs_max
+           then aux (offr +~ curr_off) subr acc
+           else acc
+         in
+         match direction with
+         | `LTR -> acc_right (acc_middle (acc_left acc))
+         | `RTL -> acc_left (acc_middle (acc_right acc))
    in
    aux Integer.zero t acc
  ;;
@@ -1918,10 +1926,22 @@ let update_under ~validity ~exact ~offsets ~size v t =
       if success then !alarm, `Map res else true, `Bottom
     with Not_less_than ->
       (* Value to paste, since we cannot be precise *)
-      let validity_src = Base.Known (Int.zero, Int.pred size) in
-      let _, v =
-        find ~validity:validity_src ~conflate_bottom:false
-          ~offsets:Ival.singleton_zero ~size src
+      let v =
+        (* Under this size, this may be an integer. Try to be a bit precise
+           when doing 'find' *)
+        if size <=~ Integer.of_int 128 then
+          let validity_src = Base.Known (Int.zero, Int.pred size) in
+          let _, v =
+            find ~validity:validity_src ~conflate_bottom:false
+              ~offsets:Ival.zero ~size src
+          in
+          v
+        else
+          (* This is a struct or an array. Either the result will be imprecise
+             because catenating semi-imprecise values through merge_bits
+             wil result in something really imprecise at the end, or we will
+             build very big integers, which is not really helpful either. *)
+          find_imprecise_between (Int.zero, Int.pred size) src
       in
       (* Have we produced an imprecision when calling 'find' ? *)
       let imprecise = match src with
@@ -1929,7 +1949,7 @@ let update_under ~validity ~exact ~offsets ~size v t =
         | _ -> true (* at least two nodes *)
       in
       if imprecise then
-        Kernel.result ~current:true ~once:true
+        Lattice_messages.emit_approximation msg_emitter
           "too many locations to update in array. Approximating.";
       update ~validity ~exact ~offsets ~size v dst
 
@@ -2108,7 +2128,7 @@ module Int_Intervals_Map = struct
           if b then ReturnRight else ReturnLeft
         | _ -> Recurse
     in
-    let cache = Hptmap.PersistentCache "Int_Intervals.join" in
+    let cache = Hptmap_sig.PersistentCache "Int_Intervals.join" in
     map2_on_values_offset cache stop_join (||)
 
   let narrow : itvs -> itvs -> itvs =
@@ -2125,7 +2145,7 @@ module Int_Intervals_Map = struct
           if b then ReturnLeft else ReturnRight
         | _ -> Recurse
     in
-    let cache = Hptmap.PersistentCache "Int_Intervals.narrow" in
+    let cache = Hptmap_sig.PersistentCache "Int_Intervals.narrow" in
     map2_on_values_offset cache stop_narrow (&&)
 
   let diff : itvs -> itvs -> itvs =
@@ -2137,7 +2157,7 @@ module Int_Intervals_Map = struct
           ReturnLeft (* diff with empty *)
         | _ -> Recurse
     in
-    let cache = Hptmap.PersistentCache "Int_Intervals.diff" in
+    let cache = Hptmap_sig.PersistentCache "Int_Intervals.diff" in
     map2_on_values_offset
       cache stop_diff (fun b1 b2 -> if b2 then false else b1)
 
@@ -2636,7 +2656,7 @@ module Int_Intervals = struct
    and the caches are reset on an ast update. *)
   let () = Ast.add_hook_on_update
     (fun () ->
-      Kernel.debug ~dkey:dkey_caches "Clearing interval caches";
+      (* Kernel.debug ~dkey:dkey_caches "Clearing interval caches"; *)
       Int_Intervals_Map.clear_caches ())
 
 end
@@ -2688,9 +2708,9 @@ end) = struct
     | Int_Base.Top ->
       update_imprecise_everywhere ~validity Origin.top v m
 
-  let fold_itv f itv m acc =
+  let fold_itv ?direction ~entire f itv m acc =
     let f' itv (v, _, _) acc = f itv v acc in
-    fold_between ~entire:false itv f' m acc
+    fold_between ?direction ~entire itv f' m acc
 
   let find = find_imprecise_between
 
@@ -2775,16 +2795,16 @@ end) = struct
   let fold_join_itvs_map_offset cache (type r) f join empty =
     let module R = struct type t = r let sentinel = empty end in
     let merge = match cache with
-     | Hptmap.PersistentCache _ | Hptmap.TemporaryCache _ ->
+     | Hptmap_sig.PersistentCache _ | Hptmap_sig.TemporaryCache _ ->
        let module Cache =
          Binary_cache.Arity_Two(Cacheable)(Int_Intervals_Map.Cacheable)(R)
        in
        (match cache with
-       | Hptmap.PersistentCache _ ->
+       | Hptmap_sig.PersistentCache _ ->
          clear_caches_ref := Cache.clear :: !clear_caches_ref
        | _ -> ());
        Cache.merge
-     | Hptmap.NoCache -> fun f x y -> f x y
+     | Hptmap_sig.NoCache -> fun f x y -> f x y
     in
     let rec aux cache (o1, t1) (o2, t2) =
       match t1, t2 with
@@ -2960,6 +2980,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

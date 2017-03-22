@@ -13,16 +13,14 @@ enum aorai_OpStatusList {
     aorai_Called = 0
 };
 /*@ ghost enum aorai_ListOper aorai_CurOperation = op_main; */
-/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called;
-*/
+/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called; */
 /*@ ghost int S0 = 1; */
 /*@ ghost int Sf = 0; */
 /*@ ghost int aorai_intermediate_state = 0; */
 /*@ ghost int aorai_intermediate_state_0 = 0; */
 /*@ ghost int aorai_intermediate_state_1 = 0; */
 /*@ ghost int aorai_intermediate_state_2 = 0; */
-/*@ ghost int aorai_reject = 0;
-*/
+/*@ ghost int aorai_reject = 0; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_f;
     assigns aorai_CurOpStatus, aorai_CurOperation, S0, Sf,

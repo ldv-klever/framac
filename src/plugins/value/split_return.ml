@@ -42,9 +42,6 @@ module ReturnUsage = struct
   (* Per-function usage: all interesting lvalues are mapped to the way
      they are used *)
   and return_usage_per_fun = return_usage_by_lv MapLval.t
-  (* Per-program usage. Lvalues are no longer used, functions are mapped
-     to the values their return code is compared against *)
-  and return_usage = Datatype.Integer.Set.t Kernel_function.Map.t
 
   module RUDatatype = Kernel_function.Map.Make(Datatype.Integer.Set)
 
@@ -145,22 +142,29 @@ module ReturnUsage = struct
     | _ -> uf
 
 
+  (* Per-program split strategy. Functions are mapped
+     to the values their return code should be split against. *)
+  type return_split = Datatype.Integer.Set.t Kernel_function.Map.t
+
+
+  (** add to [kf] hints to split on all integers in [s]. *)
+  let add_split kf s (ru:return_split) : return_split =
+    let cur =
+      try Kernel_function.Map.find kf ru
+      with Not_found -> Datatype.Integer.Set.empty
+    in
+    let s = Datatype.Integer.Set.union cur s in
+    Kernel_function.Map.add kf s ru
+
 
   (* Extract global usage: map functions to integers their return values
      are tested against *)
-  let summarize (uf: return_usage_per_fun) =
+  let summarize_by_lv (uf: return_usage_per_fun): return_split =
     let aux _lv u acc =
       if Datatype.Integer.Set.is_empty u.ret_compared then acc
       else
-        let aux' kf (acc:return_usage) : return_usage =
-          let cur =
-            try Kernel_function.Map.find kf acc
-            with Not_found -> Datatype.Integer.Set.empty
-          in
-          let s = Datatype.Integer.Set.union cur u.ret_compared in
-          Kernel_function.Map.add kf s acc
-      in
-      Kernel_function.Hptset.fold aux' u.ret_callees acc
+        let aux_kf kf ru = add_split kf u.ret_compared ru in
+        Kernel_function.Hptset.fold aux_kf u.ret_callees acc
     in
     MapLval.fold aux uf Kernel_function.Map.empty
 
@@ -194,13 +198,26 @@ module ReturnUsage = struct
       Cil.DoChildren
 
     method result () =
-      summarize usage
+      summarize_by_lv usage
   end
+
+  (* For functions returning pointers, add a split on NULL/non-NULL *)
+  let add_null_pointers_split (ru: return_split): return_split =
+    let null_set = Datatype.Integer.Set.singleton Integer.zero in
+    let aux kf acc =
+      if Cil.isPointerType (Kernel_function.get_return_type kf) then
+        add_split kf null_set acc
+      else acc
+    in
+    Globals.Functions.fold aux ru
+
 
   let compute file =
     let vis = new visitorVarUsage in
     Visitor.visitFramacFileSameGlobals (vis:> Visitor.frama_c_visitor) file;
-    vis#result ()
+    let split_compared = vis#result () in
+    let split_null_pointers = add_null_pointers_split split_compared in
+    split_null_pointers
 
 end
 
@@ -208,42 +225,48 @@ module AutoStrategy = State_builder.Option_ref
   (ReturnUsage.RUDatatype)
   (struct
     let name = "Value.Split_return.Autostrategy"
-    let dependencies = [Ast.self; Value_parameters.SplitReturnAuto.self]
+    let dependencies = [Ast.self]
    end)
+
+let compute_auto () =
+  if AutoStrategy.is_computed () then
+    AutoStrategy.get ()
+  else begin
+    let s = ReturnUsage.compute (Ast.get ()) in
+    AutoStrategy.set s;
+    AutoStrategy.mark_as_computed ();
+    s
+  end
+
+(* Auto-strategy for one given function *)
+let find_auto_strategy kf =
+  try
+    let s = Kernel_function.Map.find kf (compute_auto ()) in
+    Split_strategy.SplitEqList (Datatype.Integer.Set.elements s)
+  with Not_found -> Split_strategy.NoSplit
 
 module KfStrategy = Kernel_function.Make_Table(Split_strategy)
   (struct
     let size = 17
     let dependencies = [Value_parameters.SplitReturnFunction.self;
+                        Value_parameters.SplitGlobalStrategy.self;
                         AutoStrategy.self]
     let name = "Value.Split_return.Kfstrategy"
    end)
 
-(* Inference (and saving) of strategies when -split-return-auto is set *)
-let auto_strategy () =
-  match AutoStrategy.get_option () with
-  | None ->
-    let v =
-      if Value_parameters.SplitReturnAuto.get ()
-      then ReturnUsage.compute (Ast.get ())
-      else Kernel_function.Map.empty
-    in
-    AutoStrategy.set v;
-    v
-  | Some v -> v
-
-let strategy =
+(* Invariant: this function never returns Split_strategy.SplitAuto *)
+let kf_strategy =
   KfStrategy.memo
     (fun kf ->
-      (* User strategies take precedence *)
-      try Value_parameters.SplitReturnFunction.find kf
+      try (* User strategies take precedence *)
+        match Value_parameters.SplitReturnFunction.find kf with
+        | Split_strategy.SplitAuto -> find_auto_strategy kf
+        | s -> s
       with Not_found ->
-        let auto = auto_strategy () in
-        try
-          let set = Kernel_function.Map.find kf auto in
-          let li = Datatype.Integer.Set.fold (fun i acc -> i :: acc) set [] in
-          Split_strategy.SplitEqList li
-        with Not_found -> Split_strategy.NoSplit)
+        match Value_parameters.SplitGlobalStrategy.get () with
+        | Split_strategy.SplitAuto -> find_auto_strategy kf
+        | s -> s
+    )
 
 let default states =
   let (joined,_) = State_set.join states in
@@ -300,39 +323,54 @@ let join_final_states kf ~return_lv states =
             default states
       | Some _ -> assert false (* Cil invariant *)
   in
-  match strategy kf with
+  match kf_strategy kf with
     | Split_strategy.SplitEqList i -> split i
     | Split_strategy.NoSplit -> default states
     | Split_strategy.FullSplit -> State_set.to_list states
+    | Split_strategy.SplitAuto -> assert false (* transformed into SplitEqList*)
 
 
 let pretty_strategies fmt =
   Format.fprintf fmt "@[<v>";
-  let pp_set =
-    Pretty_utils.pp_iter ~sep:",@ " Datatype.Integer.Set.iter Int.pretty in
+  let open Split_strategy in
   let pp_list = Pretty_utils.pp_list ~sep:",@ " Int.pretty in
+  let pp_one user_auto pp = function
+    | NoSplit -> ()
+    | FullSplit ->
+      Format.fprintf fmt "@[\\full_split(%t)@]@ " pp
+    | SplitEqList l ->
+      Format.fprintf fmt "@[\\return(%t) == %a (%s)@]@ " pp pp_list l user_auto
+    | SplitAuto -> assert false (* should have been replaced by SplitEqList *)
+  in
+  let pp_kf kf fmt = Kernel_function.pretty fmt kf in
   let pp_user (kf, strategy) =
     match strategy with
-    | Some (Split_strategy.NoSplit) | None -> ()
-    | Some (Split_strategy.SplitEqList l) ->
-      Format.fprintf fmt "@[\\return(%a) == %a (user)@]@ "
-        Kernel_function.pretty kf pp_list l
-    | Some Split_strategy.FullSplit ->
-      Format.fprintf fmt "@[\\full_split(%a) (user)@]@ "
-        Kernel_function.pretty kf
+    | None -> ()
+    | Some SplitAuto -> pp_one "auto" (pp_kf kf) (kf_strategy kf)
+    | Some s -> pp_one "user" (pp_kf kf) s
   in
   Value_parameters.SplitReturnFunction.iter pp_user;
-  let pp_auto kf s =
-    if not (Value_parameters.SplitReturnFunction.mem kf) then
-      Format.fprintf fmt "@[\\return(%a) == %a (auto)@]@ "
-        Kernel_function.pretty kf pp_set s
-  in
-  Kernel_function.Map.iter pp_auto (auto_strategy ());
+  if not (Value_parameters.SplitReturnFunction.is_empty ()) &&
+     match Value_parameters.SplitGlobalStrategy.get () with
+     | Split_strategy.NoSplit | Split_strategy.SplitAuto -> false
+     | _ -> true
+  then Format.fprintf fmt "@[other functions:@]@ ";
+  begin match Value_parameters.SplitGlobalStrategy.get () with
+    | SplitAuto ->
+      let pp_auto kf s =
+        if not (Value_parameters.SplitReturnFunction.mem kf) then
+          let s = SplitEqList (Datatype.Integer.Set.elements s) in
+          pp_one "auto" (pp_kf kf) s
+      in
+      let auto = compute_auto () in
+      Kernel_function.Map.iter pp_auto auto;
+    | s -> pp_one "auto" (fun fmt -> Format.pp_print_string fmt "@all") s
+  end;
   Format.fprintf fmt "@]"
 
 let pretty_strategies () =
   if not (Value_parameters.SplitReturnFunction.is_empty ()) ||
-    Value_parameters.SplitReturnAuto.is_set ()
+    (Value_parameters.SplitGlobalStrategy.get () != Split_strategy.NoSplit)
   then
     Value_parameters.result "Splitting return states on:@.%t" pretty_strategies
 
@@ -340,6 +378,6 @@ let pretty_strategies () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -34,11 +34,9 @@ let pp_to_file f pp =
   let fout = Format.formatter_of_out_channel cout in
   try
     pp fout ;
-    Format.pp_print_newline fout () ;
     Format.pp_print_flush fout () ;
     safe_close_out cout
   with err ->
-    Format.pp_print_newline fout () ;
     Format.pp_print_flush fout () ;
     safe_close_out cout ;
     raise err
@@ -272,6 +270,6 @@ let command ?(timeout=0) ?stdout ?stderr cmd args =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

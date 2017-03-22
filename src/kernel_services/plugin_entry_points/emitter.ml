@@ -153,6 +153,8 @@ let create name kinds ~correctness ~tuning =
   Datatype.String.Hashtbl.add names name ();
   e
 
+let dummy = create "dummy" [] ~correctness:[] ~tuning:[]
+
 let get_name e = e.name
 
 let correctness_parameters e = 
@@ -617,6 +619,6 @@ include D
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -48,13 +48,10 @@
 *)
 {
 open Cparser
-exception InternalError of string
 module H = Hashtbl
 module E = Errorloc
 
-let matchingParsOpen = ref 0
-
-let currentLoc () = Cabshelper.currentLoc ()
+let currentLoc () = Errorloc.currentLoc ()
 
 let one_line_ghost = ref false
 let is_oneline_ghost () = !one_line_ghost
@@ -260,15 +257,12 @@ let init ~(filename: string) : Lexing.lexbuf =
   Lexerhack.push_context := push_context;
   Lexerhack.pop_context := pop_context;
   Lexerhack.add_identifier := add_identifier;
-  E.startParsing ~useBasename:false filename
+  E.startParsing filename
 
 
 let finish () =
-  E.finishParsing ()
-
-(*** Error handling ***)
-let error msg =
-  E.parse_error msg
+  E.finishParsing ();
+  Logic_env.reset_typenames ()
 
 
 (*** escape character management ***)
@@ -290,7 +284,8 @@ let scan_escape (char: char) : int64 =
   | '[' when not !Cprint.msvcMode -> '['
   | '%' when not !Cprint.msvcMode -> '%'
   | '\\' -> '\\'
-  | other -> error ("Unrecognized escape sequence: \\" ^ (String.make 1 other))
+  | other ->
+    E.parse_error "Unrecognized escape sequence: \\%c" other
   in
   Int64.of_int (Char.code result)
 
@@ -387,7 +382,8 @@ let () =
   Kernel.ReadAnnot.add_set_hook
     (fun _ x ->
       (* prevent the C lexer interpretation of comments *)
-      annot_char := if x then '@' else '\000')
+      annot_char := if x then '@' else '\000');
+  Kernel.CustomAnnot.add_set_hook (fun _ s -> annot_char:=s.[0])
 
 let annot_start_pos = ref Cabshelper.cabslu
 let buf = Buffer.create 1024
@@ -487,15 +483,14 @@ rule initial = parse
 
 | "/*" ([^ '*' '\n'] as c)
     { if c = !annot_char then begin
-	Cabshelper.continue_annot
-	  (currentLoc ())
-	  (fun () ->
-             save_current_pos ();
-	     Buffer.clear buf;
-	     annot_first_token lexbuf)
-	  (fun () ->
-	     initial lexbuf)
-	  "Skipping annotation"
+      try
+        save_current_pos ();
+	Buffer.clear buf;
+	annot_first_token lexbuf
+      with Parsing.Parse_error when Kernel.ContinueOnAnnotError.get () ->
+        let source = Lexing.lexeme_start_p lexbuf in
+        Kernel.debug ~source "skipping annotation";
+	initial lexbuf
       end else
 	begin
 	  do_lex_comment ~first_string:(String.make 1 c) comment lexbuf ;
@@ -523,14 +518,14 @@ rule initial = parse
 
 | "//" ([^ '\n'] as c)
     { if c = !annot_char then begin
-	Cabshelper.continue_annot
-	  (currentLoc())
-	  (fun () ->
-             save_current_pos ();
-	     Buffer.clear buf;
-	     annot_one_line lexbuf)
-	  (fun () -> initial lexbuf)
-	  "Skipping annotation"
+      try
+        save_current_pos ();
+	Buffer.clear buf;
+	annot_one_line lexbuf
+      with Parsing.Parse_error when Kernel.ContinueOnAnnotError.get () ->
+        let source = Lexing.lexeme_start_p lexbuf in
+        Kernel.debug ~source "skipping annotation";
+        initial lexbuf
       end else
 	begin
 	  do_lex_comment ~first_string:(String.make 1 c) onelinecomment lexbuf;
@@ -574,17 +569,9 @@ rule initial = parse
  *     L"Hello, " "world"
  *  then it should be treated as wide even though there's no L immediately
  *  preceding it.  See test/small1/wchar5.c for a failure case. *)
-                                          try CST_STRING (str lexbuf, currentLoc ())
-                                          with e ->
-                                             raise (InternalError
-                                                     ("str: " ^
-                                                      Printexc.to_string e))}
+                                          CST_STRING (str lexbuf, currentLoc())}
 |		"L\""			{ (* weimer: wchar_t string literal *)
-                                          try CST_WSTRING(str lexbuf, currentLoc ())
-                                          with e ->
-                                             raise (InternalError
-                                                     ("wide string: " ^
-                                                      Printexc.to_string e))}
+                                          CST_WSTRING(str lexbuf, currentLoc())}
 |		floatnum		{CST_FLOAT (Lexing.lexeme lexbuf, currentLoc ())}
 |		binarynum               { (* GCC Extension for binary numbers *) 
                                           CST_INT (Lexing.lexeme lexbuf, currentLoc ())}
@@ -648,8 +635,7 @@ rule initial = parse
                                           else (ASM (currentLoc ())) }
 
 (* If we see __pragma we eat it and the matching parentheses as well *)
-|               "__pragma"              { matchingParsOpen := 0;
-                                          let _ = matchingpars lexbuf in
+|               "__pragma"              { let _ = matchingpars 0 lexbuf in
                                           initial lexbuf
                                         }
 
@@ -678,21 +664,18 @@ and onelinecomment buffer = parse
   | '\n'|eof    {  }
   | _           { lex_comment onelinecomment buffer lexbuf }
 
-and matchingpars = parse
-  '\n'          { E.newline (); matchingpars lexbuf }
-| blank         { matchingpars lexbuf }
-| '('           { incr matchingParsOpen; matchingpars lexbuf }
-| ')'           { decr matchingParsOpen;
-                  if !matchingParsOpen = 0 then
-                     ()
-                  else
-                     matchingpars lexbuf
+and matchingpars parsopen = parse
+  '\n'          { E.newline (); matchingpars parsopen lexbuf }
+| blank         { matchingpars parsopen lexbuf }
+| '('           { matchingpars (parsopen + 1) lexbuf }
+| ')'           { if parsopen > 1 then
+                    matchingpars (parsopen - 1) lexbuf
                 }
 |  "/*"		{ do_lex_comment comment lexbuf ;
-                  matchingpars lexbuf }
+                  matchingpars parsopen lexbuf }
 |  '"'		{ let _ = str lexbuf in
-                  matchingpars lexbuf }
-| _              { matchingpars lexbuf }
+                  matchingpars parsopen lexbuf }
+| _             { matchingpars parsopen lexbuf }
 
 (* # <line number> <file name> ... *)
 and hash = parse
@@ -816,6 +799,11 @@ and annot_one_line_logic = parse
   | _ as c { Buffer.add_char buf c; annot_one_line_logic lexbuf }
 
 {
+
+  (* Catch the exceptions raised by the lexer itself *)
+  let initial lexbuf =
+    try initial lexbuf
+    with Failure _ -> raise Parsing.Parse_error 
 
 }
 

@@ -43,9 +43,9 @@ struct
 
   let _nonempty = function [] -> None | l -> Some l
 
-  let is_empty es = 
-    try 
-      Intmap.iteri (fun _ s -> if s <> [] then raise Exit) es ; 
+  let is_empty es =
+    try
+      Intmap.iteri (fun _ s -> if s <> [] then raise Exit) es ;
       true
     with Exit -> false
   let empty = Intmap.empty
@@ -55,7 +55,7 @@ struct
     let w = try Lset.add e (Intmap.find h m) with Not_found -> [e] in
     Intmap.add h w m
 
-  let singleton e = 
+  let singleton e =
     let h = E.hash e in
     Intmap.add h [e] Intmap.empty
 
@@ -72,19 +72,19 @@ struct
   let fold_sorted f m a =
     List.fold_left (fun acc x -> f x acc) a (elements m)
 
-  (* good sharing *) 
-  let filter f m = 
+  (* good sharing *)
+  let filter f m =
     Intmap.mapq (fun _ l -> _nonempty (Lset.filter f l)) m
 
-  (* good sharing *) 
-  let remove k m = 
+  (* good sharing *)
+  let remove k m =
     let h = E.hash k in
     Intmap.change (fun _h k -> function
         | None -> None
         | Some old -> _nonempty (Lset.remove k old)) h k m
-  (* good sharing *) 
+  (* good sharing *)
   let partition f =
-    Intmap.partition_split (fun _k w -> 
+    Intmap.partition_split (fun _k w ->
         let u,v = Lset.partition f w in
         (_nonempty u), (_nonempty v))
 
@@ -93,21 +93,21 @@ struct
   let iter f = Intmap.iter (Lset.iter f)
   let fold f = Intmap.fold (Lset.fold f)
 
-  let for_all f m = 
+  let for_all f m =
     try iter (fun x -> if not (f x) then raise BREAK) m ; true
     with BREAK -> false
 
-  let exists f m = 
+  let exists f m =
     try iter (fun x -> if f x then raise BREAK) m ; false
     with BREAK -> true
 
-  (* good sharing *) 
+  (* good sharing *)
   let union = Intmap.union (fun _h -> Lset.union)
 
-  (* good sharing *) 
+  (* good sharing *)
   let inter = Intmap.inter (fun _h -> Lset.inter)
 
-  (* good sharing *) 
+  (* good sharing *)
   let subset = Intmap.subset (fun _h -> Lset.subset)
 
   let intersect m1 m2 =

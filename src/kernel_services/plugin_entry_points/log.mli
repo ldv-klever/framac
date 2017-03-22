@@ -21,8 +21,7 @@
 (**************************************************************************)
 
 (** Logging Services for Frama-C Kernel and Plugins.
-    @since Beryllium-20090601-beta1
-    @plugin development guide *)
+    @since Beryllium-20090601-beta1 *)
 
 open Format
 
@@ -72,12 +71,14 @@ type ('a,'b) pretty_aborter =
     @since Beryllium-20090601-beta1 *)
 (* -------------------------------------------------------------------------- *)
 
-exception AbortError of string (** Plug-in name *)
-  (** User error that prevents a plugin to terminate.
+exception AbortError of string
+  (** User error that prevents a plugin to terminate. Argument is the name
+      of the plugin.
       @since Beryllium-20090601-beta1 *)
 
-exception AbortFatal of string (** Plug-in name *)
-  (** Internal error that prevents a plugin to terminate.
+exception AbortFatal of string
+  (** Internal error that prevents a plugin to terminate. Argument is the
+      name of the plugin.
       @since Beryllium-20090601-beta1 *)
 
 exception FeatureRequest of string * string
@@ -98,6 +99,13 @@ type category = private string
     Enabling a category (via -plugin-msg-category) will enable all its
     subcategories.
     @since Fluorine-20130401 *)
+
+type ontty = [
+  | `Message   (** Normal message (default) *)
+  | `Feedback  (** Temporary visible on console, normal message otherwise *)
+  | `Transient (** Temporary visible, only on console *)
+  | `Silent    (** Not visible on console *)
+]
 
 module Category_set: FCSet.S with type elt = category
 (** sets of category keywords *)
@@ -131,10 +139,11 @@ module type Messages = sig
         @since Beryllium-20090601-beta1
 	@plugin development guide *)
 
-  val feedback : ?level:int -> ?dkey:category -> 'a pretty_printer
+  val feedback : ?ontty:ontty -> ?level:int -> ?dkey:category -> 'a pretty_printer
     (** Progress and feedback. Level is tested against the verbosity level.
         @since Beryllium-20090601-beta1
-        @modify Fluorine-20130401 added dkey argument
+        @modify Fluorine-20130401 Optional parameter [?dkey]
+        @modify Magnesium-20151001 Optional parameter [?ontty]
 	@plugin development guide *)
 
   val debug   : ?level:int -> ?dkey:category -> 'a pretty_printer
@@ -379,6 +388,9 @@ val get_current_source : unit -> Lexing.position
     Not to be used by casual users. *)
 (* -------------------------------------------------------------------------- *)
 
+val clean : unit -> unit
+  (** Flushes the last transient message if necessary. *)
+
 val null : formatter
   (** Prints nothing.
       @since Beryllium-20090901 *)
@@ -391,7 +403,7 @@ val with_null : (unit -> 'b) -> ('a,formatter,unit,'b) format4 -> 'a
   (** Discards the message and call the continuation.
       @since Beryllium-20090901 *)
 
-val set_output : (string -> int -> int -> unit) -> (unit -> unit) -> unit
+val set_output : ?isatty:bool -> (string -> int -> int -> unit) -> (unit -> unit) -> unit
   (** This function has the same parameters as Format.make_formatter.
       @since Beryllium-20090901 
       @plugin development guide *)
@@ -428,10 +440,13 @@ val check_not_yet: (event -> bool) ref
   (* Checks whether a message been emitted already, in which case it is
      not reprinted. Currently set in {Messages}. Not for the casual user.
   *)
+
+val tty : (unit -> bool) ref
+  (* Callback for command-line option '-(no)-tty' *)
 (**/**)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

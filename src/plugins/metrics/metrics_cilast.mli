@@ -32,6 +32,7 @@ class type sloc_visitor = object
   *)
   method fundecl_calls: int Metrics_base.VInfoMap.t
   method fundef_calls: int Metrics_base.VInfoMap.t
+  method extern_global_vars: Metrics_base.VInfoSet.t
 
   (* Get the computed metris *)
   method get_metrics: Metrics_base.BasicMetrics.t

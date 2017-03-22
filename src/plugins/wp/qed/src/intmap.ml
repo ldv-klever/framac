@@ -24,7 +24,7 @@
 (* --- Patricia Trees By L. Correnson & P. Baudin                     --- *)
 (* ---------------------------------------------------------------------- *)
 
-type 'a t = 
+type 'a t =
   | Empty
   | Lf of int * 'a
   | Br of int * 'a t * 'a t
@@ -35,8 +35,8 @@ type 'a t =
 
 let hsb =
   let hsb p = if p land 2 != 0 then 1 else 0
-  in let hsb p = let n = p lsr  2 in if n != 0 then 2 + hsb n else hsb p  
-  in let hsb p = let n = p lsr  4 in if n != 0 then 4 + hsb n else hsb p 
+  in let hsb p = let n = p lsr  2 in if n != 0 then 2 + hsb n else hsb p
+  in let hsb p = let n = p lsr  4 in if n != 0 then 4 + hsb n else hsb p
   in let hsb = Array.init 256 hsb
   in let hsb p = let n = p lsr  8 in if n != 0 then  8 + hsb.(n) else hsb.(p)
   in let hsb p = let n = p lsr 16 in if n != 0 then 16 + hsb n else hsb p
@@ -58,9 +58,9 @@ let pp_mask m fmt p =
   begin
     let bits = Array.create 63 false in
     let last = ref 0 in
-    for i = 0 to 62 do 
+    for i = 0 to 62 do
       let u = 1 lsl i in
-      if u land p <> 0 then 
+      if u land p <> 0 then
         bits.(i) <- true ;
       if u == m then last := i ;
     done ;
@@ -74,8 +74,8 @@ let pp_bits fmt k =
   begin
     let bits = Array.create 63 false in
     let last = ref 0 in
-    for i = 0 to 62 do 
-      if (1 lsl i) land k <> 0 then 
+    for i = 0 to 62 do
+      if (1 lsl i) land k <> 0 then
         ( bits.(i) <- true ;
           if i > !last then last := i ) ;
     done ;
@@ -86,7 +86,7 @@ let pp_bits fmt k =
 
 let rec pp_tree tab fmt = function
   | Empty -> ()
-  | Lf(k,_) -> 
+  | Lf(k,_) ->
       Format.fprintf fmt "%sL%a=%d@\n" tab pp_bits k k
   | Br(p,l,r) ->
       let next = tab ^ "   " in
@@ -108,12 +108,12 @@ let zero_bit k p = zero_bit_int k (decode_mask p)
 let match_prefix_int k p m = (mask k m) == p
 let match_prefix k p = match_prefix_int k p (decode_mask p)
 
-let included_mask_int m n = 
+let included_mask_int m n =
   (* m mask is strictly included into n *)
   (* can not use (m < n) when n is (1 lsl 62) = min_int < 0 *)
   (* must use (0 < (n-m) instead *)
   0 > n - m
-let included_mask p q = included_mask_int (decode_mask p) (decode_mask q) 
+let included_mask p q = included_mask_int (decode_mask p) (decode_mask q)
 
 let included_prefix p q =
   let m = decode_mask p in
@@ -134,15 +134,15 @@ let br p t0 t1 = match t0 , t1 with
   | Empty,t | t,Empty -> t
   | _ -> Br(p,t0,t1)
 
-(* good sharing *) 
+(* good sharing *)
 let lf0 k x' t' = function None -> Empty | Some x -> if x == x' then t' else Lf(k,x)
 
-(* good sharing *) 
+(* good sharing *)
 let br0 p t0' t1' t' = function
   | Empty -> t1'
   | t0 -> if t0' == t0 then t' else Br(p,t0,t1')
 
-(* good sharing *) 
+(* good sharing *)
 let br1 p t0' t1' t' = function
   | Empty -> t0'
   | t1 -> if t1' == t1 then t' else Br(p,t0',t1)
@@ -155,21 +155,21 @@ let join p t0 q t1 =
   else Br(r,t1,t0)
 
 (* t0 and t1 has different prefix, but best common prefix is unknown *)
-let glue t0 t1 = 
+let glue t0 t1 =
   match t0 , t1 with
   | Empty,t | t,Empty -> t
   | (Lf(p,_) | Br(p,_,_)) , (Lf(q,_) | Br(q,_,_)) -> join p t0 q t1
 
-let glue0 t0 t0' t1' t' = 
+let glue0 t0 t0' t1' t' =
   if t0 == t0' then t' else glue t0 t1'
 
-let glue1 t1 t0' t1' t' = 
+let glue1 t1 t0' t1' t' =
   if t1 == t1' then t' else glue t0' t1
 
-let glue01 t0 t1 t0' t1' t' = 
+let glue01 t0 t1 t0' t1' t' =
   if t0 == t0' && t1 == t1' then t' else glue t0 t1
 
-let glue2 t0 t1 t0' t1' t' s0' s1' s' = 
+let glue2 t0 t1 t0' t1' t' s0' s1' s' =
   if t0 == s0' && t1 == s1' then s' else
   if t0 == t0' && t1 == t1' then t' else glue t0 t1
 
@@ -191,7 +191,7 @@ let size t =
 let rec mem k = function
   | Empty -> false
   | Lf(i,_) -> i=k
-  | Br(p,t0,t1) -> 
+  | Br(p,t0,t1) ->
       match_prefix k p && mem k (if zero_bit k p then t0 else t1)
 
 let rec findq k = function
@@ -243,13 +243,13 @@ let rec equal eq s t =
 (* --- Addition, Insert, Change, Remove                                   --- *)
 (* -------------------------------------------------------------------------- *)
 
-(* good sharing *) 
+(* good sharing *)
 let rec change phi k x = function
   | Empty as t -> (match phi k x None with
       | None -> t
       | Some w -> Lf(k,w))
   | Lf(i,y) as t ->
-      if i = k then 
+      if i = k then
         lf0 k y t (phi k x (Some y))
       else
         (match phi k x None with
@@ -269,15 +269,15 @@ let rec change phi k x = function
          | Some w -> let s = Lf(k,w) in
              join k s p t)
 
-(* good sharing *) 
+(* good sharing *)
 let insert f k x = change (fun _k x -> function
-    | None -> Some x 
+    | None -> Some x
     | Some old -> Some (f k x old)) k x
 
-(* good sharing *) 
+(* good sharing *)
 let add k x = change (fun _k x _old -> Some x) k x
 
-(* good sharing *) 
+(* good sharing *)
 let remove k = change (fun _k () _old -> None) k ()
 
 (* -------------------------------------------------------------------------- *)
@@ -288,16 +288,16 @@ let mapi phi =
   let rec mapi phi = function
     | Empty   -> Empty
     | Lf(k,x) -> Lf(k,phi k x)
-    | Br(p,t0,t1) -> 
+    | Br(p,t0,t1) ->
         let t0 = mapi phi t0 in
         let t1 = mapi phi t1 in
         Br(p,t0,t1)
   in function (* to be sorted *)
     | Empty   -> Empty
     | Lf(k,x) -> Lf(k,phi k x)
-    | Br(p,t0,t1) when p = max_int -> let t1 = mapi phi t1 in 
+    | Br(p,t0,t1) when p = max_int -> let t1 = mapi phi t1 in
         let t0 = mapi phi t0 in Br(p,t0,t1)
-    | Br(p,t0,t1)                  -> let t0 = mapi phi t0 in 
+    | Br(p,t0,t1)                  -> let t0 = mapi phi t0 in
         let t1 = mapi phi t1 in Br(p,t0,t1)
 let map phi = mapi (fun _ x -> phi x)
 
@@ -309,51 +309,51 @@ let mapf phi =
   in function (* to be sorted *)
     | Empty   -> Empty
     | Lf(k,x) -> lf k (phi k x)
-    | Br(p,t0,t1) when p = max_int -> let t1 = mapf phi t1 in 
+    | Br(p,t0,t1) when p = max_int -> let t1 = mapf phi t1 in
         let t0 = mapf phi t0 in glue t0 t1
-    | Br(_,t0,t1)                  -> let t0 = mapf phi t0 in 
+    | Br(_,t0,t1)                  -> let t0 = mapf phi t0 in
         let t1 = mapf phi t1 in glue t0 t1
 
-(* good sharing *) 
+(* good sharing *)
 let mapq phi =
   let rec mapq phi = function
     | Empty as t -> t
     | Lf(k,x) as t -> lf0 k x t (phi k x)
-    | Br(_,t0,t1) as t-> 
+    | Br(_,t0,t1) as t->
         let t0' = mapq phi t0 in
         let t1' = mapq phi t1 in
         glue01 t0' t1' t0 t1 t
   in function (* to be sorted *)
     | Empty as t -> t
     | Lf(k,x) as t -> lf0 k x t (phi k x)
-    | Br(p,t0,t1) as t when p = max_int -> 
+    | Br(p,t0,t1) as t when p = max_int ->
         let t1' = mapq phi t1 in
         let t0' = mapq phi t0 in
         glue01 t0' t1' t0 t1 t
-    | Br(_,t0,t1) as t-> 
+    | Br(_,t0,t1) as t->
         let t0' = mapq phi t0 in
         let t1' = mapq phi t1 in
         glue01 t0' t1' t0 t1 t
 
-(* good sharing *) 
+(* good sharing *)
 let filter f m = mapq (fun k v -> if f k v then Some v else None) m
 
-(* good sharing *) 
+(* good sharing *)
 let rec partition p = function
   | Empty as t -> (t,t)
   | Lf(k,x) as t -> if p k x then t,Empty else Empty,t
-  | Br(_,t0,t1) as t-> 
+  | Br(_,t0,t1) as t->
       let (t0',u0') = partition p t0 in
       let (t1',u1') = partition p t1 in
       if t0'==t0 && t1'==t1 then (t, u0') (* u0' and u1' are empty *)
       else if u0'==t0 && u1'==t1 then (t0', t) (* t0' and t1' are empty *)
       else (glue t0' t1'),(glue u0' u1')
 
-(* good sharing *) 
+(* good sharing *)
 let rec partition_split p = function
   | Empty as t -> (t,t)
   | Lf(k,x) as t -> let u,v = p k x in (lf0 k x t u), (lf0 k x t v)
-  | Br(_,t0,t1) as t-> 
+  | Br(_,t0,t1) as t->
       let t0',u0' = partition_split p t0 in
       let t1',u1' = partition_split p t1 in
       if t0'==t0 && t1'==t1 then (t, u0') (* u0' and u1' are empty *)
@@ -437,10 +437,10 @@ let rec interi lf_phi s t =
   | Empty , _ -> Empty
   | _ , Empty -> Empty
   | Lf(i,x) , Lf(j,y) ->
-      if i = j 
-      then lf_phi i x y 
+      if i = j
+      then lf_phi i x y
       else Empty
-  | Lf(i,x) , Br _ -> 
+  | Lf(i,x) , Br _ ->
       (match occur i t with None -> Empty | Some y -> lf_phi i x y)
   | Br _ , Lf(j,y) ->
       (match occur j s with None -> Empty | Some x -> lf_phi j x y)
@@ -470,13 +470,13 @@ let lfq phi i x y s t = match phi i x y with None -> Empty | Some w -> if w == x
 let occur0 phi i x s t = try let (y,t) = findq i t in lfq phi i x y s t with Not_found -> Empty
 let occur1 phi j y s t = try let (x,s) = findq j s in lfq phi j x y s t with Not_found -> Empty
 
-(* good sharing with s *) 
+(* good sharing with s *)
 let rec interq phi s t =
   match s , t with
   | Empty , _ -> s
   | _ , Empty -> t
   | Lf(i,x) , Lf(j,y) ->
-      if i = j 
+      if i = j
       then lfq phi i x y s t
       else Empty
   | Lf(i,x) , Br _ -> occur0 phi i x s t
@@ -505,23 +505,23 @@ let rec interq phi s t =
 
 (* good sharing with s *)
 let br2u p s0' s1' s' t0' t1' t' t0 t1=
-  if s0'==t0 && s1'== t1 then s' else 
-  if t0'==t0 && t1'== t1 then t' else 
+  if s0'==t0 && s1'== t1 then s' else
+  if t0'==t0 && t1'== t1 then t' else
     Br(p, t0, t1)
 
 (* good sharing with s *)
 let br0u p t0' t1' t' t0 = if t0'==t0 then t' else Br(p, t0, t1')
 let br1u p t0' t1' t' t1 = if t1'==t1 then t' else Br(p, t0', t1)
 
-(* good sharing with s *) 
+(* good sharing with s *)
 let rec union phi s t =
   match s , t with
   | Empty , _ -> t
   | _ , Empty -> s
   | Lf(i,x) , Lf(j,y) ->
-      if i = j 
+      if i = j
       then let w = phi i x y in
-        if w == x then s else if w == y then t else Lf(i,w) 
+        if w == x then s else if w == y then t else Lf(i,w)
       else join i s j t
   | Lf(i,x) , Br _ -> insert phi i x t
   | Br _ , Lf(j,y) -> insert (fun j y x -> phi j x y) j y s
@@ -589,7 +589,7 @@ let rec merge phi s t =
         (* q contains p. Merge t with a subtree of s *)
         if zero_bit q p
         then (* t has bit m = 0 => t is inside s0 *)
-          glue (merge phi s0 t) (map1 phi s1) 
+          glue (merge phi s0 t) (map1 phi s1)
         else (* t has bit m = 1 => t is inside s1 *)
           glue (map1 phi s0) (merge phi s1 t)
       else if included_prefix q p then
@@ -602,13 +602,13 @@ let rec merge phi s t =
       else
         glue (map1 phi s) (map2 phi t)
 
-(* good sharing with s *) 
+(* good sharing with s *)
 let rec diffq phi s t =
   match s , t with
   | Empty , _ -> s
   | _ , Empty -> s
   | Lf(i,x) , Lf(j,y) ->
-      if i = j 
+      if i = j
       then lfq phi i x y s t
       else s
   | Lf(i,x) , Br _ ->
@@ -646,7 +646,7 @@ let rec iterk phi s t =
   match s , t with
   | Empty , _ | _ , Empty -> ()
   | Lf(i,x) , Lf(j,y) -> if i = j then phi i x y
-  | Lf(i,x) , Br _ -> 
+  | Lf(i,x) , Br _ ->
       (match occur i t with None -> () | Some y -> phi i x y)
   | Br _ , Lf(j,y) ->
       (match occur j s with None -> () | Some x -> phi j x y)
@@ -711,7 +711,7 @@ let rec iter2 phi s t =
         (* q contains p. Merge t with a subtree of s *)
         if zero_bit q p
         then (* t has bit m = 0 => t is inside s0 *)
-          (iter2 phi s0 t ; iter21 phi s1) 
+          (iter2 phi s0 t ; iter21 phi s1)
         else (* t has bit m = 1 => t is inside s1 *)
           (iter21 phi s0 ; iter2 phi s1 t)
       else if included_prefix q p then
@@ -763,7 +763,7 @@ let rec subsetf phi s t =
   | Empty , _ -> true
   | _ , Empty -> false
   | Lf(i,x) , Lf(j,y) -> if i = j then phi i x y else false
-  | Lf(i,x) , Br _ -> 
+  | Lf(i,x) , Br _ ->
       (match occur i t with None -> false | Some y -> phi i x y)
   | Br _ , Lf _ -> false
   | Br(p,s0,s1) , Br(q,t0,t1) ->

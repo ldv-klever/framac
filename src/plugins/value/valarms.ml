@@ -68,6 +68,9 @@ let local_printer: Printer.extensible_printer = object (self)
     super#logic_var fmt lvi
 end 
 
+let pr_annot = local_printer#code_annotation
+let emitter = Value_util.emitter
+
 let current_stmt_tbl =
   let s = Stack.create () in
   Stack.push Kglobal s;
@@ -99,25 +102,28 @@ let sc_kinstr_loc ki =
         Cil.CurrentLoc.get ()
     | Kstmt s -> Cil_datatype.Stmt.loc s
 
-let do_warn {a_log=log;a_call=call} f =
-  Extlib.may f log;
-  call ()
+let do_warn {a_log; a_call} f =
+  if a_log then f ();
+  a_call ()
 
-let register_alarm ?kf ?(status=Property_status.Dont_know) e ki a =
-  Value_messages.new_alarm ki a status;
-  Alarms.register ~loc:(sc_kinstr_loc ki) ?kf ~status e ki a
+let register_alarm ?kf ?(status=Property_status.Dont_know) e ki a f =
+  let annot, _is_new =
+    Alarms.register ~loc:(sc_kinstr_loc ki) ?kf ~status e ki a
+  in
+  let k =
+    Format.kfprintf
+      (fun _fmt -> Format.flush_str_formatter ()) Format.str_formatter
+  in
+  let str = f annot k Value_util.pp_callstack in
+  Value_messages.new_alarm ki a status annot str
+;;
 
 let warn_pointer_comparison warn_mode =
   do_warn warn_mode.defined_logic
-    (fun (emitter, suffix) ->
+    (fun () ->
       let aux ki e1 e2 =
-	let annot, is_new =
-	  register_alarm emitter ki (Alarms.Pointer_comparison (e1, e2))
-	in
-	if is_new then
-          Kernel.warning ~current:true
-            "@[pointer comparison:@ %a@]%t"
-            local_printer#code_annotation annot suffix;
+        register_alarm emitter ki (Alarms.Pointer_comparison (e1, e2))
+          (fun annot k -> k "@[pointer comparison:@ %a@]%t" pr_annot annot);
       in
       match get_syntactic_context () with
 	| _,SyNone -> ()
@@ -153,121 +159,81 @@ let warn_div warn_mode ~addresses =
   end;
   (* Warn for a null denominator *)
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _,(SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
 	| ki, (SyBinOp (_, (Div|Mod), _, e)) ->
-	  let annot, is_new = 
-	    register_alarm emitter ki (Alarms.Division_by_zero e) 
-	  in
-	  if is_new then
-            Kernel.warning ~current:true
-              "@[division by zero:@ %a@]%t"
-              local_printer#code_annotation annot suffix;
+           register_alarm emitter ki (Alarms.Division_by_zero e)
+             (fun annot k -> k "@[division by zero:@ %a@]%t" pr_annot annot)
 	|_, SyBinOp _ -> assert false) 
-
-(** Auxiliary function that displays two simultaneous alarms as a conjunction *)
-let warn_conjuctive_annots warn annot1 annot2 =
-  match annot1, annot2 with
-    | Some annot, None | None, Some annot -> warn annot
-    | Some { annot_content = AAssert(_, pmn) },
-        Some { annot_content = AAssert(_, pmx) }
-        -> 
-        let p = Logic_const.pand (pmn, pmx) in
-	let annot = Logic_const.new_code_annotation (AAssert([], p)) in
-        warn annot
-    | _, _ -> ()
 
 let warn_integer_overflow warn_mode ~signed ~min:mn ~max:mx =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| ki, (SyUnOp e | SyBinOp(e, _, _, _)) ->
-          let warn annot =
-	    Kernel.warning ~current:true
-	      "@[%s overflow.@ %a@]%t"
-              (if signed then "signed" else "unsigned")
-	      local_printer#code_annotation annot suffix
-          in
-	  let signed lower bound =
-	    Extlib.may_map ~dft:None
-	      (fun n ->
-                let kind = if signed then Alarms.Signed else Alarms.Unsigned in
-		let annot, is_new =
-		  register_alarm emitter ki
-		    (Alarms.Overflow(kind, e, n, lower)) 
-		in 
-		if is_new then Some annot else None)
-              bound
+	   let signed lower bound =
+             Extlib.may_map ~dft:() (fun n ->
+               let kind = if signed then Alarms.Signed else Alarms.Unsigned in
+               register_alarm emitter ki
+                 (Alarms.Overflow(kind, e, n, lower))
+                 (fun annot k ->
+                   k "@[%s overflow.@ %a@]%t"
+                     (if signed then "signed" else "unsigned")
+                     pr_annot annot)) bound
 	  in
-          warn_conjuctive_annots 
-	    warn
-	    (signed Alarms.Lower_bound mn) 
-	    (signed Alarms.Upper_bound mx)
+	  signed Alarms.Lower_bound mn;
+	  signed Alarms.Upper_bound mx
 	| _ -> assert false)
 
 let warn_float_to_int_overflow warn_mode mn mx msg =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| ki, SyUnOp e ->
-          let warn annot =
-            Kernel.warning ~current:true
-	      "@[overflow@ in conversion@ of %t@ from@ floating-point@ \
-               to integer.@ %a@]%t" msg
-	      local_printer#code_annotation annot suffix
-          in
 	  let aux lower bound =
-	    Extlib.may_map ~dft:None
-	      (fun n ->
-		let annot, is_new =
-		  register_alarm emitter ki (Alarms.Float_to_int(e, n, lower)) 
-		in 
-		if is_new then Some annot else None
-              )
-	      bound
+            Extlib.may_map ~dft:() (fun n ->
+              register_alarm emitter ki (Alarms.Float_to_int(e, n, lower))
+                (fun annot k ->
+                  k "@[overflow@ in conversion@ of %t@ from@ floating-point@ \
+                    to integer.@ %a@]%t" msg pr_annot annot)) bound
 	  in
-          warn_conjuctive_annots
-	    warn
-	    (aux Alarms.Lower_bound mn)
-	    (aux Alarms.Upper_bound mx)
-	| _ -> assert false)
+	  (aux Alarms.Lower_bound mn);
+	  (aux Alarms.Upper_bound mx)
+        | _ -> assert false)
+;;
 
 let warn_shift warn_mode size =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _,(SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
 	| ki,SyBinOp (_, (Shiftrt | Shiftlt),_,exp_d) ->
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Invalid_shift(exp_d, Some size))
-	  in
-	  if is_new then
-            Kernel.warning ~current:true
-              "@[invalid RHS operand for shift.@ %a@]%t"
-              local_printer#code_annotation annot suffix;
+	   register_alarm emitter ki
+             (Alarms.Invalid_shift(exp_d, size))
+             (fun annot k ->
+               k "@[invalid RHS operand for shift.@ %a@]%t"
+                 pr_annot annot)
 	| _, SyBinOp _ ->
 	  assert false)
 
 let warn_shift_left_positive warn_mode =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _, (SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
 	| ki, SyBinOp (_, (Shiftrt | Shiftlt),exp_l,_) ->
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Invalid_shift(exp_l, None))
-	  in
-	  if is_new then
-            Kernel.warning ~current:true
-              "@[invalid LHS operand for left shift.@ %a@]%t"
-              local_printer#code_annotation annot suffix
+	   register_alarm emitter ki
+             (Alarms.Invalid_shift(exp_l, None))
+             (fun annot k ->
+               k "@[invalid LHS operand for left shift.@ %a@]%t"
+                 pr_annot annot)
 	| _, SyBinOp _ ->
 	  assert false)
 
@@ -277,14 +243,13 @@ let pretty_warn_mem_mode fmt m =
 
 let warn_mem warn_mode wmm =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       let warn_term ki mk_alarm =
 	let valid = wmm in
-	let annot, is_new = register_alarm emitter ki (mk_alarm valid) in
-	if is_new then
-          Kernel.warning ~current:true "@[out of bounds %a.@ %a@]%t"
-            pretty_warn_mem_mode wmm
-            local_printer#code_annotation annot suffix;
+	register_alarm emitter ki (mk_alarm valid)
+          (fun annot k ->
+            k "@[out of bounds %a.@ %a@]%t"
+              pretty_warn_mem_mode wmm pr_annot annot)
       in
       match get_syntactic_context () with
 	| _,SyNone -> ()
@@ -299,55 +264,31 @@ let warn_mem_write warn_mode = warn_mem warn_mode Alarms.For_writing
 
 let warn_index warn_mode ~positive ~range =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _,(SyMem _ | SyMemLogic _ | SyUnOp _ | SySep _ | SyCallResult) ->
 	  assert false
 	| ki ,SyBinOp (_, IndexPI, e1, e2) ->
-	  let left =
-	    if not positive then
-	      Some
-		(register_alarm 
-		   emitter ki (Alarms.Index_out_of_bound(e1, None)))
-	    else None
-	  in
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Index_out_of_bound(e1, Some e2))
-	  in
-	  let warn a =
-            Kernel.warning ~current:true
-              "@[accessing out of bounds index %s.@ @[%a@]@]%t" 
-	      range
-	      local_printer#code_annotation a
-	      suffix
-	  in
-	  if is_new then
-	    let a = match left, annot with
-	      | None, _ | Some(_, false), _ -> annot
-	      | Some({ annot_content = AAssert(_, l) }, true),
-		{ annot_content = AAssert(_, r) } -> 
-		let p = Logic_const.pand (l, r) in
-		Logic_const.new_code_annotation (AAssert([], p))
-	      | Some _, _ -> assert false
-	    in
-	    warn a
-	  else
-	    Extlib.may (fun (a, b) -> if b then warn a) left
+           let warn a =
+             register_alarm emitter ki a
+               (fun annot k ->
+                 k "@[accessing out of bounds index %s.@ @[%a@]@]%t"
+                   range pr_annot annot)
+           in
+           if not positive then
+             warn (Alarms.Index_out_of_bound(e1, None));
+           warn (Alarms.Index_out_of_bound(e1, Some e2))
 	| _, SyBinOp _ ->
 	  assert false)
 
 let warn_valid_string warn_mode =
   do_warn warn_mode.defined_logic
-    (fun (emitter, suffix) ->
+    (fun () ->
       let aux ki e =
-	let annot, is_new =
-	  register_alarm emitter ki (Alarms.Valid_string e)
-	in
-	if is_new then
-          Kernel.warning ~current:true
-            "@[may not point to a valid string:@ %a@]%t"
-            local_printer#code_annotation annot suffix;
+	register_alarm emitter ki (Alarms.Valid_string e)
+          (fun annot k ->
+            k "@[may not point to a valid string:@ %a@]%t" pr_annot annot;)
       in
       match get_syntactic_context () with
 	| _,SyNone -> ()
@@ -358,19 +299,16 @@ let warn_valid_string warn_mode =
 
 let warn_pointer_subtraction warn_mode =
   do_warn warn_mode.defined_logic
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _,(SyMem _ | SyMemLogic _ | SySep _ | SyCallResult | SyUnOp _) ->
 	  assert false
 	| ki, SyBinOp (_, _, e1, e2) ->
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Differing_blocks (e1, e2))
-	  in
-	  if is_new then
-            Kernel.warning ~current:true
-              "@[pointer subtraction:@ %a@]%t"
-              local_printer#code_annotation annot suffix)
+	   register_alarm emitter ki (Alarms.Differing_blocks (e1, e2))
+             (fun annot k ->
+               k "@[pointer subtraction:@ %a@]%t" pr_annot annot))
+
 
 let warn_nan_infinite warn_mode fkind pp =
   let sfkind = match fkind with
@@ -380,92 +318,77 @@ let warn_nan_infinite warn_mode fkind pp =
     | Some FLongDouble -> "long double"
   in
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _,(SyBinOp _ | SyMem _ | SyMemLogic _ | SySep _) -> assert false
 	| _, SyCallResult -> (* cf. bug 997 *)
-	  Kernel.warning ~current:true ~once:true
+	  Value_messages.warning
             "@[non-finite@ %s@ value being@ returned:@ \
-              assert(\\is_finite(\\returned_value))@]%t" sfkind suffix;
+              assert(\\is_finite(\\returned_value))@]" sfkind;
 	| ki,SyUnOp (exp_r) ->
           (* Should always be called with a non-none fkind, except in logic
-             mode (in which case this code is not executed *)
-          let fkind = Extlib.the fkind in
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Is_nan_or_infinite (exp_r, fkind))
-	  in
-	  if is_new then
-            Kernel.warning ~current:true ~once:true
-              "@[non-finite@ %s@ value@ (%t):@ %a@]%t"
-              sfkind pp local_printer#code_annotation annot suffix)
+             mode (in which case this code is not executed) *)
+           let fkind = Extlib.the fkind in
+	   register_alarm emitter ki
+             (Alarms.Is_nan_or_infinite (exp_r, fkind))
+             (fun annot k -> k "@[non-finite@ %s@ value@ (%t):@ %a@]%t"
+               sfkind pp pr_annot annot))
 
 let warn_uninitialized warn_mode = 
   do_warn warn_mode.unspecified
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _, SyNone
 	| _, (SyBinOp _ | SyUnOp _ | SySep _ | SyMemLogic _) -> assert false
 	| _, SyCallResult ->
-	  Kernel.warning ~once:true ~current:true
+	  Value_messages.warning
             "@[returned value may be uninitialized:@ \
-              assert \\initialized(\\returned_value)@]%t" suffix;
+              assert \\initialized(\\returned_value)@]";
 	| ki, SyMem lv_d ->
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Uninitialized lv_d)
-	  in
-	  if is_new then
-            Kernel.warning ~current:true
-              "@[accessing uninitialized left-value:@ %a@]%t"
-              local_printer#code_annotation annot suffix)
+	   register_alarm emitter ki (Alarms.Uninitialized lv_d)
+             (fun annot k ->
+               k "@[accessing uninitialized left-value:@ %a@]%t"
+                 pr_annot annot))
 
 let warn_escapingaddr warn_mode =
   do_warn warn_mode.unspecified
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _,(SyBinOp _ | SyUnOp _ | SySep _ | SyMemLogic _) -> assert false
 	| _, SyCallResult ->
-	  Kernel.warning ~once:true ~current:true
+	  Value_messages.warning
             "@[returned value may be contain escaping addresses:@ \
-              assert \\dangling(\\returned_value)@]%t" suffix;
+              assert \\dangling(\\returned_value)@]";
 	| ki,SyMem lv_d ->
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Dangling lv_d)
-	  in
-	  if is_new then
-            Kernel.warning ~current:true
-              "@[accessing left-value@ that contains@ escaping@ addresses:\
-                 @ %a@]%t" local_printer#code_annotation annot suffix)
-    
+	   register_alarm emitter ki (Alarms.Dangling lv_d)
+             (fun annot k ->
+               k "@[accessing left-value@ that contains@ escaping@ addresses:\
+                 @ %a@]%t" pr_annot annot))
+
 let warn_separated warn_mode =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
       | _,SyNone -> ()
       | _,(SyBinOp _ | SyUnOp _ | SyMem _ | SyMemLogic _| SyCallResult) ->
 	assert false
       | ki,SySep(lv1,lv2) ->
-	let annot, is_new =
-	  register_alarm emitter ki (Alarms.Not_separated(lv1, lv2))
-	in
-	if is_new then
-          Kernel.warning ~current:true
-            "@[undefined multiple accesses in expression.@ %a@]%t"
-            local_printer#code_annotation annot suffix)
+	 register_alarm emitter ki (Alarms.Not_separated(lv1, lv2))
+           (fun annot k ->
+             k "@[undefined multiple accesses in expression.@ %a@]%t"
+               pr_annot annot))
 
 let warn_overlap msg warn_mode =
   do_warn warn_mode.others
-    (fun (emitter, suffix) ->
+    (fun () ->
       match get_syntactic_context () with
 	| _,SyNone -> ()
 	| _,(SyBinOp _ | SyUnOp _ | SyMem _ | SyMemLogic _| SyCallResult) ->
 	  assert false
 	| ki,SySep(lv1,lv2) ->
-	  let annot, is_new =
-	    register_alarm emitter ki (Alarms.Overlap(lv1, lv2))
-	  in
-	  if is_new then
-            Kernel.warning ~current:true
-              "@[partially overlapping@ lvalue assignment%t.@ %a@]%t"
-              msg local_printer#code_annotation annot suffix)
+	   register_alarm emitter ki (Alarms.Overlap(lv1, lv2))
+             (fun annot k ->
+               k "@[partially overlapping@ lvalue assignment%t.@ %a@]%t"
+                 msg pr_annot annot))

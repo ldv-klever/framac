@@ -56,6 +56,6 @@ val skip: unit -> Locations.Zone.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

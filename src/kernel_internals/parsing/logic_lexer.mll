@@ -443,14 +443,6 @@ and endline = parse
     let bol = src_loc.Lexing.pos_cnum - src_loc.Lexing.pos_bol in
     update_bol_loc dest_lexbuf (-bol)
 
-  let start_pos lexbuf =
-    let pos = lexeme_start_p lexbuf in
-    pos.Lexing.pos_cnum - pos.Lexing.pos_bol
-
-  let end_pos lexbuf =
-    let pos = lexeme_end_p lexbuf in
-    pos.Lexing.pos_cnum - pos.Lexing.pos_bol
-
   let parse_from_location f (loc, s : Lexing.position * string) =
     let output = 
       if Kernel.ContinueOnAnnotError.get() then Kernel.warning ~once:true
@@ -462,7 +454,8 @@ and endline = parse
       let res = f token lb in
       lb.Lexing.lex_curr_p, res
     with
-      | Parsing.Parse_error as _e ->
+      | Failure _ (* raised by the lexer itself, through [f] *)
+      | Parsing.Parse_error ->
         output
 	  ~source:lb.lex_curr_p
           "unexpected token '%s'" (Lexing.lexeme lb);
@@ -476,11 +469,9 @@ and endline = parse
         output ~source:(fst loc) "%s" m;
         Logic_utils.exit_kw_c_mode ();
         raise Parsing.Parse_error
-     | exn ->
-        output ~source:lb.lex_curr_p "Unknown error (%s)"
-          (Printexc.to_string exn);
-        Logic_utils.exit_kw_c_mode ();
-        raise exn
+      | exn ->
+        Kernel.fatal ~source:lb.lex_curr_p "Unknown error (%s)"
+          (Printexc.to_string exn)
 
   let lexpr = parse_from_location Logic_parser.lexpr_eof
 
@@ -491,6 +482,11 @@ and endline = parse
   (* ACSL extension for external spec file *)
   let ext_spec = parse_from_location Logic_parser.ext_spec
 
+  type 'a parse = Lexing.position * string -> Lexing.position * 'a
+
+  let chr lexbuf =
+    let buf = Buffer.create 16 in
+    chr buf lexbuf
 }
 
 (*

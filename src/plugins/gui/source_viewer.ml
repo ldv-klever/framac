@@ -37,7 +37,7 @@ let set_language_to_C (buffer:GSourceView2.source_buffer)  =
   end;
   buffer#set_highlight_syntax true
 
-let make ~packing =
+let make ?name ~packing () =
 (*  let d = GWindow.font_selection_dialog ~title:"tutu" ~show:true () in
   d#selection#set_preview_text
     (Format.sprintf "%s %s %s %s"
@@ -55,7 +55,7 @@ let make ~packing =
   in
   original_source_window#set_marker_pixbuf "warning" pixbuf; *)
   original_source_window#misc#modify_font_by_name "Monospace";
-  original_source_window#misc#set_name "source";
+  original_source_window#misc#set_name (Extlib.opt_conv "source" name);
   let original_source_buffer = original_source_window#source_buffer in
   set_language_to_C original_source_buffer;
 (*

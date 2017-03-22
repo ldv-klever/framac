@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** A framework for implementing data flow analysis.
-    @plugin development guide *)
+(** Implementation of data flow analyses over user-supplied domains. *)
 
 type 't action =
     Default (** The default action *)
@@ -211,6 +210,6 @@ val find_stmts: Cil_types.fundec -> (Cil_types.stmt list * Cil_types.stmt list)
 
 (*
   Local Variables:
-  compile-command: "LC_ALL=C make -C ../../.."
+  compile-command: "make -C ../../.."
   End:
  *)

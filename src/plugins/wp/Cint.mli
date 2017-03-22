@@ -35,7 +35,7 @@ val irange : c_int -> term -> pred
 val to_cint : lfun -> c_int (** Raises [Not_found] if not. *)
 val is_cint : lfun -> c_int (** Raises [Not_found] if not. *)
 
-type model = Natural | Machine
+type model = NoRange | Natural | Machine
 val configure : model -> unit
 
 val iopp : c_int -> unop
@@ -55,7 +55,7 @@ val blsr : c_int -> binop
 val l_not : unop
 val l_and : binop
 val l_xor : binop
-val l_or  : binop  
+val l_or  : binop
 val l_lsl : binop
 val l_lsr : binop
 
@@ -67,3 +67,9 @@ val f_lsl  : lfun
 val f_lsr  : lfun
 val f_bit  : lfun
 
+(** Simplifiers *)
+
+val is_cint_simplifier: Conditions.simplifier
+(** Remove the [is_cint] in formulas that are
+    redondant with other conditions.
+*)

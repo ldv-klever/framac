@@ -507,6 +507,6 @@ let extract ~f_slice_names new_proj_name slicing_project =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -14,16 +14,15 @@ Goal Post-condition (file tests/wp_typed/user_string.i, line 23) in 'strlen':
 Let x_0 = (offset ss_3).
 Let x_1 = (offset s_3).
 Let x_2 = x_0-x_1.
-Let x_3 = Mchar_1[ss_3].
-Let x_4 = (base s_3).
+Let x_3 = (base s_3).
 Assume {
   (* Domain *)
-  Type: (is_sint8 x_3) /\ (is_sint32 x_2).
+  Type: (is_sint32 x_2).
   (* Heap *)
-  Have: (linked Malloc_0) /\ (sconst Mchar_1) /\ ((region x_4)<=0).
+  Have: (linked Malloc_0) /\ (sconst Mchar_1) /\ ((region x_3)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_1 s_3 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_1 s_3 i_16).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.
@@ -34,9 +33,9 @@ Assume {
         /\ (addr_le ss_3 (shift_sint8 s_3 (L_Length Mchar_1 s_3))).
   (* Invariant 'BASE' (file tests/wp_typed/user_string.i, line 28) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'BASE': *)
-  Have: x_4=(base ss_3).
+  Have: x_3=(base ss_3).
   (* tests/wp_typed/user_string.i:34: Else *)
-  Have: 0=x_3.
+  Have: 0=Mchar_1[ss_3].
   (* Assertion 'END' (file tests/wp_typed/user_string.i, line 37) *)
   (* tests/wp_typed/user_string.i:37: Assertion 'END': *)
   Have: (P_Length_of_str_is Malloc_0 Mchar_1 s_3 x_2).
@@ -56,7 +55,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_3) /\ ((region x_1)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_3 s_0 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_3 s_0 i_7).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.
@@ -84,7 +83,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_3) /\ ((region (base s_4))<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_3 s_4 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_3 s_4 i_8).
 }
 Prove: true.
 
@@ -102,7 +101,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_0) /\ ((region x_1)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_0 s_0 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_0 s_0 i_12).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.
@@ -129,7 +128,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_3) /\ ((region (base s_4))<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_3 s_4 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_3 s_4 i_13).
 }
 Prove: (addr_le s_4 s_4)
        /\ (addr_le s_4 (shift_sint8 s_4 (L_Length Mchar_3 s_4))).
@@ -150,7 +149,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_0) /\ ((region x_1)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_0 s_0 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_0 s_0 i_14).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.
@@ -178,16 +177,13 @@ Prove: 0!=Mchar_3[(shift_sint8 s_4 i_5)].
 Goal Assertion 'END' (file tests/wp_typed/user_string.i, line 37):
 Let x_0 = (offset ss_3).
 Let x_1 = (offset s_3).
-Let x_2 = Mchar_2[ss_3].
-Let x_3 = (base s_3).
+Let x_2 = (base s_3).
 Assume {
-  (* Domain *)
-  Type: (is_sint8 x_2).
   (* Heap *)
-  Have: (linked Malloc_1) /\ (sconst Mchar_2) /\ ((region x_3)<=0).
+  Have: (linked Malloc_1) /\ (sconst Mchar_2) /\ ((region x_2)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_1 Mchar_2 s_3 i_0).
+  Have: (P_Length_of_str_is Malloc_1 Mchar_2 s_3 i_9).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.
@@ -198,9 +194,9 @@ Assume {
         /\ (addr_le ss_3 (shift_sint8 s_3 (L_Length Mchar_2 s_3))).
   (* Invariant 'BASE' (file tests/wp_typed/user_string.i, line 28) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'BASE': *)
-  Have: x_3=(base ss_3).
+  Have: x_2=(base ss_3).
   (* tests/wp_typed/user_string.i:34: Else *)
-  Have: 0=x_2.
+  Have: 0=Mchar_2[ss_3].
 }
 Prove: (P_Length_of_str_is Malloc_1 Mchar_2 s_3 (x_0-x_1)).
 
@@ -221,7 +217,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_3) /\ ((region (base s_2))<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_3 s_2 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_3 s_2 i_17).
 }
 Prove: true.
 
@@ -236,7 +232,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_3) /\ ((region (base s_2))<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_3 s_2 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_3 s_2 i_18).
 }
 Prove: true.
 
@@ -246,16 +242,13 @@ Goal Assigns nothing in 'strlen' (3/3):
 Effect at line 38
 Let x_0 = (offset ss_3).
 Let x_1 = (offset s_3).
-Let x_2 = Mchar_1[ss_3].
-Let x_3 = (base s_3).
+Let x_2 = (base s_3).
 Assume {
-  (* Domain *)
-  Type: (is_sint8 x_2).
   (* Heap *)
-  Have: (linked Malloc_0) /\ (sconst Mchar_1) /\ ((region x_3)<=0).
+  Have: (linked Malloc_0) /\ (sconst Mchar_1) /\ ((region x_2)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_1 s_3 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_1 s_3 i_19).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.
@@ -266,9 +259,9 @@ Assume {
         /\ (addr_le ss_3 (shift_sint8 s_3 (L_Length Mchar_1 s_3))).
   (* Invariant 'BASE' (file tests/wp_typed/user_string.i, line 28) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'BASE': *)
-  Have: x_3=(base ss_3).
+  Have: x_2=(base ss_3).
   (* tests/wp_typed/user_string.i:34: Else *)
-  Have: 0=x_2.
+  Have: 0=Mchar_1[ss_3].
   (* Assertion 'END' (file tests/wp_typed/user_string.i, line 37) *)
   (* tests/wp_typed/user_string.i:37: Assertion 'END': *)
   Have: (P_Length_of_str_is Malloc_0 Mchar_1 s_3 (x_0-x_1)).
@@ -287,7 +280,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_0) /\ ((region x_1)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_0 s_0 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_0 s_0 i_10).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.
@@ -320,7 +313,7 @@ Assume {
   Have: (linked Malloc_0) /\ (sconst Mchar_0) /\ ((region x_4)<=0).
   (* Pre-condition (file tests/wp_typed/user_string.i, line 21) in 'strlen' *)
   (* Pre-condition: *)
-  Have: exists i_0:int. (P_Length_of_str_is Malloc_0 Mchar_0 s_1 i_0).
+  Have: (P_Length_of_str_is Malloc_0 Mchar_0 s_1 i_11).
   (* Invariant 'ZERO' (file tests/wp_typed/user_string.i, line 30) *)
   (* tests/wp_typed/user_string.i:34: Invariant 'ZERO': *)
   Have: forall i_0:int.

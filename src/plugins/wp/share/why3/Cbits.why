@@ -180,8 +180,8 @@ axiom is_uint16_lsr : forall x:int, y:int [Cint.to_uint16 (Cint.lsr x y)].
   y)) = (Cint.lsr x y))
 
 axiom is_uint16_lsl1_inf : forall y:int [Cint.to_uint16 (Cint.lsl 1 y)].
-  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (16)) -> ((Cint.lsl 1
-  y) = (Cint.to_uint16 (Cint.lsl 1 y)))
+  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (16)) -> ((Cint.to_uint16 (Cint.lsl 1
+  y)) = (Cint.lsl 1 y))
 
 axiom is_uint16_lsl1_sup : forall y:int [Cint.to_uint16 (Cint.lsl 1 y)].
   (Int.(<=) (16) (y)) -> ((Cint.to_uint16 (Cint.lsl 1 y)) = (0))
@@ -199,8 +199,8 @@ axiom is_uint32_lsr : forall x:int, y:int [Cint.to_uint32 (Cint.lsr x y)].
   y)) = (Cint.lsr x y))
 
 axiom is_uint32_lsl1_inf : forall y:int [Cint.to_uint32 (Cint.lsl 1 y)].
-  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (32)) -> ((Cint.lsl 1
-  y) = (Cint.to_uint32 (Cint.lsl 1 y)))
+  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (32)) -> ((Cint.to_uint32 (Cint.lsl 1
+  y)) = (Cint.lsl 1 y))
 
 axiom is_uint32_lsl1_sup : forall y:int [Cint.to_uint32 (Cint.lsl 1 y)].
   (Int.(<=) (32) (y)) -> ((Cint.to_uint32 (Cint.lsl 1 y)) = (0))
@@ -243,10 +243,11 @@ axiom is_sint8_lsr : forall x:int, y:int [Cint.to_sint8 (Cint.lsr x y)].
   (Int.(<=) (0) (y)) -> Cint.is_sint8 x -> ((Cint.to_sint8 (Cint.lsr x
   y)) = (Cint.lsr x y))
 
-axiom is_sint8_lsl1 : ((Cint.lsl 1 7) = (128))
+axiom is_sint8_lsl1 : ((Cint.lsl 1 7) = (Cint.max_sint8))
 
-axiom is_sint8_lsl1_inf : forall y:int [Cint.lsl 1 y]. (Int.(<=) (0) (y)) /\
-  (Int.(<) (y) (7)) -> Cint.is_sint8 (Cint.lsl 1 y)
+axiom is_sint8_lsl1_inf : forall y:int [Cint.to_sint8 (Cint.lsl 1 y)].
+  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (7)) -> ((Cint.to_sint8 (Cint.lsl 1
+  y)) = (Cint.lsl 1 y))
 
 axiom is_sint8_lsl1_sup : forall y:int [Cint.to_sint8 (Cint.lsl 1 y)].
   (Int.(<=) (8) (y)) -> ((Cint.to_sint8 (Cint.lsl 1 y)) = (0))
@@ -270,10 +271,11 @@ axiom is_sint16_lsr : forall x:int, y:int [Cint.to_sint16 (Cint.lsr x y)].
   (Int.(<=) (0) (y)) -> Cint.is_sint16 x -> ((Cint.to_sint16 (Cint.lsr x
   y)) = (Cint.lsr x y))
 
-axiom is_sint16_lsl1 : ((Cint.lsl 1 15) = (32768))
+axiom is_sint16_lsl1 : ((Cint.lsl 1 15) = (Cint.max_sint16))
 
-axiom is_sint16_lsl1_inf : forall y:int [Cint.lsl 1 y]. (Int.(<=) (0) (y)) /\
-  (Int.(<) (y) (15)) -> Cint.is_sint16 (Cint.lsl 1 y)
+axiom is_sint16_lsl1_inf : forall y:int [Cint.to_sint16 (Cint.lsl 1 y)].
+  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (15)) -> ((Cint.to_sint16 (Cint.lsl 1
+  y)) = (Cint.lsl 1 y))
 
 axiom is_sint16_lsl1_sup : forall y:int [Cint.to_sint16 (Cint.lsl 1 y)].
   (Int.(<=) (16) (y)) -> ((Cint.to_sint16 (Cint.lsl 1 y)) = (0))
@@ -297,10 +299,11 @@ axiom is_sint32_lsr : forall x:int, y:int [Cint.to_sint32 (Cint.lsr x y)].
   (Int.(<=) (0) (y)) -> Cint.is_sint32 x -> ((Cint.to_sint32 (Cint.lsr x
   y)) = (Cint.lsr x y))
 
-axiom is_sint32_lsl1 : ((Cint.lsl 1 31) = (2147483648))
+axiom is_sint32_lsl1 : ((Cint.lsl 1 31) = (Cint.max_sint32))
 
-axiom is_sint32_lsl1_inf : forall y:int [Cint.lsl 1 y]. (Int.(<=) (0) (y)) /\
-  (Int.(<) (y) (31)) -> Cint.is_sint32 (Cint.lsl 1 y)
+axiom is_sint32_lsl1_inf : forall y:int [Cint.to_sint32 (Cint.lsl 1 y)].
+  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (31)) -> ((Cint.to_sint32 (Cint.lsl 1
+  y)) = (Cint.lsl 1 y))
 
 axiom is_sint32_lsl1_sup : forall y:int [Cint.to_sint32 (Cint.lsl 1 y)].
   (Int.(<=) (32) (y)) -> ((Cint.to_sint32 (Cint.lsl 1 y)) = (0))
@@ -324,12 +327,19 @@ axiom is_sint64_lsr : forall x:int, y:int [Cint.to_sint64 (Cint.lsr x y)].
   (Int.(<=) (0) (y)) -> Cint.is_sint64 x -> ((Cint.to_sint64 (Cint.lsr x
   y)) = (Cint.lsr x y))
 
-axiom is_sint64_lsl1 : ((Cint.lsl 1 63) = (9223372036854775808))
+axiom is_sint64_lsl1 : ((Cint.lsl 1 63) = (Cint.max_sint64))
 
-axiom is_sint64_lsl1_inf : forall y:int [Cint.lsl 1 y]. (Int.(<=) (0) (y)) /\
-  (Int.(<) (y) (63)) -> Cint.is_sint64 (Cint.lsl 1 y)
+axiom is_sint64_lsl1_inf : forall y:int [Cint.to_sint64 (Cint.lsl 1 y)].
+  (Int.(<=) (0) (y)) /\ (Int.(<) (y) (63)) -> ((Cint.to_sint64 (Cint.lsl 1
+  y)) = (Cint.lsl 1 y))
 
 axiom is_sint64_lsl1_sup : forall y:int [Cint.to_sint64 (Cint.lsl 1 y)].
   (Int.(<=) (64) (y)) -> ((Cint.to_sint64 (Cint.lsl 1 y)) = (0))
+
+axiom lor_addition : forall x:int, y:int [Cint.land x y, Cint.lor x y].
+  ((Cint.land x y) = (0)) -> (((Int.(+) (x) (y))) = (Cint.lor x y))
+
+axiom lxor_addition : forall x:int, y:int [Cint.land x y, Cint.lxor x y].
+  ((Cint.land x y) = (0)) -> (((Int.(+) (x) (y))) = (Cint.lxor x y))
 
 end

@@ -54,7 +54,7 @@ struct
       (struct
         type t = var
         let hash = hash_var
-        let equal x y = 
+        let equal x y =
           x.vbase = y.vbase && x.vrank = y.vrank && T.equal x.vtau y.vtau
       end)
 
@@ -70,16 +70,16 @@ struct
     } in
     try W.find hmap x0
     with Not_found ->
-        let k = let i = !kid in (assert (i <> -1) ; incr kid ; i) in
-        let x = { x0 with vid = k } in W.add hmap x ; x
+      let k = let i = !kid in (assert (i <> -1) ; incr kid ; i) in
+      let x = { x0 with vid = k } in W.add hmap x ; x
 
   let dummy = insert "" 0 T.dummy
 
   let hash x = x.vid
   let equal = (==)
-  let compare x y = 
+  let compare x y =
     let cmp = String.compare x.vbase y.vbase in
-    if cmp <> 0 then cmp else 
+    if cmp <> 0 then cmp else
       let cmp = Pervasives.compare x.vrank y.vrank in
       if cmp <> 0 then cmp else
         Pervasives.compare x.vid y.vid
@@ -91,10 +91,10 @@ struct
     | None -> Hashtbl.create 131
     | Some pool -> Hashtbl.copy pool
 
-  let counter pool base = 
+  let counter pool base =
     try Hashtbl.find pool base
     with Not_found ->
-        let c = ref 0 in Hashtbl.add pool base c ; c
+      let c = ref 0 in Hashtbl.add pool base c ; c
 
   let add pool x =
     let c = counter pool x.vbase in

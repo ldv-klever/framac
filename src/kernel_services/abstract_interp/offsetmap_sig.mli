@@ -69,7 +69,7 @@ val iter:
   ((Int.t * Int.t) -> (v * Int.t * Rel.t) -> unit) ->
   t -> unit
 (** [iter f m] calls [f] on all the intervals bound in [m], in increasing
-    order. The arguments of [f (min, max) (v, size, offset)] are as follow:
+    order. The arguments of [f (min, max) (v, size, offset)] are as follows:
     - [(start, stop)] are the bounds of the interval, inclusive.
     - [v] is the value bound to the interval, and [size] its size;  if [size]
       is less than [stop-start+1], [v] repeats itself until [stop].
@@ -84,15 +84,18 @@ val fold:
 (** Same as [iter], but with an accumulator. *)
 
 val fold_between:
+  ?direction:[`LTR | `RTL] ->
   entire:bool ->
   Int.t * Int.t ->
   ((Int.t * Int.t) -> (v * Int.t * Rel.t) -> 'a -> 'a) ->
   t -> 'a -> 'a
-(** [fold_between ~entire (start, stop) m acc] is similar to [fold f m acc],
-    except that only the intervals that intersect [start..stop] (inclusive)
-    are presented. If [entire] is true, intersecting intervals are presented
-    whole (ie. they may be bigger than [start..stop]). If [entire] is [false],
-    only the intersection with [ib..ie] is presented. *)
+(** [fold_between ~direction:`LTR ~entire (start, stop) m acc] is similar to
+    [fold f m acc], except that only the intervals that intersect [start..stop]
+    (inclusive) are presented. If [entire] is true, intersecting intervals are
+    presented whole (ie. they may be bigger than [start..stop]). If [entire]
+    is [false], only the intersection with [ib..ie] is presented.
+    [fold_between ~direction:`RTL] reverses the iteration order: interval
+    are passed in decreasing order. Default is [`LTR]. *)
 
 
 (** {2 Interval-unaware iterators} *)
@@ -124,7 +127,7 @@ type map2_decide =
     [f m m' = m'], etc. *)
 
 val map2_on_values:
-  Hptmap.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
+  Hptmap_sig.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
 (** [map2_on_values cache decide join m1 m2] applies [join] pointwise to
     all the elements of [m1] and [m2] and buils the resulting map. This function
     can only be called if [m1] and [m2] contain isotropic values. [decide]
@@ -154,7 +157,8 @@ val find :
   offsets:Ival.t -> size:Integer.t ->
   t -> bool * v
 (** Find the value bound to a set of intervals, expressed as an ival, in the
-    given rangemap. *)
+    given rangemap. The returned boolean (alarm) indicates that at least one
+    of the offsets does not comply with [validity]. *)
 
 val find_imprecise: validity:Base.validity-> t -> v
 (** [find_imprecise ~validity m] returns an imprecise join of the values bound
@@ -262,6 +266,6 @@ val pretty_debug: t Pretty_utils.formatter
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

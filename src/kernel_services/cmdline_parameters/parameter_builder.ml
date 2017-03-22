@@ -555,9 +555,7 @@ struct
 
     (* parsing builds a list of triples  (action, is_category?, word) *)
 
-    let add_action a = function
-      | (_, _, None) :: _ -> assert false
-      | l -> (a, false, None) :: l
+    let add_action a l = (a, false, None) :: l
 
     let add_char c = function
       | [] -> assert false
@@ -1440,6 +1438,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

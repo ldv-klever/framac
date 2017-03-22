@@ -63,8 +63,7 @@ lemma S0_deterministic_trans{L}:
        \at(aorai_CurOperation,L) ≡ op_real_main ∧
        \at(aorai_CurOpStatus,L) ≡ aorai_Called ∧ c ≡ 0);
  */
-/*@ ghost int aorai_CurStates = Si;
-*/
+/*@ ghost int aorai_CurStates = Si; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_g;
     assigns aorai_CurOpStatus, aorai_CurOperation, aorai_CurStates;

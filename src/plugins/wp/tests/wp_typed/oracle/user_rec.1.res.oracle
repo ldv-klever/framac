@@ -55,7 +55,7 @@ Assume {
   Type: (is_sint32 i_1) /\ (is_sint32 n_1) /\ (is_sint32 (1+i_1))
         /\ (is_sint32 (L_fact (i_1-1))).
   (* tests/wp_typed/user_rec.i:9: Else *)
-  Have: 1<n_1.
+  Have: 2<=n_1.
   (* Invariant (file tests/wp_typed/user_rec.i, line 12) *)
   (* tests/wp_typed/user_rec.i:16: Invariant: *)
   Have: (2<=i_1) /\ (i_1<=(1+n_1)).
@@ -71,9 +71,9 @@ Assume {
   (* Domain *)
   Type: (is_sint32 n_1).
   (* tests/wp_typed/user_rec.i:9: Else *)
-  Have: 1<n_1.
+  Have: 2<=n_1.
 }
-Prove: true.
+Prove: 0<n_1.
 
 ------------------------------------------------------------
 
@@ -203,7 +203,7 @@ Assume {
   (* tests/wp_typed/user_rec.i:42: Invariant 'RANGE': *)
   Have: if (n_0<=1) then (n_0=n_2) else ((0<n_2) /\ (n_2<=n_0)).
   (* tests/wp_typed/user_rec.i:42: Else *)
-  Have: n_2<2.
+  Have: n_2<=1.
 }
 Prove: F4_0=x_0.
 

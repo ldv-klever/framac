@@ -44,7 +44,7 @@ and call = {
 let selection_of_localizable = function
   | PStmt( kf , stmt )
   | PLval( Some kf , Kstmt stmt , _ )
-  | PTermLval( Some kf , Kstmt stmt , _ ) ->
+  | PTermLval( Some kf , Kstmt stmt , _, _ ) ->
       begin
         match stmt with
         | { skind=Instr(Call(_,e,_,_)) } ->

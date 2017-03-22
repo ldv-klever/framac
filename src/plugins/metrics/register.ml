@@ -66,6 +66,6 @@ let () = Db.Main.extend main
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

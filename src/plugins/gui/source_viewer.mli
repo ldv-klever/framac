@@ -23,7 +23,8 @@
 (** The Frama-C source viewer.
     That is the buffer where Frama-C puts its pretty-printed AST. *)
 
-val make : packing:(GObj.widget -> unit) -> GSourceView2.source_view
+val make : ?name:string -> packing:(GObj.widget -> unit) -> unit ->
+  GSourceView2.source_view
   (** Build a new source viewer. *)
 
 val buffer : unit -> GSourceView2.source_buffer

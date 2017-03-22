@@ -64,7 +64,6 @@ let clearReferencedBits file =
   let considerGlobal global =
     match global with
     | GType (info, _) ->
-	(*trace (dprintf "clearing mark: %a\n" d_shortglobal global);*)
 	info.treferenced <- false
 
     | GEnumTag (info, _)
@@ -74,19 +73,16 @@ let clearReferencedBits file =
 
     | GCompTag (info, _)
     | GCompTagDecl (info, _) ->
-	(*trace (dprintf "clearing mark: %a\n" d_shortglobal global);*)
 	info.creferenced <- false
 
-    | GVar ({vname = _name} as info, _, _)
-    | GVarDecl (_,({vname = _name} as info), _) ->
-	(*trace (dprintf "clearing mark: %a\n" d_shortglobal global);*)
-	info.vreferenced <- false
+    | GVar (vi, _, _)
+    | GFunDecl (_, vi, _)
+    | GVarDecl (vi, _) ->
+	vi.vreferenced <- false
 
     | GFun ({svar = info} as func, _) ->
-	(*trace (dprintf "clearing mark: %a\n" d_shortglobal global);*)
 	info.vreferenced <- false;
 	let clearMark local =
-	  (*trace (dprintf "clearing mark: local %s\n" local.vname);*)
 	  local.vreferenced <- false
 	in
 	List.iter clearMark func.slocals
@@ -184,7 +180,7 @@ let categorizePragmas file =
 	    in
 	    List.iter processArg args
 	  end
-      | GVarDecl (_,v, _) -> begin
+      | GFunDecl (_,v, _) -> begin
           (* Look for alias attributes, e.g. Linux modules *)
           match filterAttributes "alias" v.vattr with
           | [] -> ()  (* ordinary prototype. *)
@@ -261,7 +257,8 @@ let isPragmaRoot keepers = function
       let collection = if structure then keepers.structs else keepers.unions in
       H.mem collection name
   | GVar ({vname = name; vattr = attrs}, _, _)
-  | GVarDecl (_,{vname = name; vattr = attrs}, _)
+  | GVarDecl ({vname = name; vattr = attrs}, _)
+  | GFunDecl (_,{vname = name; vattr = attrs}, _)
   | GFun ({svar = {vname = name; vattr = attrs}}, _) ->
       H.mem keepers.defines name ||
       hasAttribute "used" attrs
@@ -332,9 +329,9 @@ let isExportedRoot global =
     else
       v.vname, true, "other function"
   end
-  | GVarDecl(_,v,_) when hasAttribute "alias" v.vattr ->
+  | GFunDecl(_,v,_) when hasAttribute "alias" v.vattr ->
     v.vname, true, "has GCC alias attribute"
-  | GVarDecl(_,v,_) when hasAttribute "FC_BUILTIN" v.vattr ->
+  | GFunDecl(_,v,_) | GVarDecl(v,_) when hasAttribute "FC_BUILTIN" v.vattr ->
     v.vname, true, "has FC_BUILTIN attribute"
   | GAnnot _ -> "", true, "global annotation"
   | GType (t, _) when
@@ -407,7 +404,8 @@ class markReachableVisitor
 	enuminfo.ereferenced <- true;
 	DoChildren
     | GVar (varinfo, _, _)
-    | GVarDecl (_,varinfo, _)
+    | GVarDecl (varinfo, _)
+    | GFunDecl (_,varinfo, _)
     | GFun ({svar = varinfo}, _) ->
 	if not (hasAttribute "FC_BUILTIN" varinfo.vattr) then
           varinfo.vreferenced <- true;
@@ -555,7 +553,8 @@ let markReachable file isRoot =
     match global with
     | GFun ({svar = info}, _)
     | GVar (info, _, _)
-    | GVarDecl (_,info, _) ->
+    | GFunDecl (_,info, _)
+    | GVarDecl (info, _) ->
 	Hashtbl.add globalMap info.vname global
     | _ ->
 	()
@@ -750,8 +749,10 @@ let removeUnmarked isRoot file =
       | GVar (v, _, _) ->
           v.vreferenced || 
             Cil.hasAttribute "FC_BUILTIN" v.vattr || isRoot global
-      | GVarDecl (_,({vreferenced = false} as v), _) ->
-          Cil.hasAttribute "FC_BUILTIN" v.vattr ||
+      | GVarDecl (v, _)
+      | GFunDecl (_,v, _)->
+          v.vreferenced ||
+            Cil.hasAttribute "FC_BUILTIN" v.vattr ||
             (Cil.removeFormalsDecl v; isRoot global)
        (* keep FC_BUILTIN, as some plug-ins might want to use them later
           for semi-legitimate reasons. *)
@@ -835,6 +836,6 @@ let removeUnusedTemps ?(isRoot : rootsFilter = isDefaultRoot) file =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

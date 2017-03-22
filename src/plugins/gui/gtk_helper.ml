@@ -317,7 +317,7 @@ let channel_redirector channel callback =
 
 let log_redirector ?(flush=fun () -> ()) emit_string =
   let output s offset length = emit_string (String.sub s offset length) in
-  Log.set_output output flush
+  Log.set_output ~isatty:false output flush
 
 let make_string_list ~packing =
   let (model,column) =
@@ -818,6 +818,16 @@ let make_text_page ?pos (notebook:GPack.notebook) title =
   in
   reparent_page, w
 
+(* If [EDITOR] is undefined, uses [emacsclient -n] *)
+let open_in_external_viewer ?(line=1) file =
+  let viewer =
+    try Sys.getenv "EDITOR" with | Not_found -> "emacsclient -n"
+  in
+  let cmd_line = Format.sprintf "%s +%d %s" viewer line file in
+  Gui_parameters.feedback "opening external viewer, running command:\n%s"
+    cmd_line;
+  ignore (Sys.command cmd_line)
+
 exception Too_many_events
 let refresh_gui () = 
   let counter = ref 0 in
@@ -989,7 +999,7 @@ module Custom =struct
     method add_column_text   : ('a,GTree.cell_properties_text) column
     method add_column_pixbuf : ('a,GTree.cell_properties_pixbuf) column
     method add_column_toggle : ('a,GTree.cell_properties_toggle) column
-    method add_column_empty : unit
+    method add_column_empty : GTree.view_column
   end
 
   class ['a] makecolumns ?packing ?width ?height (view:GTree.view) 
@@ -1121,7 +1131,8 @@ module Custom =struct
     method add_column_empty =
       let column = GTree.view_column ~title:"" () in
       empty <- Some column ;
-      ignore (view#append_column column)
+      ignore (view#append_column column);
+      column
 
   end
 
@@ -1194,7 +1205,7 @@ module Custom =struct
       (m : 'a model) =
       let model = new list_model m in
       let view = GTree.view ~model 
-	~headers_visible:headers 
+	~headers_visible:headers
 	~rules_hint:rules 
 	~show:true () 
       in
@@ -1318,6 +1329,6 @@ let graph_window_through_dot ~parent ~title dot_formatter =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

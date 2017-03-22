@@ -31,7 +31,7 @@
 module Output : sig
   include Log.Messages
   val dkey: Log.category
-(** @since Oxygen-20121001+dev *)
+(** @since Fluorine-20130401 *)
 end
 
 (* ************************************************************************** *)
@@ -70,6 +70,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

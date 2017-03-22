@@ -68,6 +68,21 @@ val prop_id_keys : prop_id -> string list * string list (* required , hints *)
 val get_propid : prop_id -> string (** Unique identifier of [prop_id] *)
 val pp_propid : Format.formatter -> prop_id -> unit (** Print unique id of [prop_id] *)
 
+type prop_kind =
+  | PKCheck       (** internal check *)
+  | PKProp        (** normal property *)
+  | PKEstablished (** computation related to a loop property before the loop. *)
+  | PKPreserved   (** computation related to a loop property inside the loop. *)
+  | PKPropLoop    (** loop property used as hypothesis inside a loop. *)
+  | PKVarDecr     (** computation related to the decreasing of a variant in a loop *)
+  | PKVarPos      (** computation related to a loop variant being positive *)
+  | PKAFctOut     (** computation related to the function assigns on normal termination *)
+  | PKAFctExit    (** computation related to the function assigns on exit termination *)
+  | PKPre of kernel_function * stmt * Property.t (** precondition for function
+                                                     at stmt, property of the require. Many information that should come
+                                                     from the p_prop part of the prop_id, but in the PKPre case,
+                                                     it seems that it is hiden in a IPBlob property ! *)
+
 val pretty : Format.formatter -> prop_id -> unit
 val pretty_context : Description.kf -> Format.formatter -> prop_id -> unit
 val pretty_local : Format.formatter -> prop_id -> unit
@@ -132,7 +147,7 @@ val mk_loop_assigns_id : kernel_function -> stmt -> code_annotation ->
 val mk_fct_assigns_id : kernel_function -> funbehavior ->
   termination_kind -> identified_term from list -> prop_id option
 
-val mk_pre_id : kernel_function -> kinstr -> funbehavior -> 
+val mk_pre_id : kernel_function -> kinstr -> funbehavior ->
   identified_predicate -> prop_id
 
 val mk_stmt_post_id : kernel_function -> stmt -> funbehavior ->
@@ -142,7 +157,7 @@ val mk_fct_post_id : kernel_function -> funbehavior ->
   termination_kind * identified_predicate -> prop_id
 
 (** [mk_call_pre_id called_kf s_call called_pre] *)
-val mk_call_pre_id : kernel_function -> stmt -> 
+val mk_call_pre_id : kernel_function -> stmt ->
   Property.t -> Property.t -> prop_id
 
 val mk_property : Property.t -> prop_id
@@ -176,7 +191,7 @@ val mk_kf_any_assigns_info : unit -> assigns_full_info
 val mk_loop_any_assigns_info : stmt -> assigns_full_info
 
 val pp_assign_info : string -> Format.formatter -> assigns_full_info -> unit
-val merge_assign_info : 
+val merge_assign_info :
   assigns_full_info -> assigns_full_info -> assigns_full_info
 
 val mk_loop_assigns_desc : stmt -> identified_term from list -> assigns_desc
@@ -207,6 +222,9 @@ val pp_pred_info : Format.formatter -> pred_info -> unit
 
 (** [mk_part pid (k, n)] build the identification for the [k/n] part of [pid].*)
 val mk_part : prop_id -> (int * int) -> prop_id
+
+(** get the 'kind' information. *)
+val kind_of_id : prop_id -> prop_kind
 
 (** get the 'part' infomation. *)
 val parts_of_id : prop_id -> (int * int) option

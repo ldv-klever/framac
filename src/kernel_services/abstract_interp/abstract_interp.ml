@@ -21,8 +21,23 @@
 (**************************************************************************)
 
 exception Not_less_than
+exception Can_not_subdiv
+
+let msg_emitter = Lattice_messages.register "Abstract_interp"
 
 open Lattice_type
+
+module Bot = struct
+  type 'a or_bottom = [ `Value of 'a | `Bottom ]
+  let non_bottom = function
+    | `Value v -> v
+    | `Bottom -> assert false
+
+  let join_or_bottom join x y = match x, y with
+    | `Value vx, `Value vy -> `Value (join vx vy)
+    | `Bottom, (`Value _ as v) | (`Value _ as v), `Bottom
+    | (`Bottom as v), `Bottom -> v
+end
 
 module Make_Lattice_Set(V:Lattice_Value): Lattice_Set with type O.elt = V.t =
 struct
@@ -549,17 +564,27 @@ module Int = struct
 (*    Format.printf "Int.fold: inf:%a sup:%a step:%a@\n"
        pretty inf pretty sup pretty step; *)
     let nb_loop = div (sub sup inf) step in
-    let next = add step in
-    let rec fold ~counter ~inf acc =
+    let rec fold_incr ~counter ~inf acc =
       if equal counter onethousand then
-        Kernel.warning ~once:true ~current:true
-          "enumerating %s integers" (to_string nb_loop);
+        Lattice_messages.emit_costly msg_emitter
+          "enumerating %a integers" pretty nb_loop;
       if le inf sup then begin
           (*          Format.printf "Int.fold: %a@\n" pretty inf; *)
-        fold ~counter:(succ counter) ~inf:(next inf) (f inf acc)
+        fold_incr ~counter:(succ counter) ~inf:(add step inf) (f inf acc)
       end else acc
     in
-    fold ~counter:zero ~inf acc
+    let rec fold_decr ~counter ~sup acc =
+      if equal counter onethousand then
+        Lattice_messages.emit_costly msg_emitter
+          "enumerating %a integers" pretty nb_loop;
+      if le inf sup then begin
+        (*          Format.printf "Int.fold: %a@\n" pretty inf; *)
+        fold_decr ~counter:(succ counter) ~sup:(add step sup) (f sup acc)
+      end else acc
+    in
+    if le zero step
+    then fold_incr ~counter:zero ~inf acc
+    else fold_decr ~counter:zero ~sup acc
 
 end
 
@@ -748,7 +773,7 @@ struct
 
   type t1 = L1.t
   type t2 = L2.t
-  type tt = t1 * t2
+  type t = t1 * t2
   type widen_hint = L1.widen_hint * L2.widen_hint
 
   let hash (v1, v2) = L1.hash v1 + 31 * L2.hash v2
@@ -819,9 +844,11 @@ struct
       ((l,ll),bb)
     else ((l, L2.join ll1 ll2), false);;
 
-  include Datatype.Make
+  include
+    (Datatype.Make
       (struct
-        type t = tt (*= t1*t2 *)
+        type uproduct = t
+        type t = uproduct (*= t1*t2 *)
         let name = "(" ^ L1.name ^ ", " ^ L2.name ^ ") lattice_uproduct"
         let structural_descr =
           Structural_descr.t_sum [| [| L1.packed_descr; L2.packed_descr |] |]
@@ -841,7 +868,8 @@ struct
         let pretty = pretty
         let varname = Datatype.undefined
         let mem_project = Datatype.never_any_project
-       end)
+       end):
+       Datatype.S with type t := t)
   let () = Type.set_ml_name ty None
 
 end
@@ -1020,6 +1048,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -20,6 +20,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(*
-   This file is empty on purpose. Plugins register callbacks in src/kernel/db.ml.
-*)
+(** Computations of Def points. Some of the functions of this module are
+    registered in module {!Db.Scope}. *)
+
+val compute_with_def_type_zone:
+  Cil_types.kernel_function -> Cil_types.stmt -> Locations.Zone.t ->
+  ((bool * bool) Cil_datatype.Stmt.Map.t * Locations.Zone.t option) option
+(** This function is similar to {!Db.Scope.get_defs_with_type}, except
+    that it receives a zone as argument, instead of an l-value *)

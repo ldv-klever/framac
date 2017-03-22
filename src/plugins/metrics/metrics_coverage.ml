@@ -43,16 +43,18 @@ class coverageAuxVisitor = object(self)
 
   (* Visit the initializer of the given var, if it exists, and returns it *)
   method private visit_non_function_var vi =
-    try
-      (* Visit the initializer if there is one *)
-      let init = Globals.Vars.find vi in
-      match init with
+    if Metrics_base.consider_variable vi then
+      try
+        (* Visit the initializer if there is one *)
+        let init = Globals.Vars.find vi in
+        match init with
         | { init = None } -> None
         | { init = Some init } ->
           ignore (Visitor.visitFramacInit (self:>Visitor.frama_c_visitor)
                     vi NoOffset init);
           Some init
-    with Not_found -> (* not a global *) None
+      with Not_found -> (* not a global *) None
+    else None
 
 end
 
@@ -358,6 +360,6 @@ let compute_syntactic kf = fst (compute_syntactic kf)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

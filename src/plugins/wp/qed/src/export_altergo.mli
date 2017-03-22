@@ -27,7 +27,7 @@ open Engine
 
 (** Exportation Engine for Alt-Ergo.
 
-    Provides a full {{:Export.S.engine-c.html}engine} 
+    Provides a full {{:Export.S.engine-c.html}engine}
     from a {{:Export.S.linker-c.html}linker}. *)
 
 module Make(T : Term) :

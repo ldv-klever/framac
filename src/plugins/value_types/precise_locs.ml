@@ -74,7 +74,7 @@ let _cardinal_offset = function
 
 let rec imprecise_offset = function
   | POBottom -> Ival.bottom
-  | POZero -> Ival.singleton_zero
+  | POZero -> Ival.zero
   | POSingleton i -> Ival.inject_singleton i
   | POPrecise (i, _) | POImprecise i -> i
   | POShift (shift, po, _) -> Ival.add_int shift (imprecise_offset po)
@@ -183,7 +183,7 @@ let inject_location_bits loc =
 let combine_base_precise_offset base po =
   match po with
     | POBottom -> PLBottom
-    | POZero -> PLLoc (Location_Bits.inject base Ival.singleton_zero)
+    | POZero -> PLLoc (Location_Bits.inject base Ival.zero)
     | POSingleton i ->
       PLLoc (Location_Bits.inject base (Ival.inject_singleton i))
     | POImprecise i | POPrecise (i, _) -> PLLoc (Location_Bits.inject base i)
@@ -234,7 +234,7 @@ let is_bottom_loc pl = pl.loc = PLBottom
 let rec fold_offset f po acc =
   match po with
     | POBottom -> f Ival.bottom acc
-    | POZero -> f Ival.singleton_zero acc
+    | POZero -> f Ival.zero acc
     | POSingleton i -> f (Ival.inject_singleton i) acc
     | POPrecise (iv, _) | POImprecise iv -> f iv acc
     | POShift (shift, po', _) ->
@@ -249,7 +249,7 @@ let rec fold_offset f po acc =
 
 let fold f pl acc =
   match pl.loc with
-    | PLBottom -> f Locations.loc_bottom acc
+    | PLBottom -> acc
     | PLLoc l -> f (make_loc l pl.size) acc
     | PLVarOffset (b, po) ->
       let aux_po ival acc =
@@ -308,6 +308,6 @@ let pretty_loc fmt loc =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

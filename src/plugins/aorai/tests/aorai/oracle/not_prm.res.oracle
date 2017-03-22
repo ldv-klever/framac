@@ -12,11 +12,9 @@ enum aorai_OpStatusList {
     aorai_Called = 0
 };
 /*@ ghost enum aorai_ListOper aorai_CurOperation = op_f; */
-/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called;
-*/
+/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called; */
 /*@ ghost int S0 = 1; */
-/*@ ghost int Sf = 0;
-*/
+/*@ ghost int Sf = 0; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_f;
     assigns aorai_CurOpStatus, aorai_CurOperation, S0, Sf;

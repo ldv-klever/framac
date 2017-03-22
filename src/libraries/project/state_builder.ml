@@ -123,6 +123,8 @@ module States = struct
       acc
 end
 
+module FCDatatype = Datatype
+
 module Register
   (D: Datatype.S)
   (Local_state: State.Local with type t = D.t)
@@ -228,6 +230,9 @@ struct
   let copy src dst =
     debug ~level:4 ("copying to " ^ Project.get_unique_name dst) src;
     let v = find src in
+    if Datatype.copy == FCDatatype.undefined then
+      abort "cannot copy project: unimplemented `copy' function in datatype \
+             `%s' for state `%s'" Datatype.name !internal_name;
     change ~force:false dst { v with state = Datatype.copy v.state }
 
   (* ******* TOUCH THE FOLLOWING AT YOUR OWN RISK: DANGEROUS CODE ******** *)
@@ -823,6 +828,64 @@ module Queue(Data: Datatype.S)(Info: Info) = struct
 end
 
 (* ************************************************************************* *)
+(** {3 Arrays} *)
+(* ************************************************************************* *)
+
+module type Array = sig
+  type elt
+
+  val length: unit -> int
+  val set_length: int -> unit
+  val get: int -> elt
+  val set: int -> elt -> unit
+  val iter : (elt -> unit) -> unit
+  val iteri : (int -> elt -> unit) -> unit
+  val fold_left: ('a -> elt -> 'a) -> 'a -> 'a
+  val fold_right:  (elt -> 'a -> 'a) -> 'a -> 'a
+end
+
+module Array(Data: Datatype.S)(Info: sig include Info val default: Data.t end)=
+struct
+
+  type elt = Data.t
+
+  let state = ref (Array.create 0 Info.default)
+
+  include Register
+  (Datatype.Array(Data))
+  (struct
+     type t = elt array
+     let create () = Array.create 0 Info.default
+     let clear v  = Array.iteri (fun i _ -> v.(i) <- Info.default) v
+     let get () = !state
+     let set x = state := x
+     let clear_some_projects f q =
+       if Data.mem_project == Datatype.never_any_project then
+         false
+       else
+         let removed = ref false in
+         Array.iteri
+           (fun i x -> if Data.mem_project f x then begin
+             !state.(i) <- Info.default;
+             removed := true;
+           end
+           ) q;
+         !removed
+   end)
+  (struct include Info let unique_name = name end)
+
+  let length () = Array.length !state
+  let set_length i = state := Array.create i Info.default
+  let get i = !state.(i)
+  let set i v = !state.(i) <- v
+  let iter f = Array.iter f !state
+  let iteri f = Array.iteri f !state
+  let fold_left f acc = Array.fold_left f acc !state
+  let fold_right f acc = Array.fold_right f !state acc
+
+end
+
+(* ************************************************************************* *)
 (** {3 Apply Once} *)
 (* ************************************************************************* *)
 
@@ -852,6 +915,6 @@ let apply_once name dep f =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -190,6 +190,6 @@ let input_val cin = function
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

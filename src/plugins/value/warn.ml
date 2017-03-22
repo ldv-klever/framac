@@ -25,100 +25,119 @@ open Value_util
 open Locations
 
 
-exception Distinguishable_strings
-
-(* Does the comparison of [ev1] and [ev2] involve the comparison of
-   invalid pointers, or is undefined (typically pointers in different bases) *)
-let check_not_comparable op ev1 ev2 =
+(* Literal strings can only be compared if their contents are recognizably
+   different (or the strings are physically the same). *)
+let are_comparable_string pointer1 pointer2 =
   try
-    if not (Location_Bytes.is_included ev1 Location_Bytes.top_int)
-      || not (Location_Bytes.is_included ev2 Location_Bytes.top_int)
-    then begin
-        let null_1, rest_1 = Location_Bytes.split Base.null ev1 in
-        let null_2, rest_2 = Location_Bytes.split Base.null ev2 in
-        let is_bottom1 = Location_Bytes.is_bottom rest_1 in
-        let is_bottom2 = Location_Bytes.is_bottom rest_2 in
-
-        (* First check if a non-zero integer is compared to an address *)
-        if  ((not (Ival.is_included null_1 Ival.zero)) && (not is_bottom2))
-         || ((not (Ival.is_included null_2 Ival.zero)) && (not is_bottom1))
-        then raise Not_found;
-
-        if not (is_bottom1 && is_bottom2)
-        then begin
-            let loc_bits1 = loc_bytes_to_loc_bits rest_1 in
-            let loc_bits2 = loc_bytes_to_loc_bits rest_2 in
-            let single_base_ok =
-              begin try
-                (* If they are both in the same base and both almost valid,
-                   it's also fine, but beware of empty rest for comparisons
-                   to NULL, or of function pointers *)
-                let extract_base is_bot loc =
-                  if is_bot then Base.null
-                  else begin
-                    let base, offs = Location_Bits.find_lonely_key loc in
-                    if Base.is_function base then
-                      (if not (Ival.equal Ival.zero offs)
-                       then raise Base.Not_valid_offset)
-                    else
-                      Base.is_valid_offset ~for_writing:false
-                        Integer.zero base offs;
-                    base
-                  end
-                in
-                let base_1 = extract_base is_bottom1 loc_bits1
-                and base_2 = extract_base is_bottom2 loc_bits2
-                in
-                  is_bottom1 || is_bottom2 || (Base.equal base_1 base_2)
-                with
-                  Not_found -> false
-              end
-            in
-            if not single_base_ok
-            then begin
-                if op = Eq || op = Ne
-                then begin
-                    (* If both addresses are valid, they can be compared 
-		       for equality. *)
-                    let loc1 = make_loc loc_bits1 Int_Base.one in
-                    let loc2 = make_loc loc_bits2 Int_Base.one in
-                    if (not (Locations.is_valid_or_function loc1)) ||
-                      (not (Locations.is_valid_or_function loc2))
-                    then raise Not_found;
-                    (* But wait! literal strings can only be compared 
-		       if their contents are recognizably different! 
-		       (or the strings are physically the same) *)
-                    Locations.Location_Bytes.iter_on_strings
-                      ~skip:None
-                      (fun base1 s1 offs1 len1 ->
-                        Locations.Location_Bytes.iter_on_strings
-                          ~skip:(Some base1)
-                          (fun _ s2 offs2 len2 ->
-                            let delta = offs1-offs2 in
-                            begin
-                              try
-                                let start = if delta <= 0 then (-delta) else 0
-                                in
-                                for i = start to min len2 (len1 - delta)
-                                do
-(*                                Format.printf "%S %S %d %d@."
-                                    s1 s2 i delta; *)
-                                  if s2.[i] <> s1.[i + delta]
-                                  then raise Distinguishable_strings;
-                                done;
-                                raise Not_found
-                              with Distinguishable_strings -> ();
-                            end)
-                          rest_1)
-                      rest_2
-                  end
-                else raise Not_found
-              end
-          end
-      end;
-    false
-  with Not_found | Base.Not_valid_offset ->
+    Locations.Location_Bytes.iter_on_strings ~skip:None
+      (fun base1 s1 offs1 len1 ->
+         Locations.Location_Bytes.iter_on_strings ~skip:(Some base1)
+           (fun _ s2 offs2 len2 ->
+              let delta = offs1 - offs2 in
+              let start = if delta <= 0 then -delta else 0
+              and max = min len2 (len1 - delta) in
+              let length = max - start + 1 in
+              let sub1 = String.sub s1 (start + delta) length
+              and sub2 = String.sub s2 start length in
+              if String.compare sub1 sub2 = 0
+              then raise Not_found)
+           pointer1)
+      pointer2;
     true
+  with
+    | Not_found -> false
+    | Invalid_argument _s -> assert false
+
+(* Under-approximation of the fact that a pointer is actually correct w.r.t.
+   what can be created through pointer arithmetics. See C99 6.5.6 and 6.5.8
+   for the definition of possible pointers, and in particular the definition
+   of "one past". Value does not currently check that all pointers are
+   possible, but flags impossible ones using pointer_comparable alarms when
+   performing a comparison.
+
+   In practice, function pointers are considered possible or one past
+   when their offset is 0. For object pointers, the offset is checked
+   against the validity of each base, taking past-one into account. *)
+let possible_pointer ~one_past location =
+  try
+    let location = loc_bytes_to_loc_bits location in
+    let is_possible_offset base offs =
+      if Base.is_function base then
+        if Ival.is_zero offs then () else raise Base.Not_valid_offset
+      else
+        let size = if one_past then Integer.zero else Integer.one in
+        Base.is_valid_offset ~for_writing:false size base offs
+    in
+    match location with
+      | Location_Bits.Top _ -> false
+      | Location_Bits.Map m ->
+          Location_Bits.M.iter is_possible_offset m;
+          true
+  with
+  | Int_Base.Error_Top | Base.Not_valid_offset -> false
+
+(* Are [ev1] and [ev2] safely comparable, or does their comparison involves
+   invalid pointers, or is undefined (typically pointers in different bases). *)
+let are_comparable op ev1 ev2 =
+  (* If both of the operands have arithmetic type, the comparison is valid. *)
+  if Location_Bytes.is_included ev1 Location_Bytes.top_int
+     && Location_Bytes.is_included ev2 Location_Bytes.top_int
+  then true
+  else
+    let null_1, rest_1 = Location_Bytes.split Base.null ev1
+    and null_2, rest_2 = Location_Bytes.split Base.null ev2 in
+    (* Note that here, rest_1 and rest_2 cannot be both bottom. *)
+    let is_bottom1 = Location_Bytes.is_bottom rest_1
+    and is_bottom2 = Location_Bytes.is_bottom rest_2 in
+    let arith_compare_ok =
+      if op = Eq || op = Ne
+      then
+        (* A pointer can be compared to a null pointer constant
+           by equality operators. *)
+        (Ival.is_included null_1 Ival.zero || is_bottom2)
+        && (Ival.is_included null_2 Ival.zero || is_bottom1)
+      else
+        (* Pointers cannot be compared to arithmetic values by
+           relational operators. *)
+        Ival.is_bottom null_1 && Ival.is_bottom null_2
+    in
+    if not arith_compare_ok
+    then false
+    else
+    (* Both pointers have to be almost valid (they can be pointers to one past
+       an array object. *)
+    if (not (possible_pointer ~one_past:true rest_1)) ||
+       (not (possible_pointer ~one_past:true rest_2))
+    then false
+    else
+    (* Equality operators allow the comparison between an almost valid pointer
+       and the null pointer (other cases where is_bottom1 or is_bottom2 have
+       been managed by arith_compare_ok). *)
+    if is_bottom1 || is_bottom2
+    then true
+    else
+      (* If both pointers point to the same base, the comparison is valid. *)
+      let single_base_ok =
+        try
+          let base_1, _ = Location_Bytes.find_lonely_key rest_1
+          and base_2, _ = Location_Bytes.find_lonely_key rest_2 in
+          Base.equal base_1 base_2
+        with Not_found -> false
+      in
+      if single_base_ok
+      then true
+      else if not (op = Eq || op = Ne)
+      (* For relational operators, the comparison of pointers on different
+         bases is undefined. *)
+      then false
+      else
+        (* If both addresses are valid, they can be compared for equality. *)
+      if (possible_pointer ~one_past:false rest_1) &&
+         (possible_pointer ~one_past:false rest_2)
+      then
+        (* But beware of the comparisons of literal strings. *)
+        are_comparable_string rest_1 rest_2
+      else false
 
 
 exception Recursive_call
@@ -171,11 +190,11 @@ let warn_modified_result_loc ~with_alarms kf locret state lvret =
                let loc = Cil_datatype.Location.unknown in
                let exp = Cil.mkAddrOrStartOf ~loc lvret in
                Valarms.do_warn with_alarms.CilE.others
-                 (fun (_emit, suffix) ->
+                 (fun () ->
                     Value_parameters.warning ~current:true ~once:true
                       "@[possible@ side-effect@ modifying %a@ within@ call@ \
-                         to %a@]%t"
-                      Printer.pp_exp exp Kernel_function.pretty kf suffix;
+                       to %a@]%t" Printer.pp_exp exp Kernel_function.pretty kf
+                      Value_util.pp_callstack;
                  )
 
 
@@ -212,8 +231,7 @@ let warn_locals_escape_result fundec locals =
         Printer.pp_varinfo sv
 
 let warn_imprecise_lval_read ~with_alarms lv loc contents =
-  if with_alarms.CilE.imprecision_tracing.CilE.a_log <> None
-  then
+  if with_alarms.CilE.imprecision_tracing.CilE.a_log then
   let pretty_gm fmt s =
     let s = Base.SetLattice.(inject (O.remove Base.null s)) in
     Base.SetLattice.pretty fmt s
@@ -239,7 +257,7 @@ let warn_imprecise_lval_read ~with_alarms lv loc contents =
           | Location_Bytes.Map _ -> false
   in
   if something_to_warn then Valarms.do_warn with_alarms.CilE.imprecision_tracing
-    (fun  _ ->
+    (fun  () ->
     Value_parameters.result ~current:true ~once:true
       "@[<v>@[Reading left-value %a.@]@ %t%t%t@]"
       Printer.pp_lval lv
@@ -276,7 +294,7 @@ let warn_imprecise_lval_read ~with_alarms lv loc contents =
    [exp_val] is the part of the evaluation of [exp] that is imprecise. *)
 let warn_right_exp_imprecision ~with_alarms lv loc_lv exp_val =
   Valarms.do_warn with_alarms.CilE.imprecision_tracing
-    (fun _ ->
+    (fun () ->
        match exp_val with
          | Location_Bytes.Top(_topparam,origin) ->
              Value_parameters.result ~once:true ~current:true
@@ -303,7 +321,7 @@ let warn_overlap ~with_alarms (lv, left_loc) (exp_lv, right_loc) =
     try Integer.gt size (Integer.of_int (Cil.bitsSizeOf Cil.intType))
     with Cil.SizeOfError _ -> true
   in
-  if with_alarms.CilE.others.CilE.a_log <> None then
+  if with_alarms.CilE.others.CilE.a_log then
     match right_loc.size with
       | Int_Base.Value size when big_enough size ->
     	  if Location_Bits.partially_overlaps size right_loc.loc left_loc.loc
@@ -403,19 +421,20 @@ let maybe_warn_indeterminate ~with_alarms v =
 
 let maybe_warn_completely_indeterminate ~with_alarms loc vi v =
   if Cvalue.V.is_bottom v && not (Cvalue.V_Or_Uninitialized.is_bottom vi) &&
-    with_alarms.CilE.unspecified.CilE.a_log <> None
+    with_alarms.CilE.unspecified.CilE.a_log
   then
     Valarms.do_warn with_alarms.CilE.unspecified
-      (fun _ ->
+      (fun () ->
         Kernel.warning ~current:true ~once:true
           "completely indeterminate value %a."
           (Locations.pretty_english ~prefix:true) loc)
 
 let warn_float_addr ~with_alarms msg =
   Valarms.do_warn with_alarms.CilE.imprecision_tracing
-    (fun (_, pp) ->
+    (fun () ->
        Value_parameters.result ~once:true ~current:true
-         "@[float@ value@ contains@ addresses (%t)]%t" msg pp
+         "@[float@ value@ contains@ addresses (%t)]%t"
+         msg Value_util.pp_callstack
     );
 ;;
 
@@ -440,6 +459,6 @@ let warn_top () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

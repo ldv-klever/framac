@@ -24,6 +24,6 @@ val compute_pdg : Cil_types.kernel_function -> PdgTypes.Pdg.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

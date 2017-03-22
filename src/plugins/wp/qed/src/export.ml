@@ -29,17 +29,17 @@ open Logic
 open Plib
 open Engine
 
-let cmode = function 
-  | Mpositive | Mnegative -> Cprop 
+let cmode = function
+  | Mpositive | Mnegative -> Cprop
   | Mterm | Mterm_int | Mterm_real | Mint | Mreal -> Cterm
 
-let pmode = function 
-  | Mpositive -> Positive 
-  | Mnegative -> Negative 
+let pmode = function
+  | Mpositive -> Positive
+  | Mnegative -> Negative
   | Mterm | Mterm_int | Mterm_real | Mint | Mreal -> Boolean
 
-let amode = function 
-  | Mpositive | Mnegative | Mterm | Mterm_int | Mint -> Aint 
+let amode = function
+  | Mpositive | Mnegative | Mterm | Mterm_int | Mint -> Aint
   | Mterm_real | Mreal -> Areal
 
 let smode = function
@@ -74,9 +74,9 @@ let is_letter = function
   | '0' .. '9' | 'a' .. 'z' | 'A' .. 'Z' -> true
   | _ -> false
 
-let is_ident op = 
-  try 
-    for i = 0 to String.length op - 1 do 
+let is_ident op =
+  try
+    for i = 0 to String.length op - 1 do
       if not (is_letter op.[i]) then raise Exit
     done ; true
   with Exit -> false
@@ -106,7 +106,7 @@ struct
 
   module VarMap = Map.Make(T.Var)
   module Ident = Map.Make(String)
-  
+
   type allocator = {
     mutable base : string -> string ;
     mutable index : int Ident.t ;
@@ -116,7 +116,7 @@ struct
   }
 
   let identity x = x
-  
+
   let create_alloc base = {
     base ;
     index = Ident.empty ;
@@ -137,14 +137,14 @@ struct
     let basename = lnk.base basename in
     let k = try Ident.find basename lnk.index with Not_found -> 0 in
     lnk.index <- Ident.add basename (succ k) lnk.index ;
-    if k=0 && String.length basename = 1 then basename 
+    if k=0 && String.length basename = 1 then basename
     else Printf.sprintf "%s_%d" basename k
 
   let bind_bvar k t lnk =
     let x = fresh (Tau.basename t) lnk in
     lnk.bvars <- Intmap.add k x lnk.bvars ; x
 
-  let find_bvar k lnk = 
+  let find_bvar k lnk =
     try Intmap.find k lnk.bvars
     with Not_found -> assert false
 
@@ -169,7 +169,7 @@ struct
 
   let rec binders q k vars e =
     match T.repr e with
-    | Bind(q',t,e) when q'=q -> 
+    | Bind(q',t,e) when q'=q ->
         binders q (succ k) (add_var k t vars) (lc_repr e)
     | _ -> k,vars,e
 
@@ -228,7 +228,7 @@ struct
       method virtual pp_farray : tau printer2
       method virtual pp_datatype : ADT.t -> tau list printer
 
-      method pp_subtau fmt t = 
+      method pp_subtau fmt t =
         if self#t_atomic t
         then self#pp_tau fmt t
         else fprintf fmt "@[<hov 1>(%a)@]" self#pp_tau t
@@ -250,9 +250,9 @@ struct
 
       val mutable mode = Mpositive
       method mode = mode
-      method with_mode m f = 
-        let m0 = mode in 
-        if m = m0 then f m 
+      method with_mode m f =
+        let m0 = mode in
+        if m = m0 then f m
         else
           try mode <- m ; f m0 ; mode <- m0
           with err -> mode <- m0 ; raise err
@@ -275,7 +275,7 @@ struct
 
       method pp_real fmt x =
         let cst = Numbers.parse (R.to_string x) in
-        if Numbers.is_zero cst 
+        if Numbers.is_zero cst
         then self#pp_int Areal fmt Z.zero
         else self#pp_cst fmt cst
 
@@ -316,7 +316,7 @@ struct
 
       method private pp_binop ~op fmt x y =
         match op with
-        | Assoc op | Op op -> 
+        | Assoc op | Op op ->
             fprintf fmt "%a %s@ %a" self#pp_atom x op self#pp_atom y
         | Call f -> self#pp_call f fmt [x;y]
 
@@ -327,14 +327,14 @@ struct
         match op with
         | Assoc op -> Plib.pp_assoc ~op self#pp_atom fmt xs
         | Op op -> Plib.pp_fold_binop ~op self#pp_atom fmt xs
-        | Call f -> 
+        | Call f ->
             match self#callstyle with
-            | CallVar | CallVoid -> 
+            | CallVar | CallVoid ->
                 Plib.pp_fold_call  ~f self#pp_flow fmt xs
-            | CallApply -> 
+            | CallApply ->
                 Plib.pp_fold_apply ~f self#pp_atom fmt xs
 
-      method pp_fun cmode fct fmt xs = 
+      method pp_fun cmode fct fmt xs =
         match self#link fct, cmode with
         | F_call f, _
         | F_bool_prop (f,_), Cterm
@@ -344,7 +344,7 @@ struct
         | F_left f, _ ->
             begin
               match self#callstyle with
-              | CallVar | CallVoid -> 
+              | CallVar | CallVoid ->
                   Plib.pp_fold_call ~f self#pp_flow fmt xs
               | CallApply ->
                   Plib.pp_fold_apply ~f self#pp_atom fmt xs
@@ -353,7 +353,7 @@ struct
             begin
               let xs = List.rev xs in
               match self#callstyle with
-              | CallVar | CallVoid -> 
+              | CallVar | CallVoid ->
                   Plib.pp_fold_call_rev ~f self#pp_flow fmt xs
               | CallApply ->
                   Plib.pp_fold_apply_rev ~f self#pp_atom fmt xs
@@ -402,9 +402,9 @@ struct
       method private pp_arith_atom flow fmt e =
         if mode = Mreal && T.is_int e then
           self#with_mode Mint
-            (fun _ -> 
+            (fun _ ->
                match self#op_real_of_int with
-               | Op op | Assoc op -> 
+               | Op op | Assoc op ->
                    begin
                      match flow with
                      | Atom -> fprintf fmt "(%s %a)" op self#pp_atom e
@@ -413,9 +413,9 @@ struct
                | Call f ->
                    begin
                      match self#callstyle with
-                     | CallVar | CallVoid -> 
+                     | CallVar | CallVoid ->
                          fprintf fmt "%s(%a)" f self#pp_flow e
-                     | CallApply -> 
+                     | CallApply ->
                          match flow with
                          | Atom -> fprintf fmt "(%s %a)" f self#pp_atom e
                          | Flow -> fprintf fmt "%s %a" f self#pp_atom e
@@ -448,7 +448,7 @@ struct
           (if T.is_real a || T.is_real b then Mreal else Mint)
           begin fun _ ->
             match phi (amode mode) with
-            | Assoc op | Op op -> 
+            | Assoc op | Op op ->
                 Plib.pp_binop op (self#pp_arith_arg Atom) fmt a b
             | Call f -> self#pp_arith_call ~f fmt [a;b]
           end
@@ -473,12 +473,12 @@ struct
         let amode = if is_real then Areal else Aint in
         let gmode = if is_real then Mreal else Mint in
         match phi (cmode mode) amode with
-        | Assoc op | Op op -> 
-            self#with_mode gmode 
+        | Assoc op | Op op ->
+            self#with_mode gmode
               (fun emode ->
-                 let scope = 
+                 let scope =
                    match emode with
-                   | Mpositive | Mnegative 
+                   | Mpositive | Mnegative
                    | Mterm | Mterm_int | Mterm_real -> self#op_scope amode
                    | Mint | Mreal -> None
                  in match scope with
@@ -497,13 +497,13 @@ struct
         | Call f ->
             begin
               fprintf fmt "@[<hov 2>" ;
-              self#with_mode gmode 
+              self#with_mode gmode
                 (fun _ -> self#pp_arith_call ~f fmt [a;b]) ;
               fprintf fmt "@]" ;
             end
 
       method pp_times fmt k e =
-        if Z.equal k Z.minus_one 
+        if Z.equal k Z.minus_one
         then self#pp_arith_unop ~phi:(self#op_minus) fmt e
         else self#pp_arith_binop ~phi:(self#op_mul) fmt (T.e_zint k) e
 
@@ -556,11 +556,11 @@ struct
         match op with
         | Assoc op -> Plib.pp_assoc ~e:"?" ~op pp_atom fmt xs
         | Op op -> Plib.pp_fold_binop ~e:"?" ~op pp_atom fmt xs
-        | Call f -> 
+        | Call f ->
             match self#callstyle with
-            | CallVar | CallVoid -> 
+            | CallVar | CallVoid ->
                 Plib.pp_fold_call ~e:"?" ~f pp_flow fmt xs
-            | CallApply -> 
+            | CallApply ->
                 Plib.pp_fold_apply ~e:"?" ~f pp_atom fmt xs
 
       (* -------------------------------------------------------------------------- *)
@@ -605,8 +605,8 @@ struct
             let xts = List.map (fun (k,t) -> bind_bvar (last-k) t alloc,t) kts in
             self#pp_lambda fmt xts ;
             self#pp_binders fmt e
-              
-        | Bind((Forall|Exists) as q,t,e) -> 
+
+        | Bind((Forall|Exists) as q,t,e) ->
             let e = lc_repr e in
             let n,vars,e = binders q 1 (add_var 0 t TauMap.empty) e in
             let last = Bvars.order (lc_vars e) + n - 1 in
@@ -617,11 +617,11 @@ struct
                  match q with
                  | Forall -> fprintf fmt "%a@ " (self#pp_forall t) xs
                  | Exists -> fprintf fmt "%a@ " (self#pp_exists t) xs
-                 | Lambda -> assert false 
+                 | Lambda -> assert false
               ) vars ;
             self#pp_binders fmt e
 
-        | _ -> 
+        | _ ->
             self#pp_shared fmt e
 
       (* -------------------------------------------------------------------------- *)
@@ -645,12 +645,12 @@ struct
         let shareable e = self#is_shareable e in
         let es = T.shared ~shareable ~shared [e] in
         if es <> [] then
-          self#local 
+          self#local
             begin fun () ->
               let m0 = mode in
               let p0 = pmode m0 in
               List.iter
-                (fun e -> 
+                (fun e ->
                    let base = self#basename (T.basename e) in
                    let x = fresh base alloc in
                    mode <- Mterm ;
@@ -660,7 +660,7 @@ struct
               mode <- m0 ;
               self#pp_flow fmt e ;
             end
-        else 
+        else
           self#pp_flow fmt e
 
       (* -------------------------------------------------------------------------- *)
@@ -681,7 +681,7 @@ struct
           | Not a -> fprintf fmt "(%a=%s)" self#pp_do_atom a (self#e_false Cterm)
           | _ -> fprintf fmt "(%a=%s)" self#pp_do_atom e (self#e_true Cterm)
         else pp fmt e
-            
+
       method pp_atom fmt e = self#pp_bool self#pp_do_atom fmt e
       method pp_flow fmt e = self#pp_bool self#pp_do_flow fmt e
 
@@ -694,20 +694,20 @@ struct
           match self#op_scope_for e with
           | None -> ()
           | Some s -> pp_print_string fmt s
-                        
+
       method private pp_do_flow fmt e =
         try self#pp_var fmt (Tmap.find e alloc.share)
-        with Not_found -> 
+        with Not_found ->
           match self#op_scope_for e with
           | None -> self#pp_repr fmt e
           | Some s -> fprintf fmt "@[<hov 1>(%a)%s@]" self#pp_repr e s
-                        
+
       method private pp_addition fmt xs =
         let amode = if List.exists T.is_real xs then Areal else Aint in
-        match 
-          self#op_add amode , 
-          self#op_sub amode , 
-          self#op_minus amode 
+        match
+          self#op_add amode ,
+          self#op_sub amode ,
+          self#op_minus amode
         with
         | Assoc add , Assoc sub , Op minus ->
             let factor x = match T.repr x with

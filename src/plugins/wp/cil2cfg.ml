@@ -56,7 +56,7 @@ type node_type =
   | Vcall of stmt * lval option * call_type * exp list
   | Vtest of bool * stmt * exp (** bool=true for In and false for Out *)
   | Vswitch of stmt * exp
-  | Vloop of bool option * stmt 
+  | Vloop of bool option * stmt
   (** boolean is is_natural. None means the node has not been detected
     * as a loop *)
   | Vloop2 of bool * int
@@ -84,7 +84,7 @@ let node_type_id t : node_id = match t with
   | VfctOut -> (0, 2)
   | Vexit -> (0, 3)
   | Vend -> (0, 4)
-  | Vstmt s | Vtest (true, s, _) | Vswitch (s,_) | Vcall (s, _, _, _) -> 
+  | Vstmt s | Vtest (true, s, _) | Vswitch (s,_) | Vcall (s, _, _, _) ->
       (1, s.sid)
   | Vloop (_, s) -> (2, s.sid)
   | Vloop2 (_, n) -> (3, n)
@@ -129,7 +129,7 @@ let same_node v v' =
   (node_id v) = (node_id v')
 
 (** the CFG nodes *)
-module VL = 
+module VL =
 struct
   type t = node
 
@@ -251,7 +251,7 @@ module PMAP(X: Graph.Sig.COMPARABLE) = struct
 
   let fold f h init = M.fold f !h init
 
-  let map f h = 
+  let map f h =
     ref (M.fold (fun k v m -> let (k,v) = f k v in M.add k v m) !h M.empty)
 
   let iter f h = M.iter f !h
@@ -263,13 +263,13 @@ end
 (** the CFG is an ocamlgraph, but be careful to use it through the cfg function
  * because some edges don't have the same meaning as some others... *)
 module MyGraph = Graph.Blocks.Make(PMAP)
-module CFG: 
-  Graph.Sig.I 
+module CFG:
+  Graph.Sig.I
   with type V.t = VL.t
    and  type V.label = VL.t
    and  type E.t = VL.t * EL.t * VL.t
    and  type E.label = EL.t
-= 
+=
 struct
   include MyGraph.Digraph.ConcreteBidirectionalLabeled(VL)(EL)
   let add_vertex g v = ignore (add_vertex g v)
@@ -381,43 +381,43 @@ let iter_edges f cfg =
 let iter_succ f cfg n =
   let f e = if is_next_edge e then () else f (CFG.E.dst e)
   in try CFG.iter_succ_e f (cfg.graph) n
-  with Invalid_argument _ -> 
+  with Invalid_argument _ ->
     (Wp_parameters.warning "[cfg.iter_succ] pb with node %a" pp_node n)
 
 let fold_succ f cfg n acc =
   let f e acc = if is_next_edge e then acc else f (CFG.E.dst e) acc
   in try CFG.fold_succ_e f (cfg.graph) n acc
-  with Invalid_argument _ -> 
+  with Invalid_argument _ ->
     (Wp_parameters.warning "[cfg.fold_succ] pb with node %a" pp_node n; acc)
 
 let fold_pred f cfg n acc =
   let f e acc = if is_next_edge e then acc else f (CFG.E.src e) acc in
   try CFG.fold_pred_e f (cfg.graph) n acc
-  with Invalid_argument s -> 
+  with Invalid_argument s ->
     (Wp_parameters.warning "[cfg.fold_pred] pb with node %a: %s" pp_node n s; acc)
 
 let _iter_succ_e f cfg n =
   let f e = if is_next_edge e then () else f e
   in try CFG.iter_succ_e f (cfg.graph) n
-  with Invalid_argument _ -> 
+  with Invalid_argument _ ->
     (Wp_parameters.warning "[cfg.iter_succ_e] pb with node %a" pp_node n)
 
 let iter_pred_e f cfg n =
   let f e = if is_next_edge e then () else f e
   in try CFG.iter_pred_e f (cfg.graph) n
-  with Invalid_argument _ -> 
+  with Invalid_argument _ ->
     (Wp_parameters.warning "[cfg.iter_pred_e] pb with node %a" pp_node n)
 
 let fold_pred_e f cfg n acc =
   let f e acc = if is_next_edge e then acc else f e acc
   in try CFG.fold_pred_e f (cfg.graph) n acc
-  with Invalid_argument _ -> 
+  with Invalid_argument _ ->
     (Wp_parameters.warning "[cfg.fold_pred_e] pb with node %a" pp_node n; acc)
 
 let fold_succ_e f cfg n acc =
   let f e acc = if is_next_edge e then acc else f e acc
   in try CFG.fold_succ_e f (cfg.graph) n acc
-  with Invalid_argument _ -> 
+  with Invalid_argument _ ->
     (Wp_parameters.warning "[cfg.fold_succ_e] pb with node %a" pp_node n; acc)
 
 
@@ -444,11 +444,11 @@ let get_test_edges cfg v =
       begin match (edge_type e1), (edge_type e2) with
         | (Ethen|EbackThen), (Eelse|EbackElse) -> e1, e2
         | (Eelse|EbackElse), (Ethen|EbackThen) -> e2, e1
-        | _, (Eelse|EbackElse) -> 
-            Wp_parameters.fatal "[cfg] test node with invalid edges %a" 
+        | _, (Eelse|EbackElse) ->
+            Wp_parameters.fatal "[cfg] test node with invalid edges %a"
               pp_edge e1
-        | _, _ -> 
-            Wp_parameters.fatal "[cfg] test node with invalid edges %a" 
+        | _, _ ->
+            Wp_parameters.fatal "[cfg] test node with invalid edges %a"
               pp_edge e2
       end
   | _ -> raise (Invalid_argument "[cfg:get_test_edges] not a test")
@@ -525,7 +525,7 @@ let next_edge cfg n =
   match edges with
   | [] -> (* can append when nodes have been removed *) raise Not_found
   | [e] -> e
-  | _ -> Wp_parameters.fatal "several (%d) Enext edges to node %a" 
+  | _ -> Wp_parameters.fatal "several (%d) Enext edges to node %a"
            (List.length edges) pp_node n
 
 (** Find the node that follows the input node statement.
@@ -535,7 +535,7 @@ let node_after cfg n = edge_dst (next_edge cfg n)
 
 let get_pre_edges cfg n = pred_e cfg n
 
-let get_post_edges cfg v = 
+let get_post_edges cfg v =
   try let v' = node_after cfg v in pred_e cfg v'
   with Not_found -> []
 
@@ -569,12 +569,12 @@ let get_exit_edges cfg src =
     fold_pred do_node_and_preds cfg n acc
   in
   let edges =
-    try 
+    try
       let edge = next_edge cfg src in
       if false || is_next_edge edge then
         (* needs to look at all node between the next node and the source *)
         snd (do_preds (edge_dst edge) (Nset.empty, []))
-      else do_node src [] 
+      else do_node src []
     with Exit -> []
   in
   if edges = [] then
@@ -625,7 +625,7 @@ let blocks_closed_by_edge cfg e =
   let blocks = match node_type v_before with
     | Vstmt s | Vtest (true, s, _) | Vloop (_, s) | Vswitch (s,_) ->
         ignore (Ast.get ()); (* Since CIL Cfg computation is required and
-                                				Ast.get () have to do this well. *) 
+                                				Ast.get () have to do this well. *)
         begin match s.succs with
           | [s'] -> (try Kernel_function.blocks_closed_by_edge s s'
                      with Not_found as e -> debug "[blocks_closed_by_edge] not found sid:%d -> sid:%d@."
@@ -1148,9 +1148,9 @@ let mark_loops cfg =
       if (LoopInfo.is_irreducible env h) then
         (debug "irreducible loop detected in %a@." VL.pretty h; false)
       else true
-    in let back_edges_ok = 
-      if is_natural then mark_loop_back_edge h else true 
-    in 
+    in let back_edges_ok =
+         if is_natural then mark_loop_back_edge h else true
+    in
     let loop = match node_type h with
       | Vloop (_, h_stmt) ->
           assert (back_edges_ok);
@@ -1174,23 +1174,23 @@ let loop_nodes cfg = match cfg.loop_nodes with Some l -> l
                                              | None -> Wp_parameters.fatal
                                                          "Cannot use the loop nodes before having computed them"
 
-let strange_loops cfg = 
+let strange_loops cfg =
   let strange n = match node_type n with
     | Vloop (Some is_natural, _) when is_natural -> false
     | _ -> true
   in let loops = loop_nodes cfg in
   let strange_loops = List.filter strange loops in
-  debug "%d/%d strange loops" 
+  debug "%d/%d strange loops"
     (List.length strange_loops) (List.length loops);
   strange_loops
 
-let very_strange_loops cfg = 
+let very_strange_loops cfg =
   let strange n = match node_type n with
     | Vloop (Some _, _) | Vloop2 _ -> false
     | _ -> true
   in let loops = loop_nodes cfg in
   let strange_loops = List.filter strange loops in
-  debug "%d/%d very strange loops" 
+  debug "%d/%d very strange loops"
     (List.length strange_loops) (List.length loops);
   strange_loops
 
@@ -1242,7 +1242,7 @@ module Printer (PE : sig val edge_txt : edge -> string end) = struct
     let s' = if String.length s >= 50 then (String.sub s 0 49) ^ "..." else s in
     String.escaped s'
 
-  let vertex_name v = 
+  let vertex_name v =
     let a,b = node_id v in
     Printf.sprintf "%d.%d" a b
 
@@ -1372,7 +1372,7 @@ module KfCfg =
   Kernel_function.Make_Table
     (Datatype.Make
        (struct
-         include Datatype.Undefined 
+         include Datatype.Undefined
          type tt = t
          type t = tt
          let name = "WpCfg"

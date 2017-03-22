@@ -31,8 +31,7 @@ Assume {
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 13) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (e_1=Mint_2[(shift_sint32 t_2 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (e_1=Mint_2[(shift_sint32 t_2 i_0)]).
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 12) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).
@@ -65,8 +64,7 @@ Assume {
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 13) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (e_0=Mint_3[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (e_0=Mint_3[(shift_sint32 t_0 i_0)]).
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 12) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).
@@ -117,8 +115,7 @@ Assume {
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 13) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (e_0=Mint_1[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (e_0=Mint_1[(shift_sint32 t_0 i_0)]).
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 12) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).
@@ -166,8 +163,7 @@ Assume {
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 13) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (e_0=Mint_3[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (e_0=Mint_3[(shift_sint32 t_0 i_0)]).
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 12) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).
@@ -203,8 +199,7 @@ Assume {
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 13) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: forall i_0:int.
-        (i_0<i_2) -> (a_0<=i_0) -> (is_sint32 i_0)
-        -> (e_0=Mint_3[(shift_sint32 t_0 i_0)]).
+        (i_0<i_2) -> (a_0<=i_0) -> (e_0=Mint_3[(shift_sint32 t_0 i_0)]).
   (* Invariant 'qed_ok' (file tests/wp_plugin/loop.i, line 12) *)
   (* tests/wp_plugin/loop.i:15: Invariant 'qed_ok': *)
   Have: (a_0<=i_2) /\ (i_2<=(1+b_0)).

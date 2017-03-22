@@ -89,6 +89,6 @@ let get_value p = Pretty_utils.sfprintf "%a" pretty_value p
  
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

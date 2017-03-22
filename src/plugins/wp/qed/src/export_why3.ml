@@ -44,10 +44,10 @@ struct
   type typedef = (tau,Field.t,Fun.t) ftypedef
 
   let libraries = [
-    "bool.Bool" ; 
+    "bool.Bool" ;
     "int.Int" ; "int.ComputerDivision" ;
-    "real.RealInfix" ; "real.FromInt" ; 
-    "map.Map" ; 
+    "real.RealInfix" ; "real.FromInt" ;
+    "map.Map" ;
     "qed.Arith" ;
   ]
 
@@ -80,10 +80,10 @@ struct
         | Data _ -> false
         | Record _ -> true
 
-      method pp_farray fmt a b = 
+      method pp_farray fmt a b =
         fprintf fmt "map %a %a" self#pp_subtau a self#pp_subtau b
 
-      method pp_array fmt b = 
+      method pp_array fmt b =
         fprintf fmt "map int %a" self#pp_subtau b
 
       method pp_datatype adt fmt = function
@@ -103,14 +103,14 @@ struct
 
       method pp_int amode fmt k = match amode with
         | Aint -> pp_print_string fmt (Z.to_string k)
-        | Areal -> 
-          if Z.lt k Z.zero then
-            (* unary minus is -. instead of - in Why3... *)
-            fprintf fmt "-.%s.0" (Z.to_string (Z.neg k))
-          else
-            fprintf fmt "%s.0" (Z.to_string k)
+        | Areal ->
+            if Z.lt k Z.zero then
+              (* unary minus is -. instead of - in Why3... *)
+              fprintf fmt "-.%s.0" (Z.to_string (Z.neg k))
+            else
+              fprintf fmt "%s.0" (Z.to_string k)
 
-      method pp_cst fmt cst = 
+      method pp_cst fmt cst =
         let open Numbers in
         let man = if cst.man = "" then "0" else cst.man in
         let com = if cst.com = "" then "0" else cst.com in
@@ -224,7 +224,7 @@ struct
             List.iter (fun x -> fprintf fmt "@ %a" self#pp_var x) xs ;
             fprintf fmt "@ : %a.@]" self#pp_tau tau ;
 
-      method pp_trigger fmt t = 
+      method pp_trigger fmt t =
         let rec pretty fmt = function
           | TgAny -> assert false
           | TgVar x -> self#pp_var fmt (self#find x)
@@ -265,7 +265,7 @@ struct
         begin
           fprintf fmt "@[<hv 1>" ;
           self#pp_declare_adt fmt adt n ;
-          List.iter 
+          List.iter
             (fun (c,ts) ->
                fprintf fmt "@ @[<hov 4>| %s@]" (link_name (self#link c)) ;
                List.iter (fun t -> fprintf fmt "@ %a" self#pp_tau t) ts ;
@@ -288,18 +288,18 @@ struct
           begin fun () ->
             let cmode = Export.ctau t in
             fprintf fmt "@[<hov 4>%a" (self#pp_declare_symbol cmode) f ;
-            List.iter 
-              (fun x -> 
+            List.iter
+              (fun x ->
                  let a = self#bind x in
                  let t = T.tau_of_var x in
                  fprintf fmt "@ (%a : %a)" self#pp_var a self#pp_tau t
               ) xs ;
             match cmode with
-            | Cprop -> 
-                fprintf fmt " =@ @[<hov 0>%a@]@]@\n" 
+            | Cprop ->
+                fprintf fmt " =@ @[<hov 0>%a@]@]@\n"
                   self#pp_prop e
             | Cterm ->
-                fprintf fmt " : %a =@ @[<hov 0>%a@]@]@\n" 
+                fprintf fmt " : %a =@ @[<hov 0>%a@]@]@\n"
                   self#pp_tau t (self#pp_expr t) e
           end
 

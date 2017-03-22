@@ -185,6 +185,6 @@ let find_code_annot_nodes pdg stmt annot =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

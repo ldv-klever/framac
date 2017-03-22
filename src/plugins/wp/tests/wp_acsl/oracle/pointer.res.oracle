@@ -19,7 +19,7 @@ Goal Post-condition 'qed_ko,Base_oracle_ko' in 'absurd':
 Let x_0 = (base p_0).
 Assume {
   (* Goal *)
-  When: (4*(offset q_0))<(4*(offset p_0)).
+  When: (offset q_0)<(offset p_0).
   (* Heap *)
   Have: ((region x_0)<=0) /\ ((region (base q_0))<=0).
   (* Pre-condition (file tests/wp_acsl/pointer.i, line 69) in 'absurd' *)
@@ -74,7 +74,7 @@ Let x_0 = (base p_0).
 Let x_1 = (base q_0).
 Assume {
   (* Goal *)
-  When: (4*(offset q_0))<(4*(offset p_0)).
+  When: (offset q_0)<(offset p_0).
   (* Heap *)
   Have: ((region x_0)<=0) /\ ((region x_1)<=0).
   (* Pre-condition (file tests/wp_acsl/pointer.i, line 58) in 'compare' *)
@@ -90,7 +90,7 @@ Let x_0 = (base p_0).
 Let x_1 = (base q_0).
 Assume {
   (* Goal *)
-  When: (4*(offset q_0))<=(4*(offset p_0)).
+  When: (offset q_0)<=(offset p_0).
   (* Heap *)
   Have: ((region x_0)<=0) /\ ((region x_1)<=0).
   (* Pre-condition (file tests/wp_acsl/pointer.i, line 58) in 'compare' *)
@@ -106,7 +106,7 @@ Let x_0 = (base p_0).
 Let x_1 = (base q_0).
 Assume {
   (* Goal *)
-  When: (4*(offset p_0))=(4*(offset q_0)).
+  When: (offset p_0)=(offset q_0).
   (* Heap *)
   Have: ((region x_0)<=0) /\ ((region x_1)<=0).
   (* Pre-condition (file tests/wp_acsl/pointer.i, line 58) in 'compare' *)

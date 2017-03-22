@@ -56,9 +56,9 @@ val emit : ?severe:bool -> ?source:string -> effect:string ->
     Defaults: [severe=true], [source="wp"]. *)
 
 val handle : ?severe:bool -> effect:string -> handler:('a -> 'b) -> ('a -> 'b) -> 'a -> 'b
-(** Handle the error and emit a warning with specified severity and effect 
+(** Handle the error and emit a warning with specified severity and effect
     if a context has been set.
-    Otherwise, a WP-fatal error is raised instead. 
+    Otherwise, a WP-fatal error is raised instead.
     Default for [severe] is false. *)
 
 type 'a outcome =
@@ -66,7 +66,7 @@ type 'a outcome =
   | Failed of Set.t
 
 val catch : ?source:string -> ?severe:bool -> effect:string -> ('a -> 'b) -> 'a -> 'b outcome
-(** Set up a context for the job. If non-handled errors are raised, 
-    then a warning is emitted with specified severity and effect. 
+(** Set up a context for the job. If non-handled errors are raised,
+    then a warning is emitted with specified severity and effect.
     Default for [severe] is [true]. *)
 

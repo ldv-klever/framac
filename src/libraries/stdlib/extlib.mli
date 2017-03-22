@@ -21,9 +21,7 @@
 (**************************************************************************)
 
 (** Useful operations.
-
-    This module does not depend of any of frama-c module.
-    @plugin development guide *)
+    This module does not depend of any of frama-c module. *)
 
 val nop: 'a -> unit
   (** Do nothing. *)
@@ -40,9 +38,9 @@ val adapt_filename: string -> string
 
 val max_cpt: int -> int -> int
 (** [max_cpt t1 t2] returns the maximum of [t1] and [t2] wrt the total ordering
-    induced by tags creation. This ordering is defined as follow: forall tags t1
-    t2, t1 <= t2 iff t1 is before t2 in the finite sequence [0; 1; ..; max_int;
-    min_int; min_int-1; -1] *)
+    induced by tags creation. This ordering is defined as follows:
+    forall tags t1 t2, t1 <= t2 iff t1 is before t2 in the finite sequence
+    [0; 1; ..; max_int; min_int; min_int-1; -1] *)
 
 val number_to_color: int -> int
 
@@ -129,7 +127,7 @@ val list_compare : ('a -> 'a -> int) -> 'a list -> 'a list -> int
 
 val list_of_opt: 'a option -> 'a list
   (** converts an option into a list with 0 or 1 elt.
-      @since Carbon-20111201-beta2+dev *)
+      @since Carbon-20111201-beta2 *)
 
 val opt_of_list: 'a list -> 'a option
   (** converts a list with 0 or 1 element into an option.
@@ -152,6 +150,9 @@ val mapi: (int -> 'a -> 'b) -> 'a list -> 'b list
   (** Same as map, but the function to be applied take also as argument the
       index of the element (starting from 0). Tail-recursive
       @since Oxygen-20120901 *)
+
+val sort_unique: ('a -> 'a -> int) -> 'a list -> 'a list
+  (**  Same as List.sort , but also remove duplicates. *)
 
 (* ************************************************************************* *)
 (** {2 Options} *)
@@ -199,9 +200,12 @@ val opt_bind: ('a -> 'b option) -> 'a option -> 'b option
 
 val opt_filter: ('a -> bool) -> 'a option -> 'a option
 
-val the: 'a option -> 'a
-  (** @raise Invalid_argument if the value is none.
-      @plugin development guide *)
+val the: ?exn:exn -> 'a option -> 'a
+(** @raise Exn if the value is [None] and [exn] is specified.
+    @raise Invalid_argument if the value is [None] and [exn] is not specified.
+    @return v if the value is [Some v].
+    @modify Magnesium-20151001 add optional argument [exn]
+    @plugin development guide *)
 
 val find_or_none: ('a -> 'b) -> 'a -> 'b option
 
@@ -314,14 +318,8 @@ val usleep: int -> unit
     it easier to find incorrect uses of the latter *)
 external compare_basic: 'a -> 'a -> int = "%compare"
 
-(* ************************************************************************* *)
-(** Printing Lexing.position *)
-(* ************************************************************************* *)
-
-val pretty_position: Format.formatter -> Lexing.position -> unit
-
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

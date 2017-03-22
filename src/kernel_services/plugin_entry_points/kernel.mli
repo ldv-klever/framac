@@ -33,8 +33,11 @@ include Plugin.S
 (** {2 Installation Information} *)
 (* ************************************************************************* *)
 
+module PrintConfig: Parameter_sig.Bool
+  (** Behavior of option "-print-config" *)
+
 module PrintVersion: Parameter_sig.Bool
-  (** Behavior of option "-version" *)
+  (** Behavior of option "-print-version" *)
 
 module PrintShare: Parameter_sig.Bool
   (** Behavior of option "-print-share-path" *)
@@ -120,17 +123,8 @@ module SaveState: Parameter_sig.String
 module LoadState: Parameter_sig.String
   (** Behavior of option "-load" *)
 
-module AddPath: Parameter_sig.String_list
-  (** Behavior of option "-add-path" *)
-
-module LoadModule: Parameter_sig.String_set
+module LoadModule: Parameter_sig.String_list
   (** Behavior of option "-load-module" *)
-
-module LoadScript: Parameter_sig.String_set
-  (** Behavior of option "-load-script" *)
-
-module Dynlink: Parameter_sig.Bool
-  (** Behavior of option "-dynlink" *)
 
 (** Kernel for journalization. *)
 module Journal: sig
@@ -160,7 +154,7 @@ module UnrollingLevel: Parameter_sig.Int
 
 module UnrollingForce: Parameter_sig.Bool
   (** Behavior of option "-ulevel-force" 
-      @since Fluorine-20130501+dev *)
+      @since Neon-20140301 *)
 
 (** Behavior of option "-machdep".
     If function [set] is called, then {!File.prepare_from_c_files} must be
@@ -181,6 +175,9 @@ module CppGnuLike: Parameter_sig.Bool
 
 module FramaCStdLib: Parameter_sig.Bool
   (** Behavior of option "-frama-c-stdlib" *)
+
+module CustomAnnot: Parameter_sig.String
+  (** Behavior of option "-custom-annot-char". *)
 
 module ReadAnnot: Parameter_sig.Bool
   (** Behavior of option "-read-annot" *)
@@ -336,6 +333,6 @@ module TypeCheck: Parameter_sig.Bool
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

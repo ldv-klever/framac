@@ -17,12 +17,10 @@ enum aorai_OpStatusList {
 extern int call_to_an_undefined_function();
 
 /*@ ghost enum aorai_ListOper aorai_CurOperation = op_main; */
-/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called;
-*/
+/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called; */
 /*@ ghost int T0_S2 = 0; */
 /*@ ghost int T0_init = 1; */
-/*@ ghost int accept_S1 = 0;
-*/
+/*@ ghost int accept_S1 = 0; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_a;
     assigns aorai_CurOpStatus, aorai_CurOperation, T0_S2, T0_init, accept_S1;

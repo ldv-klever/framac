@@ -49,6 +49,11 @@ Tactic Notation "by" tactic(A) := A ; finish.
 
 (** ** Conditional Property *)
 
+Inductive branch (A B C : Prop) : Prop :=
+  | Then: A -> B -> branch A B C
+  | Else: not A -> C -> branch A B C
+.
+
 Definition itep (A B C : Prop) := (A -> B) /\ (~A -> C).
 
 Lemma ite_then : forall A B C : Prop, itep A B C -> A -> B.
@@ -160,10 +165,24 @@ Proof.
   induction (Z_le_dec n m) ; auto with zarith.
   apply Z.le_ind with (n := m) ; auto with zarith.
   unfold Morphisms.Proper.
-  unfold Morphisms.respectful.
+  unfold Morphisms.respectful. 
   intros. rewrite H1. intuition.
-  intros.
-  apply H0 ; auto with zarith.
+  intros. apply H0; auto with zarith.
+Qed.
+
+Theorem Z_induction_rank(m : Z)(P : Z -> Prop) : 
+  P m ->
+  (forall n, m <= n -> P n -> P (n+1)) ->
+  (forall n, m <= n -> P n).
+Proof.
+  intros h0 h1 n.
+  apply Z_induction with (m := m) (n := n).
+  + intros.
+    apply Z.le_ind with (n := m) ; auto with zarith.
+    unfold Morphisms.Proper.
+    unfold Morphisms.respectful. 
+    intros. rewrite H1. intuition.
+   + intros. auto with zarith.
 Qed.
 
 (** ** Real Constants *)
@@ -326,5 +345,6 @@ Proof.
   replace (d*x) with (x*d) by ring.
   omega.
 Qed.
+
 
 

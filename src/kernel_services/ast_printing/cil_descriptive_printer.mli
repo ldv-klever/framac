@@ -20,7 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Internal printer for Cabs2cil. 
+(** Internal printer for Cabs2cil.
 
     Like the standard [Cil_printer], but instead of temporary variable
     names it prints the description that was provided when the temp was
@@ -33,6 +33,6 @@ val pp_lval: Format.formatter -> lval -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

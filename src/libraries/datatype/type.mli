@@ -393,6 +393,6 @@ val sfprintf: ('a,Format.formatter,unit,string) format4 -> 'a
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

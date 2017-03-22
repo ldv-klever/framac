@@ -53,8 +53,8 @@ class type main_window_extension_points = object
   method menu_manager: unit -> Menu_manager.menu_manager
   method file_tree : Filetree.t
   method file_tree_view : GTree.view
-  method annot_window : GText.view
-  method pretty_information: 'a.  ('a, Format.formatter, unit) format -> 'a
+  method annot_window : Toolbox.text
+  method pretty_information: 'a. ?scroll:bool -> ('a, Format.formatter, unit) format -> 'a
     (** Pretty print a message in the [annot_window]. *)
 
   method launcher : unit -> unit
@@ -146,7 +146,9 @@ let filetree_selector
        | Filetree.File (f, l) ->
            Source_manager.load_file
              main_ui#original_source_viewer
-             ~filename:f ~line:1 () ;
+             ~filename:f ~line:1
+             ~click_cb:(fun _ ->
+                 (* original_source callback unnecessary here *) ()) ();
            main_ui#display_globals l
        | Filetree.Global g -> 
          main_ui#display_globals [g];
@@ -158,7 +160,7 @@ let filetree_selector
            main_ui#view_original loc;
            main_ui#pretty_information "%s '%s'@." prefix v.vname)
     in
-    main_ui#annot_window#buffer#set_text "";
+    main_ui#annot_window#clear;
     begin match globals with
     | Filetree.Global g ->
         begin
@@ -166,10 +168,9 @@ let filetree_selector
           match g with
             | GFun ({svar=v},loc) -> print_one_global "Function" (v,loc)
             | GVar (v,_,loc) -> print_one_global "Variable" (v,loc)
-            | GVarDecl (_, v, loc) ->
-                if Cil.isFunctionType v.vtype
-                then print_one_global "Declared function" (v,loc)
-                else print_one_global "Variable" (v,loc)
+            | GVarDecl (v, loc) -> print_one_global "Variable" (v,loc)
+            | GFunDecl (_, v, loc) ->
+              print_one_global "Declared function" (v,loc)
             | _ -> () (* cannot currently happen, we do not display the
                         other globals in the filetree *)
         end
@@ -184,6 +185,8 @@ let filetree_selector
             (fun g (gfun,gtype,gcomp,genum,gvardecl,gvar) ->
               match g with
               | GFun _ -> 
+                (cons_limit gfun_c g gfun,gtype,gcomp,genum,gvardecl,gvar)
+              | GFunDecl _ -> 
                 (cons_limit gfun_c g gfun,gtype,gcomp,genum,gvardecl,gvar)
               | GType _ -> (gfun,cons_limit gtyp_c g gtype,gcomp,genum,gvardecl,gvar)
               | GCompTagDecl _ -> 
@@ -213,8 +216,8 @@ let filetree_selector
           printing
             "Functions:"
             (!gfun_c>=max_length)
-            (fun fmt -> (function GFun ({svar=v},_) ->
-                           Varinfo.pretty_vname fmt v
+            (fun fmt -> (function GFun ({svar=v},_) | GFunDecl (_, v, _) ->
+                           Varinfo.pretty fmt v
                            | _ -> assert false))
             gfun;
           printing
@@ -246,15 +249,15 @@ let filetree_selector
           "Declared variables:"
           (!gvardecl_c>=max_length)
           (function fmt ->
-             (function GVarDecl (_,v,_) ->
-                Varinfo.pretty_vname fmt v
+             (function GVarDecl (v,_) ->
+                Varinfo.pretty fmt v
                 | _ -> assert false))
           gvardecl;
         printing
           "Variables:"
           (!gvar_c>=max_length)
           (fun fmt -> (function GVar(v,_,_) ->
-                         Varinfo.pretty_vname fmt v
+                         Varinfo.pretty fmt v
                          | _ -> assert false))
           gvar;
         main_ui#pretty_information "%!"
@@ -265,6 +268,45 @@ let pretty_predicate_status fmt p =
   let s = Property_status.get p in
   Format.fprintf fmt "Status: %a@." Property_status.pretty s
 
+(* This is called when a localizable is selected in the pretty-printed source
+   buffer *)
+let to_do_on_real_select _menu
+    (main_ui:main_window_extension_points)
+    ~button
+    selected
+    =
+  History.push (History.Localizable selected);
+  if button = 1 then begin
+    main_ui#annot_window#clear;
+  end
+
+(* Returns a pair (varinfo, callback), where [varinfo] is the selected
+   global variable or function call, and [callback] executes a jump to the
+   definition of [selected], if it is possible. Otherwise, returns [None]. *)
+let go_to_definition selected main_ui =
+    match selected with
+    | PLval (_kf, _ki, lv) ->
+      begin
+        let ty = typeOfLval lv in
+        match lv with
+        | Var vi, NoOffset when isFunctionType ty ->
+          (* only simple literal calls can be resolved syntactically *)
+          let kf = Globals.Functions.get vi in
+          let glob = Kernel_function.get_global kf in
+          Some (vi, fun () -> ignore (main_ui#select_or_display_global glob))
+        | Var vi, _ when not (isFunctionType ty) ->
+          (try
+             (* do nothing if the variable is not a global *)
+             ignore (Globals.Vars.find vi);
+             let g = GVarDecl (vi, Location.unknown) in
+             Some (vi, fun () -> ignore (main_ui#select_or_display_global g))
+           with Not_found -> None)
+        | _ -> None (* cannot go to definition *)
+      end
+    | _ -> None (* cannot go to definition *)
+
+(* This is called when a localizable is selected in the pretty-printed source
+   buffer, and also when a localizable is clicked on in the information panel *)
 let to_do_on_select
     (menu_factory:GMenu.menu GMenu.factory)
     (main_ui:main_window_extension_points)
@@ -301,14 +343,11 @@ let to_do_on_select
             (fst loc).Lexing.pos_lnum
             (Filepath.pretty (fst loc).Lexing.pos_fname)
   in
-  History.push (History.Localizable selected);
-  let annot = main_ui#annot_window#buffer in
   let formal_or_local kf vi =
     if Kernel_function.is_formal vi kf
     then "formal parameter" else "local variable"
   in
   if button = 1 then begin
-    annot#set_text "";
     match selected with
     | PStmt (kf, stmt) ->
       main_ui#protect
@@ -339,7 +378,7 @@ let to_do_on_select
         main_ui#pretty_information "This is an assigns clause@.%a@."
           pretty_predicate_status ip
     | PIP(Property.IPFrom _ as ip) ->
-      main_ui#pretty_information "This si a from clause@.%a@."
+      main_ui#pretty_information "This is a from clause@.%a@."
         pretty_predicate_status ip
     | PIP (Property.IPPredicate (Property.PKRequires _,_,_,_) as ip) ->
         main_ui#pretty_information "This is a requires clause.@.%a@."
@@ -402,17 +441,17 @@ let to_do_on_select
     | PLval (kf, ki,lv) ->
       let ty = typeOfLval lv in
       if isFunctionType ty then
-        main_ui#pretty_information "This is a C function of type %a@."
-	  Printer.pp_typ ty
+        main_ui#pretty_information "This is a C function of type `%a'@."
+	  Gui_printers.pp_typ ty
       else begin
         current_statement_msg kf ki;
 	match lv with
 	| Var vi,NoOffset ->
           main_ui#pretty_information
-            "Variable %a has type \"%a\".@\nIt is a %s.@\n\
+            "Variable %a has type `%a'.@\nIt is a %s.@\n\
                  %tIt is %sreferenced and its address is %staken.@."
-            Varinfo.pretty_vname vi
-            Printer.pp_typ vi.vtype
+            Varinfo.pretty vi
+            Gui_printers.pp_typ vi.vtype
             (if vi.vglob then "global variable"
              else formal_or_local (Extlib.the kf) vi)
             (fun fmt ->
@@ -423,22 +462,27 @@ let to_do_on_select
                   "This is a temporary variable for \"%s\".@\n" s)
             (if vi.vreferenced then "" else "not ")
             (if vi.vaddrof then "" else "not ")
-	| _ -> main_ui#pretty_information "This is an lvalue of type %a@."
-	  Printer.pp_typ (typeOfLval lv)
+	| _ ->
+          let typ = typeOfLval lv in
+          main_ui#pretty_information "This is an lvalue of type %a@."
+            Gui_printers.pp_typ typ
       end
 
     | PExp (_kf, _ki, e) ->
-      begin match constFoldToInt e with
+      begin
+        let typ = typeOf e in
+        match constFoldToInt e with
       | Some i ->
 	main_ui#pretty_information
 	  "This is a constant C expression of type %a, equal to %a.@."
-	  Printer.pp_typ (typeOf e) Datatype.Integer.pretty i
+          Gui_printers.pp_typ typ Datatype.Integer.pretty i
       | None ->
 	main_ui#pretty_information "This is a pure C expression of type %a.@."
-	  Printer.pp_typ (typeOf e)
+          Gui_printers.pp_typ typ
       end
-    | PTermLval _ ->
-        main_ui#pretty_information "This is a logical left-value.@."
+    | PTermLval (_, _, _, tlv) ->
+        main_ui#pretty_information "This is a logical left-value, \
+            of logic type %a.@." Printer.pp_logic_type (Cil.typeOfTermLval tlv)
 
     | PVDecl (kf,vi) ->
         main_ui#view_original vi.vdecl;
@@ -449,55 +493,41 @@ let to_do_on_select
              its address is %staken.@."
             (if Cil.isFunctionType vi.vtype
              then "function" else "global variable")
-            Varinfo.pretty_vname vi
+            Varinfo.pretty vi
             (if vi.vreferenced then "" else "not ")
             (if vi.vaddrof then "" else "not ")
         else
           let kf = Extlib.the kf in
           main_ui#pretty_information
             "This is the declaration of %s %a in function %a%t@."
-            (formal_or_local kf vi) Varinfo.pretty_vname vi
+            (formal_or_local kf vi) Varinfo.pretty vi
             Kernel_function.pretty kf
             (fun fmt -> match vi.vdescr with None -> ()
              | Some s ->  Format.fprintf fmt
                  "@\nThis is a temporary variable for \"%s\".@." s)
     end
   else if button = 3 then begin
-    match selected with
-    | PVDecl _ -> ()
-    | PStmt _ -> ()
-    | PLval (_kf, _ki, lv) ->
-        (* Do special actions for functions *)
-        (* popup a menu to jump the definitions of the given varinfos *)
-        let ty = typeOfLval lv in
-        let do_menu vi =
-          try
-            ignore
-              (menu_factory#add_item
-                 ("Go to definition of " ^
-                    (Pretty_utils.escape_underscores
-                       (Pretty_utils.sfprintf "%a" Varinfo.pretty_vname vi)))
-                 ~callback:
-               (fun () ->
-                  let kf = Globals.Functions.get vi in
-                  let glob = Kernel_function.get_global kf in
-                  ignore (main_ui#select_or_display_global glob)))
-          with Not_found -> () (* Should not happend since [ty] below has a
-                                  function type *)
-        in
-        (match lv with
-         | Var v,NoOffset when isFunctionType ty ->
-             (* only simple literal calls can be resolved syntactically *)
-             do_menu v
-         | _  -> ())
-    | PExp _ | PTermLval _ | PGlobal _ | PIP _ -> ()
+    match go_to_definition selected main_ui with
+    | None -> () (* no menu to show *)
+    | Some (vi, callback) ->
+      ignore (menu_factory#add_item
+                ("Go to definition of " ^
+                 (Pretty_utils.escape_underscores
+                    (Pretty_utils.sfprintf "%a" Varinfo.pretty vi)))
+                ~callback)
   end
+
+(** Widgets that might result in a localizable being selected:
+  - the main ui reactive buffer (pretty-printed source)
+  - the information panel, when the user clicks on a localizable *)
+type localizable_selection_origin = ReactiveBuffer | InformationPanel
 
 (** Global selectors and highlighters *)
 let highlighter = ref []
-let (selector: (GMenu.menu GMenu.factory ->
-         main_window_extension_points ->
-         button:int -> Pretty_source.localizable -> unit) list ref) = ref []
+let selector = ref ([] :
+              ((GMenu.menu GMenu.factory -> main_window_extension_points ->
+                  button:int -> Pretty_source.localizable -> unit
+               ) * localizable_selection_origin list) list)
 
 class protected_menu_factory (host:Gtk_helper.host) (menu:GMenu.menu) = object
   inherit [GMenu.menu] GMenu.factory menu as super
@@ -521,6 +551,23 @@ class protected_menu_factory (host:Gtk_helper.host) (menu:GMenu.menu) = object
 
 end
 
+(* This function reacts to the section of a localizable. The [origin]
+   arguments identifies the widget where the selection occured *)
+let selector_localizable (main_ui:main_window_extension_points) origin ~button localizable =
+  let popup_factory =
+    new protected_menu_factory (main_ui:>Gtk_helper.host) (GMenu.menu())
+  in
+  List.iter
+    (fun (f, origins) -> 
+     if List.mem origin origins then
+       f popup_factory main_ui ~button localizable
+    )
+    !selector;
+  if button = 3 && popup_factory#menu#children <> [] then
+    let time = GtkMain.Main.get_current_event_time () in
+    popup_factory#menu#popup ~button ~time
+
+
 class reactive_buffer_cl (main_ui:main_window_extension_points)
   ?(parent_window=main_ui#main_window)
   globs :reactive_buffer  =
@@ -537,19 +584,7 @@ object(self)
     let highlighter localizable ~start ~stop =
       List.iter (fun f -> f buffer localizable ~start ~stop) !highlighter
     in
-    let selector ~button localizable =
-      let popup_factory =
-        new protected_menu_factory (self:>Gtk_helper.host)
-          (GMenu.menu ())
-      in
-      List.iter
-        (fun f -> f popup_factory main_ui ~button localizable)
-        !selector;
-      if button = 3 && popup_factory#menu#children <> [] then
-        popup_factory#menu#popup
-          ~button
-          ~time:(GtkMain.Main.get_current_event_time ())
-    in
+    let selector = selector_localizable main_ui ReactiveBuffer in
     Extlib.may Locs.finalize locs;
     locs <- Some(
       Pretty_source.display_source
@@ -626,6 +661,9 @@ struct
 	  loc)
       reactive_buffer#locs
 end
+
+(* Reference to the view used by the stdout console, to enable use of Ctrl+F. *)
+let console_view : GText.view option ref = ref None
 
 (** The main application window *)
 class main_window () : main_window_extension_points =
@@ -717,6 +755,7 @@ class main_window () : main_window_extension_points =
       ~packing:filetree_frame#add ()
   in
   let file_tree_view = GTree.view ~packing:filetree_scrolled_window#add () in
+  let () = file_tree_view#misc#set_name "file tree" in
   let () = file_tree_view#selection#set_mode `SINGLE in
   let () = file_tree_view#set_rules_hint true in
   let () = file_tree_view#set_headers_clickable true in
@@ -749,12 +788,18 @@ class main_window () : main_window_extension_points =
   in
 
   (* lower text view and its scroll view: annotations and messages *)
-  let _,annot_window = Gtk_helper.make_text_page lower_notebook "Information" in
-
-  let pretty_information fmt =
-    Format.fprintf (Gtk_helper.make_formatter annot_window#buffer) fmt
+  let tab_label = GMisc.label ~markup:"Information" () in
+  let annot_sw =
+    GBin.scrolled_window ~vpolicy:`AUTOMATIC ~hpolicy:`AUTOMATIC
+      ~packing:(fun w -> ignore (lower_notebook#insert_page
+                                   ~tab_label:tab_label#coerce w))
+      ()
   in
-
+  let annot_window = new Toolbox.text () in
+  let () = annot_sw#add_with_viewport annot_window#coerce in
+  let () = Printer.update_printer
+      (module Gui_printers.LinkPrinter: Printer.PrinterExtension)
+  in
   (* upper text view: source code *)
   let fr1 = GBin.frame ~shadow_type:`ETCHED_OUT ~packing:hb_sources#add1 () in
 
@@ -764,7 +809,7 @@ class main_window () : main_window_extension_points =
     ~packing:fr1#add ()
   in
 
-  let source_viewer = Source_viewer.make ~packing:source_viewer_scroll#add in
+  let source_viewer = Source_viewer.make ~packing:source_viewer_scroll#add () in
   let () =
     begin
       source_viewer#set_show_line_numbers false ;
@@ -776,11 +821,9 @@ class main_window () : main_window_extension_points =
   let original_source_viewer = Source_manager.make ~packing:hb_sources#add2 ()
   in
 
-  (* Remove default pango menu for textviews *)
   let () =
+    (* Remove default pango menu (cut/paste, etc) for original source textview*)
     ignore (source_viewer#event#connect#button_press ~callback:
-              (fun ev -> GdkEvent.Button.button ev = 3));
-    ignore (annot_window#event#connect#button_press ~callback:
               (fun ev -> GdkEvent.Button.button ev = 3));
     (* startup configuration *)
     source_viewer#buffer#place_cursor ~where:source_viewer#buffer#start_iter
@@ -792,6 +835,9 @@ object (self:#main_window_extension_points)
   val mutable file_tree = None
   val mutable current_buffer_state : reactive_buffer option = None
   val mutable menu_manager = None
+
+  (* Stores the last text inserted into the "Find text" field. *)
+  val mutable last_find_text = ""
 
   method toplevel = (self:>main_window_extension_points)
   method main_window = main_window
@@ -811,13 +857,17 @@ object (self:#main_window_extension_points)
   method file_tree_view = file_tree_view
   method annot_window = annot_window
 
-  method pretty_information : 'a. ('a, Format.formatter, unit) format -> 'a
-    = pretty_information
+  method pretty_information : 'a. ?scroll:bool -> ('a, Format.formatter, unit) format -> 'a
+    = annot_window#printf
 
   method source_viewer = source_viewer
   method source_viewer_scroll = source_viewer_scroll
 
-  method register_source_selector f = selector := f::!selector
+  method private register_source_selector_origin origins f =
+    selector := (f, origins)::!selector
+  method register_source_selector f =
+    self#register_source_selector_origin [InformationPanel; ReactiveBuffer] f
+
   method register_source_highlighter f = highlighter := f::!highlighter
   method register_panel f = panel <- f::panel
 
@@ -1016,6 +1066,47 @@ object (self:#main_window_extension_points)
         self#original_source_viewer
         ~filename:(fst loc).Lexing.pos_fname
         ~line:(fst loc).Lexing.pos_lnum
+        ~click_cb:(fun olocz ->
+           match olocz with
+           | None -> ()
+           | Some locz ->
+             let scroll_to_locz locz =
+               Gtk_helper.later (fun () ->
+                   (* Prevent filetree selector from resetting the
+                      original source viewer. *)
+                   Source_manager.selection_locked := true;
+                   self#scroll locz;
+                   (* The selection lock is asynchronously released by a
+                      callback, and cannot be released here. *)
+                 )
+             in
+             match locz with
+             | PVDecl (_okf, vi) ->
+               (* if it is a global variable, show it instead of the current function *)
+               begin
+                 try
+                   ignore (Globals.Vars.find vi);
+                   let glob = GVarDecl (vi, loc) in
+                   Gtk_helper.later (fun () ->
+                       Source_manager.selection_locked := true;
+                       self#select_or_display_global glob;
+                     )
+                 with
+                 | Not_found ->
+                   (* not a global variable, treat as usual *)
+                   scroll_to_locz locz
+               end
+             | PGlobal g ->
+               (* if it is a type declaration/definition, ignore it, since
+                  types are not displayed in the file tree *)
+               begin
+                 match g with
+                 | GType _ | GCompTag _ | GCompTagDecl _ | GEnumTag _
+                 | GEnumTagDecl _ -> ()
+                 | _ -> scroll_to_locz locz
+               end
+             | _ -> scroll_to_locz locz
+        )
         ()
 
   method view_original_stmt st =
@@ -1104,11 +1195,143 @@ object (self:#main_window_extension_points)
       source_viewer#buffer#set_text
         "Please select a file in the left panel\nor start a new project."
 
+  (* Performs a forward text search on the currently focused element,
+     starting at its current cursor position.
+     Selects the next occurrence of the searched text (if found),
+     otherwise displays a message saying it was not found.
+     If [use_dialog] is true, displays a dialog asking for the text
+     to be found (e.g. Ctrl+F). Otherwise, uses the last searched
+     text (e.g. F3). *)
+  method private focused_find_text use_dialog =
+    let find_text_in_viewer (viewer : [`GTextViewer of GText.view |`GSourceViewer of GSourceView2.source_view]) text =
+      let buffer, scroll_to_iter =
+        match viewer with
+        | `GTextViewer v -> v#buffer,v#scroll_to_iter
+        | `GSourceViewer v -> v#buffer,v#scroll_to_iter
+      in
+      let cursor_iter = buffer#get_iter_at_mark `INSERT in
+      let after_cursor = cursor_iter#forward_char in
+      let notify_not_found = ref true in (* to avoid redundant 'not found' *)
+      let found_iters =
+        match
+          after_cursor#forward_search
+            ~flags:[]
+            text
+        with
+        | Some _ as iters -> iters
+        | None ->
+          (* try to wrap search if user wishes *)
+          if GToolbox.question_box ~title:"Not found"
+              (Printf.sprintf "No more occurrences for: %s\n\
+                               Search from beginning?" text)
+              ~buttons:["Yes"; "No"] = 1 (*yes*) then
+            let cursor_iter = buffer#get_iter `START in
+            (* note: may end up searching twice some parts of the buffer *)
+            cursor_iter#forward_search
+              ~flags:[]
+              text
+          else
+            (notify_not_found := false; None)
+      in
+      match found_iters with
+      | Some (i1,i2) ->
+        buffer#place_cursor i1;
+        buffer#select_range i1 i2;
+        ignore (scroll_to_iter i1
+                  ~use_align:false
+                  ~within_margin:0.025
+               );
+        last_find_text <- text
+      | None -> if !notify_not_found then
+          GToolbox.message_box ~title:"Not found"
+            (Printf.sprintf "Not found: %s" text)
+    in
+    let focused_widget = GtkWindow.Window.get_focus main_window#as_window in
+    let focused_name = Gobject.Property.get focused_widget GtkBase.Widget.P.name
+    in
+    let opt_where_view =
+      if focused_name = "source" then
+        Some ("in CIL code", `GSourceViewer source_viewer)
+      else if focused_name = "original_source" then
+        let original_buffer = (Source_manager.get_current_source_view
+                                 original_source_viewer)
+        in
+        Some ("in original code", `GSourceViewer original_buffer)
+      else if focused_name = "file tree" then
+        begin
+          let text =
+            if use_dialog then
+              Extlib.opt_conv ""
+                (GToolbox.input_string
+                   ~title:"Find" ~ok:"Find" ~cancel:"Cancel"
+                   "Find global:" ~text:last_find_text)
+            else last_find_text
+          in
+          if text <> "" then
+            match self#file_tree#find_visible_global text with
+            | None -> GToolbox.message_box ~title:"Not found"
+                        (Printf.sprintf "Global not found: %s" text)
+            | Some g ->
+              last_find_text <- text;
+              self#select_or_display_global g
+          else ();
+          None (* indicates that we are done processing the command *)
+        end
+      else
+        begin
+          let information_view = annot_window#get_view in
+          if Gobject.Property.get information_view#as_widget
+              GtkBase.Widget.P.has_focus then
+            Some ("in Information",`GTextViewer information_view)
+          else
+            let console_view_focused =
+              match !console_view with
+              | Some v ->
+                if Gobject.Property.get v#as_widget GtkBase.Widget.P.has_focus then
+                  Some ("in Console",`GTextViewer v)
+                else
+                  None
+              | None -> None
+            in
+            if console_view_focused <> None then console_view_focused
+            else
+              (* TODO: add more places where text can be searched *)
+              None
+        end
+    in
+    match opt_where_view with
+    | None -> (* no searchable focused element, or already processed *) ()
+    | Some (where_to_find,viewer) ->
+      let text =
+        if use_dialog then
+          Extlib.opt_conv ""
+            (GToolbox.input_string
+               ~title:"Find" ~ok:"Find" ~cancel:"Cancel"
+               ("Find text (" ^ where_to_find ^ "):") ~text:last_find_text)
+        else last_find_text
+      in
+      if text <> "" then find_text_in_viewer viewer text else ()
+
   initializer
     self#set_reset self#reset;
     let menu_manager = self#menu_manager () (* create the menu_manager *) in
     main_window#add_accel_group menu_manager#factory#accel_group;
-    
+
+    let extra_accel_group = GtkData.AccelGroup.create () in
+    GtkData.AccelGroup.connect extra_accel_group
+      ~key:GdkKeysyms._F
+      ~modi:[`CONTROL]
+      ~callback:
+        (fun _ -> self#focused_find_text true);
+    (* Ctrl+F is bound to an action which opens a popup asking for a string,
+       and then this string is searched in the text starting from the current
+       position. *)
+    GtkData.AccelGroup.connect extra_accel_group
+      ~key:GdkKeysyms._F3
+      ~callback:(fun _ -> self#focused_find_text false);
+    (* F3 is bound to "Find again": searches the last string
+       input with Ctrl+F without opening a popup window. *)
+    main_window#add_accel_group extra_accel_group;
     let lock_gui lock =
       (* lock left part of the GUI. *)
       filetree_panel_vpaned#misc#set_sensitive (not lock);
@@ -1163,15 +1386,21 @@ object (self:#main_window_extension_points)
     self#file_tree#add_select_function (filetree_selector self#toplevel);
     process_extensions self#toplevel;
     self#register_source_selector to_do_on_select;
+    self#register_source_selector_origin [ReactiveBuffer] to_do_on_real_select;
+
     self#initialize_panels ();
     main_window#show ();
     Gdk.Window.set_cursor main_window#misc#window arrow_cursor;
 
+    let warnings_tab_label = (GMisc.label ~text:"Messages" ())#coerce in
     let warning_manager =
       let packing w =
         ignore
           (lower_notebook#insert_page ~pos:1
-             ~tab_label:(GMisc.label ~text:"Messages" ())#coerce w)
+             ~tab_label:warnings_tab_label w);
+        let text = Format.sprintf "Messages (%d)" (Messages.nb_messages ()) in
+        let label = GtkMisc.Label.cast warnings_tab_label#as_widget in
+        GtkMisc.Label.set_text label text
       in
       let callback e _column =
 	Extlib.may
@@ -1186,6 +1415,9 @@ object (self:#main_window_extension_points)
       Messages.reset_once_flag ();
       Warning_manager.clear warning_manager;
       Messages.iter (fun event -> Warning_manager.append warning_manager event);
+      let text = Format.sprintf "Messages (%d)" (Messages.nb_messages ()) in
+      let label = GtkMisc.Label.cast warnings_tab_label#as_widget in
+      GtkMisc.Label.set_text label text
     in
     display_warnings ();
 
@@ -1204,7 +1436,85 @@ object (self:#main_window_extension_points)
     menu_manager#refresh ();
     Project.register_after_set_current_hook
       ~user_only:true
-      (fun _ -> self#reset ())
+      (fun _ -> self#reset ());
+
+    let pp_def_loc pp typ =
+      try
+        let opt_tag_name =
+          match typ with
+          | TNamed (ti, _) -> Some (Logic_typing.Typedef, ti.torig_name)
+          | TComp (ci, _, _) ->
+            let tag = if ci.cstruct then Logic_typing.Struct
+              else Logic_typing.Union
+            in
+            Some (tag, ci.corig_name)
+          | TEnum (ei, _) -> Some (Logic_typing.Enum, ei.eorig_name)
+          | _ -> None
+        in
+        match opt_tag_name with
+        | None -> ()
+        | Some (tag, name) ->
+          let g = Globals.Types.global tag name in
+          let loc = Cil_datatype.Global.loc g in
+          Format.fprintf pp ", defined at %a" Printer.pp_location loc
+      with
+      | Not_found -> ()
+    in
+
+    annot_window#on_link
+      (fun button s ->
+       begin
+        try
+          (* Retrieve a potential varinfo from the selection *)
+          let vi = Gui_printers.varinfo_of_link s in
+          (* Now that we have a varinfo, we re-synthetize a kinstr from
+            the current localizable, as it must be supplied to the callbacks *)
+          match History.selected_localizable () with
+          | None -> ()
+          | Some loc ->
+            let kfopt = Pretty_source.kf_of_localizable loc in
+            let ki = Pretty_source.ki_of_localizable loc in
+            let var_localizable =
+              Pretty_source.PLval (kfopt, ki, (Var vi, NoOffset))
+            in
+            let button = GdkEvent.Button.button button in
+            if button = 1 then self#pretty_information "@.";
+            selector_localizable self#toplevel
+              InformationPanel ~button var_localizable
+        with Gui_printers.NoMatch -> ()
+       end;
+       begin
+         try
+           (* Retrieve a potential typ from the selection *)
+           let typ = Gui_printers.typ_of_link s in
+           match typ with
+           | TComp _ | TEnum _ | TPtr _ | TArray _ | TNamed _ ->
+             let base_type = Gui_printers.get_type_specifier typ in
+             let sizeof_str =
+               try Format.sprintf "sizeof %d" (Cil.bytesSizeOf base_type)
+               with Cil.SizeOfError (b, _) -> "unknown size: " ^ b
+             in
+             self#pretty_information ~scroll:true
+               "@.Type information for `%a':@.(%s%a)@. @[%a@]"
+               Printer.pp_typ base_type sizeof_str pp_def_loc typ
+               Gui_printers.pp_typ_unfolded base_type
+           | _ -> () (* avoid printing anything for basic types;
+                        also, function types are not supported *)
+         with Gui_printers.NoMatch -> ()
+       end;
+       try
+         let loc = Gui_printers.loc_of_link s in
+         (* Retrieve a potential loc from the selection *)
+         let modi = Gdk.Convert.modifier (GdkEvent.Button.state button) in
+         let button = GdkEvent.Button.button button in
+         if button = 1 then
+           if List.mem `CONTROL modi then
+             (* Control-click: open current location using external viewer
+                (Emacs) *)
+             open_in_external_viewer (fst loc).Lexing.pos_fname
+               ~line:(fst loc).Lexing.pos_lnum;
+         self#view_original loc
+       with Gui_printers.NoMatch -> ())
 end
 
 let make_splash () =
@@ -1220,6 +1530,10 @@ let make_splash () =
       ~show:false ?icon:framac_icon
       ()
   in
+  ignore(w#event#connect#key_press
+           ~callback:(fun key ->
+                      if GdkEvent.Key.keyval key = GdkKeysyms._Escape then
+                        Cmdline.bail_out (); false));
   let _ = w#event#connect#delete ~callback:(fun _ -> Cmdline.bail_out ()) in
   let tid =
     Glib.Timeout.add ~ms:500 ~callback:(fun () -> w#show (); false)
@@ -1232,6 +1546,7 @@ let make_splash () =
   in
   ignore (close_button#connect#released ~callback:Cmdline.bail_out);
   let reparent,stdout = Gtk_helper.make_text_page ~pos:2 notebook "Console" in
+  console_view := Some stdout;
   if Gui_parameters.Debug.get () = 0 then begin
     Gtk_helper.log_redirector
       (fun s -> stdout#buffer#insert ~iter:stdout#buffer#end_iter s);
@@ -1320,6 +1635,6 @@ let () = Db.Toplevel.run := toplevel
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

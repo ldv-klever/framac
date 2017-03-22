@@ -49,37 +49,9 @@ open Cil
 open Cil_types
 open Cil_datatype
 
-(* entry points: cfgFun, printCfgChannel, printCfgFilename *)
 
-(* known issues:
- * -sucessors of if somehow end up with two edges each
- *)
-
-(*------------------------------------------------------------*)
-(* Notes regarding CFG computation:
-   1) Initially only succs and preds are computed. sid's are filled in
-      later, in whatever order is suitable (e.g. for forward problems, reverse
-      depth-first postorder).
-   2) If a stmt (return, break or continue) has no successors, then
-      function return must follow.
-      No predecessors means it is the start of the function
-   3) We use the fact that initially all the succs and preds are assigned []
-*)
-
-(* Fill in the CFG info for the stmts in a block
-   next = succ of the last stmt in this block
-   break = succ of any Break in this block
-   cont  = succ of any Continue in this block
-   None means the succ is the function return. It does not mean the break/cont
-   is invalid. We assume the validity has already been checked.
-*)
-(* At the end of CFG computation,
-   - numNodes = total number of CFG nodes
-   - length(nodeList) = numNodes
-*)
-
-(*let numNodes = ref 0 (* number of nodes in the CFG *)*)
-let nodeList : stmt list ref = ref [] (* All the nodes in a flat list *) (* ab: Added to change dfs from quadratic to linear *)
+(* All the nodes of the function visited, in a flat list *)
+let nodeList : stmt list ref = ref []
 
 class caseLabeledStmtFinder slr = object
     inherit nopCilVisitor
@@ -105,10 +77,9 @@ let findCaseLabeledStmts (b : block) : stmt list =
     !slr
 
 
-(* entry point *)
-
-(** Compute a control flow graph for fd.  Stmts in fd have preds and succs
-  filled in *)
+(** Compute a control flow graph for fd.  All the stmts in fd have
+    their preds and succs fields filled in. The summary fields of
+    fundec are also filled.  *)
 let rec cfgFun (fd : fundec) =
   nodeList := [];
   cfgBlock fd.sbody None None None;
@@ -116,9 +87,16 @@ let rec cfgFun (fd : fundec) =
   fd.sallstmts <- List.rev !nodeList;
   nodeList := []
 
-
-and cfgStmts (ss: stmt list)
-    (next:stmt option) (break:stmt option) (cont:stmt option) =
+(* Notes regarding CFG computation:
+   1) Initially only succs and preds are computed. sid's are filled in
+      later, in whatever order is suitable (e.g. for forward problems, reverse
+      depth-first postorder).
+   2) If a stmt (return, break or continue) has no successors, then
+      function return must follow.
+      No predecessors means it is the start of the function
+   3) We use the fact that initially all the succs and preds are assigned []
+*)
+and cfgStmts (ss: stmt list) next break cont =
   match ss with
     [] -> ();
   | [s] -> cfgStmt s next break cont
@@ -126,24 +104,32 @@ and cfgStmts (ss: stmt list)
       cfgStmt hd (Some (List.hd tl))  break cont;
       cfgStmts tl next break cont
 
-and cfgBlock  (blk: block)
-    (next:stmt option) (break:stmt option) (cont:stmt option) =
+(* Fill in the CFG info for the stmts in a block
+   next = succ of the last stmt in this block
+   break = succ of any Break in this block
+   cont  = succ of any Continue in this block
+   None means the succ is the function return. It does not mean the break/cont
+   is invalid. We assume the validity has already been checked.
+*)
+and cfgBlock (blk: block) next break cont =
   cfgStmts blk.bstmts next break cont
 
-
 (* Fill in the CFG info for a stmt
-   Meaning of next, break, cont should be clear from earlier comment
-*)
-and cfgStmt (s: stmt) (next:stmt option) (break:stmt option) (cont:stmt option) =
+   Meaning of next, break, cont should be clear from earlier comment *)
+and cfgStmt (s: stmt) next break cont =
   if s.sid = -1 then s.sid <- Cil.Sid.next ();
-  nodeList := s :: !nodeList; (* Future traversals can be made in linear time. e.g.  *)
+  nodeList := s :: !nodeList;
   if s.succs <> [] then
     Kernel.fatal 
       "CFG must be cleared before being computed! Stmt %d '%a' \
        has %d successors" 
       s.sid Cil_printer.pp_stmt s (List.length s.succs);
   let addSucc (n: stmt) =
-    if not (List.memq n s.succs) then s.succs <- n::s.succs;
+    s.succs <- n::s.succs;
+    (* We might have duplicate in succs here. This is important
+       to preserve the invariant that If has exactly two successors
+       (in case of [if(e);L:...], both branches will have [L:] as successor).
+     *)
     if not (List.memq s n.preds) then n.preds <- s::n.preds
   in
   let addOptionSucc (n: stmt option) =
@@ -187,7 +173,8 @@ and cfgStmt (s: stmt) (next:stmt option) (break:stmt option) (cont:stmt option) 
   | Break _ -> addOptionSucc break
   | Continue _ -> addOptionSucc cont
   | If (_, blk1, blk2, _) ->
-      (* The succs of If is [true branch;false branch] *)
+      (* The succs of If is [true branch;false branch]. Do the 'else' block
+         first. *)
       addBlockSucc blk2;
       addBlockSucc blk1;
       cfgBlock blk1 next break cont;
@@ -253,68 +240,6 @@ let forallStmts todo (fd : fundec) =
   in
   ignore (visitCilFunction vis fd)
 
-(**************************************************************)
-(* printing the control flow graph - you have to compute it first *)
-
-let d_cfgnodename fmt (s : stmt) = Format.fprintf fmt "%d" s.sid
-
-let d_cfgnodelabel fmt (s : stmt) =
-  let label =
-    begin
-      match s.skind with
-	| If (_, _, _, _)  -> "if" (*sprint ~width:999 (dprintf "if %a" d_exp e)*)
-	| Loop _ -> "loop"
-	| Break _ -> "break"
-	| Continue _ -> "continue"
-	| Goto _ -> "goto"
-	| Instr _ -> "instr"
-	| Switch _ -> "switch"
-	| Block _ -> "block"
-	| Return _ -> "return"
-        | Throw _ -> "throw"
-        | TryCatch _ -> "try-catch"
-	| TryExcept _ -> "try-except"
-	| TryFinally _ -> "try-finally"
-	| UnspecifiedSequence _ -> "unspecifiedsequence"
-    end in
-  Format.fprintf fmt "%d: %s" s.sid label
-
-let d_cfgedge src fmt dest =
-  Format.fprintf fmt "%a -> %a"
-    d_cfgnodename src
-    d_cfgnodename dest
-
-let d_cfgnode fmt (s : stmt) =
-  Format.fprintf fmt "%a [label=\"%a\"]\n\t@[<hov 2>%a@]"
-    d_cfgnodename s
-    d_cfgnodelabel s
-    (Pretty_utils.pp_list ~sep:"@." (d_cfgedge s)) s.succs
-
-(**********************************************************************)
-(* entry points *)
-
-(** print control flow graph (in dot form) for fundec to channel *)
-let printCfgChannel fmt (fd : fundec) =
-  let pnode (s:stmt) = Format.fprintf fmt "%a\n" d_cfgnode s in
-  begin
-    Format.fprintf fmt "digraph CFG_%s {\n" fd.svar.vname ;
-    forallStmts pnode fd;
-    Format.fprintf fmt  "}\n" ;
-    end
-
-(** Print control flow graph (in dot form) for fundec to file *)
-let printCfgFilename (filename : string) (fd : fundec) =
-  let chan = open_out filename in
-    begin
-      printCfgChannel (Format.formatter_of_out_channel chan) fd ;
-      close_out chan;
-    end
-
-
-;;
-
-(**********************************************************************)
-
 
 let clearCFGinfo ?(clear_id=true) (fd : fundec) =
   let clear s =
@@ -326,8 +251,8 @@ let clearCFGinfo ?(clear_id=true) (fd : fundec) =
 
 let clearFileCFG ?(clear_id=true) (f : file) =
   iterGlobals f (fun g ->
-    match g with GFun(fd,_) ->
-      clearCFGinfo ~clear_id fd
+    match g with
+    | GFun(fd,_) -> clearCFGinfo ~clear_id fd
     | _ -> ())
 
 let clear_sid_info_ref = Extlib.mk_fun "Cfg.clear_sid_info_ref"
@@ -335,96 +260,6 @@ let clear_sid_info_ref = Extlib.mk_fun "Cfg.clear_sid_info_ref"
 let computeFileCFG (f : file) =
   !clear_sid_info_ref ();
   iterGlobals f (fun g -> match g with GFun(fd,_) -> cfgFun fd | _ -> ())
-
-(* Cfg computation *)
-
-open Logic_const
-
-let statements : stmt list ref = ref []
-(* Clear all info about the CFG in statements *)
-
-class clear : cilVisitor = object
-  inherit nopCilVisitor
-  method! vstmt s = begin
-    s.sid <- Sid.next ();
-    statements := s :: !statements;
-    s.succs <- [] ;
-    s.preds <- [] ;
-    DoChildren
-  end
-  method! vexpr _ = SkipChildren
-  method! vtype _ = SkipChildren
-  method! vinst _ = SkipChildren
-  method! vcode_annot _ = SkipChildren (* via Loop stmt *)
-  method! vlval _ = SkipChildren (* via UnspecifiedSequence stmt *)
-  method! vattr _ = SkipChildren (* via block stmt *)
-end
-
-let link source dest = begin
-  if not (List.mem dest source.succs) then
-    source.succs <- dest :: source.succs ;
-  if not (List.mem source dest.preds) then
-    dest.preds <- source :: dest.preds
-end
-let trylink source dest_option = match dest_option with
-    None -> ()
-  | Some(dest) -> link source dest
-
-
- (** Compute the successors and predecessors of a block, given a fallthrough *)
-let rec succpred_block b fallthrough =
-  let rec handle sl = match sl with
-      [] -> ()
-    | [a] -> succpred_stmt a fallthrough
-    | hd :: ((next :: _) as tl) ->
-      succpred_stmt hd (Some next) ;
-      handle tl
-  in handle b.bstmts
-
-
-and succpred_stmt s fallthrough =
-  match s.skind with
-      Instr _ -> trylink s fallthrough
-    | Return _ | Throw _ -> ()
-    | Goto(dest,_) -> link s !dest
-    | Break _
-    | Continue _
-    | Switch _ ->
-      failwith "computeCFGInfo: cannot be called on functions with break, continue or switch statements. Use prepareCFG first to remove them."
-
-    | If(_e1,b1,b2,_) ->
-      (match b1.bstmts with
-	  [] -> trylink s fallthrough
-        | hd :: _ -> (link s hd ; succpred_block b1 fallthrough )) ;
-      (match b2.bstmts with
-	  [] -> trylink s fallthrough
-        | hd :: _ -> (link s hd ; succpred_block b2 fallthrough ))
-
-    | Loop(_,b,_,_,_) ->
-      begin match b.bstmts with
-	  [] -> failwith "computeCFGInfo: empty loop"
-        | hd :: _ ->
-	  link s hd ;
-	  succpred_block b (Some(hd))
-      end
-
-    | Block(b) -> begin match b.bstmts with
-	[] -> trylink s fallthrough
-	| hd :: _ -> link s hd ;
-	  succpred_block b fallthrough
-    end
-    | UnspecifiedSequence (((s1,_,_,_,_)::_) as seq) ->
-      link s s1;
-      succpred_block (block_from_unspecified_sequence seq) fallthrough
-    | UnspecifiedSequence [] ->
-      trylink s fallthrough
-    | TryCatch (t,c,_) ->
-        (match t.bstmts with
-          | [] -> trylink s fallthrough
-          | hd :: _ -> link s hd; succpred_block t fallthrough);
-        List.iter (fun (_,b) -> succpred_block b fallthrough) c
-    | TryExcept _ | TryFinally _ ->
-      failwith "computeCFGInfo: structured exception handling not implemented"
 
 
  (* This alphaTable is used to prevent collision of label names when
@@ -455,8 +290,9 @@ let xform_switch_block ?(keepSwitch=false) b =
   let () = Stack.push (Stack.create()) continues_stack in
   let assert_of_clause f ca =
     match ca.annot_content with
-      | AAssert _ | AInvariant _ | AVariant _ | AAssigns _ | AAllocation _ | APragma _ -> ptrue
+      | AAssert _ | AInvariant _ | AVariant _ | AAssigns _ | AAllocation _ | APragma _ -> Logic_const.ptrue
       | AStmtSpec (_bhv,s) ->
+        let open Logic_const in
         List.fold_left
           (fun acc bhv ->
             pand
@@ -564,8 +400,9 @@ let xform_switch_block ?(keepSwitch=false) b =
                 Kernel.fatal "empty breaks stack";
               s.skind <- Goto(break_dest (),l);
               let breaks = Stack.top breaks_stack in
-              let assertion = ref ptrue in
-              Stack.iter (fun p -> assertion := pand (p,!assertion)) breaks;
+              let assertion = ref Logic_const.ptrue in
+              Stack.iter (fun p ->
+                  assertion := Logic_const.pand (p,!assertion)) breaks;
               (match !assertion with
                   { content = Ptrue } ->
                     popn popstack;
@@ -584,8 +421,9 @@ let xform_switch_block ?(keepSwitch=false) b =
                 Kernel.fatal "empty continues stack";
               s.skind <- Goto(cont_dest (),l);
               let continues = Stack.top continues_stack in
-              let assertion = ref ptrue in
-              Stack.iter (fun p -> assertion := pand(p,!assertion)) continues;
+              let assertion = ref Logic_const.ptrue in
+              Stack.iter (fun p ->
+                  assertion := Logic_const.pand(p,!assertion)) continues;
               (match !assertion with
                   { content = Ptrue } ->
                     popn popstack;
@@ -849,17 +687,6 @@ let prepareCFG ?(keepSwitch=false) (fd : fundec) : unit =
   let b = xform_switch_block ~keepSwitch fd.sbody in
   fd.sbody <- b
 
-(* make the cfg and return a list of statements *)
-let computeCFGInfo (f : fundec) (_global_numbering : bool) : unit =
-  statements := [];
-  let clear_it = new clear in
-  ignore (visitCilBlock clear_it f.sbody) ;
-  f.smaxstmtid <- Some (Sid.next ()) ;
-  succpred_block f.sbody (None);
-  let res = List.rev !statements in
-  statements := [];
-  f.sallstmts <- res;
-  ()
 
 (*
 Local Variables:

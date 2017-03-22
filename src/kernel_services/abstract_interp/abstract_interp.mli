@@ -26,6 +26,17 @@
 exception Not_less_than
 (** Raised by {!Lattice.cardinal_less_than}. *)
 
+exception Can_not_subdiv
+(** Used by other modules e.g. {!Fval.subdiv_float_interval}. *)
+
+module Bot: sig
+  type 'a or_bottom = [ `Value of 'a | `Bottom ]
+  val non_bottom: 'a or_bottom -> 'a
+  val join_or_bottom:
+    ('a -> 'a -> 'a) -> 'a or_bottom -> 'a or_bottom -> 'a or_bottom
+end
+
+
 open Lattice_type
 
 module Int : sig
@@ -33,6 +44,10 @@ module Int : sig
   include Lattice_Value with type t := t
 
   val fold : (t -> 'a -> 'a) -> inf:t -> sup:t -> step:t -> 'a -> 'a
+  (** Fold the function on the value between [inf] and [sup] at every
+      step. If [step] is positive the first value is [inf] and values
+      go increasing, if [step] is negative the first value is [sup]
+      and values go decreasing *)
 end
 
 (** "Relative" integers. They are subtraction between two absolute integers *)
@@ -88,6 +103,6 @@ module Make_Lattice_Sum (L1:AI_Lattice_with_cardinal_one) (L2:AI_Lattice_with_ca
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -28,10 +28,19 @@ open Ctypes
 open Cil_types
 open Cil_datatype
 
-type var = Result | Cvar of varinfo | Lvar of logic_var
+type access =
+  | NoAccess
+  | ByRef     (* The expression ["*x"], equal to [load(load(&x))] *)
+  | ByArray   (* The expression ["x[_]"], equal to [load(shift(load(&x),_))] *)
+  | ByValue   (* The expression ["x"], equal to [load(&x)] *)
+  | ByAddr    (* The expression ["&x"] *)
 
-module Var :
-sig
-  type t = var
-  val pretty : Format.formatter -> t -> unit
-end
+val iter :
+  ?on_init:(access -> unit) ->
+  ?on_kf:(kernel_function -> access -> unit) ->
+  varinfo -> unit
+
+val get : ?kf:kernel_function -> ?init:bool -> varinfo -> access
+
+val dump : unit -> unit
+val compute : unit -> unit

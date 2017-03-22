@@ -71,6 +71,16 @@ module AstType =
      end
     )
 
+module Libc =
+  False
+    (struct
+      let option_name = "-metrics-libc"
+      let help = "show functions from Frama-C standard C library in the \
+                  results; deactivated by default."
+     end
+    )
+
+
 let () = AstType.set_possible_values ["cil"; "cabs"; "acsl"]
 
 module SyntacticallyReachable =
@@ -85,6 +95,6 @@ module SyntacticallyReachable =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

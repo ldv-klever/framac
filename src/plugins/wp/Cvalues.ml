@@ -65,7 +65,7 @@ and constant_term t =
 (* -------------------------------------------------------------------------- *)
 
 (* The type contains C-integers *)
-let rec is_constrained ty = 
+let rec is_constrained ty =
   match Ctypes.object_of ty with
   | C_int _ -> true
   | C_float _ -> false
@@ -91,40 +91,40 @@ module STRUCTURAL(C : CASES) =
 struct
 
   let constrained_elt ty = match C.model with
-    | Cint.Natural -> true
+    | Cint.Natural | Cint.NoRange -> true
     | Cint.Machine -> is_constrained ty
 
   let constrained_comp c = match C.model with
-    | Cint.Natural -> true
+    | Cint.Natural | Cint.NoRange -> true
     | Cint.Machine -> is_constrained_comp c
 
   let model_int fmt i = match C.model with
-    | Cint.Natural -> Format.pp_print_string fmt "int"
+    | Cint.Natural | Cint.NoRange -> Format.pp_print_string fmt "int"
     | Cint.Machine -> Ctypes.pp_int fmt i
 
   let array_name te ds =
     let dim = List.length ds in
     match te with
-    | C_int i -> 
+    | C_int i ->
         Pretty_utils.sfprintf "%sArray%d_%a" C.prefix dim model_int i
-    | C_float _ -> 
+    | C_float _ ->
         Pretty_utils.sfprintf "%sArray%d_float" C.prefix dim
     | C_pointer _ ->
-        Pretty_utils.sfprintf "%sArray%d_pointer" C.prefix dim 
+        Pretty_utils.sfprintf "%sArray%d_pointer" C.prefix dim
     | C_comp c ->
         Pretty_utils.sfprintf "%sArray%d%s" C.prefix dim (Lang.comp_id c)
     | C_array _ ->
         Wp_parameters.fatal "Unflatten array (%s %a)" C.prefix Ctypes.pretty te
 
-  let rec is_obj obj t = 
+  let rec is_obj obj t =
     match obj with
     | C_int i -> C.is_int i t
     | C_float f -> C.is_float f t
     | C_pointer _ty -> C.is_pointer t
-    | C_comp c -> 
+    | C_comp c ->
         if constrained_comp c then is_record c t else p_true
     | C_array a ->
-        if constrained_elt a.arr_element 
+        if constrained_elt a.arr_element
         then
           let te,ds = Ctypes.array_dimensions a in
           is_array te ds t
@@ -138,9 +138,9 @@ struct
       (fun lfun ->
          let basename = if c.cstruct then "S" else "U" in
          let s = Lang.freshvar ~basename (Lang.tau_of_comp c) in
-         let def = p_all 
+         let def = p_all
              (fun f -> is_typ f.ftype (e_getfield (e_var s) (Lang.Cfield f)))
-             c.cfields 
+             c.cfields
          in {
            d_lfun = lfun ; d_types = 0 ; d_params = [s] ;
            d_cluster = Definitions.compinfo c ;
@@ -222,8 +222,8 @@ module EQARRAY = Model.Generator(Matrix.NATURAL)
       type data = Lang.lfun
       let name = "Cvalues.EqArray"
       let compile (te,ds) =
-        let lfun = Lang.generated_f ~sort:Logic.Sprop "EqArray%s_%s" 
-            (Matrix.id ds) (Matrix.natural_id te) 
+        let lfun = Lang.generated_f ~sort:Logic.Sprop "EqArray%s_%s"
+            (Matrix.id ds) (Matrix.natural_id te)
         in
         let cluster = Definitions.matrix te in
         let denv = Matrix.denv ds in
@@ -234,32 +234,15 @@ module EQARRAY = Model.Generator(Matrix.NATURAL)
         let tb = e_var xb in
         let ta_xs = List.fold_left e_get ta denv.index_val in
         let tb_xs = List.fold_left e_get tb denv.index_val in
-        let eq = p_call lfun (denv.size_val @ [ta ; tb]) in
         let property = p_hyps (denv.index_range) (!s_eq te ta_xs tb_xs) in
         let definition = p_forall denv.index_var property in
         (* Definition of the symbol *)
         Definitions.define_symbol {
-          d_lfun = lfun ; d_types = 0 ; 
+          d_lfun = lfun ; d_types = 0 ;
           d_params = denv.size_var @ [xa ; xb ] ;
           d_definition = Predicate(Def,definition) ;
           d_cluster = cluster ;
         } ;
-        (* Extensionnal Definition (with triggers) *)
-        let name = Printf.sprintf "EqArrayExt%s_%s" 
-            (Matrix.id ds) (Matrix.natural_id te) 
-        in
-        Definitions.define_lemma {
-          l_name = name ;
-          l_cluster = cluster ;
-          l_types = 0 ;
-          l_forall = denv.size_var @ [xa ; xb ] @ denv.index_var ;
-          l_assumed = true ;
-          l_triggers = [ 
-            [ Trigger.of_pred eq ; Trigger.of_term ta_xs ] ;
-            [ Trigger.of_pred eq ; Trigger.of_term tb_xs ] 
-          ] ;
-          l_lemma = property ;
-        } ; 
         (* Finally return symbol *)
         lfun
     end)
@@ -267,7 +250,7 @@ module EQARRAY = Model.Generator(Matrix.NATURAL)
 let rec equal_object obj a b =
   match obj with
   | C_int _ | C_float _ | C_pointer _ -> p_equal a b
-  | C_array t -> 
+  | C_array t ->
       equal_array (Matrix.of_array t) a b
   | C_comp c ->
       equal_comp c a b
@@ -283,10 +266,10 @@ and equal_comp c a b =
        let xb = Lang.freshvar ~basename (Lang.tau_of_comp c) in
        let ra = e_var xa in
        let rb = e_var xb in
-       let def = p_all 
-           (fun f -> 
+       let def = p_all
+           (fun f ->
               let fd = Cfield f in
-              equal_typ f.ftype 
+              equal_typ f.ftype
                 (e_getfield ra fd) (e_getfield rb fd))
            c.cfields
        in {
@@ -296,7 +279,7 @@ and equal_comp c a b =
        }
     ) [a;b]
 
-and equal_array m a b = 
+and equal_array m a b =
   match m with
   | _obj , [None] -> p_equal a b
   | _ -> p_call (EQARRAY.get m) (Matrix.size m @ [a;b])
@@ -375,7 +358,7 @@ struct
         let k = e_var x in
         [x],M.shift l obj k,Vset.in_range k a b
 
-  let vset_of_sloc sloc = 
+  let vset_of_sloc sloc =
     List.map
       (function
         | Sloc p -> Vset.Singleton (M.pointer_val p)
@@ -384,7 +367,7 @@ struct
             Vset.Descr( xs , M.pointer_val l , p )
       ) sloc
 
-  let sloc_of_vset vset = 
+  let sloc_of_vset vset =
     List.map
       (function
         | Vset.Singleton e -> Sloc (M.pointer_loc e)
@@ -417,7 +400,7 @@ struct
     | Vloc l -> Vexp (f1 (M.pointer_val l))
     | _ -> Vset(f2 (vset a))
 
-  let apply_lift f1 f2 a b = 
+  let apply_lift f1 f2 a b =
     if is_single a && is_single b then
       Vexp (f1 (value a) (value b))
     else
@@ -468,7 +451,7 @@ struct
     | Some s ->
         match kset with
         | Vset.Singleton _ | Vset.Set _ -> kset
-        | Vset.Range(a,b) -> 
+        | Vset.Range(a,b) ->
             let cap l = function None -> Some l | u -> u in
             Vset.Range(cap e_zero a,cap (e_int (s-1)) b)
         | Vset.Descr(xs,k,p) ->
@@ -483,10 +466,10 @@ struct
         match sloc , restrict kset size with
         | Sloc l , Vset.Singleton k -> Sloc(M.shift l obj k)
         | Sloc l , Vset.Range(a,b) -> Srange(l,obj,a,b)
-        | Srange(l,obj0,a0,b0) , Vset.Singleton k 
+        | Srange(l,obj0,a0,b0) , Vset.Singleton k
           when Ctypes.equal obj0 obj ->
             Srange(l,obj0, Vset.bound_add a0 (Some k), Vset.bound_add b0 (Some k))
-        | Srange(l,obj0,a0,b0) , Vset.Range(a1,b1) 
+        | Srange(l,obj0,a0,b0) , Vset.Range(a1,b1)
           when Ctypes.equal obj0 obj ->
             Srange(l,obj0, Vset.bound_add a0 a1, Vset.bound_add b0 b1)
         | _ ->
@@ -511,8 +494,8 @@ struct
   (* --- Load in Memory                                                     --- *)
   (* -------------------------------------------------------------------------- *)
 
-  type loader = { 
-    mutable sloc : M.loc sloc list ; 
+  type loader = {
+    mutable sloc : M.loc sloc list ;
     mutable vset : Vset.vset list ;
   }
 
@@ -526,7 +509,7 @@ struct
           Vset (vset_of_sloc a.sloc @ a.vset)
 
   let loadsloc a sigma obj = function
-    | Sloc l -> 
+    | Sloc l ->
         begin
           match M.load sigma obj l with
           | Val t -> a.vset <- Vset.Singleton t :: a.vset
@@ -541,7 +524,7 @@ struct
         end
 
   let load sigma obj lv =
-    if is_single lv then 
+    if is_single lv then
       let data = M.load sigma obj (loc lv) in
       Lang.assume (is_object obj data) ;
       match data with
@@ -558,15 +541,15 @@ struct
       (function
         | Vexp e -> a.vset <- Vset.Singleton e::a.vset
         | Vloc l -> a.sloc <- Sloc l :: a.sloc
-        | Vset s -> a.vset <- List.rev_append s a.vset 
+        | Vset s -> a.vset <- List.rev_append s a.vset
         | Lset s -> a.sloc <- List.rev_append s a.sloc
       ) vs ;
     flush (Logic_typing.is_pointer_type t) a
 
   let inter t vs =
     match List.map (fun v -> Vset.concretize (vset v)) vs with
-    | [] -> 
-        if Logic_typing.is_pointer_type t 
+    | [] ->
+        if Logic_typing.is_pointer_type t
         then Lset [] else Vset []
     | v::vs ->
         let s = List.fold_left Vset.inter v vs in
@@ -577,7 +560,7 @@ struct
   (* --- Sloc to Rloc                                                       --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let rloc obj = function 
+  let rloc obj = function
     | Sloc l -> Rloc(obj,l)
     | Sarray(l,t,s) -> Rarray(l,t,s)
     | Srange(l,t,a,b) -> Rrange(l,t,a,b)
@@ -643,6 +626,20 @@ struct
     | Srange(l,t,a,b) -> M.valid sigma acs (Rrange(l,t,a,b))
     | Sdescr(xs,l,p) -> p_forall xs (p_imply p (M.valid sigma acs (Rloc(obj,l))))
 
-  let valid sigma acs obj = p_all (valid_sloc sigma acs obj) 
+  let valid sigma acs obj = p_all (valid_sloc sigma acs obj)
+
+  (* -------------------------------------------------------------------------- *)
+  (* --- Subset                                                             --- *)
+  (* -------------------------------------------------------------------------- *)
+
+  let subset ta la tb lb =
+    match la , lb with
+    | Vexp x , Vexp y -> F.p_equal x y
+    | Vexp e , Vset b -> Vset.member e b
+    | Vset a , Vset b -> Vset.subset a b
+    | _ ->
+        let ta = Ctypes.object_of_logic_pointed ta in
+        let tb = Ctypes.object_of_logic_pointed tb in
+        included ta (sloc la) tb (sloc lb)
 
 end

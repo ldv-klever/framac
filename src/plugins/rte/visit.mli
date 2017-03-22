@@ -33,6 +33,6 @@ val do_exp_annotations: kernel_function -> stmt -> exp -> code_annotation list
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

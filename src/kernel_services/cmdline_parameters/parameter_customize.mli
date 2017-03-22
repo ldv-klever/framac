@@ -214,6 +214,6 @@ val use_category_ref: bool ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

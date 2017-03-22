@@ -40,8 +40,8 @@ exception NoSize
 
 let pp_box fmt = function
   | [] -> ()
-  | k::ks -> 
-      Format.fprintf fmt "%d" k ; 
+  | k::ks ->
+      Format.fprintf fmt "%d" k ;
       List.iter (fun k -> Format.fprintf fmt ":%d" k) ks
 
 let pp_dim fmt ks =
@@ -62,7 +62,7 @@ let _merge_dim ds1 ds2 = (* Unused *)
         match rs1 , rs2 with
         | [] , _ -> ds2
         | _ , [] -> ds1
-        | d1::rs1 , d2::rs2 -> 
+        | d1::rs1 , d2::rs2 ->
             if d1=d2 then verify ds1 ds2 rs1 rs2
             else raise Exit
       in verify ds1 ds2 (List.rev ds1) (List.rev ds2)
@@ -75,7 +75,7 @@ let merge_box box1 box2 =
       match rs1 , rs2 with
       | [] , _ -> ds2
       | _ , [] -> ds1
-      | d1::rs1 , d2::rs2 -> 
+      | d1::rs1 , d2::rs2 ->
           if d1=d2 then verify ds1 ds2 rs1 rs2
           else raise Exit
     in verify box1 box2 box1 box2
@@ -111,7 +111,7 @@ let rec type_of_cells typ =
   | TArray(te,_,_,_) -> type_of_cells te
   | te -> te
 
-let alloc_for_type typ = 
+let alloc_for_type typ =
   match Cil.unrollType typ with
   | TArray(te,Some d,_,_) -> size_int d :: dim_of_type te
   | TArray(te,None,_,_) -> 0 :: dim_of_type te
@@ -242,18 +242,18 @@ struct
 
   let in_spec = ref false
 
-  let on_spec e = 
+  let on_spec e =
     in_spec := true ; ChangeDoChildrenPost(e,fun e -> in_spec := false ; e)
 
   let pp_target fmt = function
     | Memory -> Format.fprintf fmt "memory"
     | Validity -> Format.fprintf fmt "valid"
-    | Fcall(kf,x) -> Format.fprintf fmt "call %a:%a" 
+    | Fcall(kf,x) -> Format.fprintf fmt "call %a:%a"
                        Kernel_function.pretty kf Varinfo.pretty x
     | Logic(phi,x) -> Format.fprintf fmt "logic %a:%a"
                         Logic_var.pretty phi.l_var_info Logic_var.pretty x
 
-  let pp_access fmt ds = 
+  let pp_access fmt ds =
     List.iter
       (function
         | Dload -> Format.fprintf fmt "L"
@@ -273,7 +273,7 @@ struct
     | Bot (* value if never used *)
     | Top (* value must be allocated in heap *)
     | Value  (* always accessed by [load(base)] *)
-    | RefValue (* always accessed by [load(load(base))] *) 
+    | RefValue (* always accessed by [load(load(base))] *)
     | Array of int list (* always accessed by [load(shift(base))] *)
     | RefArray of int list (* always accessed by [load(shift(load(base)))] *)
   (* for arrays : empty list means flatten array *)
@@ -284,10 +284,10 @@ struct
 (*
   Usage Lattice Diagram
 
-           Top 
+           Top
             |
           Array           Justification comes from:
-            |      (b)          
+            |      (b)
           Value            (a) For any operation (f), f(u) <= u
             |      (a)
          RefArray          (b) 0-shift of any dimension is identity
@@ -401,7 +401,7 @@ struct
 
   let update occur inspec target context =
     match target with
-    | Memory -> 
+    | Memory ->
         if inspec then occur.param <- merge_with occur.param context ;
         occur.value <- merge_with occur.value context
     | Validity -> occur.valid <- true
@@ -410,7 +410,7 @@ struct
 
   let propagate modified occur (phi : Root.t -> Usage.domain)  =
     List.iter
-      (fun (inspec,x,w) -> 
+      (fun (inspec,x,w) ->
          let u = Usage.call (phi x) w in
          if not (Usage.leq u occur.value) then
            begin
@@ -442,8 +442,8 @@ module Domain = Datatype.Make
 module U = State_builder.Ref(Domain)
     (struct
       let name = "Wp.VarUsage.Analysis"
-      let dependencies = 
-        [ Ast.self; 
+      let dependencies =
+        [ Ast.self;
           (* [JS 2012/02/08] put all annotations state, but unsure that this
              	    state actually depends on all of them. *)
           Annotations.code_annot_state;
@@ -452,15 +452,15 @@ module U = State_builder.Ref(Domain)
       let default () = Omap.empty
     end)
 
-let occur r = 
+let occur r =
   let omap = U.get () in
   try Omap.find r omap
-  with Not_found -> 
+  with Not_found ->
     let occ = Occur.empty () in
     U.set (Omap.add r occ omap) ; occ
 
 let get_formal r =
-  try 
+  try
     let occ = Omap.find r (U.get()) in
     match r with
     | Root.Cvar _ -> occ.Occur.param
@@ -471,7 +471,7 @@ let occurrence (target,access) root =
   let in_spec = match root with
     | Root.Cvar x -> x.vformal && !Context.in_spec
     | Root.Lvar _ -> false
-  in 
+  in
   WpMain.debug ~dkey ~current:true "%s %a : %a <- %a"
     (if in_spec then "Spec" else "Code")
     Root.pretty root Context.pp_target target Context.pp_access access ;
@@ -495,16 +495,16 @@ let rec expr (context:Context.t) (e:Cil_types.exp) =
   match e.enode with
   | Const _ | SizeOf _ | SizeOfE _ | SizeOfStr _ | AlignOf _ | AlignOfE _ -> ()
   | UnOp((Neg|BNot|LNot),e,_) -> expr Context.epsilon e
-  | BinOp((PlusPI|IndexPI|MinusPI),a,b,_) -> 
+  | BinOp((PlusPI|IndexPI|MinusPI),a,b,_) ->
       let ty = Cil.typeOf_pointed (Cil.typeOf a) in
-      expr (Context.shift ty context) a ; 
+      expr (Context.shift ty context) a ;
       expr Context.epsilon b
   | BinOp( (MinusPP|PlusA|MinusA|Mult|Div|Mod
            |Shiftlt|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
            |Lt|Gt|Le|Ge|Eq|Ne), a,b,_ ) ->
-      expr Context.epsilon a ; 
+      expr Context.epsilon a ;
       expr Context.epsilon b
-  | CastE(ty_tgt,e) -> 
+  | CastE(ty_tgt,e) ->
       let ty_src = Cil.typeOf e in
       expr (Context.cast ty_src ty_tgt context) e
   | AddrOf lval -> lvalue context lval
@@ -512,9 +512,9 @@ let rec expr (context:Context.t) (e:Cil_types.exp) =
   | Lval lval -> lvalue (Context.load context) lval
   | Info(e,_) -> expr context e
 
-and lvalue context (host,offset) = 
-  let ty_host = match host with 
-    | Var x -> x.vtype 
+and lvalue context (host,offset) =
+  let ty_host = match host with
+    | Var x -> x.vtype
     | Mem e -> Cil.typeOf_pointed (Cil.typeOf e) in
   let context = lval_offset context ty_host offset in
   lval_host context host
@@ -527,9 +527,9 @@ and lval_host context = function
 
 and lval_offset context ty = function
   | NoOffset -> context
-  | Field(f,offset) -> 
+  | Field(f,offset) ->
       lval_offset Context.epsilon f.ftype offset
-  | Index(e,offset) -> 
+  | Index(e,offset) ->
       expr Context.epsilon e ;
       let telt = Cil.typeOf_array_elem ty in
       Context.shift telt (lval_offset context telt offset)
@@ -537,16 +537,16 @@ and lval_offset context ty = function
 let rec funcall_params kf xs es =
   match xs , es with
   | _ , [] | [] , _ -> ()
-  | x::xs , e::es -> 
-      expr (Context.function_param kf x) e ; 
+  | x::xs , e::es ->
+      expr (Context.function_param kf x) e ;
       funcall_params kf xs es
 
 let funcall (ef:Cil_types.exp) (es:Cil_types.exp list) =
   match Kernel_function.get_called ef with
-  | None -> 
-      expr Context.epsilon ef ; 
+  | None ->
+      expr Context.epsilon ef ;
       List.iter (expr Context.epsilon) es
-  | Some kf -> 
+  | Some kf ->
       funcall_params kf (Kernel_function.get_formals kf) es
 
 (* -------------------------------------------------------------------------- *)
@@ -555,19 +555,19 @@ let funcall (ef:Cil_types.exp) (es:Cil_types.exp list) =
 
 let rec term (context:Context.t) (t:term) =
   match t.term_node with
-  | TConst _ 
-  | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ 
+  | TConst _
+  | TSizeOf _ | TSizeOfE _ | TSizeOfStr _
   | TAlignOf _ | TAlignOfE _ -> ()
-  | TUnOp((Neg|BNot|LNot),t) -> 
+  | TUnOp((Neg|BNot|LNot),t) ->
       term Context.epsilon t
-  | TBinOp((PlusPI|IndexPI|MinusPI),a,b) -> 
+  | TBinOp((PlusPI|IndexPI|MinusPI),a,b) ->
       let ty = Logic_typing.ctype_of_pointed a.term_type in
-      term (Context.shift ty context) a ; 
+      term (Context.shift ty context) a ;
       term Context.epsilon b
   | TBinOp( (MinusPP|PlusA|MinusA|Mult|Div|Mod
             |Shiftlt|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
             |Lt|Gt|Le|Ge|Eq|Ne), a,b ) ->
-      term Context.epsilon a ; 
+      term Context.epsilon a ;
       term Context.epsilon b
   | TCastE(ty_tgt,t) ->
       begin
@@ -597,7 +597,7 @@ let rec term (context:Context.t) (t:term) =
   | Tunion ts | Tinter ts -> List.iter (term context) ts
   | Tcomprehension( t , _ , None ) ->
       term context t
-  | Tcomprehension( t , _ , Some p ) -> 
+  | Tcomprehension( t , _ , Some p ) ->
       term context t ; named_predicate p
   | Trange( a , b ) ->
       term_option Context.epsilon a ;
@@ -628,11 +628,11 @@ and term_lval context (host,offset) =
 
 and term_coffset context ty = function
   | TNoOffset -> context
-  | TField(f,offset) -> 
+  | TField(f,offset) ->
       term_coffset Context.epsilon f.ftype offset
   | TModel _ ->
       Wp_parameters.not_yet_implemented "Model field"
-  | TIndex(e,offset) -> 
+  | TIndex(e,offset) ->
       term Context.epsilon e ;
       let telt = Cil.typeOf_array_elem ty in
       Context.shift telt (term_coffset context telt offset)
@@ -651,8 +651,8 @@ and term_host context = function
 and logic_call phi xs ts =
   match xs , ts with
   | [] , _ | _ , [] -> ()
-  | x::xs , t::ts -> 
-      term (Context.logic_param phi x) t ; 
+  | x::xs , t::ts ->
+      term (Context.logic_param phi x) t ;
       logic_call phi xs ts
 
 and identified_term context t = term context t.it_content
@@ -664,11 +664,11 @@ and identified_term context t = term context t.it_content
 and named_predicate p = predicate p.content
 and predicate = function
   | Psubtype _ | Pfalse | Ptrue -> ()
-  | Papp(phi,_,ts) -> 
+  | Papp(phi,_,ts) ->
       logic_call phi phi.l_profile ts
-  | Pseparated ts -> 
+  | Pseparated ts ->
       List.iter (term Context.validity) ts
-  | Pvalid (_,t) 
+  | Pvalid (_,t)
   | Pvalid_read (_,t)
   | Pallocable (_,t)
   | Pfreeable (_,t) ->
@@ -678,24 +678,24 @@ and predicate = function
   | Pfresh (_,_,t,n) ->
       term Context.validity t ;
       term Context.validity n
-  | Prel(_,a,b) -> 
-      term Context.epsilon a ; 
+  | Prel(_,a,b) ->
+      term Context.epsilon a ;
       term Context.epsilon b
-  | Pand(p,q) | Por(p,q) | Pxor(p,q) | Pimplies(p,q) | Piff(p,q) -> 
-      named_predicate p ; 
+  | Pand(p,q) | Por(p,q) | Pxor(p,q) | Pimplies(p,q) | Piff(p,q) ->
+      named_predicate p ;
       named_predicate q
-  | Pnot p -> 
+  | Pnot p ->
       named_predicate p
-  | Pif(t,p,q) -> 
-      term Context.epsilon t ; 
-      named_predicate p ; 
+  | Pif(t,p,q) ->
+      term Context.epsilon t ;
+      named_predicate p ;
       named_predicate q
   | Plet(phi,p) ->
       logic_body phi.l_body ;
       named_predicate p
-  | Pforall(_,p) | Pexists(_,p) -> 
+  | Pforall(_,p) | Pexists(_,p) ->
       named_predicate p
-  | Pat(p,_) -> 
+  | Pat(p,_) ->
       named_predicate p
 
 (* -------------------------------------------------------------------------- *)
@@ -721,14 +721,14 @@ class visitor =
     initializer Context.in_spec := false
 
     method! vexpr e = expr Context.epsilon e ; SkipChildren
-    method! vinst = function 
-      | Call( result , e , es , _ ) -> 
-          lval_option Context.assigned result ; 
-          funcall e es ; 
+    method! vinst = function
+      | Call( result , e , es , _ ) ->
+          lval_option Context.assigned result ;
+          funcall e es ;
           SkipChildren
       | Set( lv , e , _ ) ->
-          lvalue Context.assigned lv ; 
-          expr Context.epsilon e ; 
+          lvalue Context.assigned lv ;
+          expr Context.epsilon e ;
           SkipChildren
       | Code_annot _ -> DoChildren
       | Skip _ -> DoChildren
@@ -740,26 +740,26 @@ class visitor =
 
   end
 
-let compute () = 
-  WpMain.feedback "Collecting variable usage" ;
-  Visitor.visitFramacFile (new visitor) (Ast.get()) ; 
+let compute () =
+  WpMain.feedback ~ontty:`Feedback "Collecting variable usage" ;
+  Visitor.visitFramacFile (new visitor) (Ast.get()) ;
   fixpoint ()
 
 (* -------------------------------------------------------------------------- *)
 (* --- External API                                                       --- *)
 (* -------------------------------------------------------------------------- *)
 
-let (compute,_) = 
-  State_builder.apply_once "VarUsage.compute" 
-    (* [JS 2012/02/08] looks to be redundant with the definition of module 
-       [U]. *) 
-    [ Ast.self; 
+let (compute,_) =
+  State_builder.apply_once "VarUsage.compute"
+    (* [JS 2012/02/08] looks to be redundant with the definition of module
+       [U]. *)
+    [ Ast.self;
       (* [JS 2012/02/08] put all annotations state, but unsure that this
          	 state actually depends on all of them. *)
       Annotations.code_annot_state;
       Annotations.funspec_state;
       Annotations.global_state
-    ] 
+    ]
     compute
 
 let of_cvar x = (occur (Root.Cvar x)).Occur.value
@@ -768,19 +768,19 @@ let of_lvar x = (occur (Root.Lvar x)).Occur.value
 let validated_cvar x = (occur (Root.Cvar x)).Occur.valid
 let validated_lvar x = (occur (Root.Lvar x)).Occur.valid
 
-let dump_lvar fmt x = 
+let dump_lvar fmt x =
   Usage.pretty ~name:x.lv_name fmt (of_lvar x) ;
   if validated_lvar x then Format.pp_print_string fmt " (validated)"
 
 let dump () =
-  Log.print_on_output 
+  Log.print_on_output
     begin fun fmt ->
       Format.fprintf fmt "-------------------------------------------------@\n" ;
       Format.fprintf fmt "--- Roots Usage@\n" ;
       Format.fprintf fmt "-------------------------------------------------@\n" ;
       Globals.Vars.iter_in_file_order
         (fun x _ ->
-           Format.fprintf fmt "Global %a@." 
+           Format.fprintf fmt "Global %a@."
              (Usage.pretty ~name:x.vname) (of_cvar x)
         ) ;
       Globals.Functions.iter
@@ -817,18 +817,18 @@ let dump () =
            match logic with
            | Dfun_or_pred(linfo,_) ->
                let name = linfo.l_var_info.lv_name in
-               let kind = 
-                 if linfo.l_type = None then "Predicate" else "Logic" 
+               let kind =
+                 if linfo.l_type = None then "Predicate" else "Logic"
                in
                if linfo.l_profile = [] then
-                 Format.fprintf fmt "%s '%s': %a@\n" kind name 
+                 Format.fprintf fmt "%s '%s': %a@\n" kind name
                    dump_lvar linfo.l_var_info
                else begin
                  Format.fprintf fmt "%s '%s':@\n" kind name ;
                  let xs = linfo.l_profile in
                  List.iter
                    (fun x ->
-                      Format.fprintf fmt " - parameter %a@\n" dump_lvar x) 
+                      Format.fprintf fmt " - parameter %a@\n" dump_lvar x)
                    xs
                end
            | _ -> ());

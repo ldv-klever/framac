@@ -41,7 +41,7 @@ sig
   val equal : t -> t -> bool
   val pretty : string -> Format.formatter -> t -> unit
 
-  val empty : t 
+  val empty : t
   val add : var -> term -> t -> t
   val mem : var -> t -> bool
   val find : var -> t -> term
@@ -80,7 +80,7 @@ struct
   }
 
   let equal s1 s2 =
-    Vmap.equal F.equal s1.def s2.def && Tmap.equal F.equal s1.cst s2.cst 
+    Vmap.equal F.equal s1.def s2.def && Tmap.equal F.equal s1.cst s2.cst
 
   let mem x sigma = Vmap.mem x sigma.def
   let find x sigma = Vmap.find x sigma.def
@@ -90,34 +90,35 @@ struct
     match F.repr e with
     | Fvar x ->
         begin
-          try Vmap.find x sigma.def 
+          try Vmap.find x sigma.def
           with Not_found -> e
         end
     | _ ->
         let ys = F.vars e in
-        if not (Vars.intersect ys sigma.dall) 
+        if not (Vars.intersect ys sigma.dall)
         then e (* no subst *)
-        else
+        else if n < 5 then
           begin
             (* memoization *)
             try Tmap.find e sigma.mem.(n)
-            with Not_found | Invalid_argument _ ->
-              let r = 
-                try 
-                  if n > 0 then raise Not_found ; 
-                  Tmap.find e sigma.cst 
+            with Not_found ->
+              let r =
+                try
+                  if n > 0 then raise Not_found ;
+                  Tmap.find e sigma.cst
                 with Not_found ->
-                  F.f_map (m_apply sigma) n e 
+                  F.f_map (m_apply sigma) n e
               in
               sigma.mem.(n) <- Tmap.add e r sigma.mem.(n) ; r
           end
+        else F.f_map (m_apply sigma) n e
 
   let e_apply sigma e = m_apply sigma 0 e
   let p_apply sigma p = F.p_bool (e_apply sigma (F.e_prop p))
 
   (* Returns true if [x:=a] applied to [y:=b] raises a circularity *)
-  let occur_check sigma x a = 
-    try 
+  let occur_check sigma x a =
+    try
       if vmem x a then raise Exit ;
       Vmap.iter
         (fun y b -> if vmem x b && vmem y a then raise Exit)
@@ -125,12 +126,12 @@ struct
       false
     with Exit -> true
 
-  let add_ceq x e ceq = 
+  let add_ceq x e ceq =
     match F.repr e with
     | Fvar y -> Ceq.join x y ceq
     | _ -> ceq
 
-  let single x e = 
+  let single x e =
     let sx = Vars.singleton x in
     {
       dvar = sx ; dall = sx ; dcod = F.vars e ;
@@ -144,12 +145,12 @@ struct
     let e = e_apply sigma e in
     if Vmap.mem x sigma.def then sigma
     else
-    if occur_check sigma x e then sigma 
-    else 
+    if occur_check sigma x e then sigma
+    else
       let sx = single x e in
       let def = Vmap.add x e (Vmap.map (fun _ d -> e_apply sx d) sigma.def) in
       let cst0 = Tmap.filter (fun e _c -> not (vmem x e)) sigma.cst in
-      let cst1 = Tmap.fold 
+      let cst1 = Tmap.fold
           (fun e c cst ->
              if vmem x e then Tmap.add (e_apply sx e) c cst else cst)
           cst0 sigma.cst in
@@ -181,11 +182,11 @@ struct
       let all = Vars.union (F.vars e) sigma.dall in
       let cache = Array.create (Array.length sigma.mem) Tmap.empty in
       cache.(0) <- cst ;
-      { 
-        mem = cache ; 
-        cst = cst ; 
+      {
+        mem = cache ;
+        cst = cst ;
         dall = all ;
-        dvar = sigma.dvar ; 
+        dvar = sigma.dvar ;
         dcod = sigma.dcod ;
         def = sigma.def ;
         ceq = sigma.ceq ;
@@ -195,8 +196,40 @@ struct
     try Tmap.find l sigma.mem.(0) == e_true
     with Not_found -> false
 
-  let add_lit l sigma = 
+  let add_lit l sigma =
     add_cst l e_true (add_cst (e_not l) e_false sigma)
+
+
+  (** look for the shape:
+          \forall x:integer. (csta <= x /\ x <= cstb) => t1=t2
+      and return [Some(csta,cstb)]
+
+          < on integer are always normalized to <=
+  *)
+  let extract_forall_equality fb =
+    begin match F.repr (F.lc_repr fb) with
+      | Imply ([la;lb],c) ->
+          begin match F.repr c with
+            | Eq _ ->
+                let order = 0 in (** todo get the order from term *)
+                begin match F.repr la, F.repr lb with
+                  | Leq(a,b), Leq(c,d) ->
+                      begin
+                        match F.repr a, F.repr b, F.repr c, F.repr d with
+                        | Bvar(o1,Int), Kint cstb, Kint csta, Bvar(o2,Int) when
+                            o1 = order && o2 = order -> Some(csta,cstb)
+                        | Kint csta, Bvar(o1,Int), Bvar(o2,Int), Kint cstb when
+                            o1 = order && o2 = order -> Some(csta,cstb)
+                        | _ -> None
+                      end
+                  | _ -> None
+                end
+            | _ -> None
+          end
+      | _ -> None
+    end
+
+  let is_kint e = match F.repr e with Qed.Logic.Kint _ -> true | _ -> false
 
   let rec add_pred sigma p = match F.repr p with
     | And ps -> List.fold_left add_pred sigma ps
@@ -212,12 +245,32 @@ struct
               | _ -> add_lit p sigma
         end
     | Leq(a,b) ->
-        if mem_lit (e_leq b a) sigma 
+        if mem_lit (e_leq b a) sigma
         then add_pred sigma (e_eq a b)
         else add_lit p sigma
-    | Lt(a,b) -> 
+    | Lt(a,b) ->
+        let sigma = if is_kint b then add_pred sigma (e_leq a (e_add b e_one)) else sigma in
+        let sigma = if is_kint a then add_pred sigma (e_leq (e_sub a e_one) b) else sigma in
         add_lit p (add_lit (e_leq a b) (add_lit (e_neq a b) sigma))
     | Neq _ | Fun _ | Not _ -> add_lit p sigma
+    | Bind (Forall,Int,fb) ->
+        let bound = Integer.of_int (Wp_parameters.BoundForallUnfolding.get ()) in
+        begin match extract_forall_equality fb with
+          | Some (csta,cstb) when
+              Integer.le csta cstb &&
+              Integer.le (Integer.sub cstb csta) bound ->
+              let rec aux sigma i =
+                if Integer.lt cstb i then sigma
+                else begin
+                  let eq = F.lc_open_term (e_zint i) fb in
+                  (** qed should be able to simplify it directly *)
+                  let sigma = add_pred sigma eq in
+                  aux sigma (Integer.succ i)
+                end
+              in
+              aux sigma csta
+          | _ -> sigma
+        end
     | _ -> sigma
 
   let assume sigma p = add_pred sigma (F.e_prop p)
@@ -233,14 +286,14 @@ struct
       Format.fprintf fmt "@ @[vars: %a;@]" F.pp_vars sigma.dall ;
       Xmap.iter
         (fun x e ->
-           Format.fprintf fmt "@ @[%a := %a ;@]" 
+           Format.fprintf fmt "@ @[%a := %a ;@]"
              F.pp_term (F.e_var x) F.pp_term e
         ) def ;
       Array.iteri
         (fun i w ->
            Tmap.iter
              (fun e m ->
-                Format.fprintf fmt "@ C%d: @[%a := %a ;@]" i 
+                Format.fprintf fmt "@ C%d: @[%a := %a ;@]" i
                   F.pp_term e F.pp_term m
              ) w
         ) sigma.mem ;
@@ -266,7 +319,7 @@ struct
 
   let rec diff s y = function
     | [] -> s
-    | e::es -> 
+    | e::es ->
         match F.repr e with
         | Fvar x when x==y -> diff s y es
         | _ -> diff (e_opp e :: s) y es
@@ -275,14 +328,14 @@ struct
     add_def w x (e_sum (diff pos x neg))
 
   let terms e = match F.repr e with Add es -> es | _ -> [e]
-  let rec atoms = function 
+  let rec atoms = function
     | [] -> []
-    | e::es -> 
+    | e::es ->
         match F.repr e with
         | Fvar x -> x :: atoms es
         | _ -> atoms es
 
-  let rec defs w p = 
+  let rec defs w p =
     match F.repr p with
     | And ps -> List.iter (defs w) ps
     | Eq(a,b) ->
@@ -318,11 +371,13 @@ struct
     | _ , Fvar y -> add_def w y a
     | _ -> ()
 
-  let extract p = 
+  let extract p =
     let w = ref empty in
     defs w (F.e_prop p) ; !w
 
-  let domain d = 
+  let add w p = defs w (F.e_prop p)
+
+  let domain d =
     Vmap.fold (fun x _ xs -> Vars.add x xs) d Vars.empty
 
 end
@@ -345,19 +400,19 @@ let rec extract defs sref cycle x =
       let es = ref [] in (* possible definitions *)
       let rs = ref [] in (* sigma definitions *)
       Tset.iter
-        (fun e -> 
+        (fun e ->
            if not (occurs cycle e) then
              match F.repr e with
-             | Fvar y -> 
+             | Fvar y ->
                  begin
                    try let d = Sigma.find y !sref in rs := d :: !rs
                    with Not_found -> ys := y :: !ys
                  end
-             | _ -> es := e :: !es 
+             | _ -> es := e :: !es
         ) ds ;
       (* Now choose the represent of x and the dependencies *)
       let select d = sref := Sigma.add x d !sref ; d , F.vars d in
-      let ceq , depends = 
+      let ceq , depends =
         match List.sort F.compare !rs with
         | r :: _ -> select r
         | [] -> match List.sort F.compare !es with
@@ -381,7 +436,7 @@ let rec add_eq ps y = function
   | z::zs -> add_eq (p_equal (e_var y) (e_var z) :: ps) y zs
   | [] -> ps
 
-let add_equals ys ps = 
+let add_equals ys ps =
   match ys with [] -> ps | y::ys -> add_eq ps y ys
 
 let add_definitions sigma defs xs ps =
@@ -426,7 +481,7 @@ struct
   let add m p = occur m (F.e_prop p)
 
   let select m =
-    let compare (c1,n1) (c2,n2) = 
+    let compare (c1,n1) (c2,n2) =
       (* most often first *)
       if n1 < n2 then 1 else
       if n1 > n2 then (-1) else

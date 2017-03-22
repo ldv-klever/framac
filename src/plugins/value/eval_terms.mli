@@ -54,8 +54,7 @@ type labels_states = Cvalue.Model.t Cil_datatype.Logic_label.Map.t
 (** Evaluation environment. Currently available are function Pre and Post, or
     the environment to evaluate an annotation *)
 type eval_env
-val env_pre_f :
-  ?c_labels:labels_states -> pre:Model.t -> unit -> eval_env
+val env_pre_f : pre:Model.t -> unit -> eval_env
 val env_annot :
   ?c_labels:labels_states -> pre:Model.t -> here:Model.t -> unit -> eval_env
 val env_post_f :
@@ -65,6 +64,8 @@ val env_assigns: pre:Model.t -> eval_env
 
 (** Used by auxiliary plugins, that do not supply the other states *)
 val env_only_here: Model.t -> eval_env
+
+val env_current_state: eval_env -> Model.t
 
 (** Dependencies needed to evaluate a term or a predicate *)
 type logic_deps = Zone.t Cil_datatype.Logic_label.Map.t
@@ -101,7 +102,7 @@ val eval_tlval_as_zone :
   for_writing:bool -> eval_env -> term -> Zone.t
 
 exception Not_an_exact_loc
-val eval_term_as_exact_loc :
+val eval_term_as_exact_locs :
   with_alarms:CilE.warn_mode ->
   eval_env -> term -> Cil_datatype.Typ.t * location
 

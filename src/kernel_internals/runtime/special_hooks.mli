@@ -20,12 +20,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Nothing is export: just register some special hooks for Frama-C.
-    @since Beryllium-20090601-beta1
-    @plugin development guide *)
+(** Nothing is exported: just register some special hooks for Frama-C.
+    @since Beryllium-20090601-beta1 *)
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.. -j"
+compile-command: "make -C ../../.."
 End:
 *)

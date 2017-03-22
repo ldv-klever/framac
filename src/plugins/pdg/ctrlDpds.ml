@@ -431,6 +431,6 @@ let get_loop_controled_stmts ctrl_dpds_infos loop =
 (*============================================================================*)
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

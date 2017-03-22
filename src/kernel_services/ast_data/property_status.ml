@@ -25,6 +25,7 @@
 (**************************************************************************)
 
 let dkey = Kernel.register_category "property_status"
+let dkey_graph = Kernel.register_category "property_status:graph"
 
 module Caml_hashtbl = Hashtbl
 open Emitter
@@ -179,6 +180,7 @@ let fold f = Status.fold (fun p _ -> f p)
 (* ok to be computed once right now since there is no parameter dependency *)
 let usable_kernel_emitter = Emitter.get Emitter.kernel
 
+(* property --> properties and emitters which use it as hypothesis *)
 module Hypotheses =
   State_builder.Hashtbl
     (Property.Hashtbl)
@@ -202,6 +204,45 @@ let () =
 	  ()
       in
       List.iter remove e.properties)
+
+
+module Valid_cycles : sig
+  val add: Emitter.t -> Property.Set.t -> unit
+  val _mem: Usable_emitter.t -> Property.t list -> bool
+  val self: State.t
+end = struct
+
+  module S =
+    State_builder.Hashtbl
+      (Datatype.String.Hashtbl) (* name of the emitter *)
+      (Property.Set)
+      (struct
+        let size = 7
+        let dependencies = [ self ]
+        let name = "Property_status.Valid_cycles"
+       end)
+
+  let self = S.self
+
+  let _mem e path =
+    try
+      let all_cycles = S.find_all (Usable_emitter.get_name e) in
+      List.exists
+        (fun set -> List.for_all (fun p -> Property.Set.mem p set) path)
+        all_cycles
+    with Not_found ->
+      false
+
+  let add e path = S.add (Emitter.get_name e) path
+
+end
+
+let legal_dependency_cycle = Valid_cycles.add
+
+(* Those are the states that go together with the statuses themselves. In
+   particular, they must not be cleared unless {!self} is. *)
+let linked_to_self =
+  State_selection.(of_list [Hypotheses.self; Valid_cycles.self])
 
 (**************************************************************************)
 (** {3 Unconsolidated property status} *)
@@ -316,7 +357,7 @@ and register_as_kernel_logical_consequence ppt = match ppt with
     logical_consequence
       Emitter.kernel ppt (Property.ip_post_cond_of_behavior kf ki b)
   | Property.IPReachable(None, Cil_types.Kglobal, Property.Before) ->
-      (* valid: global properties are always reachable *)
+    (* valid: global properties are always reachable *)
     emit_valid ppt
   | Property.IPReachable(None, Cil_types.Kglobal, Property.After) -> 
     assert false
@@ -325,7 +366,7 @@ and register_as_kernel_logical_consequence ppt = match ppt with
   | Property.IPReachable(Some kf, Cil_types.Kglobal, Property.Before) ->
     let f = kf.Cil_types.fundec in
     if Ast_info.Function.get_name f = Kernel.MainFunction.get_plain_string ()
-      (* main is always reachable *)
+    (* main is always reachable *)
     then emit_valid ppt
   | Property.IPOther _  | Property.IPReachable _
   | Property.IPPredicate _ | Property.IPCodeAnnot _ | Property.IPComplete _ 
@@ -372,24 +413,45 @@ under %d hypothesis@]"
 	properties = hyps; 
 	logical_consequence = auto }
     in
-    let emit s = 
+    let emit s =
+      (* first remove from the hypotheses table, each binding [(previous
+         hypothesis of e, ppt)]. These hypotheses are stored together with the
+         associated emitter as a key of [by_emitter]. Since there is no way to
+         get a key [k'] of an hashtable which is equal to [k] for the
+         hashtable equality, we have to iterate over the [by_emitter] table to
+         find it. Hopefully the number of emitters by property is low. *)
+      (try
+         Emitter_with_properties.Hashtbl.iter
+           (fun e' _ ->
+             if Usable_emitter.equal (Emitter.get e) e'.emitter then begin
+               (* the status [Dont_know] is unused by the call below *)
+               Status.apply_hooks_on_remove e' ppt Dont_know;
+               raise Exit
+             end)
+           by_emitter
+       with Exit ->
+         ());
+      (* then, clear the dependencies (but not the related internal states,
+         see MR #496) *)
+      let selection = State_selection.only_dependencies Status.self in
+      let selection = State_selection.diff selection linked_to_self in
+      Project.clear ~selection ();
+      (* finally, replace the old emitter by the new one *)
       (* do not use Hashtbl.replace, see OCaml BTS #5349 (fixed in OCaml 4.0) *)
       Emitter_with_properties.Hashtbl.remove by_emitter emitter;
-      let selection = State_selection.only_dependencies Status.self in
-      Project.clear ~selection ();
-      let add e s = 
-	Emitter_with_properties.Hashtbl.add by_emitter e s;
-	List.iter
-	  (function 
-	  | Property.IPOther _ -> ()
-	  | h ->
-	    let pair = ppt, e in
-	    try
-	      let l = Hypotheses.find h in
-	      l := pair :: !l
-	    with Not_found ->
-	      Hypotheses.add h (ref [ pair ]))
-	  e.properties
+      let add e s =
+        Emitter_with_properties.Hashtbl.add by_emitter e s;
+        List.iter
+          (function
+          | Property.IPOther _ -> ()
+          | h ->
+            let pair = ppt, e in
+            try
+              let l = Hypotheses.find h in
+              l := pair :: !l
+            with Not_found ->
+              Hypotheses.add h (ref [ pair ]))
+          e.properties
       in
       (match s with
       | True -> add emitter s
@@ -494,7 +556,7 @@ let remove_when_used_as_hypothesis hyp =
   with Not_found ->
     ()
 
-(* remove each hypothese of [ppt] from the hypotheses table *)
+(* remove each hypothesis of [ppt] from the hypotheses table *)
 let remove_hyps_from_hypotheses ppt =
   try
     let by_emitter = Status.find ppt in
@@ -521,7 +583,7 @@ let merge ~old l =
   let property_id fmt p = 
     Format.fprintf fmt "%a(%d)" Property.pretty p (Property.hash p)
   in
-  (*Kernel.feedback "MERGING ###%a###@\nWITH ###%a###"
+  (*Kernel.feedback ~dkey "MERGING ###%a###@\nWITH ###%a###"
     (Pretty_utils.pp_list ~sep:"\n###" property_id) old
     (Pretty_utils.pp_list ~sep:"\n###" property_id) l; *)
   let old_h = Property.Hashtbl.create 17 in
@@ -535,20 +597,20 @@ let merge ~old l =
     (fun p -> 
       if Property.Hashtbl.mem old_h p then begin
         (* [p] belongs to both lists *)
-	(*Kernel.feedback "UNCHANGED %a" Property.pretty p;*)
+	(*Kernel.feedback ~dkey "UNCHANGED %a" Property.pretty p;*)
         Property.Hashtbl.remove old_h p;
 	(* if [p] was a logical consequence, its dependencies may change *)
 	register_as_kernel_logical_consequence p
       end else begin
         (* [p] belongs only to the new list *)
-	(*Kernel.feedback "ADD %a" Property.pretty p;*)
+	(*Kernel.feedback ~dkey "ADD %a" Property.pretty p;*)
         register p
       end)
     l;
   (* remove the properties which are not in the new list *)
   Property.Hashtbl.iter
     (fun p () ->
-(*      Kernel.feedback "REMOVE BY MERGE %a" Property.pretty p;*)
+(*      Kernel.feedback ~dkey "REMOVE BY MERGE %a" Property.pretty p;*)
       remove p) 
     old_h
 
@@ -672,35 +734,6 @@ let automatically_proven ppt =
     with Not_found ->
       true
 
-module Valid_cycles : sig 
-  val add: Emitter.t -> Property.Set.t -> unit
-  val _mem: Usable_emitter.t -> Property.t list -> bool
-end = struct
-
-  module S = 
-    State_builder.Hashtbl
-      (Datatype.String.Hashtbl) (* name of the emitter *)
-      (Property.Set)
-      (struct
-	let size = 7
-	let dependencies = [ self ]
-	let name = "Property_status.Valid_cycles"
-       end)
-
-  let _mem e path = 
-    try 
-      let all_cycles = S.find_all (Usable_emitter.get_name e) in
-      List.exists
-	(fun set -> List.for_all (fun p -> Property.Set.mem p set) path)
-	all_cycles
-    with Not_found ->
-      false
-
-  let add e path = S.add (Emitter.get_name e) path
-
-end
-
-let legal_dependency_cycle = Valid_cycles.add
 
 (**************************************************************************)
 (** {3 Consolidated property status} *)
@@ -1122,11 +1155,11 @@ either status %a or %a not allowed when merging status@]"
       | Local.Never_tried -> Never_tried
       | Best(_, l) as local -> 
 	let status = compute_deps_status l in
-(*	Kernel.feedback "status of hypotheses of %a: %a" 
+(*	Kernel.feedback ~dkey "status of hypotheses of %a: %a" 
 	  Property.pretty ppt
 	  pretty status;*)
 	let s = merge_hypotheses_and_local_status ppt status local in
-(*	Kernel.feedback "consolidated status of %a: %a" 
+(*	Kernel.feedback ~dkey "consolidated status of %a: %a" 
 	  Property.pretty ppt
 	  pretty s;*)
 	s
@@ -1205,7 +1238,7 @@ either status %a or %a not allowed when merging status@]"
 	      (fun (status, issues) h -> 
 		  let s = memo_consolidated current_e path h in
 		  let s = reduce_hypothesis_status h s in
-		(*	      		Kernel.feedback "status of hypothesis %a (for %a): %a" 
+		(*	      		Kernel.feedback ~dkey "status of hypothesis %a (for %a): %a" 
 					Property.pretty h
 					Property.pretty ppt
 					pretty s;*)
@@ -1229,10 +1262,10 @@ broken:@ status %a not allowed when simplifying hypothesis status@]"
 	  let cur =
 	    choose_best_emitter current_status e.emitter (hyps_status, issues)
 	  in
-	  (*	  Kernel.feedback
+	  (*	  Kernel.feedback ~dkey
 		  "status of hypotheses for emitter `%a': %a" 
 		  Usable_emitter.pretty e.emitter pretty s;
-		  Kernel.feedback "current best status: %a" pretty cur;*)
+		  Kernel.feedback ~dkey "current best status: %a" pretty cur;*)
 	  cur)
 	Never_tried
 	l
@@ -1370,14 +1403,14 @@ module Consolidation_graph = struct
 
   let rec get ppt =
     let compute ppt =
-      Kernel.feedback "BUILDING GRAPH of %a" Property.pretty ppt;
+      Kernel.debug ~dkey:dkey_graph "BUILDING GRAPH of %a" Property.pretty ppt;
 	(* [JS 2011/07/21] Only the better proof is added on the graph. For
 	   instance, if the consolidated status is valid thanks to WP, it does
 	   not show the dont_know proof tried by Value. *)
       if Property.Hashtbl.mem already_done ppt then
 	G.empty, true
       else begin
-	Kernel.feedback "MARK %a" Property.pretty ppt;
+	Kernel.debug ~dkey:dkey_graph "MARK %a" Property.pretty ppt;
 	Property.Hashtbl.add already_done ppt ();
 	let v_ppt = Property ppt in
 	  (* adding the property *)
@@ -1407,7 +1440,7 @@ module Consolidation_graph = struct
 	let v_e = Emitter (Usable_emitter.get_unique_name emitter) in
 	(* adding the emitter with its computed status *)
 	let g = G.add_edge_e g (v_ppt, Some s, v_e) in
-	Kernel.feedback "%a --> %a (%a)" 
+	Kernel.debug ~dkey:dkey_graph "%a --> %a (%a)" 
 	  Property.pretty (match v_ppt with Property p -> p | _ -> assert false)
 	  Usable_emitter.pretty emitter
 	  Emitted_status.pretty s;
@@ -1444,7 +1477,7 @@ module Consolidation_graph = struct
       l
 
   let get ppt =
-    Kernel.feedback "GET %a" Property.pretty ppt;
+    Kernel.debug ~dkey:dkey_graph "GET %a" Property.pretty ppt;
     let g, truncated = get ppt in
     if truncated then Graph_by_property.replace ppt (g, false);
     Property.Hashtbl.clear already_done;
@@ -1524,6 +1557,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

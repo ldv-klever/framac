@@ -144,6 +144,6 @@ let build_dot filename kf =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

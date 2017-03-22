@@ -113,6 +113,7 @@ sig
 
   val union : logic_type -> logic list -> logic
   val inter : logic_type -> logic list -> logic
+  val subset : logic_type -> logic -> logic_type -> logic -> pred
 
   (** {3 Regions} *)
 

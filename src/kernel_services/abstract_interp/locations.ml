@@ -24,14 +24,16 @@ open Cil_types
 open Cil
 open Abstract_interp
 
+let emitter = Lattice_messages.register "Locations"
+
 module Initial_Values = struct
-  let v = [ [Base.null,Ival.singleton_zero];
-            [Base.null,Ival.singleton_one];
+  let v = [ [Base.null,Ival.zero];
+            [Base.null,Ival.one];
             [Base.null,Ival.zero_or_one];
             [Base.null,Ival.top];
             [Base.null,Ival.top_float];
             [Base.null,Ival.top_single_precision_float];
-            [] ]
+             ]
 end
 
 (* Store the information that the location has at most cardinal 1 *)
@@ -50,10 +52,6 @@ module MapLatticeIval =
 module Location_Bytes = struct
 
   include MapLatticeIval
-
-  type z = tt =
-    | Top of Base.SetLattice.t * Origin.t
-    | Map of M.t
     (* Invariant :
        [Top (s, _) must always contain NULL, _and_ at least another base.
        Top ({Null}, _) is replaced by Top_int]. See inject_top_origin below. *)
@@ -63,11 +61,11 @@ module Location_Bytes = struct
   let inject_float f = 
     inject_ival 
       (Ival.inject_float
-	  (Ival.Float_abstract.inject_singleton f))
+	  (Fval.inject_singleton f))
 
   (** Check that those values correspond to {!Initial_Values} above. *)
-  let singleton_zero = inject_ival Ival.singleton_zero
-  let singleton_one = inject_ival Ival.singleton_one
+  let singleton_zero = inject_ival Ival.zero
+  let singleton_one = inject_ival Ival.one
   let zero_or_one = inject_ival Ival.zero_or_one
   let top_int = inject_ival Ival.top
   let top_float = inject_ival Ival.top_float
@@ -289,7 +287,7 @@ module Location_Bytes = struct
            let name = Pretty_utils.sfprintf "Locations.Overlap(%d)" size_int in
 	   let f = 
 	     M.symmetric_binary_predicate
-               (Hptmap.TemporaryCache name) M.ExistentialPredicate
+               (Hptmap_sig.TemporaryCache name) M.ExistentialPredicate
 	       ~decide_fast:(fun _ _ -> M.PUnknown)
 	       ~decide_one:(fun _ _ -> false)
 	       ~decide_both:(fun _ x y -> Ival.partially_overlaps size x y)
@@ -304,7 +302,7 @@ module Location_Bits = Location_Bytes
 
 module Zone = struct
 
-  module Initial_Values = struct let v = [ [] ] end
+  module Initial_Values = struct let v = [  ] end
 
   include Map_Lattice.Make_without_cardinal
   (Base.Base)
@@ -374,28 +372,6 @@ end
 type location =
     { loc : Location_Bits.t;
       size : Int_Base.t }
-
-let is_valid_aux is_valid_offset {loc=loc;size=size} =
-  try
-    let size = Int_Base.project size in
-    let is_valid_offset = is_valid_offset size in
-    match loc with
-      | Location_Bits.Top _ -> false
-      | Location_Bits.Map m ->
-          Location_Bits.M.iter is_valid_offset m;
-          true
-  with
-  | Int_Base.Error_Top | Base.Not_valid_offset -> false
-
-
-let is_valid ~for_writing = is_valid_aux (Base.is_valid_offset ~for_writing)
-
-let is_valid_or_function =
-  is_valid_aux
-    (fun size base offs ->
-      if Base.is_function base
-      then (if Ival.is_zero offs then () else raise Base.Not_valid_offset)
-      else Base.is_valid_offset ~for_writing:false size base offs)
 
 exception Found_two
 
@@ -479,8 +455,23 @@ let make_loc loc_bits size =
             | _ -> true)
   then
     { loc = loc_bits; size = size }
-  else
+  else begin
+    Lattice_messages.emit_approximation emitter "0-sized location";
     { loc = loc_bits; size = Int_Base.top }
+    end
+
+let is_valid ~for_writing {loc; size} =
+  try
+    let size = Int_Base.project size in
+    let is_valid_offset b o = Base.is_valid_offset ~for_writing size b o in
+    match loc with
+      | Location_Bits.Top _ -> false
+      | Location_Bits.Map m ->
+          Location_Bits.M.iter is_valid_offset m;
+          true
+  with
+  | Int_Base.Error_Top | Base.Not_valid_offset -> false
+
 
 let filter_base f loc =
   { loc with loc = Location_Bits.filter_base f loc.loc }
@@ -491,7 +482,8 @@ let int_base_size_of_varinfo v =
     let s = Int.of_int s in
     Int_Base.inject s
   with Cil.SizeOfError _ ->
-    Kernel.debug ~once:true "Variable %a has no size" Printer.pp_varinfo v;
+    Lattice_messages.emit_approximation emitter
+      "imprecise size for variable %a" Printer.pp_varinfo v;
     Int_Base.top
 
 let loc_of_varinfo v =
@@ -701,6 +693,6 @@ module Location =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

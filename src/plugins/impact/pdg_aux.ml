@@ -39,7 +39,7 @@ module NS = struct
     let z_intersects _ z1 z2 = Locations.Zone.intersects z1 z2 in
     let map_intersects =
       symmetric_binary_predicate
-        (Hptmap.PersistentCache name)
+        (Hptmap_sig.PersistentCache name)
         ExistentialPredicate
 	~decide_fast:decide_fast_intersection
 	~decide_one:(fun _ _ -> false)
@@ -48,26 +48,18 @@ module NS = struct
     fun s1 s2 -> map_intersects s1 s2
 
   let inter =
-    let decide_some _ z1 z2 =
+    let decide _ z1 z2 =
       let inter = Locations.Zone.narrow z1 z2 in
       if Locations.Zone.is_bottom inter then None
       else Some inter
     in
-    let symmetric_inter =
-      symmetric_inter ~cache:("Pdg_aux.NS.inter", ()) ~decide_some
-    in
-    fun m1 m2 ->
-      if m1 == m2 then m1
-      else symmetric_inter m1 m2
+    inter ~cache:(Hptmap_sig.PersistentCache "Pdg_aux.NS.inter")
+      ~symmetric:true ~idempotent:true ~decide
 
   let union =
-    let decide_none _ n = n in
-    let decide_some z1 z2 = Zone.join z1 z2 in
-    let merge =
-      symmetric_merge ~cache:("Pdg_aux.NS.union", ())
-        ~empty_neutral:true ~decide_none ~decide_some
-    in
-    fun m1 m2 -> merge m1 m2
+    let decide _k z1 z2 = Zone.join z1 z2 in
+    join ~cache:(Hptmap_sig.PersistentCache "Pdg_aux.NS.union") ~decide
+      ~symmetric:true ~idempotent:true
 
   let find_default n m =
     try find n m
@@ -222,6 +214,6 @@ let all_call_out_nodes ~callee ~caller call_stmt =
     
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

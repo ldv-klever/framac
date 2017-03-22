@@ -268,6 +268,6 @@ let () = Annotations.populate_spec_ref := populate_funspec
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

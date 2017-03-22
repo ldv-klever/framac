@@ -364,6 +364,27 @@ end
 module Queue(Data: Datatype.S)(Info: Info) : Queue with type elt = Data.t
 
 (* ************************************************************************* *)
+(** {3 Array} *)
+(* ************************************************************************* *)
+
+module type Array = sig
+  type elt
+
+  val length: unit -> int
+  val set_length: int -> unit
+  val get: int -> elt
+  val set: int -> elt -> unit
+  val iter : (elt -> unit) -> unit
+  val iteri : (int -> elt -> unit) -> unit
+  val fold_left: ('a -> elt -> 'a) -> 'a -> 'a
+  val fold_right:  (elt -> 'a -> 'a) -> 'a -> 'a
+end
+
+module Array(Data: Datatype.S)(Info: sig include Info val default: Data.t end) :
+  Array with type elt = Data.t
+
+
+(* ************************************************************************* *)
 (** {3 Proxies} *)
 (* ************************************************************************* *)
 
@@ -459,6 +480,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

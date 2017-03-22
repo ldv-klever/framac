@@ -19,11 +19,9 @@ enum aorai_OpStatusList {
 struct People nobody;
 int myAge = 0;
 /*@ ghost enum aorai_ListOper aorai_CurOperation = op_main; */
-/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called;
-*/
+/*@ ghost enum aorai_OpStatusList aorai_CurOpStatus = aorai_Called; */
 /*@ ghost int S1 = 0; */
-/*@ ghost int main_0 = 1;
-*/
+/*@ ghost int main_0 = 1; */
 /*@ ensures aorai_CurOpStatus ≡ aorai_Called;
     ensures aorai_CurOperation ≡ op_increment;
     assigns aorai_CurOpStatus, aorai_CurOperation, S1, main_0;

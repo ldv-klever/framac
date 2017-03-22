@@ -25,5 +25,5 @@
 (* -------------------------------------------------------------------------- *)
 
 val load_driver : unit -> LogicBuiltins.driver
-(** Memoized loading of drivers according to current 
+(** Memoized loading of drivers according to current
     WP options. Finally sets [LogicBuiltins.driver] and returns it. *)

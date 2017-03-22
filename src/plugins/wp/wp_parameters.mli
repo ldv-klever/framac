@@ -37,8 +37,8 @@ module StatusMaybe : Parameter_sig.Bool
 type job =
   | WP_None
   | WP_All
-  | WP_SkipFct of string list
-  | WP_Fct of string list
+  | WP_SkipFct of Cil_datatype.Kf.Set.t
+  | WP_Fct of Cil_datatype.Kf.Set.t
 
 val job : unit -> job
 
@@ -47,6 +47,10 @@ val job : unit -> job
 val has_dkey : string -> bool
 
 module Model : Parameter_sig.String_list
+module ByValue : Parameter_sig.String_set
+module ByRef : Parameter_sig.String_set
+module InHeap : Parameter_sig.String_set
+module InCtxt : Parameter_sig.String_set
 module ExternArrays: Parameter_sig.Bool
 module ExtEqual : Parameter_sig.Bool
 module Literals : Parameter_sig.Bool
@@ -54,16 +58,24 @@ module Literals : Parameter_sig.Bool
 (** {2 Computation Strategies} *)
 
 module Init: Parameter_sig.Bool
+module InitWithForall: Parameter_sig.Bool
+module BoundForallUnfolding: Parameter_sig.Int
 module RTE: Parameter_sig.Bool
 module Simpl: Parameter_sig.Bool
 module Let: Parameter_sig.Bool
+module Core: Parameter_sig.Bool
 module Prune: Parameter_sig.Bool
 module Clean: Parameter_sig.Bool
+module Filter: Parameter_sig.Bool
 module Bits: Parameter_sig.Bool
 module QedChecks : Parameter_sig.Bool
 module Split: Parameter_sig.Bool
 module Invariants: Parameter_sig.Bool
 module DynCall : Parameter_sig.Bool
+module SimplifyIsCint : Parameter_sig.Bool
+module SimplifyForall : Parameter_sig.Bool
+module SimplifyType : Parameter_sig.Bool
+module CalleePreCond : Parameter_sig.Bool
 
 (** {2 Prover Interface} *)
 
@@ -95,7 +107,6 @@ module Print: Parameter_sig.Bool
 module Report: Parameter_sig.String_list
 module ReportName: Parameter_sig.String
 module Check: Parameter_sig.Bool
-val wpcheck_provers: unit -> [`Coq|`Why3|`Altergo] list
 
 (** {2 Environment Variables} *)
 
@@ -114,6 +125,6 @@ val print_generated: string -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

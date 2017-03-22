@@ -45,13 +45,14 @@ sig
 
   (** {3 Frames} *)
 
+  type call
   type frame
   val pp_frame : Format.formatter -> frame -> unit
 
   val frame : kernel_function -> frame
-  val frame_copy : frame -> frame
-  val call_pre   : sigma -> kernel_function -> value list -> sigma -> frame
-  val call_post  : sigma -> kernel_function -> value list -> sigma sequence -> frame
+  val call : kernel_function -> value list -> call
+  val call_pre   : sigma -> call -> sigma -> frame
+  val call_post  : sigma -> call -> sigma sequence -> frame
 
   val formal : varinfo -> value option
   val return : unit -> typ
@@ -82,8 +83,8 @@ sig
 
   val term : env -> Cil_types.term -> term
   val pred : bool -> env -> predicate named -> pred
-  val logic : env -> Cil_types.term -> logic 
-  val region : env -> Cil_types.term -> M.loc sloc list 
+  val logic : env -> Cil_types.term -> logic
+  val region : env -> Cil_types.term -> M.loc sloc list
 
   val bootstrap_term : (env -> Cil_types.term -> term) -> unit
   val bootstrap_pred : (bool -> env -> predicate named -> pred) -> unit

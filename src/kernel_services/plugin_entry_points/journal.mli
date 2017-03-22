@@ -114,6 +114,6 @@ val get_session_file: (string -> string) ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -64,7 +64,9 @@ let arch_float_endianness = (Obj.magic 1.23530711838574823e-307 : string).[1];;
 
 let intext_magic_number = "\x84\x95\xA6\xBE";;
 
-let ill_formed () = failwith "input_value: ill-formed message"
+let ill_formed reason =
+  let msg = "input_value: ill-formed message" in
+  failwith (if false(*debug*) then Printf.sprintf "%s (%s)" msg reason else msg)
 
 let zeroword = Obj.field (Obj.repr 0L) 0;;
 let null = zeroword;;
@@ -445,8 +447,7 @@ let input_val ch t =
           read_string stk t len
 
       | _ ->
-(*	  Format.printf "code %x@." code;*)
-	  ill_formed ()
+	  ill_formed (Printf.sprintf "code %x" code)
     in
     match t with
     | Dynamic f ->
@@ -464,16 +465,16 @@ let input_val ch t =
     | Abstract -> ()
     | Structure (Dependent_pair(_, _)) ->
 	if tag >= 1 || size != 2 then begin
-(*	  Format.printf "dep couple@.";*)
-	  ill_formed ()
+	  ill_formed "dep pair"
 	end
     | Structure (Sum a) ->
 	if tag >= Array.length a || size != Array.length a.(tag)
-	then begin
-(*structure sum tag=0 size=2 len=1 len-tag=1*)
-(*	  Format.printf "structure sum tag=%d size=%d len=%d len-tag=%d@."
-	    tag size (Array.length a) (Array.length a.(tag));*)
-	  ill_formed ()
+        then begin
+          let s = Format.sprintf
+              "structure sum tag=%d size=%d len=%d len-tag=%d"
+	      tag size (Array.length a) (Array.length a.(tag))
+          in
+	  ill_formed s
 	end
     | Structure (Array _) -> ()
     | _ -> assert false
@@ -518,8 +519,7 @@ let input_val ch t =
 
   and read_shared stk ofs =
     if ofs <= 0 || ofs > !ctr then begin
-      (*Format.printf "shared@.";*)
-      ill_formed ()
+      ill_formed "shared"
     end;
     let v = LA.get tbl (!ctr - ofs) in
     if v == null then begin

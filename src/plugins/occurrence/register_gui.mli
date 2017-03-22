@@ -28,6 +28,6 @@
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.. -j"
+compile-command: "make -C ../../.."
 End:
 *)

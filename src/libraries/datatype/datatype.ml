@@ -2147,6 +2147,6 @@ module Array_with_collections(T:S)(Info:Functor_info) =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -33,11 +33,11 @@ type annot_kind =
              but not a goal (see Aboth) : A => ...*)
   | Agoal (* annotation is a goal,
              but not an hypothesis (see Aboth): A /\ ...*)
-  | Aboth of bool 
+  | Aboth of bool
   (* annotation can be used as both hypothesis and goal :
      	 - with true : considerer as both : A /\ A=>..
      	 - with false : we just want to use it as hyp right now. *)
-  | AcutB of bool 
+  | AcutB of bool
   (* annotation is use as a cut :
      	 - with true (A is also a goal) -> A (+ proof obligation A => ...)
      	 - with false (A is an hyp only) -> True (+ proof obligation A => ...) *)
@@ -77,41 +77,40 @@ type t_annots = { has_asgn_goal : bool; has_prop_goal : bool; info: annots }
 (* --- Add annotations --- *)
 
 let empty_acc =
-  let a = { 
+  let a = {
     p_hyp = []; p_goal = []; p_both = []; p_cut = [];
-    call_hyp = ForCall.empty; 
-    call_pre = ForCall.empty; 
+    call_hyp = ForCall.empty;
+    call_pre = ForCall.empty;
     call_asgn = ForCall.empty;
-    a_goal = WpPropId.empty_assigns_info; 
+    a_goal = WpPropId.empty_assigns_info;
     a_hyp = WpPropId.empty_assigns_info;
     a_call = WpPropId.empty_assigns_info;
   } in
   { has_asgn_goal = false; has_prop_goal = false; info = a; }
 
-let add_prop acc kind labels id p =
-  let get_p debug_txt =
-    try
-      let p = NormAtLabels.preproc_annot labels p in
-      let _ =
-        debug "take as %s (@[%a:@ %a@])@." debug_txt
-          WpPropId.pretty id Printer.pp_predicate_named p
-      in Some (WpPropId.mk_pred_info id p)
-    with e -> NormAtLabels.catch_label_error e 
-                (WpPropId.get_propid id) "annotation"; None
-  in
-  let add_hyp l = match get_p "hyp" with None -> l | Some p -> p::l in
-  let add_goal l =
-    (* if goal_to_select config id
-       then *) match get_p "goal" with None -> l
-                                  | Some p -> ( (* has_prop_goal := true; *) p::l )
-                                  (* else l *)
-  in
+let normalize id ?assumes labels p =
+  try
+    let p = NormAtLabels.preproc_annot labels p in
+    match assumes with
+    | None -> Some p
+    | Some a ->
+        let a = Logic_const.pat(a,Logic_const.pre_label) in
+        let a = NormAtLabels.(preproc_annot labels_fct_pre a) in
+        Some(Logic_const.pimplies(a,p))
+  with e ->
+    let pid = WpPropId.get_propid id in
+    NormAtLabels.catch_label_error e pid "annotation" ;
+    None
+
+let add_prop acc kind id p =
+  let get_p = match p with None -> None
+                         | Some p -> Some(WpPropId.mk_pred_info id p) in
+  let add_hyp l = match get_p with None -> l | Some p -> p::l in
+  let add_goal l = match get_p with None -> l | Some p -> p::l in
   let add_both goal l =
-    match get_p ("both goal=" ^ if goal then "true" else "false") with 
+    match get_p with
     | None -> l
-    | Some p ->
-        (* if goal then has_prop_goal := true;*)
-        (goal, p)::l
+    | Some p -> (goal, p)::l
   in
   let add_hyp_call fct calls =
     let l = try ForCall.find fct calls with Not_found -> [] in
@@ -121,15 +120,15 @@ let add_prop acc kind labels id p =
     ForCall.add fct (add_both goal l) calls in
   let info = acc.info in
   let goal, info = match kind with
-    | Ahyp -> 
+    | Ahyp ->
         false, { info with p_hyp = add_hyp info.p_hyp }
-    | Agoal -> 
+    | Agoal ->
         true, { info with p_goal = add_goal info.p_goal }
     | Aboth goal ->
         goal, { info with p_both = add_both goal info.p_both }
     | AcutB goal ->
         goal, { info with p_cut = add_both goal info.p_cut }
-    | AcallHyp fct -> 
+    | AcallHyp fct ->
         false, { info with call_hyp = add_hyp_call fct info.call_hyp }
     | AcallPre (goal,fct) ->
         goal, { info with call_pre = add_both_call fct goal info.call_pre }
@@ -143,23 +142,21 @@ let add_prop_fct_pre acc kind kf bhv ~assumes pre =
   let id = WpPropId.mk_pre_id kf Kglobal bhv pre in
   let labels = NormAtLabels.labels_fct_pre in
   let p = Logic_const.pred_of_id_pred pre in
-  let p = match assumes with None -> p
-                           | Some assumes -> Logic_const.pimplies (assumes, p)
-  in
-  let p = Logic_const.pat (p, Logic_const.pre_label) in
-  (* TODO: why this at ??? [2011-07-08-Anne] *)
-  add_prop acc kind labels id p
+  let p = Logic_const.(pat (p,pre_label)) in
+  let p = normalize id ?assumes labels p in
+  add_prop acc kind id p
 
 let add_prop_fct_post acc kind kf  bhv tkind post =
   let id = WpPropId.mk_fct_post_id kf bhv (tkind, post) in
   let labels = NormAtLabels.labels_fct_post in
   let p = Logic_const.pred_of_id_pred post in
-  add_prop acc kind labels id p
+  let p = normalize id labels p in
+  add_prop acc kind id p
 
 let add_prop_fct_bhv_pre acc kind kf bhv ~impl_assumes =
-  let assumes = 
+  let assumes =
     if impl_assumes then Some (Ast_info.behavior_assumes bhv) else None
-  in 
+  in
   let add acc p = add_prop_fct_pre acc kind kf bhv ~assumes p in
   let acc = List.fold_left add acc bhv.b_requires in
   if impl_assumes then acc
@@ -169,15 +166,14 @@ let add_prop_stmt_pre acc kind kf s bhv ~assumes pre =
   let id = WpPropId.mk_pre_id kf (Kstmt s) bhv pre in
   let labels = NormAtLabels.labels_stmt_pre s in
   let p = Logic_const.pred_of_id_pred pre in
-  let p = match assumes with None -> p
-                           | Some assumes -> Logic_const.pimplies (assumes, p)
-  in add_prop acc kind labels id p
+  let p = normalize id labels ?assumes p in
+  add_prop acc kind id p
 
 let add_prop_stmt_bhv_requires acc kind kf s bhv ~with_assumes =
-  let assumes = 
+  let assumes =
     if with_assumes then Some (Ast_info.behavior_assumes bhv) else None
   in let add acc pre =
-    add_prop_stmt_pre acc kind kf s bhv ~assumes pre
+       add_prop_stmt_pre acc kind kf s bhv ~assumes pre
   in List.fold_left add acc bhv.b_requires
 
 (** Process the stmt spec precondition as an hypothesis for external properties.
@@ -191,37 +187,34 @@ let add_prop_stmt_post acc kind kf s bhv tkind l_post ~assumes post =
   let id = WpPropId.mk_stmt_post_id kf s bhv (tkind, post) in
   let labels = NormAtLabels.labels_stmt_post s l_post in
   let p = Logic_const.pred_of_id_pred post in
-  let p = match assumes with None -> p
-                           | Some assumes ->
-                               let assumes = Logic_const.pold assumes in
-                               (* can use old because label normalisation will be called *)
-                               Logic_const.pimplies (assumes, p)
-  in add_prop acc kind labels id p
+  let p = normalize id labels ?assumes p in
+  add_prop acc kind id p
 
 let add_prop_call_pre acc kind id ~assumes pre =
-  (* TODO: we don't build the id here yet because of strange things in wpAnnot.
-   *        Find out how to deal with it. [2011-07-13-Anne] *)
   let labels = NormAtLabels.labels_fct_pre in
   let p = Logic_const.pred_of_id_pred pre in
+  (* assumes can be normalized in the same time *)
   let p = Logic_const.pimplies (assumes, p) in
-  add_prop acc kind labels id p
+  let p = normalize id labels p in
+  add_prop acc kind id p
 
 let add_prop_call_post acc kind called_kf bhv tkind ~assumes post =
   let id = WpPropId.mk_fct_post_id called_kf bhv (tkind, post) in
   let labels = NormAtLabels.labels_fct_post in
   let p = Logic_const.pred_of_id_pred post in
-  let assumes = Logic_const.pold assumes in
-  let p = Logic_const.pimplies (assumes, p) in
-  add_prop acc kind labels id p
+  let p = normalize id labels ~assumes p in
+  add_prop acc kind id p
 
 let add_prop_assert acc kind kf s ca p =
   let id = WpPropId.mk_assert_id kf s ca in
   let labels = NormAtLabels.labels_assert_before s in
-  add_prop acc kind labels id p
+  let p = normalize id labels p in
+  add_prop acc kind id p
 
 let add_prop_loop_inv acc kind s id p =
   let labels = NormAtLabels.labels_loop_inv s in
-  add_prop acc kind labels id p
+  let p = normalize id labels p in
+  add_prop acc kind id p
 
 (** apply [f_normal] on the [Normal] postconditions,
  * [f_exits] on the [Exits] postconditions, and warn on the others. *)
@@ -379,7 +372,7 @@ let add_fct_bhv_assigns_hyp acc kf tkind b = match b.b_assigns with
       | None ->
           let id = WpPropId.mk_kf_any_assigns_info () in
           add_assigns_any acc Ahyp id
-      | Some id ->     
+      | Some id ->
           let labels = NormAtLabels.labels_fct_assigns in
           let assigns' = NormAtLabels.preproc_assigns labels assigns in
           let a_desc = WpPropId.mk_kf_assigns_desc assigns' in
@@ -398,17 +391,17 @@ let filter_both l =
 
 let get_both_hyp_goals annots = filter_both annots.info.p_both
 
-let get_call_hyp annots fct = 
+let get_call_hyp annots fct =
   try ForCall.find fct annots.info.call_hyp
   with Not_found -> []
 
-let get_call_pre annots fct = 
+let get_call_pre annots fct =
   try filter_both (ForCall.find fct annots.info.call_pre)
   with Not_found -> [],[]
 
 let get_call_asgn annots = function
   | None -> annots.info.a_call
-  | Some fct -> 
+  | Some fct ->
       try ForCall.find fct annots.info.call_asgn
       with Not_found -> WpPropId.empty_assigns_info
 
@@ -434,7 +427,7 @@ let pp_annots fmt acc =
     pp_pred_b_list "H+G" acc.p_both;
     pp_pred_b_list "C" acc.p_cut;
     ForCall.iter
-      (fun kf hs -> 
+      (fun kf hs ->
          let name = "CallHyp:" ^ (Kernel_function.get_name kf) in
          pp_pred_list name hs)
       acc.call_hyp;
@@ -503,8 +496,8 @@ let add_on_edges tbl new_acc edges =
   if new_acc.has_asgn_goal then tbl.tbl_has_asgn_goal <- true;
   let add_on_edge e =
     let acc =
-      try 
-        let acc = Hannots.find tbl.tbl_annots e in 
+      try
+        let acc = Hannots.find tbl.tbl_annots e in
         merge_acc new_acc.info acc
       with Not_found -> new_acc.info
     in Hannots.replace tbl.tbl_annots e acc;
@@ -538,7 +531,7 @@ let add_loop_annots tbl cfg vloop ~entry ~back ~core =
   let back_edges, entry_edges =
     List.partition Cil2cfg.is_back_edge edges_to_loop
   in
-  debug "[add_loop_annots] %d back_edges + %d entry_edges" 
+  debug "[add_loop_annots] %d back_edges + %d entry_edges"
     (List.length back_edges) (List.length entry_edges);
   add_on_edges tbl entry entry_edges;
   debug "[add_loop_annots on entry_edges ok]@.";
@@ -552,8 +545,8 @@ let add_axiom tbl lemma =
     (* Labels does not need normalization *)
     let axiom = WpPropId.mk_axiom_info lemma in
     debug "take %a@." WpPropId.pp_axiom_info axiom;
-    tbl.tbl_axioms <- axiom::tbl.tbl_axioms 
-  with e -> 
+    tbl.tbl_axioms <- axiom::tbl.tbl_axioms
+  with e ->
     NormAtLabels.catch_label_error e ("axiom "^lemma.lem_name) "axiom"
 
 let add_all_axioms tbl =
@@ -603,11 +596,11 @@ type strategy = {
 let get_kf s = Cil2cfg.cfg_kf s.cfg
 let get_bhv s = s.behavior_name
 
-let is_default_behavior s = 
+let is_default_behavior s =
   match s.behavior_name with None -> true | Some _ -> false
 
 let mk_strategy desc cfg bhv_name new_loops kind tbl = {
-  desc = desc; cfg = cfg; behavior_name = bhv_name; new_loops = new_loops; 
+  desc = desc; cfg = cfg; behavior_name = bhv_name; new_loops = new_loops;
   strategy_kind = kind; annots = tbl;
 }
 
@@ -620,7 +613,7 @@ let strategy_has_asgn_goal strat = strat.annots.tbl_has_asgn_goal
 let get_annots strat = get_annots strat.annots
 let new_loop_computation strat = strat.new_loops
 
-let pp_info_of_strategy fmt strat = 
+let pp_info_of_strategy fmt strat =
   Format.fprintf fmt "@[%s@]" strat.desc
 
 (* -------------------------------------------------------------------------- *)

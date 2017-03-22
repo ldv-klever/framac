@@ -47,7 +47,7 @@
     | RECLINK of (string * (string * bal)) list
     | FIELD of string * string
 
-  let keywords = [ 
+  let keywords = [
     "library" , KEY "library" ;
     "type" , KEY "type" ;
     "ctor" , KEY "ctor" ;
@@ -77,8 +77,8 @@
     | `Default -> conv_bal default (name,default)
     | `Left  -> Qed.Engine.F_left name
     | `Right -> Qed.Engine.F_right name
-    | `Nary  -> 
-        if Qed.Plib.is_template name 
+    | `Nary  ->
+        if Qed.Plib.is_template name
         then Qed.Engine.F_subst name
         else Qed.Engine.F_call name
 
@@ -172,7 +172,7 @@ and reclink_bis acc field = parse
 and reclink_ter acc field = parse
   | blank+ { reclink_ter acc field lexbuf }
   | '\n'   { newline lexbuf ; reclink_ter acc field lexbuf }
-  | ident as name 
+  | ident as name
       { let link  = name,(bal lexbuf) in
         reclink ((field,link)::acc) lexbuf
       }
@@ -234,7 +234,7 @@ and bal = parse
     | ID x | LINK x -> skip input ; x
     | _ -> failwith "missing identifier"
 
-  let kind input = 
+  let kind input =
     let kd = match token input with
       | INTEGER -> Z
       | REAL -> R
@@ -255,7 +255,7 @@ and bal = parse
   let rec parameters input =
     if key input ")" then [] else
       let p = parameter input in
-      if key input "," then p :: parameters input else 
+      if key input "," then p :: parameters input else
 	if key input ")" then [p] else
 	  failwith "Missing ',' or ')'"
 
@@ -330,17 +330,15 @@ and bal = parse
       | _ ->
         match LogicBuiltins.constant op with
         | ACSLDEF -> failwith (Printf.sprintf "Symbol '%s' not found" op)
-        | CONST _ ->
-          failwith "Invariant broken only true and false can be const"
         | LFUN lfun -> E_const lfun
 
   let rec op_link op input =
     match token input with
       | LINK _ | RECLINK _ ->
           Operator op, link `Left input
-      | ID "associative" -> skip input ; skipkey input ":" ; 
+      | ID "associative" -> skip input ; skipkey input ":" ;
 	  op_link { op with associative = true } input
-      | ID "commutative" -> skip input ; skipkey input ":" ; 
+      | ID "commutative" -> skip input ; skipkey input ":" ;
 	  op_link { op with commutative = true } input
       | ID "ac" -> skip input ; skipkey input ":" ;
 	  op_link { op with commutative = true ; associative = true } input
@@ -348,7 +346,7 @@ and bal = parse
 	  op_link { op with idempotent = true } input
       | ID "inversible" -> skip input ; skipkey input ":" ;
 	  op_link { op with inversible = true } input
-      | ID "neutral" -> 
+      | ID "neutral" ->
 	  skip input ; let e = op_elt input in
 	  op_link { op with neutral = e } input
       | ID "absorbant" ->
@@ -361,11 +359,11 @@ and bal = parse
     match token input with
       | LINK _ | RECLINK _ ->
 	  Function, link `Nary input
-      | ID "constructor" -> 
-	  skip input ; skipkey input ":" ; 
+      | ID "constructor" ->
+	  skip input ; skipkey input ":" ;
 	  Constructor, link `Nary input
-      | ID "injective" -> 
-	  skip input ; skipkey input ":" ; 
+      | ID "injective" ->
+	  skip input ; skipkey input ":" ;
 	  Injection, link `Nary input
       | _ -> op_link op input
 

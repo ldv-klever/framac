@@ -27,6 +27,6 @@
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

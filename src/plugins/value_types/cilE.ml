@@ -26,18 +26,18 @@
 (* ************************************************************************* *)
 
 type alarm_behavior = 
-    { a_log: (Emitter.t * (Format.formatter -> unit)) option;
+    { a_log: bool;
       a_call: unit -> unit;}
 
-let a_ignore = {a_log=None;a_call=Extlib.nop}
+let a_ignore = {a_log=false; a_call=Extlib.nop}
 
 type warn_mode = {imprecision_tracing:alarm_behavior;
                   defined_logic: alarm_behavior;
                   unspecified: alarm_behavior;
                   others: alarm_behavior;}
 
-let warn_all_mode emitter suffix =
-  let alog = {a_log=Some (emitter, suffix); a_call=Extlib.nop} in
+let warn_all_mode =
+  let alog = {a_log=true; a_call=Extlib.nop} in
   { imprecision_tracing = alog;
     defined_logic = alog;
     unspecified = alog; 
@@ -50,6 +50,6 @@ let warn_none_mode =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Frama-c preprocessing and Cil AST initialization.
-    @plugin development guide *)
+(** Frama-c preprocessing and Cil AST initialization. *)
 
 (** Whether a given preprocessor supports gcc options used in some
     configurations. *)
@@ -56,6 +55,15 @@ val new_machdep: string -> Cil_types.mach -> unit
     @modify Fluorine-20130401 Receives the machdep (as a module) as argument
     @modify Sodium-20150201 Receives directly the machdep as argument
     @raise Invalid_argument if the given name already exists *)
+
+val machdep_macro: string -> string
+ (** [machdep_macro machine] returns the name of a macro __FC_MACHDEP_XXX so
+     that the preprocessor can select std lib definition consistent with
+     the selected machdep. This function will emit a warning if [machine] is
+     not known by default by the kernel and return __FC_MACHDEP_MACHINE in that
+     case.
+     @since Magnesium-20151001 (exported in the API)
+  *)
 
 type code_transformation_category
 (** type of registered code transformations
@@ -136,12 +144,6 @@ val from_filename: ?cpp:string -> string -> t
 (* ************************************************************************* *)
 (** {2 Initializers} *)
 (* ************************************************************************* *)
-
-class check_file: string -> Visitor.frama_c_visitor
-  (** visitor that performs various consistency checks over the AST.
-      The string argument will be used in the error message in case of
-      inconsistency, in order to trace the issue.
-  *)
 
 val prepare_from_c_files: unit -> unit
   (** Initialize the AST of the current project according to the current
@@ -237,6 +239,6 @@ val pretty_ast : ?prj:Project.t -> ?fmt:Format.formatter -> unit -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

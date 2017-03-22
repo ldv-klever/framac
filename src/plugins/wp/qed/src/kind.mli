@@ -46,20 +46,20 @@ val tmap : ('a,'f) datatype array -> ('a,'f) datatype -> ('a,'f) datatype
 val basename : sort -> string
 val pretty : Format.formatter -> sort -> unit
 
-val pp_tau : 
+val pp_tau :
   (Format.formatter -> int -> unit) ->
   (Format.formatter -> 'f -> unit) ->
   (Format.formatter -> 'a -> unit) ->
   Format.formatter -> ('f,'a) datatype -> unit
 
 val pp_data :
-  (Format.formatter -> 'a -> unit) -> 
-  (Format.formatter -> 'b -> unit) -> 
+  (Format.formatter -> 'a -> unit) ->
+  (Format.formatter -> 'b -> unit) ->
   Format.formatter -> 'a -> 'b list -> unit
 
 val pp_record:
-  (Format.formatter -> 'f -> unit) -> 
-  (Format.formatter -> 'b -> unit) -> 
+  (Format.formatter -> 'f -> unit) ->
+  (Format.formatter -> 'b -> unit) ->
   Format.formatter -> ?opened:bool -> ('f * 'b) list -> unit
 
 val eq_tau :
@@ -72,6 +72,6 @@ val compare_tau:
   ('a -> 'a -> int) ->
   ('f,'a) datatype -> ('f,'a) datatype -> int
 
-module MakeTau(F : Field)(A : Data) : 
+module MakeTau(F : Field)(A : Data) :
   Data with type t = (F.t,A.t) datatype
 

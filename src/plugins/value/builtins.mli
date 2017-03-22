@@ -53,6 +53,6 @@ val dump_state_file: string -> Db.Value.builtin_sig
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -350,7 +350,7 @@ struct
   let hash = H.hash
 
   let merge f a0 a1 =
-    let a0, a1, h0, h1 =
+    let a0', a1', h0, h1 =
       let h0 = hash a0 in
       let h1 = hash a1 in
       if h0 < h1
@@ -361,8 +361,8 @@ struct
     in
     let has = has land mask in
 
-    if H.equal (Array_3.get0 !!cache has) a0
-      && H.equal (Array_3.get1 !!cache has) a1
+    if H.equal (Array_3.get0 !!cache has) a0'
+      && H.equal (Array_3.get1 !!cache has) a1'
     then begin
 (*      Format.printf "Cache O@.";  *)
         Array_3.get2 !!cache has
@@ -370,7 +370,7 @@ struct
     else
       let result = f a0 a1 in
 (*      Format.printf "Cache N@."; *)
-      Array_3.set !!cache has a0 a1 result;
+      Array_3.set !!cache has a0' a1' result;
       result
 end
 
@@ -572,6 +572,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

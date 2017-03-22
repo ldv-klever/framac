@@ -47,6 +47,7 @@ type logic_type =
   | LTunion of string (** C union *)
   | LTnamed of string * logic_type list (** declared logic type. *)
   | LTarrow of logic_type list * logic_type
+  | LTattribute of logic_type * attribute (* Only const and volatile can appear here *)
 
 (** quantifier-bound variables *)
 type quantifiers = (logic_type * string) list
@@ -287,6 +288,6 @@ type ext_module = string * ext_decl list * ((string * location) * ext_function l
 type ext_spec = ext_module list
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../../.."
+compile-command: "make -C ../../.."
 End:
 *)

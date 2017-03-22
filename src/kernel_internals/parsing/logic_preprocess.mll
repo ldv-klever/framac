@@ -28,7 +28,25 @@
   let preprocess_buffer = Buffer.create 1024
   let output_buffer = Buffer.create 1024
   let beg_of_line = Buffer.create 8
-  let blacklisted_macros = [ "__STDC__"; "__STDC_HOSTED__"; "assert"]
+  (* Standard prohibits the predefined macros to be subject of a #define
+     (or #undef) directive. We thus have to filter the definition of these
+     macros from gcc's output (gcc emits a warning otherwise).
+     The list of predefined macros is taken from C11 standard, in the order
+     in which they are defined in Section 6.10.8
+   *)
+  let blacklisted_macros = [
+    (* 6.10.8.1 mandatory macros. *)
+    "__DATE__"; "__FILE"; "__LINE__"; "__STDC__"; "__STDC_HOSTED__";
+    "__STDC_VERSION__"; "__TIME__";
+    (* 6.10.8.2 environment macros *)
+    "__STDC_ISO_10646__"; "__STDC_MB_MIGHT_NEQ_WC__";
+    "__STDC_UTF_16__"; "__STDC_UTF_32__";
+    (* 6.10.8.3 conditional feature macros *)
+    "__STDC_ANALYZABLE__"; "__STDC_IEC_559__"; "__STDC_IEC_559_COMPLEX__";
+    "__STDC_LIB_EXT1__"; "__STD_NO_ATOMICS__"; "__STD_NO_COMPLEX__";
+    "__STDC_NO_THREADS__"; "__STDC_NO_VLA__";
+    (* expanding assert, an ACSL keyword, is not a good idea. *)
+    "assert"]
   let is_newline = ref CHAR
   let curr_file = ref ""
   let curr_line = ref 1
@@ -239,8 +257,6 @@ rule main = parse
       main lexbuf }
 and macro blacklisted = parse
 | "\\\n" {
-      if not blacklisted then
-        Buffer.add_string preprocess_buffer (lexeme lexbuf);
       make_newline ();
       Buffer.add_char output_buffer '\n';
       macro blacklisted lexbuf
@@ -248,6 +264,16 @@ and macro blacklisted = parse
 (* we ignore comments in macro definition, as their expansion 
    in ACSL annotations would lead to ill-formed ACSL. *)
 | "/*" { macro_comment blacklisted lexbuf }
+| '"' { 
+  if not blacklisted then
+    Buffer.add_char preprocess_buffer '"';
+  macro_string blacklisted lexbuf
+}
+| "'" {
+  if not blacklisted then
+    Buffer.add_char preprocess_buffer '\'';
+  macro_char blacklisted lexbuf
+}
 | "\n" {
       if not blacklisted then
         Buffer.add_char preprocess_buffer '\n';
@@ -268,6 +294,39 @@ and macro_comment blacklisted = parse
     }
 | "*/" { macro blacklisted lexbuf }
 | _  { macro_comment blacklisted lexbuf }
+
+and macro_string blacklisted = parse
+|  "\\\"" as s {
+  if not blacklisted then Buffer.add_string preprocess_buffer s;
+  macro_string blacklisted lexbuf
+  }
+| "\\\n" {
+  make_newline();
+  Buffer.add_char output_buffer '\n';
+  macro_string blacklisted lexbuf
+}
+| "\n" { abort_preprocess "unterminated string in macro definition" }
+| eof { abort_preprocess "unterminated string in macro definition" }
+| '"' { if not blacklisted then Buffer.add_char preprocess_buffer '"';
+        macro blacklisted lexbuf }
+| _ as c { if not blacklisted then Buffer.add_char preprocess_buffer c;
+           macro_string blacklisted lexbuf }
+and macro_char blacklisted = parse
+|  "\\'" as s {
+  if not blacklisted then Buffer.add_string preprocess_buffer s;
+  macro_char blacklisted lexbuf
+  }
+| "\\\n" {
+  make_newline();
+  Buffer.add_char output_buffer '\n';
+  macro_char blacklisted lexbuf
+}
+| "\n" { abort_preprocess "unterminated char in macro definition" }
+| eof { abort_preprocess "unterminated char in macro definition" }
+| "'" { if not blacklisted then Buffer.add_char preprocess_buffer '\'';
+        macro blacklisted lexbuf }
+| _ as c { if not blacklisted then Buffer.add_char preprocess_buffer c;
+           macro_char blacklisted lexbuf }
 and c_string = parse
 | "\\\"" { Buffer.add_string beg_of_line "  ";
            Buffer.add_string output_buffer (lexeme lexbuf);

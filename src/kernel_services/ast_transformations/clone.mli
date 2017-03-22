@@ -31,6 +31,6 @@ val clone_defined_kernel_function: kernel_function -> kernel_function
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

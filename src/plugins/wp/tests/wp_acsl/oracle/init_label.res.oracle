@@ -21,20 +21,19 @@ Prove: 12=x_0.
 ------------------------------------------------------------
 
 Goal Post-condition 'OK' in 'foreign':
-Let x_0 = A_0[8].
 Assume {
   (* Domain *)
-  Type: (is_sint32 x_0).
+  Type: (is_sint32 A_0[8]).
   (* Initializer *)
-  Have: 10=A_0[0].
+  Init: 10=A_0[0].
   (* Initializer *)
-  Have: 11=A_0[1].
+  Init: 11=A_0[1].
   (* Initializer *)
-  Have: 12=A_0[2].
+  Init: 12=A_0[2].
   (* Initializer *)
-  Have: forall i_0:int. (3<=i_0) -> (i_0<=19) -> (0=A_0[i_0]).
+  Init: forall i_0:int. (3<=i_0) -> (i_0<=19) -> (0=A_0[i_0]).
 }
-Prove: 0=x_0.
+Prove: true.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
@@ -47,13 +46,13 @@ Assume {
   (* Domain *)
   Type: (IsArray1_sint32 A_0) /\ (IsArray1_sint32 A_2) /\ (is_sint32 x_0).
   (* Initializer *)
-  Have: 10=A_2[0].
+  Init: 10=A_2[0].
   (* Initializer *)
-  Have: 11=A_2[1].
+  Init: 11=A_2[1].
   (* Initializer *)
-  Have: 12=A_2[2].
+  Init: 12=A_2[2].
   (* Initializer *)
-  Have: forall i_0:int. (3<=i_0) -> (i_0<=19) -> (0=A_2[i_0]).
+  Init: forall i_0:int. (3<=i_0) -> (i_0<=19) -> (0=A_2[i_0]).
   (* Pre-condition 'Init' in 'job' *)
   (* Pre-condition 'Init': *)
   Have: (EqArray1_int 20 A_0 A_2).
@@ -66,20 +65,18 @@ Prove: 12=x_0.
 ------------------------------------------------------------
 
 Goal Pre-condition 'OK' in 'main':
-Let x_0 = A_0[19].
-Let x_1 = A_0[1].
 Assume {
   (* Domain *)
-  Type: (is_sint32 x_1) /\ (is_sint32 x_0).
+  Type: (is_sint32 A_0[19]).
   (* Initializer *)
-  Have: 10=A_0[0].
+  Init: 10=A_0[0].
   (* Initializer *)
-  Have: 11=x_1.
+  Init: 11=A_0[1].
   (* Initializer *)
-  Have: 12=A_0[2].
+  Init: 12=A_0[2].
   (* Initializer *)
-  Have: forall i_0:int. (3<=i_0) -> (i_0<=19) -> (0=A_0[i_0]).
+  Init: forall i_0:int. (3<=i_0) -> (i_0<=19) -> (0=A_0[i_0]).
 }
-Prove: 0=x_0.
+Prove: true.
 
 ------------------------------------------------------------
