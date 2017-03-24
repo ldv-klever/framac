@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,6 +22,9 @@
 
 #ifndef __FC_DEFINE_NLINK_T
 #define __FC_DEFINE_NLINK_T
+#include "features.h"
+__BEGIN_DECLS
 typedef unsigned int nlink_t;
+__END_DECLS
 #endif
 

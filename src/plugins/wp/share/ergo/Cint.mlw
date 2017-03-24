@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(* this is a prelude for Alt-Ergo*)
+(* this is the prelude for Alt-Ergo, any versions *)
 (** The theory BuiltIn_ must be appended to this file*)
 (** The theory Bool_ must be appended to this file*)
 (** The theory bool_Bool_ must be appended to this file*)
@@ -127,6 +127,17 @@ logic to_uint64 : int -> int
 
 logic to_sint64 : int -> int
 
+logic two_power_abs : int -> int
+
+predicate is_uint(n: int, x: int) = ((0 <= x) and (x <  two_power_abs(n)))
+
+predicate is_sint(n: int, x: int) = (((-two_power_abs(n)) <= x) and
+  (x <  two_power_abs(n)))
+
+logic to_uint : int, int -> int
+
+logic to_sint : int, int -> int
+
 axiom is_to_uint8 :
   (forall x:int [is_uint8(to_uint8(x))]. is_uint8(to_uint8(x)))
 
@@ -182,6 +193,22 @@ axiom id_uint64 :
 axiom id_sint64 :
   (forall x:int [to_sint64(x)]. ((((-9223372036854775808) <= x) and
   (x <  9223372036854775808)) -> (to_sint64(x) = x)))
+
+axiom proj_int8 :
+  (forall x:int [to_sint8(to_uint8(x))].
+  (to_sint8(to_uint8(x)) = to_sint8(x)))
+
+axiom proj_int16 :
+  (forall x:int [to_sint16(to_uint16(x))].
+  (to_sint16(to_uint16(x)) = to_sint16(x)))
+
+axiom proj_int32 :
+  (forall x:int [to_sint32(to_uint32(x))].
+  (to_sint32(to_uint32(x)) = to_sint32(x)))
+
+axiom proj_int64 :
+  (forall x:int [to_sint64(to_uint64(x))].
+  (to_sint64(to_uint64(x)) = to_sint64(x)))
 
 logic lnot : int -> int
 

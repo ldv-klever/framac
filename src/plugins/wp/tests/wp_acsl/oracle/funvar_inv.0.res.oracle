@@ -1,0 +1,126 @@
+# frama-c -wp -wp-model 'Hoare' [...]
+[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
+[kernel] Parsing tests/wp_acsl/funvar_inv.i (no preprocessing)
+[wp] Running WP plugin...
+[wp] Loading driver 'share/wp.driver'
+[wp] warning: Missing RTE guards
+tests/wp_acsl/funvar_inv.i:24:[wp] warning: Can not compare pointers in Empty model
+tests/wp_acsl/funvar_inv.i:23:[wp] warning: Can not compare pointers in Empty model
+tests/wp_acsl/funvar_inv.i:38:[wp] warning: Can not compare pointers in Empty model
+tests/wp_acsl/funvar_inv.i:37:[wp] warning: Can not compare pointers in Empty model
+tests/wp_acsl/funvar_inv.i:53:[wp] warning: Can not compare pointers in Empty model
+tests/wp_acsl/funvar_inv.i:52:[wp] warning: Can not compare pointers in Empty model
+------------------------------------------------------------
+  Function f
+------------------------------------------------------------
+
+Goal Post-condition 'P_startof' in 'f':
+tests/wp_acsl/funvar_inv.i:23: warning from Empty Model:
+ - Warning: Target turned to False, looking for context inconsistency
+   Reason: Can not compare pointers in Empty model
+Let x = G[0].
+Assume {
+  Type: is_sint32(i) /\ is_sint32(x) /\ is_sint32(G[1]) /\ is_sint32(G[i_1]).
+  If i <= 3
+  Then { (* Else *) Have: 0 = G[i]. }
+}
+Prove: 0 != x.
+
+------------------------------------------------------------
+
+Goal Post-condition 'P_addr' in 'f':
+tests/wp_acsl/funvar_inv.i:24: warning from Empty Model:
+ - Warning: Target turned to False, looking for context inconsistency
+   Reason: Can not compare pointers in Empty model
+Let x = G[0].
+Assume {
+  Type: is_sint32(i) /\ is_sint32(x) /\ is_sint32(G[i_1]).
+  (* Goal *)
+  When: (0 != x) /\ (0 = G[1]).
+  If i <= 3
+  Then { (* Else *) Have: 0 = G[i]. }
+}
+Prove: false.
+
+------------------------------------------------------------
+
+Goal Loop assigns 'qed_ok,index':
+Prove: true.
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function f2
+------------------------------------------------------------
+
+Goal Post-condition 'P_startof_shift' in 'f2':
+tests/wp_acsl/funvar_inv.i:37: warning from Empty Model:
+ - Warning: Target turned to False, looking for context inconsistency
+   Reason: Can not compare pointers in Empty model
+Let x = G[0].
+Assume {
+  Type: is_sint32(i) /\ is_sint32(x) /\ is_sint32(G[1]) /\ is_sint32(G[i_1]).
+  If (4 * i) <= 15
+  Then { (* Else *) Have: 0 = G[i]. }
+}
+Prove: 0 != x.
+
+------------------------------------------------------------
+
+Goal Post-condition 'P_addr_shift' in 'f2':
+tests/wp_acsl/funvar_inv.i:38: warning from Empty Model:
+ - Warning: Target turned to False, looking for context inconsistency
+   Reason: Can not compare pointers in Empty model
+Let x = G[0].
+Assume {
+  Type: is_sint32(i) /\ is_sint32(x) /\ is_sint32(G[i_1]).
+  (* Goal *)
+  When: (0 != x) /\ (0 = G[1]).
+  If (4 * i) <= 15
+  Then { (* Else *) Have: 0 = G[i]. }
+}
+Prove: false.
+
+------------------------------------------------------------
+
+Goal Loop assigns 'qed_ok,index':
+Prove: true.
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function g
+------------------------------------------------------------
+
+Goal Post-condition 'P_addr_startof_shift' in 'g':
+tests/wp_acsl/funvar_inv.i:52: warning from Empty Model:
+ - Warning: Target turned to False, looking for context inconsistency
+   Reason: Can not compare pointers in Empty model
+Let x = G[0].
+Assume {
+  Type: is_sint32(i) /\ is_sint32(x) /\ is_sint32(G[1]) /\ is_sint32(G[i_1]).
+  If (16 * i) <= 63
+  Then { (* Else *) Have: 0 = G[i]. }
+}
+Prove: 0 != x.
+
+------------------------------------------------------------
+
+Goal Post-condition 'P_addr_addr_shift' in 'g':
+tests/wp_acsl/funvar_inv.i:53: warning from Empty Model:
+ - Warning: Target turned to False, looking for context inconsistency
+   Reason: Can not compare pointers in Empty model
+Let x = G[0].
+Assume {
+  Type: is_sint32(i) /\ is_sint32(x) /\ is_sint32(G[i_1]).
+  (* Goal *)
+  When: (0 != x) /\ (0 = G[1]).
+  If (16 * i) <= 63
+  Then { (* Else *) Have: 0 = G[i]. }
+}
+Prove: false.
+
+------------------------------------------------------------
+
+Goal Loop assigns 'qed_ok':
+Prove: true.
+
+------------------------------------------------------------

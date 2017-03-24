@@ -11,4 +11,3 @@
 /*@ ensures qed_ok: 0<=t<256 ;
   @ ensures qed_ko: 0<=t<128 ; */
 void f(void) {return;}
-

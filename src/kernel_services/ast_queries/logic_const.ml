@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -43,13 +43,11 @@ let new_code_annotation annot =
 let fresh_code_annotation = AnnotId.next
 
 let new_predicate p =
-  { ip_id = PredicateId.next ();
-    ip_content = p.content; ip_loc = p.loc; ip_name = p.name }
+  { ip_id = PredicateId.next (); ip_content = p }
 
 let fresh_predicate_id = PredicateId.next
 
-let pred_of_id_pred p =
-  { name = p.ip_name; loc = p.ip_loc; content = p.ip_content }
+let pred_of_id_pred p = p.ip_content
 
 let refresh_predicate p = { p with ip_id = PredicateId.next () }
 
@@ -87,8 +85,7 @@ let refresh_behavior b =
       List.map (fun (k,p) -> (k, refresh_predicate p)) b.b_post_cond;
     b_assigns = refresh_assigns b.b_assigns;
     b_allocation = refresh_allocation b.b_allocation;
-    b_extended =
-      List.map (fun (s,n,p) -> (s,n,List.map refresh_predicate p)) b.b_extended
+    (* no need to refresh b_extended, it contains only named predicates. *)
   }
 
 let refresh_spec s =
@@ -102,7 +99,8 @@ let refresh_spec s =
 let refresh_code_annotation annot =
   let content =
     match annot.annot_content with
-      | AAssert _ | AInvariant _ | AAllocation _ | AVariant _ | APragma _ as c -> c
+      | AAssert _ | AInvariant _ | AAllocation _ | AVariant _ | APragma _
+      | AExtended _ as c -> c
       | AStmtSpec(l,spec) -> AStmtSpec(l, refresh_spec spec)
       | AAssigns(l,a) -> AAssigns(l, refresh_assigns a)
       
@@ -130,6 +128,20 @@ let loop_entry_label = LogicLabel (None, "LoopEntry")
 
 (** {2 Types} *)
 
+let is_list_type = function
+  | Ltype ({lt_name = "\\list"},[_]) -> true
+  | _ -> false
+
+(** returns the type of elements of a list type.
+    @raise Failure if the input type is not a list type. *)
+let type_of_list_elem ty = match ty with
+  | Ltype ({lt_name = "\\list"},[t]) -> t
+  | _ -> failwith "not a list type"
+
+(** build the type list of [ty]. *)
+let make_type_list_of ty =
+  Ltype(Logic_env.find_logic_type "\\list",[ty])
+
 let is_set_type = function
   | Ltype ({lt_name = "set"},[_]) -> true
   | _ -> false
@@ -145,7 +157,8 @@ let set_conversion ty1 ty2 =
 
 (** converts a type into the corresponding set type if needed. *)
 let make_set_type ty =
-  set_conversion ty (Ltype(Logic_env.find_logic_type "set",[Lvar "_"]))
+  if is_set_type ty then ty
+  else Ltype(Logic_env.find_logic_type "set",[ty])
 
 (** returns the type of elements of a set type.
     @raise Failure if the input type is not a set type. *)
@@ -235,6 +248,11 @@ let treal_zero ?(loc=Cil_datatype.Location.unknown) ?(ltyp=Lreal) () =
   let zero = { r_nearest = 0.0 ; r_upper = 0.0 ; r_lower = 0.0 ; r_literal = "0." } in
   term ~loc (TConst (LReal zero)) ltyp
 
+let tstring ?(loc=Cil_datatype.Location.unknown) s =
+  (* Cannot refer to Cil.charConstPtrType in this module... *)
+  let typ = TPtr(TInt(IChar, [Attr("const", [])]),[]) in
+  term ~loc (TConst (LStr s)) (Ctype typ)
+
 let tat ?(loc=Cil_datatype.Location.unknown) (t,label) =
   term ~loc (Tat(t,label)) t.term_type
 
@@ -266,20 +284,20 @@ let rec is_exit_status t = match t.term_node with
 (* empty line for ocamldoc *)
 
 let unamed ?(loc=Cil_datatype.Location.unknown) p =
-  {content = p ; loc = loc; name = [] }
+  {pred_content = p ; pred_loc = loc; pred_name = [] }
 
 let ptrue = unamed Ptrue
 let pfalse = unamed Pfalse
 
-let pold ?(loc=Cil_datatype.Location.unknown) p = match p.content with
+let pold ?(loc=Cil_datatype.Location.unknown) p = match p.pred_content with
   | Ptrue | Pfalse -> p
-  | _ -> {p with content = Pat(p, old_label); loc = loc}
+  | _ -> {p with pred_content = Pat(p, old_label); pred_loc = loc}
 
 let papp ?(loc=Cil_datatype.Location.unknown) (p,lab,a) =
   unamed ~loc (Papp(p,lab,a))
 
 let pand ?(loc=Cil_datatype.Location.unknown) (p1, p2) =
-  match p1.content, p2.content with
+  match p1.pred_content, p2.pred_content with
   | Ptrue, _ -> p2
   | _, Ptrue -> p1
   | Pfalse, _ -> p1
@@ -287,7 +305,7 @@ let pand ?(loc=Cil_datatype.Location.unknown) (p1, p2) =
   | _, _ -> unamed ~loc (Pand (p1, p2))
 
 let por ?(loc=Cil_datatype.Location.unknown) (p1, p2) =
-  match p1.content, p2.content with
+  match p1.pred_content, p2.pred_content with
   | Ptrue, _ -> p1
   | _, Ptrue -> p2
   | Pfalse, _ -> p2
@@ -295,7 +313,7 @@ let por ?(loc=Cil_datatype.Location.unknown) (p1, p2) =
   | _, _ -> unamed ~loc (Por (p1, p2))
 
 let pxor ?(loc=Cil_datatype.Location.unknown) (p1, p2) =
-  match p1.content, p2.content with
+  match p1.pred_content, p2.pred_content with
   | Ptrue, Ptrue -> unamed ~loc Pfalse
   | Ptrue, _ -> p1
   | _, Ptrue -> p2
@@ -303,33 +321,33 @@ let pxor ?(loc=Cil_datatype.Location.unknown) (p1, p2) =
   | _, Pfalse -> p1
   | _,_ -> unamed ~loc (Pxor (p1,p2))
 
-let pnot ?(loc=Cil_datatype.Location.unknown) p2 = match p2.content with
-  | Ptrue -> {p2 with content = Pfalse; loc = loc }
-  | Pfalse ->  {p2 with content = Ptrue; loc = loc }
+let pnot ?(loc=Cil_datatype.Location.unknown) p2 = match p2.pred_content with
+  | Ptrue -> {p2 with pred_content = Pfalse; pred_loc = loc }
+  | Pfalse ->  {p2 with pred_content = Ptrue; pred_loc = loc }
   | Pnot p -> p
   | _ -> unamed ~loc (Pnot p2)
 
 let pands l = List.fold_right (fun p1 p2 -> pand (p1, p2)) l ptrue
 let pors l = List.fold_right (fun p1 p2 -> por (p1, p2)) l pfalse
 
-let plet ?(loc=Cil_datatype.Location.unknown) p = match p.content with
-  | (_, ({content = Ptrue} as p)) -> p
-  | (v, p) -> unamed ~loc (Plet (v, p))
+let plet ?(loc=Cil_datatype.Location.unknown) v p = match p.pred_content with
+  | Ptrue -> p
+  | _ -> unamed ~loc (Plet (v, p))
 
 let pimplies ?(loc=Cil_datatype.Location.unknown) (p1,p2) =
-  match p1.content, p2.content with
+  match p1.pred_content, p2.pred_content with
   | Ptrue, _ | _, Ptrue -> p2
-  | Pfalse, _ -> { name = p1.name; loc = loc; content = Ptrue }
+  | Pfalse, _ -> { pred_name = p1.pred_name; pred_loc = loc; pred_content = Ptrue }
   | _, _ -> unamed ~loc (Pimplies (p1, p2))
 
 let pif ?(loc=Cil_datatype.Location.unknown) (t,p2,p3) =
-  match (p2.content, p3.content) with
+  match (p2.pred_content, p3.pred_content) with
   | Ptrue, Ptrue  -> ptrue
   | Pfalse, Pfalse -> pfalse
   | _,_ -> unamed ~loc (Pif (t,p2,p3))
 
 let piff ?(loc=Cil_datatype.Location.unknown) (p2,p3) =
-  match p2.content, p3.content with
+  match p2.pred_content, p3.pred_content with
   | Pfalse, Pfalse -> ptrue
   | Ptrue, _  -> p3
   | _, Ptrue -> p2
@@ -342,21 +360,23 @@ let prel ?(loc=Cil_datatype.Location.unknown) (a,b,c) =
 let pforall ?(loc=Cil_datatype.Location.unknown) (l,p) = match l with
   | [] -> p
   | _ :: _ ->
-    match p.content with
+    match p.pred_content with
     | Ptrue -> p
     | _ -> unamed ~loc (Pforall (l,p))
 
 let pexists ?(loc=Cil_datatype.Location.unknown) (l,p) = match l with
   | [] -> p
-  | _ :: _ -> match p.content with
+  | _ :: _ -> match p.pred_content with
     | Pfalse -> p
     | _ -> unamed ~loc (Pexists (l,p))
 
 let pfresh ?(loc=Cil_datatype.Location.unknown) (l1,l2,p,n) = unamed ~loc (Pfresh (l1,l2,p,n))
 let pallocable ?(loc=Cil_datatype.Location.unknown) (l,p) = unamed ~loc (Pallocable (l,p))
 let pfreeable ?(loc=Cil_datatype.Location.unknown) (l,p) = unamed ~loc (Pfreeable (l,p))
-let pvalid_read ?(loc=Cil_datatype.Location.unknown) (l,p) = unamed ~loc (Pvalid_read (l,p))
 let pvalid ?(loc=Cil_datatype.Location.unknown) (l,p) = unamed ~loc (Pvalid (l,p))
+let pvalid_read ?(loc=Cil_datatype.Location.unknown) (l,p) = unamed ~loc (Pvalid_read (l,p))
+let pvalid_function ?(loc=Cil_datatype.Location.unknown) p = unamed ~loc (Pvalid_function p)
+
 (* the index should be an integer or a range of integers *)
 let pvalid_index ?(loc=Cil_datatype.Location.unknown) (l,t1,t2) =
   let ty1 = t1.term_type in

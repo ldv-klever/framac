@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,8 +21,47 @@
 (**************************************************************************)
 
 exception Not_less_than
+exception Can_not_subdiv
+
+let msg_emitter = Lattice_messages.register "Abstract_interp"
 
 open Lattice_type
+
+module Comp = struct
+  type t = Lt | Gt | Le | Ge | Eq | Ne
+
+  type result = True | False | Unknown
+  
+  let inv = function
+    | Gt -> Le
+    | Lt -> Ge
+    | Le -> Gt
+    | Ge -> Lt
+    | Eq -> Ne
+    | Ne -> Eq
+
+  let sym = function
+    | Gt -> Lt
+    | Lt -> Gt
+    | Le -> Ge
+    | Ge -> Le
+    | Eq -> Eq
+    | Ne -> Ne
+
+  let pretty_comp fmt = function
+    | Gt -> Format.pp_print_string fmt ">"
+    | Lt -> Format.pp_print_string fmt "<"
+    | Le -> Format.pp_print_string fmt "<="
+    | Ge -> Format.pp_print_string fmt ">="
+    | Eq -> Format.pp_print_string fmt "=="
+    | Ne -> Format.pp_print_string fmt "!="
+
+  let inv_result = function
+    | Unknown -> Unknown
+    | True -> False
+    | False -> True
+
+end
 
 module Make_Lattice_Set(V:Lattice_Value): Lattice_Set with type O.elt = V.t =
 struct
@@ -549,17 +588,27 @@ module Int = struct
 (*    Format.printf "Int.fold: inf:%a sup:%a step:%a@\n"
        pretty inf pretty sup pretty step; *)
     let nb_loop = div (sub sup inf) step in
-    let next = add step in
-    let rec fold ~counter ~inf acc =
+    let rec fold_incr ~counter ~inf acc =
       if equal counter onethousand then
-        Kernel.warning ~once:true ~current:true
-          "enumerating %s integers" (to_string nb_loop);
+        Lattice_messages.emit_costly msg_emitter
+          "enumerating %a integers" pretty nb_loop;
       if le inf sup then begin
           (*          Format.printf "Int.fold: %a@\n" pretty inf; *)
-        fold ~counter:(succ counter) ~inf:(next inf) (f inf acc)
+        fold_incr ~counter:(succ counter) ~inf:(add step inf) (f inf acc)
       end else acc
     in
-    fold ~counter:zero ~inf acc
+    let rec fold_decr ~counter ~sup acc =
+      if equal counter onethousand then
+        Lattice_messages.emit_costly msg_emitter
+          "enumerating %a integers" pretty nb_loop;
+      if le inf sup then begin
+        (*          Format.printf "Int.fold: %a@\n" pretty inf; *)
+        fold_decr ~counter:(succ counter) ~sup:(add step sup) (f sup acc)
+      end else acc
+    in
+    if le zero step
+    then fold_incr ~counter:zero ~inf acc
+    else fold_decr ~counter:zero ~sup acc
 
 end
 
@@ -575,6 +624,105 @@ module Rel = struct
   let sub_abs = sub
 end
 
+
+module Bool = struct
+  type t = Top | True | False | Bottom
+  let hash (b : t) = Hashtbl.hash b
+  let equal (b1 : t) (b2 : t) = b1 = b2
+  let compare (b1 : t) (b2 : t) = Pervasives.compare b1 b2
+  let pretty fmt = function
+    | Top -> Format.fprintf fmt "Top"
+    | True -> Format.fprintf fmt "True"
+    | False -> Format.fprintf fmt "False"
+    | Bottom -> Format.fprintf fmt "Bottom"
+  let is_included t1 t2 = match t1, t2 with
+    | Bottom, _
+    | _, Top
+    | True, True
+    | False, False -> true
+    | _ -> false
+  let bottom = Bottom
+  let top = Top
+  let join b1 b2 = match b1, b2 with
+    | Top, _
+    | _, Top
+    | True, False -> Top
+    | True, _
+    | _, True -> True
+    | False, _
+    | _, False -> False
+    | Bottom, Bottom -> Bottom
+  let narrow b1 b2 = match b1, b2 with
+    | Bottom, _
+    | _, Bottom
+    | True, False -> Bottom
+    | True, _
+    | _, True -> True
+    | False, _
+    | _, False -> False
+    | Top, Top -> Top
+  let link = join
+  let meet = narrow
+  let join_and_is_included b1 b2 = join b1 b2, is_included b1 b2
+  type widen_hint = unit
+  let widen () = join
+  let cardinal_zero_or_one b = not (equal b top)
+  let intersects b1 b2 = match b1, b2 with
+    | Bottom, _ | _, Bottom -> false
+    | _, Top | Top, _ -> true
+    | False, False | True, True -> true
+    | False, True | True, False -> false
+  let diff b1 b2 = match b1, b2 with
+    | b1, Bottom -> b1
+    | _, Top -> Bottom
+    | Bottom, _ -> Bottom
+    | Top, True -> False
+    | Top, False -> True
+    | True, True -> Bottom
+    | True, False -> True
+    | False, True -> False
+    | False, False -> Bottom
+  let diff_if_one b1 b2 = match b1, b2 with
+    | b1, Top -> b1
+    | _, _ -> diff b1 b2
+  let fold_enum f b init =
+    let elements = match b with
+      | Top -> [True; False]
+      | True -> [True]
+      | False -> [False]
+      | Bottom -> []
+    in
+    List.fold_right (fun b acc -> f b acc) elements init
+  let cardinal = function
+    | Top -> 2
+    | True | False -> 1
+    | Bottom -> 0
+  let cardinal_less_than b i =
+    let c = cardinal b in
+    if c > i then raise Not_less_than
+    else c
+
+  type blt = t
+  include (Datatype.Make_with_collections
+             (struct
+               type t = blt
+               let name = "Bool_lattice"
+               let structural_descr = Structural_descr.t_abstract
+               let reprs = [Top; True; False; Bottom]
+               let equal = equal
+               let compare = compare
+               let hash = hash
+               let rehash = Datatype.identity
+               let copy = Datatype.identity
+               let pretty = pretty
+               let internal_pretty_code = Datatype.undefined
+               let varname = Datatype.undefined
+               let mem_project = Datatype.never_any_project
+             end) :
+             Datatype.S with type t := t)
+
+  exception Error_Top (* for With_Error_Top *)
+end
 
 
 module type Collapse = sig
@@ -748,7 +896,7 @@ struct
 
   type t1 = L1.t
   type t2 = L2.t
-  type tt = t1 * t2
+  type t = t1 * t2
   type widen_hint = L1.widen_hint * L2.widen_hint
 
   let hash (v1, v2) = L1.hash v1 + 31 * L2.hash v2
@@ -819,9 +967,11 @@ struct
       ((l,ll),bb)
     else ((l, L2.join ll1 ll2), false);;
 
-  include Datatype.Make
+  include
+    (Datatype.Make
       (struct
-        type t = tt (*= t1*t2 *)
+        type uproduct = t
+        type t = uproduct (*= t1*t2 *)
         let name = "(" ^ L1.name ^ ", " ^ L2.name ^ ") lattice_uproduct"
         let structural_descr =
           Structural_descr.t_sum [| [| L1.packed_descr; L2.packed_descr |] |]
@@ -841,7 +991,8 @@ struct
         let pretty = pretty
         let varname = Datatype.undefined
         let mem_project = Datatype.never_any_project
-       end)
+       end):
+       Datatype.S with type t := t)
   let () = Type.set_ml_name ty None
 
 end
@@ -1020,6 +1171,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,7 +31,7 @@ open Definitions
 
 let dkey = Wp_parameters.register_category "prover"
 
-let cluster_file c = 
+let cluster_file c =
   let dir = Model.directory () in
   let base = cluster_id c in
   Printf.sprintf "%s/%s.v" dir base
@@ -54,29 +54,24 @@ type coqlib = {
   c_module : string ;  (* Full module name. *)
 }
 
-(* example: 
+(* example:
 
-   { 
+   {
    c_id="/mydir/foobar:a/b/User.v" ;
    c_source="/mydir/foobar" ;
    c_file= "a/b/User.v" ;
    c_path = "a/b" ;
    c_name = "a.b" ;
    c_module  = "a.b.User" ;
-   } 
+   }
 
 *)
 
 (* Take the directory name and changes all '/' into '.' *)
 let name_of_path path =
-  if path = "." then "" else
-    begin
-      let name = String.copy path in
-      for i = 0 to String.length name - 1 do
-        if name.[i] = '/' then name.[i] <- '.'
-        else if name.[i] = '\\' then name.[i] <- '.' 
-      done ; name
-    end
+  if path = "." then ""
+  else
+    String.map (fun c -> if c = '/' || c = '\\' then '.' else c) path
 
 let find_nonwin_column opt =
   let p = String.rindex opt ':' in
@@ -96,17 +91,22 @@ let parse_c_option opt =
     let c_path = Filename.dirname c_file in
     let c_name = name_of_path c_path in
     let coqid = Filename.chop_extension (Filename.basename c_file) in
-    let c_module = Printf.sprintf "%s.%s" c_name (String.capitalize coqid) in 
+    let c_module =
+      Printf.sprintf "%s.%s" c_name
+        (Transitioning.String.capitalize_ascii coqid)
+    in
     { c_id = opt ; c_source ; c_file ; c_path ; c_name ; c_module }
   with Not_found ->
     (* Format "<source>/<file.v>" *)
     let c_source = Filename.dirname opt in
     let c_file = Filename.basename opt in
-    let c_module = String.capitalize (Filename.chop_extension c_file) in
+    let c_module =
+      Transitioning.String.capitalize_ascii (Filename.chop_extension c_file)
+    in
     { c_id = opt ; c_source ; c_file ; c_path = "." ; c_name = "" ; c_module }
 
 let coqlibs = Hashtbl.create 128 (*[LC] Not Projectified. *)
-let c_option opt = 
+let c_option opt =
   try Hashtbl.find coqlibs opt
   with Not_found ->
     let clib = parse_c_option opt in
@@ -123,20 +123,25 @@ type depend =
 (* --- Exporting Formulae to Coq                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
-let engine = 
+let engine =
   let module E = Qed.Export_coq.Make(Lang.F) in
-  object
-    inherit E.engine
+  object(self)
+    inherit E.engine as super
     inherit Lang.idprinting
-
     method infoprover p = p.coq
+                            
+    method! pp_fun cmode fct ts =
+      if fct == Vlist.f_concat
+      then Vlist.pp_concat self ts
+      else super#pp_fun cmode fct ts
+    
   end
 
 
 class visitor fmt c =
   object(self)
 
-    inherit Definitions.visitor c 
+    inherit Definitions.visitor c
     inherit ProverTask.printer fmt (cluster_title c)
 
     val mutable deps : depend list = []
@@ -160,7 +165,7 @@ class visitor fmt c =
       let files = LogicBuiltins.get_option option_file ~library:thy in
       List.iter self#add_coqfile files
 
-    method on_cluster c = 
+    method on_cluster c =
       self#lines ;
       Format.fprintf fmt "Require Import %s.@\n" (cluster_id c) ;
       deps <- (D_cluster c) :: deps
@@ -182,8 +187,8 @@ class visitor fmt c =
     method on_dlemma l =
       begin
         self#paragraph ;
-        engine#declare_axiom fmt 
-          (Lang.lemma_id l.l_name) 
+        engine#declare_axiom fmt
+          (Lang.lemma_id l.l_name)
           l.l_forall l.l_triggers
           (F.e_prop l.l_lemma)
       end
@@ -193,7 +198,7 @@ class visitor fmt c =
         self#paragraph ;
         match d.d_definition with
         | Logic t ->
-            engine#declare_signature fmt 
+            engine#declare_signature fmt
               d.d_lfun (List.map F.tau_of_var d.d_params) t ;
         | Value(t,mu,v) ->
             let pp = match mu with
@@ -261,8 +266,8 @@ module Marked = Set.Make
         | D_coqlib c1 , D_coqlib c2 -> String.compare c1.c_id c2.c_id
     end)
 
-type included = string * string 
-(* -I <path> -as <name>, name possibly empty *)
+type included = string * string
+(* -R <path> <name>, name possibly empty, use -I instead *)
 type coqcc = {
   mutable marked : Marked.t ;
   mutable includes : included list ; (* (reversed) includes with as *)
@@ -277,7 +282,7 @@ let add_source coqcc file =
 
 (* Recursive assembly: some file need further dependencies *)
 
-let rec assemble coqcc d = 
+let rec assemble coqcc d =
   if not (Marked.mem d coqcc.marked) then
     begin
       coqcc.marked <- Marked.add d coqcc.marked ;
@@ -288,7 +293,7 @@ let rec assemble coqcc d =
 
 and assemble_cluster coqcc c =
   let (age,deps) = try CLUSTERS.find c with Not_found -> (-1,[]) in
-  let deps = 
+  let deps =
     if age < cluster_age c then
       let deps = write_cluster c in
       CLUSTERS.update c (cluster_age c , deps) ; deps
@@ -306,8 +311,8 @@ and assemble_coqlib coqcc c =
       let tgtdir = Wp_parameters.get_output_dir "coqwp" in
       let source = Printf.sprintf "%s/%s" c.c_source c.c_file in
       let target = Printf.sprintf "%s/%s" tgtdir c.c_file in
-      let dir = Printf.sprintf "%s/%s" tgtdir c.c_path in 
-      if need_recompile ~source ~target then 
+      let dir = Printf.sprintf "%s/%s" tgtdir c.c_path in
+      if need_recompile ~source ~target then
         begin
           Wp_parameters.make_output_dir dir ;
           Command.copy source target ;
@@ -366,7 +371,11 @@ let coq_timeout () =
   let gentimeout = Wp_parameters.Timeout.get () in
   max coqtimeout gentimeout
 
-let coqidelock = Task.mutex ()
+let coqide_lock = Task.mutex ()
+let emacs_regexp = Str.regexp_string_case_fold "emacs"
+let is_emacs cmd =
+  try ignore (Str.search_forward emacs_regexp cmd 0) ; true
+  with Not_found -> false
 
 class runcoq includes source =
   let base = Filename.chop_extension source in
@@ -375,59 +384,96 @@ class runcoq includes source =
   object(coq)
 
     inherit ProverTask.command "coq"
-
-    initializer
+      
+    method private project =
+      let dir = Filename.dirname source in
+      let p = Wp_parameters.CoqProject.get () in
+      Command.pp_to_file (Printf.sprintf "%s/%s" dir p)
+        begin fun fmt ->
+          List.iter
+            (fun (dir,name) ->
+               if name = "" then
+                 Format.fprintf fmt "-R %s ''@\n" dir
+               else
+                 Format.fprintf fmt "-R %s %s@\n" dir name
+            ) includes ;
+          Format.fprintf fmt "-arg -noglob@\n" ;
+        end
+    
+    method private options =
       begin
         List.iter
           (fun (dir,name) ->
-             coq#add ["-I";dir] ;
-             if name <> "" then coq#add ["-as";name]
+             if name = "" then
+               coq#add ["-R";dir;""]
+             else
+               coq#add ["-R";dir;name]
           ) includes ;
         coq#add [ "-noglob" ] ;
       end
 
-
     method failed : 'a. 'a task =
       begin
         let name = Filename.basename source in
-        Wp_parameters.feedback "[Coq] '%s' compilation failed." name ;
-        if Sys.file_exists logout then
-          Log.print_on_output (fun fmt -> Command.pp_from_file fmt logout) ;
-        if Sys.file_exists logerr then
-          Log.print_on_output (fun fmt -> Command.pp_from_file fmt logerr) ;
+        Wp_parameters.feedback ~ontty:`Message "[Coq] '%s' compilation failed." name ;
+        if Wp_parameters.verbose_atleast 1 then
+          begin
+            ProverTask.pp_file ~message:"Coqc (stdout)" ~file:logout ;
+            ProverTask.pp_file ~message:"Coqc (stderr)" ~file:logerr ;
+          end ;
         Task.failed "Compilation of '%s' failed." name ;
       end
 
     method compile =
-      coq#set_command "coqc" ;
+      let cmd = Wp_parameters.CoqCompiler.get () in
+      coq#set_command cmd ;
+      coq#options ;
       coq#add [ source ] ;
       coq#timeout (coq_timeout ()) ;
-      Task.call 
+      Task.call
         (fun () ->
            if not (Wp_parameters.Check.get ()) then
              let name = Filename.basename source in
-             Wp_parameters.feedback "[Coq] Compiling '%s'." name) ()
-      >>= coq#run ~logout ~logerr 
+             Wp_parameters.feedback ~ontty:`Transient
+               "[Coq] Compiling '%s'." name) ()
+      >>= coq#run ~logout ~logerr
       >>= fun r ->
-      if r <> 0 then coq#failed 
+      if r = 127 then Task.failed "Command '%s' not found" cmd
+      else if r <> 0 then coq#failed
       else Task.return ()
 
     method check =
-      coq#set_command "coqc" ;
+      let cmd = Wp_parameters.CoqCompiler.get () in
+      coq#set_command cmd ;
+      coq#options ;
       coq#add [ source ] ;
       coq#timeout (coq_timeout ()) ;
       coq#run ~logout ~logerr () >>= function
+      | 127 -> Task.failed "Command '%s' not found" cmd
       | 0 -> Task.return true
       | 1 -> Task.return false
       | _ -> coq#failed
 
-    method coqide =
-      coq#set_command "coqide" ;
-      coq#add [ source ] ;
+    method script =
       let script = Wp_parameters.Script.get () in
-      if Sys.file_exists script then coq#add [ script ] ;
-      Task.sync coqidelock (coq#run ~logout ~logerr)
-
+      if Sys.file_exists script then coq#add [ script ]
+    
+    method coqide =
+      let coqide = Wp_parameters.CoqIde.get () in
+      coq#set_command coqide ;
+      if is_emacs coqide then
+        begin
+          coq#project ;
+          coq#script ;
+          coq#add [ source ] ;
+        end
+      else
+        begin
+          coq#options ;
+          coq#add [ source ] ;
+          coq#script ;
+        end ;
+      Task.sync coqide_lock (coq#run ~logout ~logerr)
   end
 
 (* -------------------------------------------------------------------------- *)
@@ -439,7 +485,7 @@ let shared_headers : (string,unit Task.shared) Hashtbl.t = Hashtbl.create 120
 
 let shared includes source =
   try Hashtbl.find shared_headers source
-  with Not_found -> 
+  with Not_found ->
     if !shared_demon then
       begin
         shared_demon := false ;
@@ -466,6 +512,8 @@ let rec compile_headers includes forced = function
 (* --- Coq Prover                                                         --- *)
 (* -------------------------------------------------------------------------- *)
 
+let ontty = `Feedback
+
 open Wpo
 
 type coq_wpo = {
@@ -474,32 +522,40 @@ type coq_wpo = {
   cw_goal : string ; (* filename for goal without proof *)
   cw_script : string ; (* filename for goal with proof script *)
   cw_headers : string list ; (* filename for libraries *)
-  cw_includes : included list ; (* -I ... -as ... *)
+  cw_includes : included list ; (* -R ... ... *)
 }
 
-let make_script ?(admitted=false) w script =
+let make_check w =
   Command.print_file w.cw_script
     begin fun fmt ->
       Command.pp_from_file fmt w.cw_goal ;
-      if admitted then
-        Format.fprintf fmt "Proof.@\nAdmitted.@\n@."
-      else
-        Format.fprintf fmt "Proof.@\n%sQed.@\n@." script ;
+      Format.fprintf fmt "Proof.@\nAdmitted.@\n@." ;
     end
 
-let try_script ?admitted w script =
-  make_script ?admitted w script ; 
+let make_script w script closing =
+  Command.print_file w.cw_script
+    begin fun fmt ->
+      Command.pp_from_file fmt w.cw_goal ;
+      Format.fprintf fmt "Proof.@\n%s%s@\n@." script closing ;
+    end
+
+let try_script w script closing =
+  make_script w script closing ;
+  (new runcoq w.cw_includes w.cw_script)#check
+
+let check_script w =
+  make_check w ;
   (new runcoq w.cw_includes w.cw_script)#check
 
 let rec try_hints w = function
   | [] -> Task.return false
-  | (kind,script) :: hints ->
-      Wp_parameters.feedback "[Coq] Goal %s : %s" w.cw_gid kind ;
-      try_script w script >>= fun succeed ->
+  | (kind,script,closing) :: hints ->
+      Wp_parameters.feedback ~ontty "[Coq] Goal %s : %s" w.cw_gid kind ;
+      try_script w script closing >>= fun succeed ->
       if succeed then
         let required,hints = WpPropId.prop_id_keys w.cw_pid in
         let keys = List.merge String.compare required hints in
-        Proof.add_script w.cw_gid keys script ; 
+        Proof.add_script w.cw_gid keys script closing ;
         Task.return true
       else
         try_hints w hints
@@ -507,46 +563,47 @@ let rec try_hints w = function
 let try_prove w =
   begin
     match Proof.script_for ~pid:w.cw_pid ~gid:w.cw_gid with
-    | Some script -> 
-        Wp_parameters.feedback "[Coq] Goal %s : Saved script" w.cw_gid ;
-        try_script w script
+    | Some (script,closing) ->
+        Wp_parameters.feedback ~ontty "[Coq] Goal %s : Saved script" w.cw_gid ;
+        try_script w script closing
     | None -> Task.return false
   end
   >>= fun succeed ->
-  if succeed then 
+  if succeed then
     Task.return true
   else
     try_hints w (Proof.hints_for ~pid:w.cw_pid)
 
 let try_coqide w =
-  let script = Proof.script_for_ide ~pid:w.cw_pid ~gid:w.cw_gid in
-  make_script w script ;
+  let script,closing = Proof.script_for_ide ~pid:w.cw_pid ~gid:w.cw_gid in
+  make_script w script closing ;
   (new runcoq w.cw_includes w.cw_script)#coqide >>= fun st ->
   if st = 0 then
     match Proof.parse_coqproof w.cw_script with
     | None ->
         Wp_parameters.feedback "[Coq] No proof found" ;
         Task.return false
-    | Some script ->
+    | Some(script,closing) ->
         if Proof.is_empty script then
           begin
-            Proof.delete_script w.cw_gid ; 
+            Proof.delete_script w.cw_gid ;
             Task.canceled () ;
           end
         else
           begin
             let req,hs = WpPropId.prop_id_keys w.cw_pid in
             let hints = List.merge String.compare req hs in
-            Proof.add_script w.cw_gid hints script ;
-            Wp_parameters.feedback "[Coq] Goal %s : Script" w.cw_gid ;
-            try_script w script
+            Proof.add_script w.cw_gid hints script closing ;
+            Wp_parameters.feedback ~ontty "[Coq] Goal %s : Script" w.cw_gid ;
+            try_script w script closing
           end
-  else 
-    Task.failed "[Coq] coqide exit with status %d" st
+  else if st = 127
+  then Task.failed "CoqIde command '%s' not found" (Wp_parameters.CoqIde.get ())
+  else Task.failed "CoqIde exits with status %d." st
 
 let prove_session ~mode w =
   begin
-    compile_headers w.cw_includes false w.cw_headers >>= 
+    compile_headers w.cw_includes false w.cw_headers >>=
     begin fun () ->
       match mode with
       | BatchMode -> try_prove w
@@ -556,7 +613,7 @@ let prove_session ~mode w =
             try_prove w >>> function
             | Task.Result true -> Task.return true
             | Task.Failed e -> Task.raised e
-            | Task.Canceled | Task.Timeout | Task.Result false -> try_coqide w
+            | Task.Canceled | Task.Timeout _ | Task.Result false -> try_coqide w
           end
     end
   end
@@ -566,10 +623,10 @@ exception Admitted_not_proved
 
 let check_session w =
   compile_headers w.cw_includes false w.cw_headers >>=
-  (fun () -> try_script ~admitted:true w "") >>> function
-  | Task.Result true -> Task.return VCS.unknown
+  (fun () -> check_script w) >>> function
+  | Task.Result true -> Task.return VCS.checked
   | Task.Failed e -> Task.raised e
-  | Task.Canceled | Task.Timeout | Task.Result false ->
+  | Task.Canceled | Task.Timeout _ | Task.Result false ->
       Task.raised Admitted_not_proved
 
 let prove_session ~mode w =
@@ -582,11 +639,11 @@ let prove_prop wpo ~mode ~axioms ~prop =
   let gid = wpo.po_gid in
   let model = wpo.po_model in
   let script = DISK.file_goal ~pid ~model ~prover:Coq in
-  let includes , headers , goal = 
+  let includes , headers , goal =
     Model.with_model model (assemble_goal ~pid axioms) prop
   in
   Wp_parameters.print_generated script;
-  if Wp_parameters.Generate.get () 
+  if Wp_parameters.Generate.get ()
   then Task.return VCS.no_result
   else prove_session ~mode {
       cw_pid = pid ;
@@ -597,14 +654,14 @@ let prove_prop wpo ~mode ~axioms ~prop =
       cw_includes = includes ;
     }
 
-let prove_annot wpo vcq ~mode = 
+let prove_annot wpo vcq ~mode =
   Task.todo
     begin fun () ->
       let prop = GOAL.compute_proof vcq.VC_Annot.goal in
       prove_prop wpo ~mode ~axioms:None ~prop
     end
 
-let prove_lemma wpo vca ~mode = 
+let prove_lemma wpo vca ~mode =
   Task.todo
     begin fun () ->
       let lemma = vca.VC_Lemma.lemma in
@@ -614,7 +671,7 @@ let prove_lemma wpo vca ~mode =
       prove_prop wpo ~mode ~axioms ~prop
     end
 
-let prove_check wpo vck ~mode = 
+let prove_check wpo vck ~mode =
   Task.todo
     begin fun () ->
       let axioms = None in

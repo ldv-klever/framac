@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,6 +33,6 @@ include module type of Int_Intervals_sig
 
 (*
 Local Variables:
-compile-command: "make -C ../.. byte"
+compile-command: "make -C ../../.. byte"
 End:
 *)

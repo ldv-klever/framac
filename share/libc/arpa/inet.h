@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -24,6 +24,10 @@
 #define FC_ARPA_INET
 #include "../inttypes.h"
 #include "../netinet/in.h"
+#include "../features.h"
+
+__BEGIN_DECLS
+
 /*@ assigns \result \from arg ; */
 uint32_t htonl(uint32_t arg);
 /*@ assigns \result \from arg ; */
@@ -46,5 +50,7 @@ const char  *inet_ntop(int af, const void *src, char *dst,
 /*@ assigns \result \from af,src[..];
   assigns ((char*)dst)[0..] \from af,src[0..] ; */
 int          inet_pton(int af, const char *src, void *dst);
+
+__END_DECLS
 
 #endif

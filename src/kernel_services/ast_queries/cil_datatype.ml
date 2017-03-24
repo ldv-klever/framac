@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,6 +19,15 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
+
+module type S_with_pretty = sig
+  include Datatype.S
+  val pretty_ref: (Format.formatter -> t -> unit) ref
+end
+module type S_with_collections_pretty = sig
+  include Datatype.S_with_collections
+  val pretty_ref: (Format.formatter -> t -> unit) ref
+end
 
 open Cil_types
 let (=?=) = Extlib.compare_basic
@@ -147,13 +156,14 @@ module Position =
       let internal_pretty_code = Datatype.undefined
       let pretty fmt pos =
         Format.fprintf fmt "%s:%d char %d"
-          pos.Lexing.pos_fname pos.Lexing.pos_lnum
+          (Filepath.pretty pos.Lexing.pos_fname) pos.Lexing.pos_lnum
           (pos.Lexing.pos_cnum - pos.Lexing.pos_bol)
       let varname _ = "pos"
      end)
 
 module Location = struct
   let unknown = Lexing.dummy_pos, Lexing.dummy_pos
+  let pretty_ref = ref (fun _ _ -> assert false)
   include Make_with_collections
     (struct
       type t = location
@@ -540,6 +550,7 @@ module Attribute=struct
      end)
 end
 
+(* Shared between the different modules for types. *)
 let pretty_typ_ref = ref (fun _ _ -> assert false)
 
 module Attributes=
@@ -548,6 +559,7 @@ module Attributes=
 
 module MakeTyp(M:sig val config: type_compare_config val name: string end) =
 struct
+  let pretty_ref = pretty_typ_ref
   include Make_with_collections
     (struct
       type t = typ
@@ -695,8 +707,6 @@ end
 module Varinfo = struct
   include Varinfo_Id
 
-  let pretty_vname fmt v = Format.pp_print_string fmt v.vname
-
   module Hptset = struct
     include Hptset.Make
       (Varinfo_Id)
@@ -729,8 +739,9 @@ module Compinfo =
       let varname = Datatype.undefined
      end)
 
-module Fieldinfo =
-  Make_with_collections
+module Fieldinfo = struct
+  let pretty_ref = Extlib.mk_fun "Cil_datatype.Fieldinfo.pretty_ref"
+  include  Make_with_collections
     (struct
       type t = fieldinfo
       let name = "fieldinfo"
@@ -765,9 +776,10 @@ module Fieldinfo =
       let equal f1 f2 = (fid f1) = (fid f2)
       let copy = Datatype.undefined
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty fmt f = !pretty_ref fmt f
       let varname = Datatype.undefined
      end)
+end
 
 module Enuminfo =
   Make_with_collections
@@ -828,13 +840,17 @@ let compare_constant c1 c2 = match c1, c2 with
  
 let hash_const c =
   match c with
-      CInt64 _ | CStr _ | CWStr _ | CChr _ | CReal _  -> Hashtbl.hash c
+    | CStr _ | CWStr _ | CChr _ -> Hashtbl.hash c
+    | CReal (fn,fk,_) -> Hashtbl.hash fn + Hashtbl.hash fk
+    | CInt64 (n,k,_) -> Integer.hash n + Hashtbl.hash k
     | CEnum ei -> 95 + Enumitem.hash ei
 
 module StructEq =
   struct
     let rec compare_exp e1 e2 =
       match e1.enode, e2.enode with
+        | Const (CStr _), Const (CStr _)
+        | Const (CWStr _), Const (CWStr _) -> compare e1.eid e2.eid
         | Const c1, Const c2 -> compare_constant c1 c2
         | Const _, _ -> 1
         | _, Const _ -> -1
@@ -1232,10 +1248,9 @@ module Logic_info =
       let hash i = Logic_var.hash i.l_var_info
       let copy = Datatype.undefined
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty fmt f = Logic_var.pretty fmt f.l_var_info
       let varname _ = "logic_varinfo"
      end)
-
 
 let rec compare_logic_type config v1 v2 =
   let rank = function
@@ -1281,10 +1296,13 @@ let rec hash_logic_type config = function
   | Larrow (_,t) -> 41 * hash_logic_type config t
 
 
+(* Shared between the different modules for logic types *)
 let pretty_logic_type_ref = ref (fun _ _ -> assert false)
+
 module Make_Logic_type
-  (M: sig val config: type_compare_config val name: string end) =
-  Make_with_collections(
+  (M: sig val config: type_compare_config val name: string end) = struct
+  let pretty_ref = pretty_logic_type_ref
+  include Make_with_collections(
     struct
       include Datatype.Undefined
       type t = logic_type
@@ -1294,10 +1312,11 @@ module Make_Logic_type
       let compare = compare_logic_type M.config
       let equal = Datatype.from_compare
       let hash = hash_logic_type M.config
-        
+
       let pretty fmt t = !pretty_logic_type_ref fmt t
         
     end)
+end
 
 module Logic_type =
   Make_Logic_type(
@@ -1346,7 +1365,7 @@ module Model_info = struct
       let hash mi = Hashtbl.hash mi.mi_name + 3 * Typ.hash mi.mi_base_type
       let copy mi =
         {
-          mi_name = String.copy mi.mi_name;
+          mi_name = mi.mi_name;
           mi_base_type = Typ.copy mi.mi_base_type;
           mi_field_type = Logic_type.copy mi.mi_field_type;
           mi_decl = Location.copy mi.mi_decl;
@@ -1359,12 +1378,20 @@ end
 (* --- Comparison Over Terms                                              --- *)
 (* -------------------------------------------------------------------------- *)
 
+(* @return [true] is the given logic real represents an exact float *)
+let is_exact_float r =
+  Pervasives.classify_float r.r_upper = FP_normal &&
+  Datatype.Float.equal r.r_upper r.r_lower
+
 let compare_logic_constant c1 c2 = match c1,c2 with
   | Integer (i1,_), Integer(i2,_) -> Integer.compare i1 i2
   | LStr s1, LStr s2 -> Datatype.String.compare s1 s2
   | LWStr s1, LWStr s2 -> compare_list Datatype.Int64.compare s1 s2
   | LChr c1, LChr c2 -> Datatype.Char.compare c1 c2
-  | LReal r1, LReal r2 -> Datatype.String.compare r1.r_literal r2.r_literal
+  | LReal r1, LReal r2 ->
+    if is_exact_float r1 && is_exact_float r2
+    then Datatype.Float.compare r1.r_lower r2.r_lower
+    else Datatype.String.compare r1.r_literal r2.r_literal
   | LEnum e1, LEnum e2 -> Enumitem.compare e1 e2
   | Integer _,(LStr _|LWStr _ |LChr _|LReal _|LEnum _) -> 1
   | LStr _ ,(LWStr _ |LChr _|LReal _|LEnum _) -> 1
@@ -1519,15 +1546,16 @@ and compare_bound b1 b2 = match b1, b2 with
 
 
 exception StopRecursion of int
-let _hash_const c =
-  match c with
-      CInt64 _ | CStr _ | CWStr _ | CChr _ | CReal _  -> Hashtbl.hash c
-    | CEnum ei -> 95 + Enumitem.hash ei
 
-let hash_logic_constant c =
-  match c with
-      Integer _ | LStr _ | LWStr _ | LChr _ | LReal _  -> Hashtbl.hash c
-    | LEnum ei -> 95 + Enumitem.hash ei
+let hash_logic_constant = function
+  | LStr s -> Datatype.String.hash s
+  | LWStr l -> hash_list Datatype.Int64.hash l
+  | LChr c  -> Datatype.Char.hash c
+  | Integer(n, _) -> Integer.hash n
+  | LReal r ->
+    if is_exact_float r then Datatype.Float.hash r.r_lower
+    else Datatype.String.hash r.r_literal
+  | LEnum ei -> 95 + Enumitem.hash ei
 
 let hash_label x =
   match x with
@@ -1783,8 +1811,9 @@ module Term_lval = struct
   let pretty fmt t = !pretty_ref fmt t
 end
 
-module Logic_label =
-  Make_with_collections
+module Logic_label = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
         type t = logic_label
         let name = "Logic_label"
@@ -1796,9 +1825,10 @@ module Logic_label =
         let copy = Datatype.undefined
         let hash = hash_label
         let internal_pretty_code = Datatype.undefined
-        let pretty = Datatype.undefined
+        let pretty fmt l = !pretty_ref fmt l
         let varname _ = "logic_label"
-     end)
+    end)
+end
 
 module Global_annotation = struct
 
@@ -1904,9 +1934,12 @@ module Global = struct
           | GEnumTagDecl(t1,_), GEnumTagDecl(t2,_) -> Enuminfo.compare t1 t2
           | GEnumTagDecl _, _ -> -1
           | _, GEnumTagDecl _ -> 1
-          | GVarDecl (_,v1,_), GVarDecl(_,v2,_) -> Varinfo.compare v1 v2
+          | GVarDecl (v1,_), GVarDecl(v2,_) -> Varinfo.compare v1 v2
           | GVarDecl _,_ -> -1
           | _,GVarDecl _ -> 1
+          | GFunDecl (_,v1,_), GFunDecl(_,v2,_) -> Varinfo.compare v1 v2
+          | GFunDecl _,_ -> -1
+          | _,GFunDecl _ -> 1
           | GVar (v1,_,_), GVar (v2,_,_) -> Varinfo.compare v1 v2
           | GVar _,_ -> -1
           | _, GVar _ -> 1
@@ -1932,13 +1965,14 @@ module Global = struct
         | GCompTagDecl (t,_) -> 5 * Compinfo.hash t
         | GEnumTag (t,_) -> 7 * Enuminfo.hash t
         | GEnumTagDecl(t,_) -> 11 * Enuminfo.hash t
-        | GVarDecl (_,v,_) -> 13 * Varinfo.hash v
+        | GVarDecl (v,_) -> 13 * Varinfo.hash v
         | GVar (v,_,_) -> 17 * Varinfo.hash v
         | GFun (f,_) -> 19 * Varinfo.hash f.svar
         | GAsm (_,l) -> 23 * Location.hash l
         | GText t -> 29 * Datatype.String.hash t
         | GAnnot (g,_) -> 31 * Global_annotation.hash g
         | GPragma(_,l) -> 37 * Location.hash l
+        | GFunDecl (_,v,_) -> 43 * Varinfo.hash v
 
       let copy = Datatype.undefined
      end)
@@ -1950,7 +1984,8 @@ module Global = struct
     | GEnumTagDecl(_, l)
     | GCompTag(_, l)
     | GCompTagDecl(_, l)
-    | GVarDecl(_, _, l)
+    | GVarDecl( _, l)
+    | GFunDecl(_, _, l)
     | GVar(_, _, l)
     | GAsm(_, l)
     | GPragma(_, l)
@@ -1999,7 +2034,6 @@ module Kf = struct
 			   sallstmts = [];
 			   sspec = empty_spec },
 			 loc);
-		      return_stmt = None;
 		      spec = empty_spec } :: acc)
 		acc
 		Varinfo.reprs)
@@ -2059,21 +2093,23 @@ module Code_annotation = struct
      end)
 
   let loc ca = match ca.annot_content with
-    | AAssert(_,{loc=loc})
-    | AInvariant(_,_,{loc=loc})
+    | AAssert(_,{pred_loc=loc})
+    | AInvariant(_,_,{pred_loc=loc})
     | AVariant({term_loc=loc},_) -> Some loc
-    | AAssigns _ | AAllocation _ | APragma _
+    | AAssigns _ | AAllocation _ | APragma _ | AExtended _
     | AStmtSpec _ -> None
 
 end
 
-module Predicate_named = 
+module Predicate =
   Make
     (struct
-      type t = predicate named
-      let name = "Predicate_named"
-      let reprs = 
-	[ { name = [ "" ]; loc = Location.unknown; content = Pfalse } ]
+      type t = predicate
+      let name = "Predicate"
+      let reprs =
+        [ { pred_name = [ "" ];
+            pred_loc = Location.unknown;
+            pred_content = Pfalse } ]
       let internal_pretty_code = Datatype.undefined
       let pretty = Datatype.undefined
       let varname _ = "p"
@@ -2085,10 +2121,7 @@ module Identified_predicate =
         type t = identified_predicate
         let name = "Identified_predicate"
         let reprs =
-          [ { ip_name = [ "" ]; 
-	      ip_loc = Location.unknown; 
-	      ip_content = Pfalse; 
-	      ip_id = -1} ]
+          [ { ip_content = List.hd Predicate.reprs; ip_id = -1} ]
         let compare x y = Extlib.compare_basic x.ip_id y.ip_id
         let equal x y = x.ip_id = y.ip_id
         let copy = Datatype.undefined
@@ -2112,7 +2145,7 @@ module Funbehavior =
 	       List.map (fun x -> Normal, x) Identified_predicate.reprs;
 	     b_assigns = WritesAny;
 	     b_allocation = FreeAllocAny;
-	     b_extended = [ "toto", 4, Identified_predicate.reprs ]; } ]
+	     b_extended = [ "toto", Ext_preds Predicate.reprs ]; } ]
       let mem_project = Datatype.never_any_project
      end)
 
@@ -2220,6 +2253,6 @@ let clear_caches () = List.iter (fun f -> f ()) !clear_caches
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -117,7 +117,7 @@ let compute_using_prototype_for_state state kf =
 	      let acc = Function_Froms.Memory.add_binding ~exact:true
 		acc sure_out_zone input_deps in
 	      acc
-            with Invalid_argument "not an lvalue" ->
+            with Db.Properties.Interp.No_conversion ->
               From_parameters.result
                 ~once:true ~current:true "Unable to extract assigns in %a"
                 Kernel_function.pretty kf;
@@ -140,7 +140,7 @@ let compute_using_prototype_for_state state kf =
                                            ~start:base ~size ~m:acc inputs_deps)
                 )
                 acc coffs
-            with Invalid_argument "not an lvalue" | SizeOfError _ ->
+            with Db.Properties.Interp.No_conversion | SizeOfError _ ->
               From_parameters.result  ~once:true ~current:true
                 "Unable to extract a proper offset. \
                  Using FROM for the whole \\result";
@@ -178,10 +178,9 @@ module ZoneStmtMap = struct
     (struct let l = [Ast.self] end)
 
   let join =
-    let decide_none _base z = z in
-    let decide_some z1 z2 = Zone.join z1 z2 in
-    symmetric_merge ~cache:("From_compute.ZoneStmtMap.join", ())
-      ~empty_neutral:true ~decide_none ~decide_some
+    let decide _k z1 z2 = Zone.join z1 z2 in
+    join ~cache:(Hptmap_sig.PersistentCache "From_compute.ZoneStmtMap.join")
+      ~symmetric:true ~idempotent:true ~decide
 end
 
 module Make (To_Use: To_Use) =
@@ -220,7 +219,7 @@ struct
     { data = data; indirect = ind }
 
 
-  (** Bind all the given variables to [Assigned \from \nothing]. This function
+  (** Bind all the variables of [b] to [Assigned \from \nothing]. This function
       is always called on local variables. We do *not* want to bind a local
       variable [v] to Unassigned, as otherwise we could get some dependencies
       that refer to [v] (when [v] is not guaranteed to be always assigned, or
@@ -229,14 +228,24 @@ struct
       "uninitalized",  which represents an indefinite part of the stack). We
       do not attemps to track this "uninitalized" information in From, as this
       is redundant with the work done by Value -- hence the use of [\nothing].*)
-  let bind_locals vars m =
+  let bind_locals m b =
     let aux_local acc vi =
+      Cil.CurrentLoc.set vi.vdecl;
       (* Consider that local are initialized to a constant value *)
       Function_Froms.Memory.bind_var vi Function_Froms.Deps.bottom acc
     in
-    if Function_Froms.Memory.is_bottom m
-    then m
-    else List.fold_left aux_local m vars
+    let loc = Cil.CurrentLoc.get () in
+
+    let r = List.fold_left aux_local m b.blocals in
+    Cil.CurrentLoc.set loc;
+    r
+
+  let unbind_locals m b =
+    let aux_local acc vi =
+      Function_Froms.Memory.unbind_var vi acc
+    in
+    List.fold_left aux_local m b.blocals
+
 
   let find stmt deps_tbl expr =
     let state = To_Use.get_value_state stmt in
@@ -323,6 +332,7 @@ struct
       included && included'
 
     let join old new_ = fst (join_and_is_included old new_)
+    let is_included old new_ = snd (join_and_is_included old new_)
 
     (** Handle an assignement [lv = ...], the dependencies of the right-hand
         side being stored in [deps_right]. *)
@@ -388,7 +398,7 @@ struct
                          Function_Froms.Memory.bind_var
                          vi from !state_with_formals;
                      ) formal_args args_froms;
-                    with Invalid_argument "List.iter2" ->
+                    with Invalid_argument _ ->
                       From_parameters.warning ~once:true ~current:true
                         "variadic call detected. Using only %d argument(s)."
                         (min
@@ -516,14 +526,12 @@ struct
     let doEdge s succ d =
       if Db.Value.is_reachable (To_Use.get_value_state succ)
       then
-	let d = match Kernel_function.blocks_closed_by_edge s succ with
-          | [] -> d
-          | closed_blocks ->
-            let vars =
-              List.fold_left (fun x y -> y.blocals @ x) [] closed_blocks
-            in
-            { d with deps_table = bind_locals vars d.deps_table }
-	in d
+        let dt = d.deps_table in
+        let opened = Kernel_function.blocks_opened_by_edge s succ in
+        let closed = Kernel_function.blocks_closed_by_edge s succ in
+        let dt = List.fold_left bind_locals dt opened in
+        let dt = List.fold_left unbind_locals dt closed in
+        { d with deps_table = dt }
       else 
 	bottom_from
 
@@ -580,7 +588,7 @@ struct
           Stack.push kf call_stack;
           let state =
             { empty_from with
-                deps_table = bind_locals f.slocals empty_from.deps_table }
+                deps_table = bind_locals empty_from.deps_table f.sbody }
           in
 	  let module Fenv =
                 (val Dataflows.function_env kf: Dataflows.FUNCTION_ENV)
@@ -641,7 +649,7 @@ struct
       (let s = ref "" in
        Stack.iter
          (fun kf ->
-           s := !s^" <-"^(Pretty_utils.sfprintf "%a" Kernel_function.pretty kf))
+           s := !s^" <-"^(Format.asprintf "%a" Kernel_function.pretty kf))
          call_stack;
        !s);
     !Db.progress ();
@@ -665,6 +673,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

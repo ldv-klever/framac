@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -67,7 +67,7 @@ struct
       method! vlogic_var_decl _ = assert false
       method! vquantifiers _ = assert false
       method! vpredicate _ = assert false
-      method! vpredicate_named _ = assert false
+      method! vpredicate_node _ = assert false
       method! vbehavior _ = assert false
       method! vannotation _ = assert false
     end
@@ -131,7 +131,7 @@ end
 (** Topologically propagate user marks to callers in whole project *)
 let topologic_propagation project =
   !Db.Slicing.Request.apply_all_internal project;
-  !Db.Semantic_Callgraph.topologically_iter_on_functions
+  Callgraph.Uses.iter_in_rev_order
     (fun kf ->
        SlicingParameters.debug ~level:3
          "doing topologic propagation for function: %a"
@@ -290,13 +290,13 @@ let select_stmt_zone set mark zone ~before ki kf =
 (** Registered as a slicing selection function:
     Add a selection of data relative to a statement.
     Variables of [lval_str] string are bounded
-    relatively to the scope of the statement [~scope].
+    relatively to the whole scope of the function [kf].
     The interpretation of the address of the lvalues is
     done just before the execution of the statement [~eval].
     The selection preserve the value of these lvalues before
     or after (c.f. boolean [~before]) the statement [ki].
     Note: add also a transparent selection on the whole statement. *)
-let select_stmt_lval set mark lval_str ~before ki ~scope ~eval kf =
+let select_stmt_lval set mark lval_str ~before ki ~eval kf =
   assert (Db.Value.is_computed ());
   if Datatype.String.Set.is_empty lval_str
   then set
@@ -304,7 +304,7 @@ let select_stmt_lval set mark lval_str ~before ki ~scope ~eval kf =
     let zone =
       Datatype.String.Set.fold
         (fun lval_str acc ->
-           let lval_term = !Db.Properties.Interp.lval kf scope lval_str in
+           let lval_term = !Db.Properties.Interp.term_lval kf lval_str in
            let lval =
              !Db.Properties.Interp.term_lval_to_lval ~result:None lval_term
            in
@@ -320,17 +320,17 @@ let select_stmt_lval set mark lval_str ~before ki ~scope ~eval kf =
     select_stmt_zone set mark zone ~before ki kf
 
 (** Add a selection of data relative to read/write accesses.
-    Interpret the [~rd] lvalues and the [~wr] lvalues from [~scope], [~eval]
+    Interpret the [~rd] lvalues and the [~wr] lvalues from [~eval]
     statements of [kf]:
     - Variables of [lval_str] string are bounded
-      relatively to the scope of the statement [~scope].
+      relatively to the whole scope of the function [kf].
     - The interpretation of the address of the lvalues is
       done just before the execution of the statement [~eval].
     Find read/write accesses from the whole project if [ki_opt]=None.
     Otherwise, restrict the research among the direct effect of [ki_opt] statement.
     i.e. when [ki_opt] is a call, the selection doesn't look at the assigns clause
     of a call. *)
-let select_lval_rw set mark ~rd ~wr ~scope ~eval kf ki_opt=
+let select_lval_rw set mark ~rd ~wr ~eval kf ki_opt=
   assert (Db.Value.is_computed ());
    let zone_option ~for_writing lval_str =
     if Datatype.String.Set.is_empty lval_str
@@ -339,7 +339,7 @@ let select_lval_rw set mark ~rd ~wr ~scope ~eval kf ki_opt=
       let zone =
         Datatype.String.Set.fold
           (fun lval_str acc ->
-             let lval_term = !Db.Properties.Interp.lval kf scope lval_str in
+             let lval_term = !Db.Properties.Interp.term_lval kf lval_str in
              let lval = !Db.Properties.Interp.term_lval_to_lval ~result:None lval_term in
              let state = Db.Value.get_stmt_state eval in
              let _deps, zone, _exact =
@@ -412,7 +412,7 @@ let select_lval_rw set mark ~rd ~wr ~scope ~eval kf ki_opt=
 (** Registered as a slicing selection function:
     Add a selection of rw accesses to lvalues relative to a statement.
     Variables of [~rd] and [~wr] string are bounded
-    relatively to the scope of the statement [~scope].
+    relatively to the whole scope of the function [kf].
     The interpretation of the address of the lvalues is
     done just before the execution of the statement [~eval].
     The selection preserve the [~rd] and ~[wr] accesses
@@ -420,8 +420,8 @@ let select_lval_rw set mark ~rd ~wr ~scope ~eval kf ki_opt=
     i.e. when [ki] is a call, the selection doesn't look at
     the assigns clause of the called function.
     Note: add also a transparent selection on the whole statement.*)
-let select_stmt_lval_rw set mark ~rd ~wr ki ~scope ~eval kf =
-  select_lval_rw set mark ~rd ~wr ~scope ~eval kf (Some ki)
+let select_stmt_lval_rw set mark ~rd ~wr ki ~eval kf =
+  select_lval_rw set mark ~rd ~wr ~eval kf (Some ki)
 
 (** Add a selection of the declaration of [vi]. *)
 let select_decl_var set mark vi kf =
@@ -531,7 +531,7 @@ let select_func_annots set mark ~spare ~threat ~user_assert ~slicing_pragma ~loo
 (** Registered as a slicing selection function:
     Add selection of function ouputs.
     Variables of [lval_str] string are bounded
-    relatively to the scope of the first statement of [kf].
+    relatively to the whole scope of the function [kf].
     The interpretation of the address of the lvalues is
     done just before the execution of the first statement [kf].
     The selection preserve the value of these lvalues before
@@ -545,22 +545,22 @@ let select_func_lval set mark lval_str kf =
       set mark lval_str
       ~before:false
       (Kernel_function.find_return kf)
-      ~scope:ki_scope_eval
       ~eval:ki_scope_eval
       kf
 
 (** Registered as a slicing selection function:
     Add a selection of data relative to read/write accesses.
-    Interpret the [~rd] lvalues and the [~wr] lvalues from [~scope], [~eval] statements of [kf]:
+    Interpret the [~rd] lvalues and the [~wr] lvalues from [~eval] 
+    statements of [kf]:
     - Variables of [lval_str] string are bounded
-      relatively to the scope of the statement [~scope].
+      relatively to the whole scope of the function [kf].
     - The interpretation of the address of the lvalues is
       done just before the execution of the statement [~eval].
     Find read/write accesses from the whole project if [ki_opt]=None. *)
-let select_func_lval_rw set mark ~rd ~wr ~scope ~eval kf =
+let select_func_lval_rw set mark ~rd ~wr ~eval kf =
   if Datatype.String.Set.is_empty rd && Datatype.String.Set.is_empty wr
   then set
-  else select_lval_rw set mark ~rd ~wr ~scope ~eval kf None
+  else select_lval_rw set mark ~rd ~wr ~eval kf None
 
 (** Registered as a slicing request function:
     Add selections to all concerned slices, as slicing requests and apply them,
@@ -667,7 +667,7 @@ let add_persistent_cmdline project =
           selection := !Db.Slicing.Select.select_func_lval_rw !selection top_mark
             ~rd:(SlicingParameters.Select.RdAccess.get ())
             ~wr:(SlicingParameters.Select.WrAccess.get ())
-            ~scope:ki_scope_eval ~eval:ki_scope_eval kf ;
+            ~eval:ki_scope_eval kf ;
           SlicingParameters.Select.Value.clear () ;
           SlicingParameters.Select.RdAccess.clear () ;
           SlicingParameters.Select.WrAccess.clear () ;
@@ -691,6 +691,6 @@ let apply_all project ~propagate_to_callers =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -3,15 +3,15 @@
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
 [value] Initial state computed
-[value] Values of globals at initialization
+[value:initial-state] Values of globals at initialization
   
-tests/misc/bts1201.i:5:[value] Assertion got status valid.
+tests/misc/bts1201.i:5:[value] assertion got status valid.
 [value] Recording results for main
 [value] done for function main
 [value] Analyzing a complete application starting at main2
 [value] Computing initial state
 [value] Initial state computed
-[value] Values of globals at initialization
+[value:initial-state] Values of globals at initialization
   
 [value] Recording results for main2
 [value] done for function main2

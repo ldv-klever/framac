@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -47,6 +47,8 @@ type language =
 (* --- Prover Names                                                       --- *)
 (* -------------------------------------------------------------------------- *)
 
+module Pmap : Map.S with type key = prover
+
 val language_of_prover : prover -> language
 val language_of_name : string -> language option
 val name_of_prover : prover -> string
@@ -71,13 +73,14 @@ type verdict =
   | Timeout
   | Stepout
   | Computing of (unit -> unit) (* kill function *)
+  | Checked
   | Valid
   | Failed
 
 type result = {
-  verdict : verdict ; 
+  verdict : verdict ;
   solver_time : float ;
-  prover_time : float ; 
+  prover_time : float ;
   prover_steps : int ;
   prover_errpos : Lexing.position option ;
   prover_errmsg : string ;
@@ -85,12 +88,18 @@ type result = {
 
 val no_result : result
 val valid : result
+val checked : result
 val invalid : result
 val unknown : result
-val timeout : result
 val stepout : result
+val timeout : int -> result
 val computing : (unit -> unit) -> result
 val failed : ?pos:Lexing.position -> string -> result
+val kfailed : ?pos:Lexing.position -> ('a,Format.formatter,unit,result) format4 -> 'a
 val result : ?solver:float -> ?time:float -> ?steps:int -> verdict -> result
 
+val is_verdict : result -> bool
+
 val pp_result : Format.formatter -> result -> unit
+
+val compare : result -> result -> int (* best is minimal *)

@@ -64,7 +64,9 @@ let arch_float_endianness = (Obj.magic 1.23530711838574823e-307 : string).[1];;
 
 let intext_magic_number = "\x84\x95\xA6\xBE";;
 
-let ill_formed () = failwith "input_value: ill-formed message"
+let ill_formed reason =
+  let msg = "input_value: ill-formed message" in
+  failwith (if false(*debug*) then Printf.sprintf "%s (%s)" msg reason else msg)
 
 let zeroword = Obj.field (Obj.repr 0L) 0;;
 let null = zeroword;;
@@ -166,12 +168,12 @@ let readheader64 =
 ;;
 
 let readblock ch dest ofs len =
-  unsafe_really_input ch (Obj.obj dest : string) ofs len
+  unsafe_really_input ch (Obj.obj dest : bytes) ofs len
 ;;
 
 let readblock_rev ch dest ofs len =
   for i = len - 1 + ofs downto ofs do
-    String.unsafe_set (Obj.obj dest : string) i (input_char ch);
+    Bytes.unsafe_set (Obj.obj dest : bytes) i (input_char ch);
   done
 ;;
 
@@ -235,29 +237,29 @@ let check_const ch s msg =
 (* Auxiliary functions for handling Custom blocks. *)
 
 let buflen = 100;;
-let buf = String.create buflen;;
+let buf = Bytes.create buflen;;
 let bufs = ref [];;
 let read_customident ch =
   let rec loop i =
     let c = input_char ch in
     if c = '\000' then begin
       if !bufs = []
-      then String.sub buf 0 i
+      then Bytes.sub buf 0 i
       else begin
-        let res = String.concat "" (List.rev (String.sub buf 0 i :: !bufs)) in
+        let res = Bytes.concat Bytes.empty (List.rev (Bytes.sub buf 0 i :: !bufs)) in
         bufs := [];
         res
       end
     end else if i >= buflen then begin
       assert (i = buflen);
-      bufs := String.copy buf :: !bufs;
+      bufs := Bytes.copy buf :: !bufs;
       loop 0
     end else begin
-      buf.[i] <- c;
+      Bytes.set buf i c;
       loop (i + 1)
     end
   in
-  loop 0
+  loop 0 |> Bytes.to_string
 ;;
 
 let custom_table =
@@ -445,8 +447,7 @@ let input_val ch t =
           read_string stk t len
 
       | _ ->
-(*	  Format.printf "code %x@." code;*)
-	  ill_formed ()
+	  ill_formed (Printf.sprintf "code %x" code)
     in
     match t with
     | Dynamic f ->
@@ -464,16 +465,16 @@ let input_val ch t =
     | Abstract -> ()
     | Structure (Dependent_pair(_, _)) ->
 	if tag >= 1 || size != 2 then begin
-(*	  Format.printf "dep couple@.";*)
-	  ill_formed ()
+	  ill_formed "dep pair"
 	end
     | Structure (Sum a) ->
 	if tag >= Array.length a || size != Array.length a.(tag)
-	then begin
-(*structure sum tag=0 size=2 len=1 len-tag=1*)
-(*	  Format.printf "structure sum tag=%d size=%d len=%d len-tag=%d@."
-	    tag size (Array.length a) (Array.length a.(tag));*)
-	  ill_formed ()
+        then begin
+          let s = Format.sprintf
+              "structure sum tag=%d size=%d len=%d len-tag=%d"
+	      tag size (Array.length a) (Array.length a.(tag))
+          in
+	  ill_formed s
 	end
     | Structure (Array _) -> ()
     | _ -> assert false
@@ -496,7 +497,7 @@ let input_val ch t =
     end
 
   and read_string stk t len =
-    let v = Obj.repr (String.create len) in
+    let v = Obj.repr (Bytes.create len) in
     readblock ch v 0 len;
     let dest = !ctr in
     ctr := dest + 1;
@@ -518,8 +519,7 @@ let input_val ch t =
 
   and read_shared stk ofs =
     if ofs <= 0 || ofs > !ctr then begin
-      (*Format.printf "shared@.";*)
-      ill_formed ()
+      ill_formed "shared"
     end;
     let v = LA.get tbl (!ctr - ofs) in
     if v == null then begin
@@ -667,6 +667,16 @@ register_custom "_n"
   )
 ;;
 
+let ge_ocaml ~major ?(minor=0) ?(rev=0) () =
+  let test x y z =
+    x > major || (x = major && (y > minor || y = minor && z >= rev))
+  in
+  Scanf.sscanf Sys.ocaml_version "%d.%d.%d" test
+
+let ge_ocaml_4 = ge_ocaml ~major:4 ()
+
+let ge_ocaml_403 = ge_ocaml ~major:4 ~minor:3 ()
+
 let t_unit = Abstract;;
 let t_int = Abstract;;
 let t_string = Abstract;;
@@ -683,7 +693,13 @@ let t_ref a = t_record [| a |];;
 let t_option = t_ref;;
 
 let t_array a = Structure (Array a)
-let t_queue a = t_record [| t_int; t_list a |]
+let t_queue a =
+  if ge_ocaml_403 then
+    (* queue cells are only a list-like structure, but there is
+       no distinguishable difference at this level. *)
+    t_record [| t_int; t_list a; t_list a |]
+  else
+    t_record [| t_int; t_list a |]
 
 (**** Hash tables ****)
 
@@ -701,11 +717,6 @@ and ('a, 'b) _caml_hashtable_4_ =
 and ('a, 'b) _bucketlist =
     Empty
   | Cons of 'a * 'b * ('a, 'b) _bucketlist
-
-let ge_ocaml_4 =
-  let major, _minor =
-    Scanf.sscanf Sys.ocaml_version "%d.%d" (fun ma mi -> ma, mi) in
-  major >= 4
 
 let t_hashtbl bucket =
   if not (ge_ocaml_4) then

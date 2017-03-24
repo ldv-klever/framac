@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -39,7 +39,7 @@ val if_then : stmt -> tag
 val if_else : stmt -> tag
 val switch_cases : stmt -> int64 list -> tag
 val switch_default : stmt -> tag
-val cases : identified_predicate -> (tag * predicate named) list option
+val cases : identified_predicate -> (tag * predicate) list option
 val call : stmt -> kernel_function -> tag
 
 type 'a t
@@ -49,7 +49,7 @@ val singleton : 'a -> 'a t
 val group : tag -> ('a list -> 'a) -> 'a t -> 'a t
 
 val union : ('a -> 'a -> 'a) -> 'a t -> 'a t -> 'a t
-val merge : 
+val merge :
   left:('a -> 'c) ->
   both:('a -> 'b -> 'c) ->
   right:('b -> 'c) ->

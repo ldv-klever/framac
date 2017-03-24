@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,12 +27,23 @@ module type S = sig
     val contains_single_elt: t -> elt option
     val intersects: t -> t -> bool
 
+    type action = Neutral | Absorbing | Traversing of (elt -> bool)
+
+    val merge :
+      cache:Hptmap_sig.cache_type ->
+      symmetric:bool ->
+      idempotent:bool ->
+      decide_both:(elt -> bool) ->
+      decide_left:action ->
+      decide_right:action ->
+      t -> t -> t
+
     type 'a shape
     val shape: t -> unit shape
     val from_shape: 'a shape -> t
 
     val fold2_join_heterogeneous:
-      cache:Hptmap.cache_type ->
+      cache:Hptmap_sig.cache_type ->
       empty_left:('a shape -> 'b) ->
       empty_right:(t -> 'b) ->
       both:(elt -> 'a -> 'b) ->
@@ -42,6 +53,8 @@ module type S = sig
       'b
 
     val clear_caches: unit -> unit
+
+    val pretty_debug: t Pretty_utils.formatter
 end
 
 module Make(X: Hptmap.Id_Datatype)
@@ -54,15 +67,16 @@ module Make(X: Hptmap.Id_Datatype)
   = struct
 
   type elt = X.t
-  type 'a shape = 'a Hptmap.Shape(X).t
 
-  include
+  module M =
     Hptmap.Make
     (X)
     (struct include Datatype.Unit let pretty_debug = pretty end)
     (Hptmap.Comp_unused)
     (struct let v = List.map (List.map (fun k -> k, ())) Initial_Values.v end)
     (Datatype_deps)
+
+  include M
 
   let add k s = add k () s
   let iter f s = iter (fun x () -> f x) s
@@ -87,16 +101,13 @@ module Make(X: Hptmap.Id_Datatype)
 
   let find x s = find_key x s
 
-  let diff s1 s2 =
-    fold (fun x acc -> if mem x s2 then acc else add x acc) s1 empty
-
   let inter =
     let name = Format.sprintf "Hptset(%s).inter" X.name in
-    let res = Some () in
-    let aux =
-      symmetric_inter ~cache:(name, ()) ~decide_some:(fun _ () () -> res)
-    in
-    fun m1 m2 -> aux m1 m2
+    inter
+      ~cache:(Hptmap_sig.PersistentCache name)
+      ~symmetric:true
+      ~idempotent:true
+      ~decide:(fun _ () () -> Some ())
 
   (* Test that implementation of function inter in Hptmap is correct *)
   let _test_inter s1 s2 =
@@ -111,11 +122,8 @@ module Make(X: Hptmap.Id_Datatype)
 
   let union =
     let name = Format.sprintf "Hptset(%s).union" X.name in
-    symmetric_merge
-      ~cache:(name, ())
-      ~empty_neutral:true
-      ~decide_none:(fun _k () -> ())
-      ~decide_some:(fun () () -> ())
+    join ~cache:(Hptmap_sig.PersistentCache name) ~decide:(fun _ () () -> ())
+      ~symmetric:true ~idempotent:true
 
   let singleton x = add x empty
 
@@ -125,7 +133,7 @@ module Make(X: Hptmap.Id_Datatype)
 
   let subset =
     let name = Format.sprintf "Hptset(%s).subset" X.name in
-    binary_predicate (Hptmap.PersistentCache name) UniversalPredicate
+    binary_predicate (Hptmap_sig.PersistentCache name) UniversalPredicate
       ~decide_fast:decide_fast_inclusion
       ~decide_fst:(fun _ () -> false)
       ~decide_snd:(fun _ () -> true)
@@ -143,15 +151,40 @@ module Make(X: Hptmap.Id_Datatype)
     l, pres <> None, r
 
   let intersects =
-    let name = Pretty_utils.sfprintf "Hptset(%s).intersects" X.name in
+    let name = Format.asprintf "Hptset(%s).intersects" X.name in
     symmetric_binary_predicate
-      (Hptmap.PersistentCache name)
+      (Hptmap_sig.PersistentCache name)
       ExistentialPredicate
       ~decide_fast:decide_fast_intersection
       ~decide_one:(fun _ () -> false)
       ~decide_both:(fun _ () () -> true)
 
   let of_list l = List.fold_left (fun acc key -> add key acc) empty l
+
+  type action = Neutral | Absorbing | Traversing of (elt -> bool)
+
+  let translate_action = function
+    | Neutral -> M.Neutral
+    | Absorbing -> M.Absorbing
+    | Traversing f -> M.Traversing (fun k () -> if f k then Some () else None)
+
+  let merge ~cache ~symmetric ~idempotent
+      ~decide_both ~decide_left ~decide_right =
+    let decide_both = fun k () () -> if decide_both k then Some () else None
+    and decide_left = translate_action decide_left
+    and decide_right = translate_action decide_right in
+    merge ~cache ~symmetric ~idempotent
+      ~decide_both ~decide_left ~decide_right
+
+  let diff =
+    let name = Format.sprintf "Hptset(%s).diff" X.name in
+    merge
+      ~cache:(Hptmap_sig.PersistentCache name)
+      ~symmetric:false
+      ~idempotent:false
+      ~decide_both:(fun _ -> false)
+      ~decide_left:Neutral
+      ~decide_right:Absorbing
 
   let from_shape m = from_shape (fun _ _ -> ()) m
 
@@ -164,6 +197,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -46,7 +46,7 @@ sig
   val interf : (key -> 'a -> 'b -> 'c option) -> 'a t -> 'b t -> 'c t
   val interq : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
   val diffq : (key -> 'a -> 'a -> 'a option) -> 'a t -> 'a t -> 'a t
-  val merge : (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t 
+  val merge : (key -> 'a option -> 'b option -> 'c option) -> 'a t -> 'b t -> 'c t
 
   (** [insert (fun key v old -> ...) key v map] *)
   val insert : (key -> 'a -> 'a -> 'a) -> key -> 'a -> 'a t -> 'a t

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -121,17 +121,22 @@ let deps =
 
 let () = Pdg_parameters.BuildAll.set_output_dependencies deps
 
-let compute () =
+let compute_for_kf kf =
   let all = Pdg_parameters.BuildAll.get () in
+  (all && !Db.Value.is_called kf) ||
+    Kernel_function.Set.mem kf (Pdg_parameters.BuildFct.get ())
+
+let compute () =
+  !Db.Value.compute ();
   let do_kf_pdg kf =
-    if all || Kernel_function.Set.mem kf (Pdg_parameters.BuildFct.get ()) then
+    if compute_for_kf kf then
       let pdg = !Db.Pdg.get kf in
       let dot_basename = Pdg_parameters.DotBasename.get () in
       if dot_basename <> "" then
         let fname = Kernel_function.get_name kf in
         !Db.Pdg.extract pdg (dot_basename ^ "." ^ fname ^ ".dot")
   in
-  !Db.Semantic_Callgraph.topologically_iter_on_functions do_kf_pdg;
+  Callgraph.Uses.iter_in_rev_order do_kf_pdg;
   Pdg_parameters.debug "Logging keys : %s"
     (Pdg_parameters.Debug_category.As_string.get ());
   if Pdg_parameters.BuildAll.get () then
@@ -142,9 +147,8 @@ let compute_once, _ =
 
 let output () =
   let bw  = Pdg_parameters.PrintBw.get () in
-  let all = Pdg_parameters.BuildAll.get () in
   let do_kf_pdg kf =
-    if all || Kernel_function.Set.mem kf (Pdg_parameters.BuildFct.get ()) then
+    if compute_for_kf kf then
       let pdg = !Db.Pdg.get kf in
       let header fmt =
         Format.fprintf fmt "PDG for %a" Kernel_function.pretty kf
@@ -152,7 +156,7 @@ let output () =
       Pdg_parameters.printf ~header "@[ @[%a@]@]"
         (PdgTypes.Pdg.pretty_bw ~bw) pdg
   in
-  !Db.Semantic_Callgraph.topologically_iter_on_functions do_kf_pdg
+  Callgraph.Uses.iter_in_rev_order do_kf_pdg
 
 let something_to_do () =
   Pdg_parameters.BuildAll.get ()
@@ -168,6 +172,6 @@ let () = Db.Main.extend main
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

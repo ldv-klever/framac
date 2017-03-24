@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -83,8 +83,8 @@ class virtual do_it_ = object(self)
 
   method clean_kf_result kf r =
     Zone.filter_base
-      (!Db.Semantic_Callgraph.accept_base
-         ~with_formals:true ~with_locals:true kf) r
+      (Callgraph.Uses.accept_base ~with_formals:true ~with_locals:true kf)
+      r
 
   method compute_funspec kf =
     let state = self#specialize_state_on_call kf in
@@ -107,8 +107,8 @@ let get_internal = Analysis.kernel_function
 
 let externalize kf x =
   Zone.filter_base
-    (!Db.Semantic_Callgraph.accept_base
-       ~with_formals:false ~with_locals:false kf) x
+    (Callgraph.Uses.accept_base ~with_formals:false ~with_locals:false kf)
+    x
 
 module Externals =
   Kernel_function.Make_Table(Locations.Zone)
@@ -149,6 +149,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

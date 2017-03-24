@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -123,7 +123,7 @@ struct
     try find_vertex empty_node
     with Not_found -> Hooks.add_vertex hooks empty_node; empty_node
 
-  module Apply = Graph.Topological.Make(Hooks)
+  module Apply = Graph.Topological.Make_stable(Hooks)
 
   let extend (_,q) f = Queue.add f q
 
@@ -171,6 +171,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

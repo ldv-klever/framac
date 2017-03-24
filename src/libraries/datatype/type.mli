@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -387,12 +387,8 @@ val may_use_obj: unit -> bool
 
 val add_abstract_types: (string -> string -> unit) ref
 
-val sfprintf: ('a,Format.formatter,unit,string) format4 -> 'a
-(** similar as Format.sprintf, but %a are allowed in the formatting string*)
-(**/**)
-
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

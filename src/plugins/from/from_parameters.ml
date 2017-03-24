@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -62,24 +62,10 @@ let () =
     (fun _ new_ ->
       if new_ then ForceCallDeps.set true)
 
-module PathDeps =
-False
-    (struct
-       let option_name = "-experimental-path-deps"
-       let help = "experimental"
-     end)
-
-module MemDeps =
-False
-    (struct
-       let option_name = "-experimental-mem-deps"
-       let help = "experimental"
-     end)
-
 
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

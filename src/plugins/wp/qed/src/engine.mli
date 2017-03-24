@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,6 +40,7 @@ type link =
   | F_subst of string (** n-ary function with substitution "foo(%1,%2)" *)
   | F_left  of string (** 2-ary function left-to-right + *)
   | F_right of string (** 2-ary function right-to-left + *)
+  | F_list of string * string (** n-ary function with (cons,nil) constructors *)
   | F_assoc of string (** associative infix operator *)
   | F_bool_prop of string * string (** Has a bool and prop version *)
 
@@ -48,7 +49,7 @@ type callstyle =
   | CallVoid (** Call is [f(x,...)] ; in [f()], [()] is mandatory *)
   | CallApply (** Call is [f x ...] *)
 
-type mode = 
+type mode =
   | Mpositive  (** Current scope is [Prop] in positive position. *)
   | Mnegative  (** Current scope is [Prop] in negative position. *)
   | Mterm      (** Current scope is [Term]. *)
@@ -77,9 +78,27 @@ type ('t,'f,'c) ftypedef =
   | Trec of ('f * 't) list
   | Tsum of ('c * 't list) list
 
+type scope = [ `Auto | `Unfolded | `Defined of string ]
+
+module type Env =
+sig
+  type t
+  type term
+  val create : unit -> t
+  val copy : t -> t
+  val clear : t -> unit
+  val used : t -> string -> bool
+  val fresh : t -> ?suggest:bool -> string -> string
+  val define : t -> string -> term -> unit
+  val unfold : t -> term -> unit
+  val shared : t -> term -> bool
+  val shareable : t -> term -> bool (** not unfolded *)
+  val lookup : t -> term -> scope
+end
+
 (** Generic Engine Signature *)
 
-class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
+class type virtual ['z,'adt,'field,'logic,'tau,'var,'term,'env] engine =
   object
 
     (** {3 Linking} *)
@@ -92,14 +111,20 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
 
     (** {3 Global and Local Environment} *)
 
+    method env : 'env (** Returns a fresh copy of the current environment. *)
+    method lookup : 'term -> scope (** Term scope in the current environment. *)
+    method scope : 'env -> (unit -> unit) -> unit
+    (** Calls the continuation in the provided environment. 
+        Previous environment is restored after return. *)
+    
     method local : (unit -> unit) -> unit
     (** Calls the continuation in a local copy of the environment.
-        	Previous environment is restored after return, but allocators
-        	are left unchanged to enforce on-the-fly alpha-conversion. *)
+        Previous environment is restored after return, but allocators
+        are left unchanged to enforce on-the-fly alpha-conversion. *)
 
     method global : (unit -> unit) -> unit
     (** Calls the continuation in a fresh local environment.
-        	Previous environment is restored after return. *)
+        Previous environment is restored after return. *)
 
     method bind : 'var -> string
     method find : 'var -> string
@@ -116,12 +141,12 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     method pp_farray : 'tau printer2 (** For [k->a] arrays *)
 
     method pp_tvar : int printer (** Type variables. *)
-    method pp_datatype : 'adt -> 'tau list printer 
+    method pp_datatype : 'adt -> 'tau list printer
 
     method pp_tau : 'tau printer (** Without parentheses. *)
     method pp_subtau : 'tau printer (** With parentheses if non-atomic. *)
 
-    (** {3 Current Mode} 
+    (** {3 Current Mode}
 
         The mode represents the expected type for a
         term to printed.  A requirement for all term printers in the
@@ -151,7 +176,7 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
 
     method pp_var : string printer
 
-    (** {3 Calls} 
+    (** {3 Calls}
 
         These printers only applies to connective, operators and
         functions that are morphisms {i w.r.t} current mode.
@@ -161,7 +186,7 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     method pp_fun : cmode -> 'logic -> 'term list printer
     method pp_apply : cmode -> 'term -> 'term list printer
 
-    (** {3 Arithmetics Operators} *) 
+    (** {3 Arithmetics Operators} *)
 
     method op_real_of_int : op
     method op_add : amode -> op
@@ -174,7 +199,7 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     method pp_times : formatter -> 'z -> 'term -> unit
     (** Defaults to [self#op_minus] or [self#op_mul] *)
 
-    (** {3 Comparison Operators} *) 
+    (** {3 Comparison Operators} *)
 
     method op_equal : cmode -> op
     method op_noteq : cmode -> op
@@ -243,21 +268,20 @@ class type virtual ['z,'adt,'field,'logic,'tau,'var,'term] engine =
     (** {3 Top Level} *)
 
     method pp_term : 'term printer
-    (** Prints in {i term} mode. 
-        	Default uses [self#pp_shared] with mode [Mterm] inside an [<hov>] box. *)
+    (** Prints in {i term} mode.
+        Default uses [self#pp_shared] with mode [Mterm] inside an [<hov>] box. *)
 
     method pp_prop : 'term printer
-    (** Prints in {i prop} mode. 
-        	Default uses [self#pp_shared] with mode [Mprop] inside an [<hv>] box. *)
+    (** Prints in {i prop} mode.
+        Default uses [self#pp_shared] with mode [Mprop] inside an [<hv>] box. *)
 
     method pp_expr : 'tau -> 'term printer
-    (** Prints in {i term}, {i arithemtic} or {i prop} mode with 
-        	respect to provided type. *)
+    (** Prints in {i term}, {i arithemtic} or {i prop} mode with
+        respect to provided type. *)
 
-    method declare_type : formatter -> 'adt -> int -> ('tau,'field,'logic) ftypedef -> unit
-    method declare_axiom :
-      formatter -> string -> 'var list -> ('var,'logic) ftrigger list list -> 'term -> unit
-    method declare_signature : formatter -> 'logic -> 'tau list -> 'tau -> unit
-    method declare_definition : formatter -> 'logic -> 'var list -> 'tau -> 'term -> unit
+    method pp_sort : 'term printer
+    (** Prints in {i term}, {i arithemtic} or {i prop} mode with
+        respect to the sort of term. Boolean expression that also have a 
+        property form are printed in [Mprop] mode. *)
 
   end

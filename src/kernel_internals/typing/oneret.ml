@@ -104,7 +104,7 @@ let oneret (f: fundec) : unit =
     match f.svar.vtype with
       TFun(rt, _, _, _) -> rt
     | _ ->
-	Kernel.abort "Function %s does not have a function type" f.svar.vname
+	Kernel.fatal "Function %s does not have a function type" f.svar.vname
   in
   (* Does it return anything ? *)
   let hasRet = match unrollType retTyp with TVoid _ -> false | _ -> true in
@@ -131,11 +131,11 @@ let oneret (f: fundec) : unit =
           ChangeTo (TVar (cvar_to_lvar v))
         | TMem _ | TVar _ -> DoChildren
     end
-    in visitCilPredicateNamed vis p
+    in visitCilPredicate vis p
   in
   let assert_of_returns ca =
     match ca.annot_content with
-      | AAssert _ | AInvariant _ | AVariant _ | AAssigns _ | AAllocation _ | APragma _ -> ptrue
+      | AAssert _ | AInvariant _ | AVariant _ | AAssigns _ | AAllocation _ | APragma _ | AExtended _ -> ptrue
       | AStmtSpec (_bhvs,s) ->
         let res =
           List.fold_left
@@ -146,16 +146,14 @@ let oneret (f: fundec) : unit =
                    (pands
                       (List.map
                          (fun p ->
-                           pold ~loc:p.ip_loc
-                             (Logic_utils.named_of_identified_predicate p))
+                           pold ~loc:p.ip_content.pred_loc
+                             (Logic_const.pred_of_id_pred p))
                          bhv.b_assumes),
                     pands
                       (List.fold_left
                          (fun acc (kind,p) ->
                            match kind with
-                               Returns ->
-                                 Logic_utils.named_of_identified_predicate p
-                                 :: acc
+                               Returns -> Logic_const.pred_of_id_pred p :: acc
                              | Normal | Exits | Breaks | Continues -> acc)
                          [ptrue] bhv.b_post_cond)
                    )))
@@ -243,10 +241,10 @@ let oneret (f: fundec) : unit =
       d_loc l);
      *)
       if hasRet && retval = None then
-        Kernel.error ~current:true
+        Kernel.fatal ~current:true
 	  "Found return without value in function %s" fname;
       if not hasRet && retval <> None then
-        Kernel.error ~current:true "Found return in subroutine %s" fname;
+        Kernel.fatal ~current:true "Found return in subroutine %s" fname;
     (* Keep this statement because it might have labels. But change it to
      * an instruction that sets the return value (if any). *)
       s.skind <- begin
@@ -266,7 +264,7 @@ let oneret (f: fundec) : unit =
       );
       let add_assert res =
         match !returns_assert with
-            { content = Ptrue } -> res
+          | { pred_content = Ptrue } -> res
           | p ->
             let a =
               Logic_const.new_code_annotation (AAssert ([],p))

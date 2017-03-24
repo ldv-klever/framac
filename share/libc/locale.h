@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,6 +22,9 @@
 
 #ifndef __FC_LOCALE
 #define __FC_LOCALE
+#include "features.h"
+
+__BEGIN_DECLS
 
 /* Structure giving information about numeric and monetary notation.  */
 struct lconv
@@ -98,7 +101,7 @@ extern struct lconv* __frama_c_locale;
 extern char*__frama_c_locale_names[];
 
 /*@ 
-  requires locale == \null || valid_string(locale);
+  requires locale == \null || valid_read_string(locale);
   assigns __frama_c_locale \from category, locale[..];
   assigns \result \from __frama_c_locale,category, locale[..];
   ensures \result==\null
@@ -111,4 +114,7 @@ extern char *setlocale(int category, const char *locale);
   ensures \result == __frama_c_locale;
  */
 extern struct lconv *localeconv(void);
+
+__END_DECLS
+
 #endif

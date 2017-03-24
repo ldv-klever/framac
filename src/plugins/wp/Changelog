@@ -1,3 +1,4 @@
+
 ###############################################################################
 # Preliminary notes:                                                          #
 # ------------------                                                          #
@@ -20,11 +21,89 @@
 #   <Prover>: prover
 ###############################################################################
 
+################################
+Plugin WP 1.1 Silicon_20161101
+################################
+
+ - WP          [2016/04/08] Unified variable usage for all models
+ - WP          [2016/10/06] Simplification of arithmetics models
+ - WP          [2016/10/06] Use kernel options -warn-xxx in cint model
+ - WP          [2016/10/06] Use cint and cfloat models by default
+ - WP          [2016/10/06] Fix -wp-rte with respect to models and kernel options
+
+################################
+Plugin WP 1.0 Aluminium_20160502
+################################
+
+- Coq         [2016/03/30] Fixed bug #2214 (coq realbase)
+- WP	      [2016/03/29] Support for why3 0.87 (and ide)
+- WP	      [2016/03/25] Support for Why3 0.86
+- WP	      [2016/03/25] Support for Coq 8.5
+- WP	      [2016/02/24] Support for Alt-Ergo 1.01
+- WP	      [2016/02/18] Fix behavior on ASM code
+- WP	      [2016/02/15] Now follows '-safe-arrays' when refining 'p+(..)'
+- WP          [2016/02/02] Added support for ACSL let-predicate
+-! WP         [2016/01/15] Removed alias '-wp-log' (use '-wp-msg-key' instead)
+- WP          [2015/12/16] Strict parsing of -wp-model (stop on error)
+- Caveat      [2015/12/02] Separation Hypotheses with -wp-print-separation
+- WP          [2015/11/13] Exported OCaml API via Wp.mli
+- WP          [2015/11/24] Added support for built-in ACSL lists
+- WP	      [2015/11/19] New options to set prover commands
+- Coq	      [2015/11/19] Support for Proof General 4.3
+
+################################
+Plugin WP 0.9 Magnesium_20151002
+################################
+
+- WP	      [2015/09/02] Added support for float-classification.
+              (\is_NaN, \is_finite, \is_infinite, \is_plus_infinity, \is_minus_infinity).
+-* WP         [2015/09/02] Fixed bug #2082 (crash with \is_infinite).
+-* WP         [2015/08/19] Fixed bug #2040 (wrong label Here in assumes).
+-* WP         [2015/08/18] Fixed bug #2110 (wrong premisses for structs assigns).
+-* WP         [2015/08/18] Fixed bug #2141 (incorrect simplification of 'x%1').
+-* WP         [2015/08/18] Fixed bug #2144 (lost \result after explicit assignment).
+-* WP         [2015/06/29] Fixed bug #2078 (ill typed PO with void*).
+-* WP         [2015/06/29] Fixed bug #2127 (unsigned inequality).
+-* WP         [2015/06/29] Fixed bug #2126 (0-shift rewriting).
+-* WP         [2015/05/20] Fixed bug #1683 (multiply reported Qed proofs).
+-* WP         [2015/03/20] Fixed bug #2079 (incorrect pointer arithmetics).
+- WP	      [2015/02/28] Handle global constants (-wp-init-const).
+- WP	      [2015/02/28] Quiet output on TTY (see -tty kernel option).
+- WP	      [2015/02/28] Added solver mean time to console output.
+-* Hoare      [2015/02/28] Fixed incorrect partial assignments in compound objects.
+- WP	      [2015/02/28] Refactoring of compound objects modeling.
+- Qed	      [2015/02/28] Fold constant expressions in goals.
+- Qed	      [2015/02/28] More simplifications on strict inequalities.
+- Qed	      [2015/02/28] More agressive filtering and pruning (-wp-filter).
+- Qed	      [2015/02/28] Aggressive ite-lifting.
+- Qed	      [2015/02/28] Automatic introduction of existentials.
+-! Coq	      [2015/02/28] Inductive if-then-else construct.
+- WP	      [2015/02/28] -wp-simplify-type remove some most type constraints (sound, incomplete).
+- WP	      [2015/02/28] -wp-simplify-forall of quantifier guards (unsound).
+- Qed	      [2015/02/28] Factorization of core equalities (-wp-core).
+- WP	      [2015/02/28] Improved -wp-check mode.
+-* WP	      [2015/02/28] Fixed bool-prop conversions.
+- WP	      [2015/02/28] Summarize initializers (-wp-init-summarize-array).
+- WP	      [2015/02/28] Simplifications of 'is_cint' with quantifiers.
+- Caveat      [2015/02/28] New 'Caveat' memory model.
+- Typed	      [2015/02/28] Named shift operators (better triggers).
+- WP          [2015/02/28] New integer model '+rg'.
+-* WP	      [2015/02/28] Fixed bug #1683 (duplicate Qed results).
+-* WP	      [2015/02/28] Improved typing for alt-ergo let-bindings.
+-* WP	      [2015/02/28] Fix sharing bug in proof obligation output.
+- Report      [2015/02/28] Support for CVC4 reporting.
+-* WP	      [2015/02/28] Fix bugs with -wp-extern-arrays.
+- WP 	      [2015/02/28] More lemmas for bitwise operations.
+- WP	      [2015/02/28] Options -wp-*-vars to tune memory model detection.
+-* WP         [2015/02/18] Fixed bug #1785 (fixed pre-condition with Clang).
+- WP	      [2015/01/27] Support for \subset.
+- WP	      [2014/09/24] Now accept patterns in drivers.
+-* WP	      [2014/09/15] Fixed bug #1828 (separation of locals/formals/heap).
+
 #############################
 Plugin WP 0.8 Sodium_20150201
 #############################
 
-- WP	      [2014/09/24] Now accept patterns in drivers.
 - WP          [2014/09/05] Drivers for min/max.
 - Typed       [2014/09/04] Simplification of assigns and separated.
 -* Gui	      [2014/09/04] Fixed bug #1688 (recover results from cmdline).
@@ -163,7 +242,7 @@ Plugin WP 0.4 Nitrogen_20111001
 +* Gui 	      [2011/05/17] Fixed bug #!706 : property status not refreshed.
 +* Gui	      [2011/05/17] Fixed bug #!707 : unexpected run of wp provers
 	      after -then.
-+* WP         [2011/05/02] Fixed bug #!708 (missing definitions in 
++* WP         [2011/05/02] Fixed bug #!708 (missing definitions in
 	      environments).
 -  WP         [2011/04/29] Alt-Ergo is now selected (and run) by default.
 -* WP         [2011/04/29] Fixed problems with -wp-out <dir>.

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,7 +38,7 @@ sig
   type root = (E.t -> unit) -> unit
   (** Iterator on the required roots *)
 
-  val components : succ:succ -> root:root -> ?size:int -> 
+  val components : succ:succ -> root:root -> ?size:int ->
     unit -> E.t list array
   (** The array of components.
       	For two elements [a in Ci] and [b in Cj] with [i<=j], then [a->*b]

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -296,8 +296,7 @@ module Visibility (SliceName : sig
   let fun_precond_visible ff_opt p =
     SlicingParameters.debug ~level:2
       "[SlicingTransform.Visibility.fun_precond_visible] %a ?"
-      Printer.pp_predicate_named
-      { name = []; loc = Cil_datatype.Location.unknown; content = p };
+      Printer.pp_predicate p;
     let visible = match ff_opt with
       | Isrc _ -> true
       | Iproto -> true
@@ -317,8 +316,7 @@ module Visibility (SliceName : sig
   let fun_postcond_visible ff_opt p =
     SlicingParameters.debug ~level:2
       "[SlicingTransform.Visibility.fun_postcond_visible] %a ?"
-      Printer.pp_predicate_named
-      { name = []; loc = Cil_datatype.Location.unknown; content = p };
+      Printer.pp_predicate p;
     let visible = match ff_opt with
       | Isrc _ -> true
       | Iproto -> true
@@ -507,6 +505,6 @@ let extract ~f_slice_names new_proj_name slicing_project =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

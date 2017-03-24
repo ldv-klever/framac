@@ -3,9 +3,7 @@
 [kernel] Parsing tests/wp_bts/bts788.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
-[wp] Collecting variable usage
 [wp] 3 goals scheduled
 [wp] [Qed] Goal typed_ref_main_post_I0 : Valid
 [wp] [Alt-Ergo] Goal typed_ref_main_post_I1 : Valid
@@ -15,5 +13,5 @@
      Alt-Ergo:        2
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
-main                 1      2 (15)     3       100%
+main                 1      2 (13)     3       100%
 ----------------------------------------------------------

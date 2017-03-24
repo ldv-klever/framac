@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,7 +42,7 @@ val narrow: t -> t -> t;;
 
 (** Create a trace, or add an element at the end of a trace.  *)
 val initial: kernel_function -> t;;
-val add_disjunction: Property.t -> predicate named -> t -> t;;
+val add_disjunction: Property.t -> predicate -> t -> t;;
 val add_statement: stmt -> t -> t;;
 
 (** Set to false to set all traces to top. *)
@@ -50,6 +50,6 @@ val set_compute_trace: bool -> unit;;
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

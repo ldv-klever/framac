@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -53,9 +53,12 @@ module type Location_map_bitwise = sig
     unit ->
     t Pretty_utils.formatter
 
+  val pretty_debug: t Pretty_utils.formatter
+
   val add_binding : reducing:bool -> exact:bool -> t -> Zone.t -> v -> t
   val add_binding_loc: reducing:bool -> exact:bool -> t -> location -> v -> t
   val add_base: Base.t -> LOffset.t -> t -> t
+  val remove_base: Base.t -> t -> t
 
   val find : t -> Zone.t -> v
   val filter_base : (Base.t -> bool) -> t -> t
@@ -75,8 +78,8 @@ module type Location_map_bitwise = sig
     Locations.Zone.t -> map -> 'b
 
   val map2:
-    Hptmap.cache_type -> idempotent:bool -> empty_neutral:bool ->
-    (LOffset.t -> LOffset.t -> LOffset.map2_decide) ->
+    cache:Hptmap_sig.cache_type -> symmetric:bool -> idempotent:bool
+    -> empty_neutral:bool -> (LOffset.t -> LOffset.t -> LOffset.map2_decide) ->
     (v -> v -> v) -> map -> map -> map
 
   val shape: map -> LOffset.t Hptmap.Shape(Base.Base).t
@@ -105,31 +108,32 @@ struct
 
   (* validity must not be invalid; otherwise, Invalid_base is raised. *)
   let default_offsetmap_aux b validity =
+    let size_or_bottom = LOffset.size_from_validity validity in
     let default () =
-      match Base.valid_range validity with
-      | None -> raise Invalid_base
-      | Some (ib, ie) ->
-        assert (Integer.(equal ib zero));
-        LOffset.create ~size:(Integer.succ ie) V.default
+      match size_or_bottom with
+      | `Bottom -> raise Invalid_base
+      | `Value size -> LOffset.create ~size V.default
     in
     if Base.equal Base.null b then
       match validity with
       | Base.Invalid -> raise Invalid_base
-      | Base.Known (ib, ie) | Base.Unknown (ib, _, ie) ->
+      | Base.Known (ib, ie) ->
         if Integer.is_zero ib then
           default ()
         else begin
           (* NULL is special, because the validity may not start at 0. We must
              bind the beginning of the interval to bottom. *)
           assert (Integer.gt ib Integer.zero);
-          let to_bottom = LOffset.create ~size:(Integer.succ ie) V.bottom in
+          let size = Bottom.non_bottom size_or_bottom in
+          let to_bottom = LOffset.create ~size V.bottom in
           let range = Int_Intervals.inject_bounds ib ie in
           match LOffset.add_binding_intervals
            ~validity ~exact:true range V.default to_bottom
           with
           | `Bottom -> assert false
-          | `Map m -> m
+          | `Value m -> m
         end
+      | Base.Unknown _ | Base.Empty | Base.Variable _ -> assert false
     else
       default ()
 
@@ -148,8 +152,7 @@ struct
           let default = default_offsetmap Base.null in
           LOffset.equal default offsm
         else
-          let is_default v = V.equal v V.default in
-          LOffset.is_single_interval ~f:is_default offsm
+          LOffset.is_same_value offsm V.default
       in
       if is_default then
         remove b m
@@ -188,6 +191,15 @@ struct
     | Bottom, Bottom -> true
     | (Top | Bottom | Map _),  _ -> false
 
+  let compare =
+    if LBase.compare == Datatype.undefined then Datatype.undefined
+    else
+      fun m1 m2 -> match m1, m2 with
+        | Bottom, Bottom | Top, Top -> 0
+        | Map m1, Map m2 -> LBase.compare m1 m2
+        | Bottom, (Top | Map _) | Map _, Top -> -1
+        | Top, (Bottom | Map _) | Map _, Bottom -> 1
+
   let is_empty x = equal empty x
   let is_bottom x = x = Bottom
 
@@ -209,6 +221,11 @@ struct
 
   let pretty = pretty_generic_printer ~sep:"FROM" ()
 
+  let pretty_debug fmt m =
+    match m with
+    | Top | Bottom -> pretty fmt m
+    | Map m -> LBase.pretty_debug fmt m
+
   include Datatype.Make
       (struct
         type t = lmap
@@ -218,7 +235,7 @@ struct
          let name = LOffset.name ^ " lmap_bitwise"
         let hash = hash
         let equal = equal
-        let compare = Datatype.undefined
+        let compare = compare
         let pretty = pretty
         let internal_pretty_code = Datatype.undefined
         let rehash = Datatype.identity
@@ -261,7 +278,7 @@ struct
        let offsm = find_or_default base m in
        match LOffset.add_binding_intervals ~validity ~exact offs v offsm with
        | `Bottom -> m
-       | `Map new_offsetmap -> LBase.add base new_offsetmap m
+       | `Value new_offsetmap -> LBase.add base new_offsetmap m
      with Invalid_base -> m
    in
    match loc, m with
@@ -279,7 +296,7 @@ struct
        in
        match new_offsetmap with
        | `Bottom -> m
-       | `Map new_offsetmap -> LBase.add base new_offsetmap m
+       | `Value new_offsetmap -> LBase.add base new_offsetmap m
      with Invalid_base -> m
    in
    match loc.loc, m with
@@ -292,12 +309,27 @@ struct
    | Bottom | Top as m -> m
    | Map m -> Map (LBase.add b offsm m)
 
+ let remove_base b = function
+   | Bottom | Top as m -> m
+   | Map m -> Map (LBase.remove b m)
+
  let join_on_map =
-   let decide_none b m = LOffset.join m (default_offsetmap b) in
-   let decide_some = LOffset.join in
-   LBase.symmetric_merge
-     ~cache:("lmap_bitwise.join", ())
-     ~empty_neutral:false ~decide_none ~decide_some
+   (* [join t Empty] is [t] if unbound bases are bound to [bottom] by default*)
+   if V.(equal default bottom)
+   then
+     LBase.join
+       ~cache:(Hptmap_sig.PersistentCache "lmap_bitwise.join")
+       ~decide:(fun _ v1 v2 -> LOffset.join v1 v2)
+       ~symmetric:true ~idempotent:true
+   else
+     let decide =
+       let get b = function Some v -> v | None -> default_offsetmap b in
+       fun b v1 v2 -> LOffset.join (get b v1) (get b v2)
+     in
+     LBase.generic_join
+       ~cache:(Hptmap_sig.PersistentCache "lmap_bitwise.join")
+       ~symmetric:true ~idempotent:true ~decide
+
 
  let join m1 m2 =
    let result = match m1, m2 with
@@ -316,7 +348,7 @@ struct
    | Bottom -> Bottom
    | Map m -> Map (LBase.map (fun m -> LOffset.map f m) m)
 
- let map2 cache ~idempotent ~empty_neutral fv f =
+ let map2 ~cache ~symmetric ~idempotent ~empty_neutral fv f =
    let aux = LOffset.map2 cache fv f in
    let decide b om1 om2 = match om1, om2 with
      | None, None -> assert false (* decide is never called in this case *)
@@ -324,19 +356,16 @@ struct
      | None, Some m2 -> aux (default_offsetmap b) m2
      | Some m1, Some m2 -> aux m1 m2
    in
-   let cache = match cache with
-     | Hptmap.PersistentCache _ -> true
-     | Hptmap.NoCache -> false
-     | Hptmap.TemporaryCache _ (* not possible with generic_merge *) -> false
-   in
-   LBase.generic_merge ~idempotent ~empty_neutral ~cache:("", cache) ~decide
+   if empty_neutral
+   then LBase.join ~symmetric ~idempotent ~cache ~decide:(fun _ m1 m2 -> aux m1 m2)
+   else LBase.generic_join ~symmetric ~idempotent ~cache ~decide
 
  let is_included_map =
-   let name = Pretty_utils.sfprintf "Lmap_bitwise(%s).is_included" V.name in
+   let name = Format.asprintf "Lmap_bitwise(%s).is_included" V.name in
    let decide_fst b offs1 = LOffset.is_included offs1 (default_offsetmap b) in
    let decide_snd b offs2 = LOffset.is_included (default_offsetmap b) offs2 in
    let decide_both _ offs1 offs2 = LOffset.is_included offs1 offs2 in
-   LBase.binary_predicate (Hptmap.PersistentCache name) LBase.UniversalPredicate
+   LBase.binary_predicate (Hptmap_sig.PersistentCache name) LBase.UniversalPredicate
      ~decide_fast:LBase.decide_fast_inclusion
      ~decide_fst ~decide_snd ~decide_both
 
@@ -385,7 +414,7 @@ struct
          Zone.fold_i treat_offset loc V.bottom
 
  let fold_join_zone ~both ~conv ~empty_map ~join ~empty =
-   let cache = Hptmap.PersistentCache "Lmap_bitwise.fold_on_zone" in
+   let cache = Hptmap_sig.PersistentCache "Lmap_bitwise.fold_on_zone" in
    let empty_left _ = empty (* zone over which to fold is empty *) in
    let empty_right z = empty_map z in
    let both b itvs map_b = conv b (both itvs map_b) in
@@ -402,6 +431,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -139,65 +139,6 @@ val selfMachine_is_computed: ?project:Project.project -> unit -> bool
 val msvcMode: unit -> bool
 val gccMode: unit -> bool
 
-(** Styles of printing line directives *)
-type lineDirectiveStyle =
-  | LineComment                (** Before every element, print the line
-                                * number in comments. This is ignored by
-                                * processing tools (thus errors are reported
-                                * in the CIL output), but useful for
-                                * visual inspection *)
-  | LineCommentSparse          (** Like LineComment but only print a line
-                                * directive for a new source line *)
-  | LinePreprocessorInput      (** Use #line directives *)
-  | LinePreprocessorOutput     (** Use # nnn directives (in gcc mode) *)
-
-type miscState =
-    { (** How to print line directives *)
-      mutable lineDirectiveStyle: lineDirectiveStyle option;
-      (** Whether we print something that will only be used as input to our own
-	  parser. In that case we are a bit more liberal in what we print *)
-      mutable print_CIL_Input: bool;
-      (** Whether to print the CIL as they are, without trying to be smart and
-	  print nicer code. Normally this is false, in which case the pretty
-	  printer will turn the while(1) loops of CIL into nicer loops, will not
-	  print empty "else" blocks, etc. These is one case howewer in which if
-	  you turn this on you will get code that does not compile: if you use
-	  varargs the __builtin_va_arg function will be printed in its internal
-	  form. *)
-      mutable printCilAsIs: bool;
-      (** The length used when wrapping output lines. Setting this variable to
-	  a large integer will prevent wrapping and make #line directives more
-	  accurate. *)
-      mutable lineLength: int;
-      (** Emit warnings when truncating integer constants (default true) *)
-      mutable warnTruncate: bool }
-
-val miscState: miscState
-
-(** To be able to add/remove features easily, each feature should be package
-    as an interface with the following interface. *)
-type featureDescr = {
-    fd_enabled: bool ref;
-    (** The enable flag. Set to default value  *)
-
-    fd_name: string;
-    (** This is used to construct an option "--doxxx" and "--dontxxx" that
-     * enable and disable the feature  *)
-
-    fd_description: string;
-    (** A longer name that can be used to document the new options  *)
-
-    fd_extraopt: (string * Arg.spec * string) list;
-    (** Additional command line options *)
-
-    fd_doit: (file -> unit);
-    (** This performs the transformation *)
-
-    fd_post_check: bool;
-    (** Whether to perform a CIL consistency checking after this stage, if
-     * checking is enabled (--check is passed to cilly). Set this to true if
-     * your feature makes any changes for the program. *)
-}
 
 (* ************************************************************************* *)
 (** {2 Values for manipulating globals} *)
@@ -495,7 +436,7 @@ val isSignedInteger: typ -> bool
 val isUnsignedInteger: typ -> bool
 
 
-(** Creates a a (potentially recursive) composite type. The arguments are:
+(** Creates a (potentially recursive) composite type. The arguments are:
  * (1) a boolean indicating whether it is a struct or a union, (2) the name
  * (always non-empty), (3) a function that when given a representation of the
  * structure type constructs the type of the fields recursive type (the first
@@ -514,8 +455,13 @@ val mkCompInfo: bool ->      (* whether it is a struct or a union *)
                   constructing a recursive type.  *)
                attributes -> compinfo
 
-(** Makes a shallow copy of a {!Cil_types.compinfo} changing the name and the key.*)
-val copyCompInfo: bool -> compinfo -> string -> compinfo
+(** Makes a shallow copy of a {!Cil_types.compinfo} changing the name. It also
+    copies the fields, and makes sure that the copied field points back to the
+    copied compinfo.
+    If [fresh] is [true] (the default), it will also give a fresh id to the
+    copy. 
+*)
+val copyCompInfo: ?fresh:bool -> compinfo -> string -> compinfo
 
 (** This is a constant used as the name of an unnamed bitfield. These fields
     do not participate in initialization and their name is not printed. *)
@@ -527,8 +473,11 @@ val compFullName: compinfo -> string
 (** Returns true if this is a complete type.
    This means that sizeof(t) makes sense.
    Incomplete types are not yet defined
-   structures and empty arrays. *)
-val isCompleteType: typ -> bool
+   structures and empty arrays. 
+   @param allowZeroSizeArrays defaults to [false]. When [true], arrays of
+   size 0 (a gcc extension) are considered as complete
+*)
+val isCompleteType: ?allowZeroSizeArrays:bool -> typ -> bool
 
 (** Unroll a type until it exposes a non
  * [TNamed]. Will collect all attributes appearing in [TNamed]!!! *)
@@ -746,18 +695,6 @@ val addOffsetLval: offset -> lval -> lval
 (** [addOffset o1 o2] adds [o1] to the end of [o2]. *)
 val addOffset:     offset -> offset -> offset
 
-(** Equivalent to [lastOffset] for terms.
-        @deprecated Oxygen-20120901  use Logic_const.addTermOffsetLval *)
-val lastTermOffset: term_offset -> term_offset
-
-(** Equivalent to [addOffsetLval] for terms.
-        @deprecated Oxygen-20120901  use Logic_const.addTermOffsetLval *)
-val addTermOffsetLval: term_offset -> term_lval -> term_lval
-
-(** Equivalent to [addOffset] for terms.
-        @deprecated Oxygen-20120901  use Logic_const. *)
-val addTermOffset:     term_offset -> term_offset -> term_offset
-
 (** Remove ONE offset from the end of an lvalue. Returns the lvalue with the
  * trimmed offset and the final offset. If the final offset is [NoOffset]
  * then the original [lval] did not have an offset. *)
@@ -893,21 +830,6 @@ val constFoldBinOp: loc:location -> bool -> binop -> exp -> exp -> typ -> exp
     @since Nitrogen-20111001
 *)
 val compareConstant: constant -> constant -> bool
-
-(** [true] if the two expressions are syntactically the same. 
-    @deprecated Oxygen-20120901 use {!Cil_datatype.ExpStructEq.compare}
-*)
-val compareExp: exp -> exp -> bool
-
-(** [true] if the two lval are syntactically the same. 
-    @deprecated Oxygen-20120901 use {!Cil_datatype.LvalStructEq.compare}
-*)
-val compareLval: lval -> lval -> bool
-
-(** [true] if the two offsets are syntactically the same. 
-    @deprecated Oxygen-20120901 use {!Cil_datatype.OffsetStructEq.compare}
-*)
-val compareOffset: offset -> offset -> bool
 
 (** Increment an expression. Can be arithmetic or pointer type *)
 val increm: exp -> int -> exp
@@ -1075,6 +997,13 @@ val dummyInstr: instr
     @plugin development guide *)
 val dummyStmt: stmt
 
+(** Make a statement equivalent to a pure expression, 'exp;'. Despite doing
+    nothing, this statement implies that it is valid to read 'exp' and
+    therefore has consequences on program verification.
+    The statement is build as 'tmp = exp;' where tmp is a new fresh
+    variable. *)
+val mkPureExpr: ?ghost:bool -> fundec:fundec -> ?loc:location -> exp -> stmt
+
 (** Make a while loop. Can contain Break or Continue *)
 val mkWhile: guard:exp -> body:stmt list -> stmt list
 
@@ -1186,8 +1115,17 @@ val typeAddAttributes: attribute list -> typ -> typ
 
 (** Remove all attributes with the given names from a type. Note that this
     does not remove attributes from typedef and tag definitions, just from
-    their uses *)
+    their uses (unfolding the type definition when needed).
+    It only removes attributes of topmost type, i.e. does not
+    recurse under pointers, arrays, ...
+*)
 val typeRemoveAttributes: string list -> typ -> typ
+
+(** same as above, but remove any existing attribute from the type. 
+
+ @since Magnesium-20151001
+*)
+val typeRemoveAllAttributes: typ -> typ
 
 val typeHasAttribute: string -> typ -> bool
 (** Does the type have the given attribute. Does
@@ -1286,14 +1224,14 @@ type 'a visitAction =
 
 val mk_behavior :
   ?name:string ->
-  ?assumes:('a list) ->
-  ?requires:('a list) ->
-  ?post_cond:((termination_kind * 'a) list) ->
-  ?assigns:('b Cil_types.assigns ) ->
-  ?allocation:('b  Cil_types.allocation option) ->
-  ?extended:((string * int * 'a list) list) ->
+  ?assumes:identified_predicate list ->
+  ?requires:identified_predicate list ->
+  ?post_cond:(termination_kind * identified_predicate) list ->
+  ?assigns:identified_term Cil_types.assigns ->
+  ?allocation:identified_term  Cil_types.allocation ->
+  ?extended:acsl_extension list ->
   unit ->
-  ('a, 'b) Cil_types.behavior
+  Cil_types.behavior
 (** @since Carbon-20101201
     returns a dummy behavior with the default name [Cil.default_behavior_name].
     invariant: [b_assumes] must always be
@@ -1302,11 +1240,11 @@ val mk_behavior :
 val default_behavior_name: string
   (** @since Carbon-20101201  *)
 
-val is_default_behavior: ('a,'b) behavior -> bool
+val is_default_behavior: behavior -> bool
 val find_default_behavior: funspec -> funbehavior option
   (** @since Carbon-20101201  *)
 
-val find_default_requires: ('a, 'b) behavior list -> 'a list
+val find_default_requires: behavior list -> identified_predicate list
   (** @since Carbon-20101201  *)
 
 (* ************************************************************************* *)
@@ -1562,15 +1500,14 @@ class type cilVisitor = object
       @plugin development guide *)
 
   method vvdec: varinfo -> varinfo visitAction
-    (** Invoked for each variable declaration. The subtrees to be traversed
-	are those corresponding to the type and attributes of the variable.
-	Note that variable declarations are all the [GVar], [GVarDecl], [GFun],
-	all the [varinfo] in formals of function types, and the formals and
-	locals for function definitions. This means that the list of formals
-	in a function definition will be traversed twice, once as part of the
-	function type and second as part of the formals in a function
-	definition.
-	@plugin development guide *)
+  (** Invoked for each variable declaration. The children to be traversed
+      are those corresponding to the type and attributes of the variable.
+      Note that variable declarations are [GVar], [GVarDecl], [GFun] and
+      [GFunDecl] globals, the formals of functions prototypes, and the
+      formals and locals of function definitions. This means that the list
+      of formals of a function may be traversed multiple times if there exists
+      both a declaration and a definition, or multiple declarations.
+      @plugin development guide *)
 
   method vvrbl: varinfo -> varinfo visitAction
   (** Invoked on each variable use. Here only the [SkipChildren] and
@@ -1719,15 +1656,9 @@ class type cilVisitor = object
 
   method videntified_predicate:
     identified_predicate -> identified_predicate visitAction
-  (**
-     @since Fluorine-20130401 
-     the child of an identified predicate is treated as a predicate named:
-     if you wish to modify names, you only have to override vpredicate_named,
-     not both videntified_predicate and vpredicate_named.
-  *)
 
+  method vpredicate_node: predicate_node -> predicate_node visitAction
   method vpredicate: predicate -> predicate visitAction
-  method vpredicate_named: predicate named -> predicate named visitAction
   method vbehavior: funbehavior -> funbehavior visitAction
   method vspec: funspec -> funspec visitAction
   method vassigns:
@@ -1773,11 +1704,12 @@ end
     @plugin development guide
 
     @since Sodium-20150201
+    @modify Silicon-20161101
 *)
 val register_behavior_extension:
   string ->
-  (cilVisitor -> (int * identified_predicate list) ->
-   (int * identified_predicate list) visitAction) -> unit
+  (cilVisitor -> acsl_extension_kind -> (acsl_extension_kind) visitAction)
+  -> unit
 
 (**/**)
 class internal_genericCilVisitor:
@@ -1825,7 +1757,7 @@ val doVisitList:
 
 (** {3 Visitor's entry points} *)
 
-(** Visit a file. This will will re-cons all globals TWICE (so that it is
+(** Visit a file. This will re-cons all globals TWICE (so that it is
  * tail-recursive). Use {!Cil.visitCilFileSameGlobals} if your visitor will
  * not change the list of globals.
     @plugin development guide *)
@@ -1920,10 +1852,9 @@ val visitCilBehaviors: cilVisitor -> funbehavior list -> funbehavior list
 
 (** visit an extended clause of a behavior.
     @since Nitrogen-20111001
+    @modify Silicon-20161101
  *)
-val visitCilExtended: 
-  cilVisitor -> (string * int * identified_predicate list) 
-  -> (string * int * identified_predicate list)
+val visitCilExtended: cilVisitor -> acsl_extension -> acsl_extension
 
 val visitCilModelInfo: cilVisitor -> model_info -> model_info
 
@@ -1932,9 +1863,9 @@ val visitCilLogicType: cilVisitor -> logic_type -> logic_type
 val visitCilIdPredicate:
   cilVisitor -> identified_predicate -> identified_predicate
 
-val visitCilPredicate: cilVisitor -> predicate -> predicate
+val visitCilPredicateNode: cilVisitor -> predicate_node -> predicate_node
 
-val visitCilPredicateNamed: cilVisitor -> predicate named -> predicate named
+val visitCilPredicate: cilVisitor -> predicate -> predicate
 
 val visitCilPredicates:
   cilVisitor -> identified_predicate list -> identified_predicate list
@@ -1977,11 +1908,6 @@ val is_skip: stmtkind -> bool
  * machine specific simplifications to be done, or not. *)
 val constFoldVisitor: bool -> cilVisitor
 
-(** Return the string 's' if we're printing output for gcc, suppres
- *  it if we're printing for CIL to parse back in.  the purpose is to
- *  hide things from gcc that it complains about, but still be able
- *  to do lossless transformations when CIL is the consumer *)
-val forgcc: string -> string
 
 (* ************************************************************************* *)
 (** {2 Debugging support} *)
@@ -1994,9 +1920,6 @@ module CurrentLoc: State_builder.Ref with type data = location
 
 (** Pretty-print [(Cil.CurrentLoc.get ())] *)
 val pp_thisloc: Format.formatter -> unit
-
-(** A reference to the current global being visited *)
-val currentGlobal: global ref
 
 (** @return a dummy specification *)
 val empty_funspec : unit -> funspec
@@ -2016,7 +1939,7 @@ val is_empty_behavior: funbehavior -> bool
     used by CIL internally, but once you print the file out the compiler
     downstream might be confused. You might have added a new global that happens
     to have the same name as a local in some function. Rename the local to
-    ensure that there would never be confusioin. Or, viceversa, you might have
+    ensure that there would never be confusion. Or, viceversa, you might have
     added a local with a name that conflicts with a global *)
 val uniqueVarNames: file -> unit
 
@@ -2140,15 +2063,6 @@ val bytesAlignOf: typ -> int
  * this after you call {!Cil.initCIL}. *)
 val bitsOffset: typ -> offset -> int * int
 
-(** Generate an {!Cil_types.exp} to be used in case of errors. *)
-val dExp:string -> exp
-
-(** Generate an {!Cil_types.instr} to be used in case of errors. *)
-val dInstr: string -> location -> instr
-
-(** Generate a {!Cil_types.global} to be used in case of errors. *)
-val dGlobal: string -> location -> global
-
 (** Like map but try not to make a copy of the list *)
 val mapNoCopy: ('a -> 'a) -> 'a list -> 'a list
 
@@ -2227,7 +2141,7 @@ val lmone : ?loc:location -> unit -> term
 val lconstant : ?loc:location -> Integer.t -> term
 
 (** Bind all free variables with an universal quantifier *)
-val close_predicate : predicate named -> predicate named
+val close_predicate : predicate -> predicate
 
 (** extract [varinfo] elements from an [exp] *)
 val extract_varinfos_from_exp : exp -> Varinfo.Set.t
@@ -2240,7 +2154,7 @@ val extract_free_logicvars_from_term : term -> Logic_var.Set.t
 
 (** extract [logic_var] elements from a [predicate] *)
 val extract_free_logicvars_from_predicate :
-  predicate named -> Logic_var.Set.t
+  predicate -> Logic_var.Set.t
 
 (** extract [logic_label] elements from a [code_annotation] *)
 val extract_labels_from_annot:
@@ -2251,7 +2165,7 @@ val extract_labels_from_term: term -> Cil_datatype.Logic_label.Set.t
 
 (** extract [logic_label] elements from a [pred] *)
 val extract_labels_from_pred: 
-  predicate named -> Cil_datatype.Logic_label.Set.t 
+  predicate -> Cil_datatype.Logic_label.Set.t 
 
 (** extract [stmt] elements from [logic_label] elements *)
 val extract_stmts_from_labels:
@@ -2296,6 +2210,6 @@ val pp_attributes_ref: (Format.formatter -> attribute list -> unit) ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

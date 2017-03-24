@@ -1,0 +1,284 @@
+# frama-c -wp [...]
+[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
+[kernel] Parsing tests/wp_typed/array_initialized.c (with preprocessing)
+tests/wp_typed/array_initialized.c:13:[kernel] warning: Too many initializers for array g
+[wp] Running WP plugin...
+[wp] Loading driver 'share/wp.driver'
+[wp] warning: Missing RTE guards
+------------------------------------------------------------
+  Function main1
+------------------------------------------------------------
+
+Goal Assertion (file tests/wp_typed/array_initialized.c, line 71):
+Assume {
+  (* Goal *)
+  When: (0 <= i) /\ (i <= 499).
+  (* Initializer *)
+  Init: forall i_1 : Z. ((0 <= i_1) -> ((i_1 <= 499) -> (0 = g[i_1]))).
+}
+Prove: 0 = g[i].
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function main2
+------------------------------------------------------------
+
+Goal Assertion (file tests/wp_typed/array_initialized.c, line 185):
+Assume {
+  (* Goal *)
+  When: (0 <= i) /\ (i <= 499).
+  (* Initializer *)
+  Init: 0 = h2_0[0].
+  (* Initializer *)
+  Init: 1 = h2_0[1].
+  (* Initializer *)
+  Init: 2 = h2_0[2].
+  (* Initializer *)
+  Init: 3 = h2_0[3].
+  (* Initializer *)
+  Init: 4 = h2_0[4].
+  (* Initializer *)
+  Init: 5 = h2_0[5].
+  (* Initializer *)
+  Init: 6 = h2_0[6].
+  (* Initializer *)
+  Init: 7 = h2_0[7].
+  (* Initializer *)
+  Init: 8 = h2_0[8].
+  (* Initializer *)
+  Init: 9 = h2_0[9].
+  (* Initializer *)
+  Init: 10 = h2_0[10].
+  (* Initializer *)
+  Init: 11 = h2_0[11].
+  (* Initializer *)
+  Init: 12 = h2_0[12].
+  (* Initializer *)
+  Init: 13 = h2_0[13].
+  (* Initializer *)
+  Init: 14 = h2_0[14].
+  (* Initializer *)
+  Init: 15 = h2_0[15].
+  (* Initializer *)
+  Init: 16 = h2_0[16].
+  (* Initializer *)
+  Init: 17 = h2_0[17].
+  (* Initializer *)
+  Init: 18 = h2_0[18].
+  (* Initializer *)
+  Init: 19 = h2_0[19].
+  (* Initializer *)
+  Init: 20 = h2_0[20].
+  (* Initializer *)
+  Init: 21 = h2_0[21].
+  (* Initializer *)
+  Init: 22 = h2_0[22].
+  (* Initializer *)
+  Init: 23 = h2_0[23].
+  (* Initializer *)
+  Init: 24 = h2_0[24].
+  (* Initializer *)
+  Init: 25 = h2_0[25].
+  (* Initializer *)
+  Init: 26 = h2_0[26].
+  (* Initializer *)
+  Init: 27 = h2_0[27].
+  (* Initializer *)
+  Init: 28 = h2_0[28].
+  (* Initializer *)
+  Init: 29 = h2_0[29].
+  (* Initializer *)
+  Init: 30 = h2_0[30].
+  (* Initializer *)
+  Init: 31 = h2_0[31].
+  (* Initializer *)
+  Init: 32 = h2_0[32].
+  (* Initializer *)
+  Init: 33 = h2_0[33].
+  (* Initializer *)
+  Init: 34 = h2_0[34].
+  (* Initializer *)
+  Init: 35 = h2_0[35].
+  (* Initializer *)
+  Init: 36 = h2_0[36].
+  (* Initializer *)
+  Init: 37 = h2_0[37].
+  (* Initializer *)
+  Init: 38 = h2_0[38].
+  (* Initializer *)
+  Init: 39 = h2_0[39].
+  (* Initializer *)
+  Init: 40 = h2_0[40].
+  (* Initializer *)
+  Init: 41 = h2_0[41].
+  (* Initializer *)
+  Init: 42 = h2_0[42].
+  (* Initializer *)
+  Init: 43 = h2_0[43].
+  (* Initializer *)
+  Init: 44 = h2_0[44].
+  (* Initializer *)
+  Init: 45 = h2_0[45].
+  (* Initializer *)
+  Init: 46 = h2_0[46].
+  (* Initializer *)
+  Init: 47 = h2_0[47].
+  (* Initializer *)
+  Init: 48 = h2_0[48].
+  (* Initializer *)
+  Init: 49 = h2_0[49].
+  (* Initializer *)
+  Init: forall i_1 : Z. ((50 <= i_1) -> ((i_1 <= 499) -> (0 = h2_0[i_1]))).
+  (* Initializer *)
+  Init: 0 = h1_0[0].
+  (* Initializer *)
+  Init: 1 = h1_0[1].
+  (* Initializer *)
+  Init: 2 = h1_0[2].
+  (* Initializer *)
+  Init: 3 = h1_0[3].
+  (* Initializer *)
+  Init: 4 = h1_0[4].
+  (* Initializer *)
+  Init: 5 = h1_0[5].
+  (* Initializer *)
+  Init: 6 = h1_0[6].
+  (* Initializer *)
+  Init: 7 = h1_0[7].
+  (* Initializer *)
+  Init: 8 = h1_0[8].
+  (* Initializer *)
+  Init: 9 = h1_0[9].
+  (* Initializer *)
+  Init: 10 = h1_0[10].
+  (* Initializer *)
+  Init: 11 = h1_0[11].
+  (* Initializer *)
+  Init: 12 = h1_0[12].
+  (* Initializer *)
+  Init: 13 = h1_0[13].
+  (* Initializer *)
+  Init: 14 = h1_0[14].
+  (* Initializer *)
+  Init: 15 = h1_0[15].
+  (* Initializer *)
+  Init: 16 = h1_0[16].
+  (* Initializer *)
+  Init: 17 = h1_0[17].
+  (* Initializer *)
+  Init: 18 = h1_0[18].
+  (* Initializer *)
+  Init: 19 = h1_0[19].
+  (* Initializer *)
+  Init: 20 = h1_0[20].
+  (* Initializer *)
+  Init: 21 = h1_0[21].
+  (* Initializer *)
+  Init: 22 = h1_0[22].
+  (* Initializer *)
+  Init: 23 = h1_0[23].
+  (* Initializer *)
+  Init: 24 = h1_0[24].
+  (* Initializer *)
+  Init: 25 = h1_0[25].
+  (* Initializer *)
+  Init: 26 = h1_0[26].
+  (* Initializer *)
+  Init: 27 = h1_0[27].
+  (* Initializer *)
+  Init: 28 = h1_0[28].
+  (* Initializer *)
+  Init: 29 = h1_0[29].
+  (* Initializer *)
+  Init: 30 = h1_0[30].
+  (* Initializer *)
+  Init: 31 = h1_0[31].
+  (* Initializer *)
+  Init: 32 = h1_0[32].
+  (* Initializer *)
+  Init: 33 = h1_0[33].
+  (* Initializer *)
+  Init: 34 = h1_0[34].
+  (* Initializer *)
+  Init: 35 = h1_0[35].
+  (* Initializer *)
+  Init: 36 = h1_0[36].
+  (* Initializer *)
+  Init: 37 = h1_0[37].
+  (* Initializer *)
+  Init: 38 = h1_0[38].
+  (* Initializer *)
+  Init: 39 = h1_0[39].
+  (* Initializer *)
+  Init: 40 = h1_0[40].
+  (* Initializer *)
+  Init: 41 = h1_0[41].
+  (* Initializer *)
+  Init: 42 = h1_0[42].
+  (* Initializer *)
+  Init: 43 = h1_0[43].
+  (* Initializer *)
+  Init: 44 = h1_0[44].
+  (* Initializer *)
+  Init: 45 = h1_0[45].
+  (* Initializer *)
+  Init: 46 = h1_0[46].
+  (* Initializer *)
+  Init: 47 = h1_0[47].
+  (* Initializer *)
+  Init: 48 = h1_0[48].
+  (* Initializer *)
+  Init: 49 = h1_0[49].
+  (* Initializer *)
+  Init: forall i_1 : Z. ((50 <= i_1) -> ((i_1 <= 499) -> (0 = h1_0[i_1]))).
+}
+Prove: h1_0[i] = h2_0[i].
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function main3
+------------------------------------------------------------
+
+Goal Assertion (file tests/wp_typed/array_initialized.c, line 194):
+Prove: true.
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function main_pointer
+------------------------------------------------------------
+
+Goal Assertion (file tests/wp_typed/array_initialized.c, line 283):
+Assume {
+  (* Goal *)
+  When: (0 <= i) /\ (i <= 499).
+  (* Initializer *)
+  Init: forall i_1 : Z. ((0 <= i_1) -> ((i_1 <= 499) ->
+      (global(G_p0_75) = p[i_1]))).
+  (* Heap *)
+  Have: linked(Malloc_0).
+}
+Prove: valid_rw(Malloc_0, p[i], 1).
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function simpl
+------------------------------------------------------------
+
+Goal Post-condition (file tests/wp_typed/array_initialized.c, line 288) in 'simpl':
+Let x = Mint_0[shift_sint32(t, 0)].
+Assume {
+  Type: is_sint32(x).
+  (* Goal *)
+  When: (0 <= i) /\ (i <= 49).
+  (* Heap *)
+  Have: region(t.base) <= 0.
+  (* Pre-condition *)
+  Have: forall i_1 : Z. ((0 <= i_1) -> ((i_1 <= 49) ->
+      (x = Mint_0[shift_sint32(t, i_1)]))).
+  If 0 <= x
+  Then { Have: 1 = simpl_0. }
+  Else { Have: 0 = simpl_0. }
+}
+Prove: (1 = simpl_0) <-> (0 <= Mint_0[shift_sint32(t, i)]).
+
+------------------------------------------------------------

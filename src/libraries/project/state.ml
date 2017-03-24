@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -91,8 +91,6 @@ let dummy =
   { name = "";
     unique_name = dummy_unique_name;
     private_ops = dummy_private_ops () }
-
-module Caml_hashtbl = Hashtbl
 
 include Datatype.Make_with_collections
     (struct
@@ -209,6 +207,6 @@ let create
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

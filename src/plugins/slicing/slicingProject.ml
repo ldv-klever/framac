@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -193,18 +193,8 @@ let print_project fmt proj =
     let fct_info = M.get_kf_fi proj kf in
     M.fi_slices fct_info
   in
-  let print_var_decl glob var _spec = (* might be a function prototype *)
-    (* TODO: print the spec also *)
-    match var.Cil_types.vtype with
-    | Cil_types.TFun _ -> (* function prototype TODO *)
-      PrintSlice.print_original_glob fmt glob
-    | _ -> PrintSlice.print_original_glob fmt glob
-           (* TODO use global marks *)
-  in
   let print glob =
     match glob with
-    | Cil_types.GVarDecl (spec, var, _) -> 
-      print_var_decl glob var spec
     | Cil_types.GFun (func, _) -> (* function definition *)
       let slices = get_slices func.Cil_types.svar in
       List.iter (PrintSlice.print_marked_ff fmt) slices
@@ -404,6 +394,6 @@ let apply_all_actions proj =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,12 +20,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Nothing is export: just register some special hooks for Frama-C.
-    @since Beryllium-20090601-beta1
-    @plugin development guide *)
+(** Nothing is exported: just register some special hooks for Frama-C.
+    @since Beryllium-20090601-beta1 *)
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.. -j"
+compile-command: "make -C ../../.."
 End:
 *)

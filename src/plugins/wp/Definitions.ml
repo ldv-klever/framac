@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,6 +35,10 @@ open Lang.F
 type trigger = (var,lfun) Qed.Engine.ftrigger
 type typedef = (tau,field,lfun) Qed.Engine.ftypedef
 
+let rec rev_iter f = function
+  | [] -> ()
+  | x::w -> rev_iter f w ; f x
+
 type cluster = {
   c_id : string ;
   c_title : string ;
@@ -65,7 +69,7 @@ and dfun = {
 }
 
 and definition =
-  | Logic of tau (** return type of an abstract function *)
+  | Logic of tau (* return type of an abstract function *)
   | Value of tau * recursion * term
   | Predicate of recursion * pred
   | Inductive of dlemma list
@@ -82,7 +86,7 @@ struct
     | Fvar x -> TgVar x
     | Aget(a,k) -> TgGet(of_exp Cterm a,of_exp Cterm k)
     | Aset(a,k,v) -> TgSet(of_exp Cterm a,of_exp Cterm k,of_exp Cterm v)
-    | Fun(f,ts) -> 
+    | Fun(f,ts) ->
         let ts = List.map (of_exp Cterm) ts in
         begin
           match mode with
@@ -142,7 +146,7 @@ let compare_lemma a b = String.compare a.l_name b.l_name
 
 let () =
   begin
-    Symbol.callback 
+    Symbol.callback
       (fun _ f ->
          touch f.d_cluster ;
          f.d_cluster.c_symbols <- f :: f.d_cluster.c_symbols) ;
@@ -165,7 +169,7 @@ let define_type c t =
     c.c_types <- t :: c.c_types ;
   end
 
-let parameters f = 
+let parameters f =
   if Model.is_model_defined () then
     try List.map Lang.F.sort_of_var (Symbol.find f).d_params
     with Not_found -> []
@@ -183,6 +187,7 @@ let cluster_position c = c.c_position
 let cluster_age c = c.c_age
 let cluster_compare a b = String.compare a.c_id b.c_id
 let pp_cluster fmt c = Format.pp_print_string fmt c.c_id
+let iter f = Cluster.iter_sorted (fun _key c -> f c)
 
 let newcluster ~id ?title ?position () =
   {
@@ -200,7 +205,7 @@ let cluster ~id ?title ?position () =
   Cluster.memoize (fun id -> newcluster ~id ?title ?position ()) id
 
 let axiomatic ax =
-  Cluster.memoize 
+  Cluster.memoize
     (fun id ->
        let title = Printf.sprintf "Axiomatic '%s'" ax.ax_name in
        let position = ax.ax_position in
@@ -210,7 +215,7 @@ let axiomatic ax =
 
 let section = function
   | Toplevel 0 -> cluster ~id:"Axiomatic" ~title:"Global Definitions" ()
-  | Toplevel n -> 
+  | Toplevel n ->
       let id = "Axiomatic" ^ string_of_int n in
       let title = Printf.sprintf "Global Definitions (continued #%d)" n in
       cluster ~id ~title ()
@@ -219,11 +224,11 @@ let section = function
 let compinfo c =
   Cluster.memoize
     (fun id ->
-       let title = 
-         if c.cstruct 
+       let title =
+         if c.cstruct
          then Printf.sprintf "Struct '%s'" c.cname
          else Printf.sprintf "Union '%s'" c.cname in
-       let cluster = newcluster ~id ~title () 
+       let cluster = newcluster ~id ~title ()
        in cluster.c_records <- [c] ; cluster)
     (Lang.comp_id c)
 
@@ -283,7 +288,7 @@ class virtual visitor main =
 
     method private vtypedef = function
       | None -> ()
-      | Some (LTsum cs) -> 
+      | Some (LTsum cs) ->
           List.iter (fun c -> self#vadt (Lang.atype c.ctor_type)) cs
       | Some (LTsyn lt) -> self#vtau (Lang.tau_of_ltype lt)
 
@@ -298,10 +303,10 @@ class virtual visitor main =
               let def = match t.lt_def with
                 | None -> Qed.Engine.Tabs
                 | Some (LTsyn lt) -> Qed.Engine.Tdef (Lang.tau_of_ltype lt)
-                | Some (LTsum cs) -> 
+                | Some (LTsum cs) ->
                     let cases = List.map
                         (fun ct ->
-                           Lang.CTOR ct , 
+                           Lang.CTOR ct ,
                            List.map Lang.tau_of_ltype ct.ctor_params
                         ) cs in
                     Qed.Engine.Tsum cases
@@ -309,7 +314,7 @@ class virtual visitor main =
             end
         end
 
-    method vcomp r = 
+    method vcomp r =
       if not (DR.mem r comps) then
         begin
           comps <- DR.add r comps ;
@@ -320,7 +325,7 @@ class virtual visitor main =
                   (fun f ->
                      let t = Lang.tau_of_ctype f.ftype in
                      self#vtau t ; Cfield f , t
-                  ) r.cfields 
+                  ) r.cfields
               in self#on_comp r fts ;
             end
         end
@@ -341,26 +346,35 @@ class virtual visitor main =
       | Data(a,ts) -> self#vadt a ; List.iter self#vtau ts
 
     method vparam x = self#vtau (tau_of_var x)
-
-    method vterm t = 
+        
+    method private repr ~bool = function
+      | Fun(f,_) -> self#vsymbol f
+      | Rget(_,f) -> self#vfield f
+      | Rdef fts -> List.iter (fun (f,_) -> self#vfield f) fts
+      | Fvar x -> self#vparam x
+      | Bind(_,t,_) -> self#vtau t
+      | True | False | Kint _ | Kreal _ | Bvar _
+      | Times _ | Add _ | Mul _ | Div _ | Mod _
+      | Aget _ | Aset _ | Apply _ -> ()
+      | Eq _ | Neq _ | Leq _ | Lt _
+      | And _ | Or _ | Not _ | Imply _ | If _ ->
+          if bool then self#on_library "bool"
+    
+    method vterm t =
       if not (Tset.mem t terms) then
         begin
           terms <- Tset.add t terms ;
+          self#repr ~bool:true (F.repr t) ;
           F.lc_iter self#vterm t ;
-          match F.repr t with
-          | Fun(f,_) -> self#vsymbol f
-          | Rget(_,f) -> self#vfield f
-          | Rdef fts -> List.iter (fun (f,_) -> self#vfield f) fts
-          | Fvar x -> self#vparam x
-          | Bind(_,t,_) -> self#vtau t
-          | True | False | Kint _ | Kreal _ | Bvar _
-          | Times _ | Add _ | Mul _ | Div _ | Mod _ 
-          | Eq _ | Neq _ | Leq _ | Lt _ 
-          | Aget _ | Aset _ 
-          | And _ | Or _ | Not _ | Imply _ | If _ | Apply _ -> ()
         end
 
-    method vpred p = self#vterm (F.e_prop p)
+    method vpred p =
+      let t = F.e_prop p in
+      if not (Tset.mem t terms) then
+        begin
+          self#repr ~bool:false (F.repr t) ;
+          F.p_iter self#vpred self#vterm p
+        end
 
     method private vdefinition = function
       | Logic t -> self#vtau t
@@ -413,7 +427,7 @@ class virtual visitor main =
             self#vtrigger v ;
           end
       | Qed.Engine.TgFun(f,tgs)
-      | Qed.Engine.TgProp(f,tgs) -> 
+      | Qed.Engine.TgProp(f,tgs) ->
           self#vsymbol f ; List.iter self#vtrigger tgs
 
     method private vdlemma a =
@@ -461,14 +475,14 @@ class virtual visitor main =
     method vgoal (axioms : axioms option) prop =
       match axioms with
       | None ->
-          (** Print a goal *)
+          (* Visit a goal *)
           begin
             let hs = LogicUsage.proof_context () in
             List.iter self#vlemma hs ;
             self#vpred prop ;
           end
       | Some(cluster,hs) ->
-          (** Print the goal corresponding to a lemma *)
+          (* Visit the goal corresponding to a lemma *)
           begin
             self#section (cluster_title cluster) ;
             self#set_local cluster ;
@@ -476,12 +490,12 @@ class virtual visitor main =
             self#vpred prop ;
           end
 
-    method vself = (** Print a cluster *)
+    method vself = (* Visit a cluster *)
       begin
-        List.iter self#vcomp main.c_records ;
-        List.iter self#vtype main.c_types ;
-        List.iter (fun d -> self#vsymbol d.d_lfun) main.c_symbols ;
-        List.iter (fun l -> self#vdlemma l) main.c_lemmas ;
+        rev_iter self#vcomp main.c_records ;
+        rev_iter self#vtype main.c_types ;
+        rev_iter (fun d -> self#vsymbol d.d_lfun) main.c_symbols ;
+        rev_iter (fun l -> self#vdlemma l) main.c_lemmas ;
       end
 
     method virtual section : string -> unit

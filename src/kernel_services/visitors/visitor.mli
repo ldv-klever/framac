@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,10 +20,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Cil_types
+(** Frama-C visitors dealing with projects. *)
 
-(** Frama-C visitors dealing with projects.
-    @plugin development guide *)
+open Cil_types
 
 (** Class type for a Db-aware visitor.
     This is done by defining auxiliary methods that can be
@@ -119,6 +118,17 @@ val visitFramacFileSameGlobals: frama_c_visitor -> file -> unit
 (** Visit a global. *)
 val visitFramacGlobal: frama_c_visitor -> global -> global list
 
+(** Visit a kernel_function. More precisely, the entry point for the visit
+    will be the global corresponding to the last declaration/definition of
+    the kf. The returned kf is the one that has the varinfo 
+    associated to the varinfo of the original kf. If this is a new kf, it is
+    however the responsibility of the visitor to insert it in the AST at
+    the appropriate place.
+
+    @since Aluminium-20160501
+*)
+val visitFramacKf: frama_c_visitor -> Kernel_function.t -> Kernel_function.t
+
 (** Visit a function definition.
     @plugin development guide  *)
 val visitFramacFunction: frama_c_visitor -> fundec -> fundec
@@ -150,6 +160,12 @@ val visitFramacType: frama_c_visitor -> typ -> typ
 (** Visit a variable declaration *)
 val visitFramacVarDecl: frama_c_visitor -> varinfo -> varinfo
 
+(** Visit a logic variable declaration 
+
+    @since Magnesium-20151001
+*)
+val visitFramacLogicVarDecl: frama_c_visitor -> logic_var -> logic_var
+
 (** Visit an initializer, pass also the global to which this belongs and the
  * offset. *)
 val visitFramacInit: frama_c_visitor -> varinfo -> offset -> init -> init
@@ -162,6 +178,9 @@ val visitFramacAnnotation:
 
 val visitFramacCodeAnnotation:
   frama_c_visitor -> code_annotation -> code_annotation
+
+val visitFramacAllocation:
+  frama_c_visitor -> identified_term allocation -> identified_term allocation
 
 val visitFramacAssigns:
   frama_c_visitor -> identified_term assigns -> identified_term assigns
@@ -176,10 +195,10 @@ val visitFramacFunspec: frama_c_visitor -> funspec -> funspec
 
 val visitFramacLogicType: frama_c_visitor -> logic_type -> logic_type
 
-val visitFramacPredicate: frama_c_visitor -> predicate -> predicate
+val visitFramacPredicateNode: frama_c_visitor -> predicate_node -> predicate_node
 
-val visitFramacPredicateNamed:
-  frama_c_visitor -> predicate named -> predicate named
+val visitFramacPredicate:
+  frama_c_visitor -> predicate -> predicate
 
 val visitFramacIdPredicate:
   frama_c_visitor -> identified_predicate -> identified_predicate
@@ -209,8 +228,11 @@ val visitFramacBehaviors:
 
 val visitFramacModelInfo: frama_c_visitor -> model_info -> model_info
 
+val visitFramacExtended:
+  frama_c_visitor -> acsl_extension -> acsl_extension
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

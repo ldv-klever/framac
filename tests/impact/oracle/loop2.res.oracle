@@ -1,10 +1,9 @@
-[kernel:offsetmap:caches] Clearing interval caches
 [kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/impact/loop2.i (no preprocessing)
 [value] Analyzing an incomplete application starting at main
 [value] Computing initial state
 [value] Initial state computed
-[value] Values of globals at initialization
+[value:initial-state] Values of globals at initialization
   v ∈ [--..--]
   t[0..9] ∈ [--..--]
   u[0..9] ∈ [--..--]
@@ -17,18 +16,6 @@ tests/impact/loop2.i:11:[value] entering loop for the first time
 [from] Done for function init
 [value] Done for function init
 tests/impact/loop2.i:25:[value] entering loop for the first time
-[value] computing for function f <- main.
-        Called from tests/impact/loop2.i:27.
-[value] Recording results for f
-[from] Computing for function f
-[from] Done for function f
-[value] Done for function f
-[value] computing for function f <- main.
-        Called from tests/impact/loop2.i:27.
-[value] Recording results for f
-[from] Computing for function f
-[from] Done for function f
-[value] Done for function f
 [value] computing for function f <- main.
         Called from tests/impact/loop2.i:27.
 [value] Recording results for f
@@ -82,13 +69,12 @@ tests/impact/loop2.i:25:[value] entering loop for the first time
            tests/impact/loop2.i:26 (sid 27): if(t[i]) <..>
            tests/impact/loop2.i:27 (sid 28): f(i);
 [impact] analysis done
-[kernel:offsetmap:caches] Clearing interval caches
 [kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/impact/loop2.i (no preprocessing)
 [value] Analyzing an incomplete application starting at main
 [value] Computing initial state
 [value] Initial state computed
-[value] Values of globals at initialization
+[value:initial-state] Values of globals at initialization
   v ∈ [--..--]
   t[0..9] ∈ [--..--]
   u[0..9] ∈ [--..--]

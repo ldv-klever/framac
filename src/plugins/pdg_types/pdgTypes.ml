@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,7 +40,7 @@ module Node : sig
 end
 = struct
 
-  type tt = { id : int; key : PdgIndex.Key.t }
+  type t = { id : int; key : PdgIndex.Key.t }
 
   module Counter =
     State_builder.Counter(struct let name = "PdgTypes.Node.Counter" end)
@@ -64,9 +64,11 @@ end
   let print_id fmt n = 
     Format.fprintf fmt "n:%a" print_id n
 
-  include Datatype.Make_with_collections
-    (struct
-        type t = tt
+  include
+    (Datatype.Make_with_collections
+      (struct
+        type node = t
+        type t = node
         let name = "PdgTypes.Elem"
         let reprs = [ { id = -1; key = PdgIndex.Key.top_input } ]
         let structural_descr = 
@@ -81,7 +83,8 @@ end
         let internal_pretty_code = Datatype.undefined
         let varname = Datatype.undefined
         let mem_project = Datatype.never_any_project
-     end)
+      end)
+     : Datatype.S_with_collections with type t := t)
 
   let pretty_list fmt l =
     List.iter (fun n -> Format.fprintf fmt " %a" pretty n) l
@@ -643,10 +646,10 @@ module Pdg = struct
       let key = Node.elem_key v in
       let sh, col, txt = match key with
         | Key.VarDecl v ->
-          let txt = Pretty_utils.sfprintf "@[Decl %s@]" v.vname in
+          let txt = Format.asprintf "@[Decl %s@]" v.vname in
           `Shape `Box, color_decl, txt
         | Key.SigKey k ->
-          let txt = Pretty_utils.sfprintf "%a" Signature.pretty_key k in
+          let txt = Format.asprintf "%a" Signature.pretty_key k in
           let color = 
 	    match k with | Signature.Out _ -> color_out | _ ->  color_in 
 	  in
@@ -700,7 +703,7 @@ module Pdg = struct
         | None -> attrib
         | Some z ->
           let txt =
-            Pretty_utils.sfprintf "@[<h 1>%a@]" Locations.Zone.pretty z in
+            Format.asprintf "@[<h 1>%a@]" Locations.Zone.pretty z in
           (`Label (String.escaped txt)) :: attrib
       in
       let attrib =
@@ -728,7 +731,7 @@ module Pdg = struct
       | Key.CallStmt call | Key.SigCallKey (call, _) ->
         let call_stmt = Key.call_from_id call in
         let name = "Call"^(string_of_int call_stmt.sid) in
-        let call_txt = Pretty_utils.sfprintf "%a" Printer.pp_stmt call_stmt in
+        let call_txt = Format.asprintf "%a" Printer.pp_stmt call_stmt in
         let call_txt = String.escaped call_txt in
         let attrib = [(`Label (name^" : "^call_txt))] in
         let attrib = (`Fillcolor 0xB38B4D) :: attrib in
@@ -764,6 +767,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

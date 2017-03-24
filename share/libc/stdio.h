@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -23,22 +23,23 @@
 /* ISO C: 7.19 */
 #ifndef __FC_STDIO
 #define __FC_STDIO
+#include "features.h"
 #include "__fc_machdep.h"
+#include "__fc_string_axiomatic.h"
 #include "stdarg.h"
 #include "stddef.h"
 #include "errno.h"
 #include "__fc_define_stat.h"
-#include "__fc_define_restrict.h"
 #include "__fc_define_fpos_t.h"
 #include "__fc_define_file.h"
 #include "__fc_define_null.h"
+#include "__fc_define_eof.h"
 
 #define _IOFBF 0
 #define _IOLBF 1
 #define _IONBF 2
 
 #define BUFSIZ __FC_BUFSIZ
-#define EOF __FC_EOF
 #define FOPEN_MAX __FC_FOPEN_MAX
 #define FILENAME_MAX __FC_FILENAME_MAX
 #define L_tmpnam __FC_L_tmpnam
@@ -46,6 +47,8 @@
 #include "__fc_define_seek_macros.h"
 
 #define TMP_MAX __FC_TMP_MAX
+
+__BEGIN_DECLS
 
 extern FILE * __fc_stderr;
 #define stderr (__fc_stderr)
@@ -56,43 +59,53 @@ extern FILE * __fc_stdin;
 extern FILE * __fc_stdout;
 #define stdout (__fc_stdout)
 
+/*
+  Note: currently some functions only consider the __fc_FILE_id field of FILE.
+        This models the fact that operations on different files are considered
+        non-interferent between them.
+*/
+
 /*@ assigns \nothing; */ 
 int remove(const char *filename);
 
 /*@ assigns \nothing; */ 
-int rename(const char *old, const char *new);
+int rename(const char *old_name, const char *new_name);
 
 /*@ assigns \nothing; 
   ensures \result==\null || (\valid(\result) && \fresh(\result,sizeof(FILE))) ; */ 
 FILE *tmpfile(void);
 
-/*@ 
+/*@
   assigns \result \from s[..]; 
   assigns s[..] \from \nothing; 
   // TODO: more precise behaviors from ISO C 7.19.4.4 
 */
 char *tmpnam(char *s);
 
-/*@ assigns *stream \from \nothing; 
-  ensures \result == 0 || \result == (-1);  // -1 expanded manually to EOF
+/*@
+  requires \valid(stream);
+  assigns \result \from stream, stream->__fc_FILE_id;
+  ensures \result == 0 || \result == EOF;
   // TODO: more precise behaviors from ISO C 7.19.4.1 
 */
 int fclose(FILE *stream);
 
-/*@ assigns *stream \from \nothing;
-   ensures \result == 0 || \result == (-1);  // -1 expanded manually from EOF
+/*@
+  requires stream == \null || \valid_read(stream);
+  assigns \result \from stream, stream->__fc_FILE_id;
+  ensures \result == 0 || \result == EOF;
   // TODO: more precise behaviors from ISO C 7.19.5.2
  */
 int fflush(FILE *stream);
 
 FILE __fc_fopen[__FC_FOPEN_MAX];
-const FILE* _p__fc_fopen = __fc_fopen;
+FILE* const __p_fc_fopen = __fc_fopen;
 
 /*@ 
-  assigns \result \from filename[..],mode[..], _p__fc_fopen; 
-  ensures 
-  \result==\null 
-  || (\valid(\result) && (\subset(\result,&__fc_fopen[0..]))) ;
+  assigns \result \from filename[..],mode[..], __p_fc_fopen; 
+  ensures
+  \result==\null
+  || (\subset(\result,&__fc_fopen[0 .. __FC_FOPEN_MAX-1])) ;
 */ 
 FILE *fopen(const char * restrict filename,
      const char * restrict mode);
@@ -118,18 +131,20 @@ int setvbuf(FILE * restrict stream,
      char * restrict buf,
      int mode, size_t size);
 
-/*@ assigns *stream; */
+/*@ assigns *stream \from stream->__fc_FILE_id; */
+// unsupported...
 int fprintf(FILE * restrict stream,
      const char * restrict format, ...);
 
-/*@ assigns *stream;
+/*@ assigns *stream \from stream->__fc_FILE_id;
 // unsupported...
  */
 int fscanf(FILE * restrict stream,
      const char * restrict format, ...);
 
-// TODO: \from ...
-/*@ assigns *__fc_stdout \from format[..]; */
+/*@ assigns *__fc_stdout \from format[..];
+// unsupported...
+*/
 int printf(const char * restrict format, ...);
 
 /*@ assigns *__fc_stdin; 
@@ -149,6 +164,7 @@ int snprintf(char * restrict s, size_t n,
 int sprintf(char * restrict s,
      const char * restrict format, ...);
 
+// unsupported...
 int sscanf(const char * restrict s,
      const char * restrict format, ...);
 
@@ -231,12 +247,26 @@ int puts(const char *s);
 /*@ assigns *stream \from c; */
 int ungetc(int c, FILE *stream);
 
-/*@ assigns ((char*)ptr)[0..(nmemb*size)-1] \from *stream; */
+/*@
+  requires \valid(((char*)ptr)+(0..(nmemb*size)-1));
+  requires \valid(stream);
+  assigns *(((char*)ptr)+(0..(nmemb*size)-1)) \from size, nmemb, *stream;
+  assigns \result \from size, *stream;
+  ensures \result <= nmemb;
+  ensures \initialized(((char*)ptr)+(0..(\result*size)-1));
+  //TODO: specify precise fields from struct FILE
+*/
 size_t fread(void * restrict ptr,
      size_t size, size_t nmemb,
      FILE * restrict stream);
 
-/*@ assigns *stream \from ((char*)ptr)[0..(nmemb*size)-1]; */
+/*@
+  requires \valid_read(((char*)ptr)+(0..(nmemb*size)-1));
+  requires \valid(stream);
+  assigns *stream, \result \from *(((char*)ptr)+(0..(nmemb*size)-1));
+  ensures \result <= nmemb;
+  //TODO: specify precise fields from struct FILE
+*/
 size_t fwrite(const void * restrict ptr,
      size_t size, size_t nmemb,
      FILE * restrict stream);
@@ -310,7 +340,8 @@ size_t fwrite_unlocked(const void *ptr, size_t size, size_t n,
 char *fgets_unlocked(char *s, int n, FILE *stream);
 int fputs_unlocked(const char *s, FILE *stream);
 
-#define IOV_MAX 1024
+__END_DECLS
 
+#define IOV_MAX 1024
 
 #endif

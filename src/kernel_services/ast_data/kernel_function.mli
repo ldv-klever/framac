@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -53,8 +53,7 @@ val find_first_stmt : t -> stmt
 
 val find_return : t -> stmt
   (** Find the return statement of a kernel function.
-      @raise No_Statement is there is no return statement for the given
-      function.
+      @raise No_Statement is the kernel function is only a prototype.
       @modify Nitrogen-20111001 may raise No_Statement*)
 
 val find_label : t -> string -> stmt ref
@@ -90,9 +89,15 @@ val find_all_enclosing_blocks: stmt -> block list
 val blocks_closed_by_edge: stmt -> stmt -> block list
   (** [blocks_closed_by_edge s1 s2] returns the (possibly empty)
       list of blocks that are closed when going from [s1] to [s2].
-      @raise Invalid_argument if the statements do not belong to the
-      same function or [s2] is not a successor of [s1] in the cfg.
+      @raise Invalid_argument if [s2] is not a successor of [s1] in the cfg.
       @since Carbon-20101201 *)
+
+val blocks_opened_by_edge: stmt -> stmt -> block list
+  (** [blocks_opened_by_edge s1 s2] returns the (possibly empty)
+      list of blocks that are opened when going from [s1] to [s2].
+      @raise Invalid_argument if [s2] is not a successor of [s1] in the cfg.
+      @since Magnesium-20151001 *)
+
 
 val stmt_in_loop: t -> stmt -> bool
   (** [stmt_in_loop kf stmt] is [true] iff [stmt] strictly 
@@ -118,6 +123,12 @@ val find_syntactic_callsites : t -> (t * stmt) list
 (* ************************************************************************* *)
 
 val is_definition : t -> bool
+
+val is_entry_point: t -> bool
+(** @return true iff the given function is the main of the program (as stated by
+    option -main).
+    @since Sodium-20150201 *)
+
 val returns_void : t -> bool
 
 (* ************************************************************************* *)
@@ -134,6 +145,8 @@ val get_type : t -> typ
 val get_return_type : t -> typ
 val get_location: t -> Cil_types.location
 val get_global : t -> global
+(** For functions with a declaration and a definition, returns the definition.*)
+
 val get_formals : t -> varinfo list
 val get_locals : t -> varinfo list
 
@@ -199,6 +212,6 @@ val self: State.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

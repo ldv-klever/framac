@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -43,7 +43,6 @@ module Make_without_cardinal
      val e: bool
      val f : K.t -> V.t -> bool
      val compose : bool -> bool -> bool
-     val default:bool
   end)
   (L: sig val v : (K.t * V.t) list list end)
   =
@@ -62,7 +61,8 @@ struct
   module Top_Param = Top_Param
 
   type map_t = M.t
-  type tt = Top of Top_Param.t * Origin.t | Map of map_t
+
+  type t = Top of Top_Param.t * Origin.t | Map of map_t
   (** No function of this module creates a [Top] out of a [Map]. [Top] are
       always derived from an existing [Top] value. *)
 
@@ -181,12 +181,11 @@ struct
   let check_join_assert = ref 0
 
   let join =
-    let decide_none _k v = v in
-    let decide_some v1 v2 = V.join v1 v2 in
+    let decide _ v1 v2 = V.join v1 v2 in
     let name = Printf.sprintf "Map_Lattice(%s).join" V.name in
     let symmetric_merge =
-      M.symmetric_merge
-        ~cache:(name, ()) ~empty_neutral:true ~decide_none ~decide_some
+      M.join ~cache:(Hptmap_sig.PersistentCache name)
+        ~symmetric:true ~idempotent:true ~decide
     in
     fun m1 m2 ->
       if m1 == m2 then m1 else
@@ -256,12 +255,15 @@ struct
         Map (M.fold (fun k _ acc -> if f k then acc else M.remove k acc) m m)
 
   let meet =
-    let decide_some _k v1 v2 =
+    let decide _k v1 v2 =
       let r = V.meet v1 v2 in
       if V.equal V.bottom r then None else Some r
     in
     let name = Printf.sprintf "Map_Lattice(%s).meet" V.name in
-    let merge = M.symmetric_inter ~cache:(name, ()) ~decide_some in
+    let merge =
+      M.inter ~cache:(Hptmap_sig.PersistentCache name)
+        ~symmetric:true ~idempotent:true ~decide
+    in
     fun m1 m2 ->
       match m1, m2 with
       | Top (x1, a1), Top (x2, a2) ->
@@ -281,12 +283,15 @@ struct
       else if Top_Param.is_included x2 x1 then a2
       else Origin.top
     in
-    let decide_some _k v1 v2 =
+    let decide _k v1 v2 =
       let r = V.narrow v1 v2 in
       if V.equal V.bottom r then None else Some r
     in
     let name = Printf.sprintf "Map_Lattice(%s).narrow" V.name in
-    let merge = M.symmetric_inter ~cache:(name, ()) ~decide_some in
+    let merge =
+      M.inter ~cache:(Hptmap_sig.PersistentCache name)
+        ~symmetric:true ~idempotent:true ~decide
+    in
     fun m1 m2 ->
       match m1, m2 with
         | Top (x1, a1), Top (x2, a2) ->
@@ -301,14 +306,14 @@ struct
 
   let is_included =
     let name =
-      Pretty_utils.sfprintf "Map_Lattice(%s)(%s).is_included" K.name V.name
+      Format.asprintf "Map_Lattice(%s)(%s).is_included" K.name V.name
     in
     let decide_fst _ _ = false in
     let decide_snd _ _ = true in
     let decide_both _ v1 v2 = V.is_included v1 v2 in
     let decide_fast = M.decide_fast_inclusion in
     let map_is_included =
-      M.binary_predicate (Hptmap.PersistentCache name) M.UniversalPredicate
+      M.binary_predicate (Hptmap_sig.PersistentCache name) M.UniversalPredicate
         ~decide_fast ~decide_fst ~decide_snd ~decide_both
     in
     fun m1 m2 ->
@@ -327,12 +332,11 @@ struct
 
   (* under-approximation of union *)
   let link =
-    let decide_none _k v = v in
-    let decide_some v1 v2 = V.link v1 v2 in
+    let decide _k v1 v2 = V.link v1 v2 in
     let name = Printf.sprintf "Map_Lattice(%s).link" V.name in
     let merge =
-      M.symmetric_merge
-        ~cache:(name, ()) ~empty_neutral:true ~decide_none ~decide_some
+      M.join ~cache:(Hptmap_sig.PersistentCache name)
+        ~symmetric:true ~idempotent:true ~decide
     in
     fun m1 m2 -> match m1, m2 with
     | Top _, Map _ -> m1 (* may be approximated *)
@@ -345,11 +349,11 @@ struct
 
   let intersects =
     let name =
-      Pretty_utils.sfprintf "Map_Lattice(%s)(%s).intersects" K.name V.name
+      Format.asprintf "Map_Lattice(%s)(%s).intersects" K.name V.name
     in
     let map_intersects =
       M.symmetric_binary_predicate
-        (Hptmap.PersistentCache name) M.ExistentialPredicate
+        (Hptmap_sig.PersistentCache name) M.ExistentialPredicate
 	~decide_fast:M.decide_fast_intersection
 	~decide_one:(fun _ _ -> false)
 	~decide_both:(fun _ x y -> V.intersects x y)
@@ -363,6 +367,12 @@ struct
       | Top (Top_Param.Set s, _), Map m | Map m, Top (Top_Param.Set s, _) ->
         M.exists (fun b _ -> Top_Param.O.mem b s) m
       | Map m1, Map m2 -> map_intersects m1 m2
+
+  let find k v =
+    match v with
+    | Top (s, _) ->
+      if Top_Param.mem k s then V.top else V.bottom
+    | Map m -> find_or_bottom k m
 
   (** if there is only one key [k] in map [m], then returns the pair [k,v]
       where [v] is the value associated to [k].
@@ -436,9 +446,10 @@ struct
     | Map m ->
         M.fold f m acc
 
-  include Datatype.Make_with_collections
+  include (Datatype.Make_with_collections
       (struct
-        type t = tt
+        type map = t
+        type t = map
         let name = M.name ^ " map_lattice"
         let structural_descr =
            Structural_descr.t_sum
@@ -454,7 +465,7 @@ struct
         let pretty = pretty
         let mem_project = Datatype.never_any_project
         let varname = Datatype.undefined
-       end)
+       end): Datatype.S_with_collections with type t := t)
 
   let clear_caches = M.clear_caches
 
@@ -465,47 +476,39 @@ module Make
   (K : Key)
   (Top_Param : Lattice_type.Lattice_Hashconsed_Set with type O.elt=K.t)
   (V : sig
+    type generic_widen_hint
+    type size_widen_hint
     include Lattice_type.Full_AI_Lattice_with_cardinality
+      with type widen_hint = size_widen_hint * generic_widen_hint
     val pretty_debug: t Pretty_utils.formatter
   end)
   (Comp: sig (** See {!Hptmap} for the documentation of this option *)
      val e: bool
      val f : K.t -> V.t -> bool
      val compose : bool -> bool -> bool
-     val default:bool
   end)
   (L: sig val v : (K.t * V.t) list list end)
   =
 struct
   include Make_without_cardinal(K)(Top_Param)(V)(Comp)(L)
 
-  type widen_hint = K.t -> V.widen_hint
+  type size_widen_hint = V.size_widen_hint
+  type generic_widen_hint = K.t -> V.generic_widen_hint
+  type widen_hint = size_widen_hint * generic_widen_hint
 
-  let widen wh =
+  let widen (size,wh) =
     let widen_map =
-    let decide k v1 v2 =
-      let v1 = match v1 with
-        None -> V.bottom
-      | Some v1 -> v1
-      in
-      let v2 = match v2 with
-        None -> V.bottom
-      | Some v2 -> v2
-      in
-      V.widen (wh k) v1 v2
-    in
-    M.generic_merge
-      ~cache:("", false (* No cache, because of wh *))
-      ~decide
-      ~idempotent:true
-      ~empty_neutral:true
+      let decide k v1 v2 = V.widen (size,wh k) v1 v2 in
+      M.join
+        ~cache:Hptmap_sig.NoCache (* No cache, because of wh *)
+        ~symmetric:false ~idempotent:true ~decide
     in
     fun m1 m2 ->
       match m1, m2 with
-      | _ , Top _ -> m2
-      | Top _, _ -> assert false (* m2 should be larger than m1 *)
-      | Map m1, Map m2 ->
-          Map (widen_map m1 m2)
+        | _ , Top _ -> m2
+        | Top _, _ -> assert false (* m2 should be larger than m1 *)
+        | Map m1, Map m2 ->
+            Map (widen_map m1 m2)
 
   (** if there is only one binding [k -> v] in map [m] (that is, only one key
       [k] and [cardinal_zero_or_one v]), returns the pair [k,v].
@@ -566,6 +569,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,7 +31,13 @@ type callstack = call_site list
 (** Value callstacks, as used e.g. in Db.Value hooks *)
 
 module Callsite: Datatype.S_with_collections with type t = call_site
-module Callstack: Datatype.S_with_collections with type t = callstack
+module Callstack: sig
+  include Datatype.S_with_collections with type t = callstack
+  val pretty_debug : Format.formatter -> t -> unit
+
+  (** Print a call stack without displaying call sites. *)
+  val pretty_short : Format.formatter -> t -> unit
+end
 
 type 'a callback_result =
   | Normal of 'a
@@ -62,6 +68,11 @@ type call_result = {
 
   c_cacheable: cacheable
     (** Is it possible to cache the result of this call? *);
+
+  c_from: (Function_Froms.froms * Locations.Zone.t) option
+    (** If not None, the froms of the function, and its sure outputs;
+        i.e. the dependencies of the result, and the dependencies
+        of each zone written to. *)
 }
 
 
@@ -71,7 +82,7 @@ type logic_dependencies = Locations.Zone.t Cil_datatype.Logic_label.Map.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)
 

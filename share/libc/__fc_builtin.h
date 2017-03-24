@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -23,9 +23,10 @@
 #ifndef Frama_C_BUILTIN
 #define Frama_C_BUILTIN
 #include "__fc_define_size_t.h"
-#include "__fc_builtin_for_normalization.i"
+#include "features.h"
+__BEGIN_DECLS
 
-extern int Frama_C_entropy_source;
+extern volatile int Frama_C_entropy_source __attribute__((unused)) __attribute__((FRAMA_C_MODEL));
 
 /*@ requires \valid(p + (0 .. l-1));
     assigns p[0 .. l-1] \from Frama_C_entropy_source;
@@ -46,19 +47,21 @@ int Frama_C_nondet(int a, int b);
  */
 void *Frama_C_nondet_ptr(void *a, void *b);
 
-/*@ assigns \result \from min, max, Frama_C_entropy_source;
+/*@ requires min <= max;
+    assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
  */
 int Frama_C_interval(int min, int max);
 
-/*@ assigns \result \from min, max, Frama_C_entropy_source;
+/*@ requires min <= max;
+    assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
  */
 int Frama_C_interval_split(int min, int max);
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
@@ -66,21 +69,21 @@ int Frama_C_interval_split(int min, int max);
 unsigned char Frama_C_unsigned_char_interval
   (unsigned char min, unsigned char max);
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
  */
 char Frama_C_char_interval(char min, char max);
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
  */
 unsigned short Frama_C_unsigned_short_interval(unsigned short min, unsigned short max);
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
@@ -88,14 +91,14 @@ unsigned short Frama_C_unsigned_short_interval(unsigned short min, unsigned shor
 short Frama_C_short_interval(short min, short max);
 
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
  */
 unsigned int Frama_C_unsigned_int_interval(unsigned int min, unsigned int max);
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
@@ -103,7 +106,7 @@ unsigned int Frama_C_unsigned_int_interval(unsigned int min, unsigned int max);
 int Frama_C_int_interval(int min, int max);
 
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
@@ -111,7 +114,7 @@ int Frama_C_int_interval(int min, int max);
 unsigned long Frama_C_unsigned_long_interval
      (unsigned long min, unsigned long max);
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
@@ -119,7 +122,7 @@ unsigned long Frama_C_unsigned_long_interval
 long Frama_C_long_interval(long min, long max);
 
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
@@ -127,7 +130,7 @@ long Frama_C_long_interval(long min, long max);
 unsigned long long Frama_C_unsigned_long_long_interval
      (unsigned long long min, unsigned long long max);
 
-/*@ 
+/*@ requires min <= max;
     assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures min <= \result <= max ;
@@ -135,13 +138,17 @@ unsigned long long Frama_C_unsigned_long_long_interval
 long long Frama_C_long_long_interval(long long min, long long max);
 
 
-/*@ assigns \result \from min, max, Frama_C_entropy_source;
+/*@ requires \is_finite(min) && \is_finite(max);
+    requires min <= max;
+    assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures \is_finite(\result) && min <= \result <= max ;
  */
 float Frama_C_float_interval(float min, float max);
 
-/*@ assigns \result \from min, max, Frama_C_entropy_source;
+/*@ requires \is_finite(min) && \is_finite(max);
+    requires min <= max;
+    assigns \result \from min, max, Frama_C_entropy_source;
     assigns Frama_C_entropy_source \from Frama_C_entropy_source;
     ensures \is_finite(\result) && min <= \result <= max ;
  */
@@ -150,25 +157,22 @@ double Frama_C_double_interval(double min, double max);
 
 /*@ assigns ((char *)dest)[0..n-1] \from ((char *)src)[0..n-1];
     assigns \result \from dest; 
-    ensures dest[0..n] == src[0..n];
 */
-void* Frama_C_memcpy(char *dest, const char *src, unsigned long n);
+void* Frama_C_memcpy(void *dest, const void *src, size_t n);
 
-/*@
+/*@ assigns ((char*)p)[0 .. s-1] \from c ; assigns \result \from p; */
+void* Frama_C_memset(void *p, int c, size_t s);
+
+/*@ // Signals an error;
+  requires \false;
   assigns \nothing;
-  ensures \false;
 */
 void Frama_C_abort(void) __attribute__ ((noreturn));
 
-void Frama_C_show_each_warning(const char*, ...);
-
-size_t Frama_C_offset(const void*);
-
-void *Frama_C_undegenerate(const void*);
-
-/*@ assigns ((char*)p)[0 .. s-1] \from c ; */
-void Frama_C_memset(void *p, int c, size_t s);
+/*@ assigns \result \from p; */
+size_t Frama_C_offset(const void* p);
 
 void *Frama_C_alloc_size(size_t size);
+__END_DECLS
 
 #endif

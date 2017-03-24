@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,7 +38,7 @@ let () = Cmdline.run_after_configuring_stage disable_other_analyzers
 
 let force_run () =
   if not (Dictionary.is_computed ()) then begin
-    let old_printer = Printer.printer () in
+    let old_printer = Printer.current_printer () in
     Obfuscate.obfuscate ();
     if Options.Dictionary.is_default () then Log.print_delayed Dictionary.pretty
     else begin
@@ -54,7 +54,7 @@ let force_run () =
 	  (Printexc.to_string exn)
     end;
     File.pretty_ast ();
-    Printer.change_printer (fun () -> old_printer)
+    Printer.set_printer old_printer
   end
 
 let force_run =
@@ -76,6 +76,6 @@ let () = Db.Main.extend run
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

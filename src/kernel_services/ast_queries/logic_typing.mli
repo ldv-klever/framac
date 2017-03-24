@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -22,8 +22,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Logic typing and logic environment.
-    @plugin development guide *)
+(** Logic typing and logic environment. *)
 
 open Cil_types
 
@@ -47,6 +46,12 @@ val is_integral_type: Cil_types.logic_type -> bool
 val is_set_type: Cil_types.logic_type -> bool
 val is_array_type: Cil_types.logic_type -> bool
 val is_pointer_type: Cil_types.logic_type -> bool
+
+(** @since Aluminium-20160501 *)
+val is_list_type: Cil_types.logic_type -> bool
+
+(** @since Aluminium-20160501 *)
+val type_of_list_elem : logic_type -> logic_type
 
 val type_of_pointed: logic_type -> logic_type
 val type_of_array_elem: logic_type -> logic_type
@@ -98,45 +103,46 @@ type typing_context = {
   pre_state:Lenv.t;
   post_state:termination_kind list -> Lenv.t;
   assigns_env: Lenv.t;
-  type_predicate:Lenv.t -> Logic_ptree.lexpr -> predicate named;
+  type_predicate:Lenv.t -> Logic_ptree.lexpr -> predicate;
   type_term:Lenv.t -> Logic_ptree.lexpr -> term;
   type_assigns:
     accept_formal:bool -> 
     Lenv.t -> Logic_ptree.lexpr assigns -> identified_term assigns;
- 
- error: 'a. location -> ('a,Format.formatter,unit) format -> 'a;
+  error: 'a 'b. location -> ('a,Format.formatter,unit,'b) format4 -> 'a;
 }
 
 (** [register_behavior_extension name f] registers a typing function [f] to 
-    be used to type clause with name [name]. 
-    This function may change the funbehavior in place. 
+    be used to type clause with name [name].
     Here is a basic example:
-    let foo_typer ~typing_context ~loc bhv ps =
+    let count = ref 0 in
+    let foo_typer ~typing_context ~loc ps =
     match ps with p::[] ->
-      bhv.b_extended <- ("FOO",42,
-			 [Logic_const.new_predicate 
-                                (typing_context.type_predicate 
+      ("FOO",
+       Ext_preds
+	[
+             (typing_context.type_predicate 
 				 (typing_context.post_state [Normal]) 
 				 p)])
-      ::bhv.b_extended
+      | [] -> let id = !count in incr count; ("FOO", Ext_id id)
       | _ -> typing_context.error loc "expecting a predicate after keyword FOO"
     let () = register_behavior_extension "FOO" foo_typer
 
     @plugin development guide
 
     @since Carbon-20101201
+    @modify Silicon-20161101 change type of the function
 *)
-val register_behavior_extension:  
+val register_behavior_extension:
   string ->
-  (typing_context:typing_context -> loc:location -> funbehavior -> 
-    Logic_ptree.lexpr list -> unit)
-  -> unit
+  (typing_context:typing_context -> loc:location ->
+    Logic_ptree.lexpr list -> acsl_extension_kind) -> unit
 
 module Make
   (C :
     sig
       val is_loop: unit -> bool 
-      (** whether the annotation we want to type is contained in a loop. *)
+      (** whether the annotation we want to type is contained in a loop.
+          Only useful when creating objects of type [code_annotation]. *)
       val anonCompFieldName : string
       val conditionalConversion : typ -> typ -> typ
       val compatibleTypesp : typ -> typ -> bool
@@ -167,6 +173,10 @@ module Make
        *)
       val integral_cast: Cil_types.typ -> Cil_types.term -> Cil_types.term
 
+      (** raises an error at the given location and with the given message.
+          @since Magnesium-20151001 *)
+      val error: location -> ('a,Format.formatter,unit, 'b) format4 -> 'a 
+
     end) :
 sig
 
@@ -180,7 +190,7 @@ sig
   (** type-checks a term. *)
   val term : Lenv.t -> Logic_ptree.lexpr -> term
 
-  val predicate : Lenv.t -> Logic_ptree.lexpr -> predicate named
+  val predicate : Lenv.t -> Logic_ptree.lexpr -> predicate
 
   (** [code_annot loc behaviors rt annot] type-checks an in-code annotation.
     @param loc current location
@@ -250,6 +260,6 @@ val post_state_env: termination_kind -> logic_type -> Lenv.t
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../../.."
+compile-command: "make -C ../../.."
 End:
 *)

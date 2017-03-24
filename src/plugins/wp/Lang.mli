@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -90,6 +90,7 @@ and source =
   | Extern of Engine.link extern
 
 val builtin_type : name:string -> link:string infoprover -> library:string -> unit
+val is_builtin_type : name:string -> tau -> bool
 val datatype : library:string -> string -> adt
 val record :
   link:string infoprover -> library:string -> (string * tau) list -> adt
@@ -102,21 +103,21 @@ val fields_of_field : field -> field list
 type balance = Nary | Left | Right
 
 val extern_s :
-  library:library -> 
+  library:library ->
   ?link:(Engine.link infoprover) ->
-  ?category:lfun category -> 
-  ?params:sort list -> 
-  ?sort:sort -> 
+  ?category:lfun category ->
+  ?params:sort list ->
+  ?sort:sort ->
   ?result:tau ->
   string -> lfun
 
 val extern_f :
-  library:library -> 
+  library:library ->
   ?link:(Engine.link infoprover) ->
   ?balance:balance ->
-  ?category:lfun category -> 
-  ?params:sort list -> 
-  ?sort:sort -> 
+  ?category:lfun category ->
+  ?params:sort list ->
+  ?sort:sort ->
   ?result:tau ->
   ('a,Format.formatter,unit,lfun) format4 -> 'a
 (** balance just give a default when link is not specified *)
@@ -131,8 +132,8 @@ val extern_p :
 val extern_fp : library:library -> ?params:sort list ->
   ?link:string infoprover -> string -> lfun
 
-val generated_f : ?category:lfun category -> 
-  ?params:sort list -> ?sort:sort -> ?result:tau -> 
+val generated_f : ?category:lfun category ->
+  ?params:sort list -> ?sort:sort -> ?result:tau ->
   ('a,Format.formatter,unit,lfun) format4 -> 'a
 
 val generated_p : string -> lfun
@@ -259,7 +260,10 @@ sig
   val e_subst : ?sigma:sigma -> (term -> term) -> term -> term
   val p_subst : ?sigma:sigma -> (term -> term) -> pred -> pred
 
-  val p_close : pred -> pred
+  val e_vars : term -> var list (** Sorted *)
+  val p_vars : pred -> var list (** Sorted *)
+  
+  val p_close : pred -> pred (** Quantify over (sorted) free variables *)
 
   val idp : pred -> int
   val varsp : pred -> Vars.t
@@ -268,6 +272,7 @@ sig
   val intersect : term -> term -> bool
   val intersectp : pred -> pred -> bool
 
+  val pp_tau : Format.formatter -> tau -> unit
   val pp_var : Format.formatter -> var -> unit
   val pp_vars : Format.formatter -> Vars.t -> unit
   val pp_term : Format.formatter -> term -> unit
@@ -284,6 +289,8 @@ sig
   val pp_epred : env -> Format.formatter -> pred -> unit
 
   val pred : pred -> pred expression
+  val epred : pred -> term expression
+  val p_iter : (pred -> unit) -> (term -> unit) -> pred -> unit
 
   module Pmap : Qed.Idxmap.S with type key = pred
   module Pset : Qed.Idxset.S with type elt = pred
@@ -298,9 +305,13 @@ sig
 
   (** {3 Internal Checks} *)
 
-  val do_checks : bool ref
-  val iter_checks : (qed:term -> raw:term -> goal:pred -> unit) -> unit
-
+  module Check :
+  sig
+    val reset : unit -> unit
+    val set : string -> unit (* check constructor *)
+    val is_set : unit -> bool
+    val iter : (qed:term -> raw:term -> goal:pred -> unit) -> unit
+  end
 
 end
 
@@ -312,11 +323,11 @@ type gamma
 val new_pool : ?copy:pool -> unit -> pool
 val new_gamma : ?copy:gamma -> unit -> gamma
 
-val local : ?pool:pool -> ?gamma:gamma -> ('a -> 'b) -> 'a -> 'b 
+val local : ?pool:pool -> ?gamma:gamma -> ('a -> 'b) -> 'a -> 'b
 
 val freshvar : ?basename:string -> tau -> var
 val freshen : var -> var
-val assume : pred -> unit  
+val assume : pred -> unit
 val without_assume : ('a -> 'b) -> 'a -> 'b
 val epsilon : ?basename:string -> tau -> (term -> pred) -> term
 val hypotheses : gamma -> pred list

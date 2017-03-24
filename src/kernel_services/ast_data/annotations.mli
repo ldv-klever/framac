@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -68,8 +68,7 @@ val funspec:
     @raise No_funspec whenever the given function has no specification *) 
 
 val behaviors:
-  ?emitter:Emitter.t -> ?populate:bool -> kernel_function -> 
-  (identified_predicate, identified_term) behavior list
+  ?emitter:Emitter.t -> ?populate:bool -> kernel_function -> funbehavior list
 (** Get the behaviors clause of the contract associated to the given function.
     Meaning of [emitter] and [populate] is similar to {!funspec}. 
     @raise No_funspec whenever the given function has no specification *)
@@ -204,23 +203,21 @@ val fold_allocates:
   (** Fold on the allocates of the corresponding behavior. *)
 
 val iter_extended:
-  (Emitter.t -> (string * int * identified_predicate list) -> unit) ->
+  (Emitter.t -> acsl_extension -> unit) ->
   kernel_function -> string -> unit
   (** @since Sodium-20150201 *)
 
 val fold_extended:
-  (Emitter.t -> (string * int * identified_predicate list) -> 'a -> 'a) ->
+  (Emitter.t -> acsl_extension -> 'a -> 'a) ->
   kernel_function -> string -> 'a -> 'a
 
 val iter_behaviors:
-  (Emitter.t -> (identified_predicate, identified_term) behavior -> unit)
-  -> kernel_function -> unit
+  (Emitter.t -> funbehavior -> unit) -> kernel_function -> unit
   (** Iter on the behaviors of the given kernel function.
       @since Fluorine-20130401 *)
 
 val fold_behaviors:
-  (Emitter.t -> (identified_predicate, identified_term) behavior -> 'a -> 'a)
-  -> kernel_function -> 'a -> 'a
+  (Emitter.t -> funbehavior -> 'a -> 'a) -> kernel_function -> 'a -> 'a
   (** Fold on the behaviors of the given kernel function. *)
 
 val iter_complete:
@@ -263,13 +260,23 @@ val fold_decreases:
 (** {2 Adding annotations} *)
 (**************************************************************************)
 
-val add_code_annot: 
+val add_code_annot:
   Emitter.t -> ?kf:kernel_function -> stmt -> code_annotation -> unit
 (** Add a new code annotation attached to the given statement. If [kf] is
-    provided, the function runs faster. *)
+    provided, the function runs faster.
+
+    There might be at most one statement contract associated to
+    a given statement and a given set of enclosing behaviors.
+    Trying to associate more than one will result in a merge of the contracts.
+
+    The same things happens with loop assigns and allocates/frees.
+
+    There can be at most one loop variant registered per statement.
+    Attempting to register a second one will result in a fatal error.
+ *)
 
 val add_assert:
-  Emitter.t -> ?kf:kernel_function -> stmt -> predicate named -> unit
+  Emitter.t -> ?kf:kernel_function -> stmt -> predicate -> unit
 (** Add an assertion attached to the given statement. If [kf] is
     provided, the function runs faster. 
     @plugin development guide *)
@@ -277,76 +284,116 @@ val add_assert:
 val add_global: Emitter.t -> global_annotation -> unit
 (** Add a new global annotation into the program. *)
 
+type 'a contract_component_addition =
+  Emitter.t ->
+    kernel_function -> ?stmt:stmt -> ?active:string list -> 'a -> unit
+(** type for functions adding a part of a contract (either for global function
+    or for a given [stmt]). In the latter case [active] may be used to state the
+    list of enclosing behavior(s) for which the contract is supposed to hold.
+    [active] defaults to the empty list, meaning that the contract must
+    always hold.
+
+    @since Aluminium-20160501
+ *)
+
+type 'a behavior_component_addition =
+  Emitter.t ->
+    kernel_function -> ?stmt:stmt -> ?active:string list ->
+    ?behavior:string -> 'a -> unit
+(** type for functions adding a part of a [behavior] inside a contract. The
+    contract is found in a similar way as for {!contract_component_addition}
+    functions. Similarly, [active] has the same meaning as for
+    {!contract_component_addition}.
+
+    Default for [behavior] is {!Cil.default_behavior_name}. 
+
+    @since Aluminium-20160501
+*)
+
 val add_behaviors:
-  ?register_children:bool ->
-  Emitter.t -> 
-  kernel_function ->
-  (identified_predicate, identified_term) behavior list -> 
-  unit
-(** Add new behaviors into the contract of the given function. 
+  ?register_children:bool -> funbehavior list contract_component_addition
+(** Add new behaviors into the given contract. 
     if [register_children] is [true] (the default), inner clauses of the
     behavior will also be registered by the function.
+
+    @modify Aluminium-20160501 restructuration of annotations management
 *)
 
 val add_decreases: Emitter.t -> kernel_function -> term variant -> unit
 (** Add a decrease clause into the contract of the given function. 
-    No decrease clause must previously be attached to this function. *)
+    No decrease clause must previously be attached to this function. 
 
-val add_terminates: Emitter.t -> kernel_function -> identified_predicate -> unit
-(** Add a terminates clause into the contract of the given function. 
-    No terminates clause must previously be attached to this function. *)
-
-val add_complete: Emitter.t -> kernel_function -> string list -> unit
-(** Add a new complete behaviors clause into the contract of the given
-    function. Do nothing but emitting a warning if one of the given name
-    is not an existing behavior or {!Cil.default_behavior_name}.
+    @modify Aluminium-20160501 restructuration of annotations management
 *)
 
-val add_disjoint: Emitter.t -> kernel_function -> string list -> unit
-(** Add a new disjoint behaviors clause into the contract of the given
-    function. Do nothing but emitting a warning if one of the given name
-    is not an existing behavior or {!Cil.default_behavior_name}.
+val add_terminates: identified_predicate contract_component_addition
+(** Add a terminates clause into a contract. 
+    No terminates clause must previously be attached to this contract. 
+
+    @modify Aluminium-20160501 restructuration of annotations management
+*)
+
+val add_complete: string list contract_component_addition
+(** Add a new complete behaviors clause into the contract of the given
+    function. Do nothing (but emit a warning) if this clause already exists
+    in the spec.
+
+    @raise Fatal if one of the given name
+    is either an unknown behavior or {!Cil.default_behavior_name}.
+
+    @modify Aluminium-20160501 restructuration of annotations management
  *)
 
-val add_requires:
-  Emitter.t -> kernel_function -> string -> identified_predicate list -> unit
-(** Add new requires clauses into the given behavior (provided by its name) of
-    the given function. *) 
+val add_disjoint: string list contract_component_addition
+(** Add a new disjoint behaviors clause into the contract of the given
+    function. Do nothing (but emit a warning) if this clause already exists
+    in the spec.
 
-val add_assumes:
-  Emitter.t -> kernel_function -> string -> identified_predicate list -> unit
-(** Add new assumes clauses into the given behavior (provided by its name) of
-    the given function. Does nothing but emitting a warning if an attempt is
-    made to add assumes clauses to the default behavior.
+    @raise Fatal if one of the given name
+    is either an unknown behavior or {!Cil.default_behavior_name}.
+
+    @modify Aluminium-20160501 restructuration of annotations management
+ *)
+
+val add_requires: identified_predicate list behavior_component_addition
+(** Add new requires clauses into the given behavior. 
+
+    @modify Aluminium-20160501 restructuration of annotations management
 *)
 
+val add_assumes: identified_predicate list behavior_component_addition
+(** Add new assumes clauses into the given behavior.
+    
+    Does nothing but emitting a warning if an attempt is
+    made to add assumes clauses to the default behavior.
+
+    @modify Aluminium-20160501 restructuration of annotations management
+ *)
+
 val add_ensures:
-  Emitter.t ->
-  kernel_function ->
-  string -> 
-  (termination_kind * identified_predicate) list ->
-  unit
-(** Add new ensures clauses into the given behavior (provided by its name) of
-    the given function. *) 
+  (termination_kind * identified_predicate) list behavior_component_addition
+(** Add new ensures clauses into the given behavior. 
+
+    @modify Aluminium-20160501 restructuration of annotations management
+*)
 
 val add_assigns:
-  keep_empty:bool ->
-  Emitter.t -> kernel_function -> string -> identified_term assigns -> unit
-(** Add new assigns into the given behavior (provided by its name) of the given
-    function. If [keep_empty] is [true] and the assigns clause were empty, then
+  keep_empty:bool -> identified_term assigns behavior_component_addition
+(** Add new assigns into the given behavior.
+
+    If [keep_empty] is [true] and the assigns clause were empty, then
     the assigns clause remains empty. (That corresponds to the ACSL semantics of
     an assigns clause: if no assigns is specified, that is equivalent to assigns
-    everything.) *)
+    everything.) 
 
-val add_allocates:
-  Emitter.t -> kernel_function -> string -> identified_term allocation -> unit 
-(** Add new allocates into the given behavior (provided by its name) of the
-    given function. *)
+    @modify Aluminium-20160501 restructuration of annotations management
+*)
 
-val add_extended:
-  Emitter.t -> kernel_function -> string ->
-  (string * int * identified_predicate list) -> unit
-  (** @since Sodium-20150201 *)
+val add_allocates: identified_term allocation behavior_component_addition
+(** Add new allocates into the given behavior. *)
+
+val add_extended: acsl_extension behavior_component_addition
+(** @since Sodium-20150201 *)
 
 (**************************************************************************)
 (** {2 Removing annotations} *)
@@ -367,11 +414,7 @@ val remove_global: Emitter.t -> global_annotation -> unit
 *)
   
 val remove_behavior:
-  ?force:bool ->
-  Emitter.t ->
-  kernel_function -> 
-  (identified_predicate, identified_term) behavior -> 
-  unit
+  ?force:bool -> Emitter.t -> kernel_function -> funbehavior -> unit
 (** Remove a behavior attached to a function. The provided emitter must be the
     one that emits this annotation. Do nothing if the annotation does not exist,
     or if the emitter is not ok. If [force] is [false] (which is the default),
@@ -435,10 +478,8 @@ val remove_assigns:
   (** Remove the corresponding assigns clause. Do nothing if the clause
       does not exist or was not emitted by the given emitter. *)
 
-val remove_extended:
-  Emitter.t -> kernel_function ->
-  (string * int * identified_predicate list) -> unit
-  (** @since Sodium-20150201 *)
+val remove_extended: Emitter.t -> kernel_function -> acsl_extension -> unit
+(** @since Sodium-20150201 *)
 
 (**************************************************************************)
 (** {2 Other useful functions} *)
@@ -447,6 +488,15 @@ val remove_extended:
 val has_code_annot: ?emitter:Emitter.t -> stmt -> bool
 (** @return [true] iff there is some annotation attached to the given statement
     (and generated by the given emitter, if any). *)
+
+val emitter_of_code_annot: code_annotation -> stmt -> Emitter.t
+(** @return the emitter which generated the given code_annotation,
+    assumed to be registered at the given statement.
+    @raise Not_found if the code annotation does not exist, or if it is
+    registered at another statement. 
+
+    @since Magnesium-20151001
+*)
 
 val emitter_of_global: global_annotation -> Emitter.t
 (** @return the emitter which generates a global annotation.
@@ -496,6 +546,6 @@ val remove_alarm_ref:
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

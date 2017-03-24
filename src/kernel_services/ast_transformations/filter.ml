@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -88,9 +88,7 @@ end = struct
           | Declaration(_,_,arg,l) ->
             Declaration(Cil.empty_funspec(),v,arg,l)
       in
-      let kf =
-        { fundec = fundec; spec = Cil.empty_funspec(); return_stmt = None }
-      in
+      let kf = { fundec = fundec; spec = Cil.empty_funspec() } in
       Cil_datatype.Varinfo.Hashtbl.add tbl v kf; kf
 
   let rec can_skip keep_stmts stmt =
@@ -432,8 +430,8 @@ end = struct
         ChangeTo
           (Logic_const.new_code_annotation
              (AAssert ([],
-                       { name = []; loc = Lexing.dummy_pos,Lexing.dummy_pos;
-                         content = Ptrue})))
+                       { pred_name = []; pred_loc = Cil_datatype.Location.unknown;
+                         pred_content = Ptrue})))
       end
 
     method private process_call call_stmt call =
@@ -640,9 +638,7 @@ end = struct
 
     method private visit_pred p =
       Logic_const.new_predicate
-        { name = p.ip_name;
-          loc = p.ip_loc;
-          content = visitCilPredicate (self:>Cil.cilVisitor) p.ip_content }
+        (visitCilPredicate (self:>Cil.cilVisitor) p.ip_content)
 
     method private visit_identified_term t =
       let t' = visitCilTerm (self:>Cil.cilVisitor) t.it_content in
@@ -712,7 +708,8 @@ end = struct
 
       let new_term = match spec.spec_terminates with
         | None -> None
-        | Some p -> if  Info.fun_precond_visible finfo p.ip_content
+        | Some p ->
+          if Info.fun_precond_visible finfo p.ip_content
           then Some (self#visit_pred p)
           else None
       in
@@ -795,7 +792,7 @@ end = struct
       Cil.set_orig_kernel_function self#behavior new_kf kf;
       Queue.add 
         (fun () -> Globals.Functions.register new_kf) self#get_filling_actions;
-      GVarDecl (Cil.empty_funspec(), new_var, loc), action
+      GFunDecl (Cil.empty_funspec(), new_var, loc), action
       end else begin
         let old_finfo = Varinfo.Hashtbl.find fi_table new_var in
         if not (finfo = old_finfo) then
@@ -804,7 +801,7 @@ end = struct
             Kernel_function.pretty kf
             new_var.vname;
         (* already processed: no need for more *)
-        GVarDecl(Cil.empty_funspec(),new_var,loc), fun () -> ()
+        GFunDecl(Cil.empty_funspec(),new_var,loc), fun () -> ()
       end
 
     method private compute_fct_prototypes (_fct_var,loc) =
@@ -872,20 +869,13 @@ end = struct
           List.split (self#compute_fct_definitions f loc)
         in
         Cil.ChangeToPost (new_functions, post actions)
-      | GVarDecl (_, v, loc) ->
-        begin
-          match Cil.unrollType v.vtype with
-          | TFun _ ->
-            debug1 "[vglob_aux] GVarDecl %s (TFun)@." v.vname;
-            let var_decl = (v, loc) in
-            let (new_decls,actions) =
-              List.split (self#compute_fct_prototypes var_decl)
-            in
-            Cil.ChangeToPost (new_decls, post actions)
-          | _ ->
-            debug1 "[vglob_aux] GVarDecl %s (other)@." v.vname;
-            Cil.DoChildren
-        end
+      | GFunDecl (_, v, loc) ->
+        debug1 "[vglob_aux] GFunDecl %s (TFun)@." v.vname;
+        let var_decl = (v, loc) in
+        let (new_decls,actions) =
+          List.split (self#compute_fct_prototypes var_decl)
+        in
+        Cil.ChangeToPost (new_decls, post actions)
       | _ -> Cil.DoChildren
   end
 
@@ -900,6 +890,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

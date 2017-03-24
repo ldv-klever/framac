@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,9 @@
 (*                                                                        *)
 (**************************************************************************)
 
+# 24 "src/kernel_internals/runtime/config.ml.in"
+
 let version = "@VERSION@"
-let date = "@CURR_DATE@"
 
 let is_gui = ref false
 
@@ -33,24 +34,23 @@ let () = Filepath.add_symbolic_dir "FRAMAC_SHARE" datadir
 let libdir = try Sys.getenv "FRAMAC_LIB" with Not_found -> "@FRAMAC_LIBDIR@"
 let () = Filepath.add_symbolic_dir "FRAMAC_LIB" libdir
 let plugin_dir =
-  try Sys.getenv "FRAMAC_PLUGIN"
+  try
+    let path = Sys.getenv "FRAMAC_PLUGIN" in
+    Str.split (Str.regexp ":") path
   with Not_found ->
-    try (Sys.getenv "FRAMAC_LIB") ^ "/plugins"
-    with Not_found ->
-      let myself = Filename.basename Sys.executable_name in
-      let myself = if Filename.check_suffix myself (".opt" ^ "@EXE@")
-        then Filename.chop_suffix myself (".opt" ^ "@EXE@")
-	else myself
-      in
-      let myself =
-	if Filename.check_suffix myself (".byte" ^ "@EXE@")
-	then Filename.chop_suffix myself (".byte" ^ "@EXE@")
-	else myself
-      in
-      if myself = "toplevel" || myself = "viewer" then
-	"@FRAMAC_TOP_SRCDIR@/lib/plugins"
-      else "@FRAMAC_PLUGINDIR@"
-let () = Filepath.add_symbolic_dir "FRAMAC_PLUGIN" plugin_dir
+    try [ Sys.getenv "FRAMAC_LIB" ^ "/plugins" ]
+    with Not_found -> [ "@FRAMAC_PLUGINDIR@" ]
+
+let plugin_path = String.concat ":" plugin_dir
+
+let () = match plugin_dir with
+  | [d] -> Filepath.add_symbolic_dir "FRAMAC_PLUGIN" d
+  | ds ->
+      Array.iteri
+        (fun i d ->
+           let path = Printf.sprintf "FRAMAC_PLUGIN#%d" (succ i) in
+           Filepath.add_symbolic_dir path d)
+        (Array.of_list ds)
 
 let preprocessor =
   try Sys.getenv "CPP" with Not_found -> "@FRAMAC_DEFAULT_CPP@"
@@ -66,5 +66,6 @@ let static_plugins = [@STATIC_PLUGINS@]
 let static_gui_plugins = [@STATIC_GUI_PLUGINS@]
 
 let compilation_unit_names = [@COMPILATION_UNITS@]
+let library_names = [@LIBRARY_NAMES@]
 
 let dot = @OPTDOT@

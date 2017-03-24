@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,6 +36,16 @@ module Stmt_hashtbl(Data:Datatype.S)(Info: State_builder.Info_with_size) :
 module Varinfo_hashtbl(Data:Datatype.S)(Info: State_builder.Info_with_size) :
   State_builder.Hashtbl with type key = Cil_types.varinfo
 			and type data = Data.t
+
+module Exp_hashtbl(Data:Datatype.S)(Info: State_builder.Info_with_size) :
+  State_builder.Hashtbl with type key = Cil_types.exp
+                         and type data = Data.t
+
+module Kernel_function_hashtbl
+    (Data:Datatype.S)(Info: State_builder.Info_with_size):
+  State_builder.Hashtbl with type key = Cil_types.kernel_function
+                         and type data = Data.t
+
 (*
 module Code_annotation_hashtbl
   (Data:Project.Datatype.S)(Info:State_builder.Info_with_size) :
@@ -45,6 +55,6 @@ module Code_annotation_hashtbl
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

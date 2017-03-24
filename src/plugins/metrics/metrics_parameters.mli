@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -46,8 +46,14 @@ module OutputFile: Parameter_sig.String
 module SyntacticallyReachable: Parameter_sig.Kernel_function_set
 (** Set of functions for which we compute the functions they may call *)
 
+module LocalsSize: Parameter_sig.Kernel_function_set
+(** Compute and print the total size of local variables for all functions in
+    this set (option -metrics-locals-size) *)
+
+module Libc: Parameter_sig.Bool
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

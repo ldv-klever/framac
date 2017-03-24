@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -47,7 +47,7 @@ let rec log2up n a b =
   if c = a then b else
   if s < n then log2up n c b else log2up n a c
 
-let max_cache_log = 
+let max_cache_log =
   log2up Sys.max_array_length 0 (Sys.word_size - 3) - 1
 
 let alloc size = 1 lsl (log2up size 0 max_cache_log)
@@ -67,7 +67,7 @@ struct
     | C( e , r ) when A.equal x e -> r
     | _ -> let r = f x in m.(h) <- C(x,r) ; r
 
-  let create ~size = Array.create (alloc size) N
+  let create ~size = Array.make (alloc size) N
 
 end
 
@@ -87,6 +87,6 @@ struct
     | C( a , b , r ) when A.equal x a && A.equal y b -> r
     | _ -> let r = f x y in m.(h) <- C(x,y,r) ; r
 
-  let create ~size = Array.create (alloc size) N
+  let create ~size = Array.make (alloc size) N
 
 end

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,26 +31,25 @@ open Cil_datatype
 (* -------------------------------------------------------------------------- *)
 
 let find_call env loc f =
-  try env.find_var f 
-  with Not_found -> 
-    env.error loc "Unknown function '%s'" f ; assert false
+  try env.find_var f
+  with Not_found ->
+    env.error loc "Unknown function '%s'" f
 
-let typecheck cmd ~typing_context ~loc bhv ps =
-  let fs = 
+let typecheck ~typing_context ~loc ps =
+  ignore loc ;
+  let fs =
     List.map
       (fun p ->
          let loc = p.lexpr_loc in
          match p.lexpr_node with
-         | PLvar f -> 
+         | PLvar f ->
              let fv = find_call typing_context loc f in
              Logic_const.term ~loc (TLval(TVar fv,TNoOffset)) fv.lv_type
-         | _ -> 
-             typing_context.error loc "Function name expected for calls" ;
-             assert false
-      ) ps in
-  let kfs = Logic_const.pseparated ~loc fs in
-  let ext = cmd,0,[Logic_const.new_predicate kfs] in
-  bhv.b_extended <- ext :: bhv.b_extended
+         | _ ->
+             typing_context.error loc "Function name expected for calls"
+      ) ps
+  in
+  Ext_terms fs
 
 (* -------------------------------------------------------------------------- *)
 (* --- Recover                                                            --- *)
@@ -65,31 +64,22 @@ let rec either loc = function
   | [p] -> p
   | p::ps -> Logic_const.por ~loc (p,either loc ps)
 
-let get_called_kf (p : identified_predicate) : kernel_function list = 
-  try
-    match p.ip_content with
-    | Pseparated ts -> List.map get_call ts
-    | _ -> raise Not_found
-  with Not_found ->
-    let source = fst p.ip_loc in
-    Wp_parameters.failure ~source "Calls annotation not well-formed" ; []
-
-let get_calls ecmd bhvs : (string * Kernel_function.t list) list = 
+let get_calls ecmd bhvs : (string * Kernel_function.t list) list =
   List.fold_right
     (fun bhv calls ->
        let fs = ref [] in
        List.iter
-         (function 
-           | cmd,_,ps when cmd = ecmd ->
-               List.iter (fun p -> fs := !fs @ get_called_kf p) ps
+         (function
+           | cmd, Ext_terms ts when cmd = ecmd ->
+               fs := !fs @ List.map get_call ts
            | _ -> ())
-         bhv.b_extended ;
-       let fs = !fs in 
-       if fs <> [] then (bhv.b_name , fs) :: calls else calls
+         bhv.Cil_types.b_extended ;
+       let fs = !fs in
+       if fs <> [] then (bhv.Cil_types.b_name , fs) :: calls else calls
     ) bhvs []
 
 let pp_calls fmt calls =
-  List.iter 
+  List.iter
     (fun kf -> Format.fprintf fmt "@ %a" Kernel_function.pretty kf)
     calls
 
@@ -100,9 +90,9 @@ let pp_calls fmt calls =
 module PInfo = struct let module_name = "Dyncall.Point" end
 module Point = Datatype.Pair_with_collections(Datatype.String)(Stmt)(PInfo)
 module Calls = Datatype.List(Kernel_function)
-module CInfo = 
-struct 
-  let name = "Dyncall.CallPoints" 
+module CInfo =
+struct
+  let name = "Dyncall.CallPoints"
   let dependencies = [Ast.self]
   let size = 63
 end
@@ -110,8 +100,8 @@ module CallPoints = State_builder.Hashtbl(Point.Hashtbl)(Calls)(CInfo)
 
 let property ~kf ?bhv ~stmt ~calls =
   let fact = match bhv with
-    | None -> Pretty_utils.sfprintf "@[<hov 2>calls%a@]" pp_calls calls
-    | Some b -> Pretty_utils.sfprintf "@[<hov 2>for %s calls%a@]" b pp_calls calls
+    | None -> Format.asprintf "@[<hov 2>calls%a@]" pp_calls calls
+    | Some b -> Format.asprintf "@[<hov 2>for %s calls%a@]" b pp_calls calls
   in
   Property.ip_other fact (Some kf) (Kstmt stmt)
 
@@ -130,7 +120,7 @@ class dyncall =
 
     method count = count
 
-    method private stmt = 
+    method private stmt =
       match self#current_stmt with None -> assert false | Some stmt -> stmt
 
     method! vfunc _ =
@@ -138,7 +128,7 @@ class dyncall =
       DoChildren
 
     method! vspec spec =
-      let calls = get_calls "wp:calls" spec.spec_behavior in
+      let calls = get_calls "calls" spec.Cil_types.spec_behavior in
       if calls <> [] && scope <> [] then
         List.iter
           (fun stmt ->
@@ -149,7 +139,7 @@ class dyncall =
                     if Wp_parameters.has_dkey "calls" then
                       let source = snd (Stmt.loc stmt) in
                       if Cil.default_behavior_name = bhv then
-                        Wp_parameters.result ~source 
+                        Wp_parameters.result ~source
                           "@[<hov 2>Calls%a@]" pp_calls kfs
                       else
                         Wp_parameters.result ~source
@@ -159,14 +149,14 @@ class dyncall =
                ) calls
           ) scope ;
       scope <- [] ;
-      let calls = get_calls "wp:instanceof" spec.spec_behavior in
+      let calls = get_calls "instanceof" spec.Cil_types.spec_behavior in
       if calls <> [] then
         begin
           match self#current_kf with None -> () | Some kf ->
             List.iter
               (fun (bhv,kfs) ->
                  Wp_parameters.result
-                   "@[<hov 2>%a for %s instance of%a" 
+                   "@[<hov 2>%a for %s instance of%a"
                    Kernel_function.pretty kf bhv pp_calls kfs)
               calls
         end ;
@@ -174,7 +164,7 @@ class dyncall =
 
     method! vinst = function
       | Call( _ , fct , _ , _ ) when Kernel_function.get_called fct = None ->
-          scope <- self#stmt :: scope ; 
+          scope <- self#stmt :: scope ;
           SkipChildren
       | _ -> SkipChildren
 
@@ -211,10 +201,10 @@ let get ?(bhv=Cil.default_behavior_name) stmt =
 
 let register () =
   if Wp_parameters.DynCall.get () then
-    let syntax = Logic_typing.register_behavior_extension in
+    let register = Logic_typing.register_behavior_extension in
     begin
-      syntax "calls" (typecheck "wp:calls") ;
-      syntax "instanceof" (typecheck "wp:instanceof") ;
+      register "calls" typecheck ;
+      register "instanceof" typecheck ;
     end
 
 let () = Cmdline.run_after_configuring_stage register

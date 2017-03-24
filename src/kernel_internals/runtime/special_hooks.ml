@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,43 +20,55 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let version () =
-  if Kernel.PrintVersion.get () then begin
+(* just after loading all plug-ins, add the dependencies between the AST
+   and the command line options that depend on it. *)
+let () =
+  Cmdline.run_after_extended_stage
+    (fun () ->
+      State_dependency_graph.add_dependencies
+        ~from:Ast.self
+        !Parameter_builder.ast_dependencies)
+
+let print_config () =
+  if Kernel.PrintConfig.get () then begin
     Log.print_on_output 
-      (fun fmt -> Format.fprintf fmt "Version: %s@\n\
-Compilation date: %s@\n\
-Share path: %s (may be overridden with FRAMAC_SHARE variable)@\n\
-Library path: %s (may be overridden with FRAMAC_LIB variable)@\n\
-Plug-in paths: %t(may be overridden with FRAMAC_PLUGIN variable)%t@."
-	 Config.version Config.date Config.datadir Config.libdir
-	 (fun fmt -> List.iter 
-	    (fun s -> Format.fprintf fmt "%s " s)
-	    (Dynamic.default_path ()))
+      (fun fmt -> Format.fprintf fmt
+          "Frama-C %s@\n\
+           Environment:@\n  \
+           FRAMAC_SHARE  = %S@\n  \
+           FRAMAC_LIB    = %S@\n  \
+           FRAMAC_PLUGIN = %S%t@."
+          Config.version
+          Config.datadir Config.libdir Config.plugin_path
         (fun fmt ->
           if Config.preprocessor = "" then
-            Format.fprintf fmt "@\nWARNING: no default pre-processor"
+            Format.fprintf fmt "@\nWarning: no default pre-processor"
           else if not Config.preprocessor_keep_comments then
             Format.fprintf fmt
-              "@\nWARNING: default pre-processor is not able to keep comments \
-               (hence ACSL annotations) in its output"
-        ));
+              "@\nWarning: default pre-processor is not able to keep comments \
+               (hence ACSL annotations) in its output")
+        ;
+        );
     raise Cmdline.Exit
   end
-let () = Cmdline.run_after_early_stage version
+let () = Cmdline.run_after_early_stage print_config
 
-let print_path get dir () =
+let print_config get value () =
   if get () then begin
-    Log.print_on_output (fun fmt -> Format.fprintf fmt "%s%!" dir) ;
+    Log.print_on_output (fun fmt -> Format.fprintf fmt "%s%!" value) ;
     raise Cmdline.Exit
   end
 
-let print_sharepath = print_path Kernel.PrintShare.get Config.datadir
+let print_version = print_config Kernel.PrintVersion.get Config.version
+let () = Cmdline.run_after_early_stage print_version
+
+let print_sharepath = print_config Kernel.PrintShare.get Config.datadir
 let () = Cmdline.run_after_early_stage print_sharepath
 
-let print_libpath = print_path Kernel.PrintLib.get Config.libdir
+let print_libpath = print_config Kernel.PrintLib.get Config.libdir
 let () = Cmdline.run_after_early_stage print_libpath
 
-let print_pluginpath = print_path Kernel.PrintPluginPath.get Config.plugin_dir
+let print_pluginpath = print_config Kernel.PrintPluginPath.get Config.plugin_path
 let () = Cmdline.run_after_early_stage print_pluginpath
 
 (* Time *)
@@ -79,7 +91,7 @@ let time () =
       time;
     flush oc;
     close_out oc
-let () = at_exit time
+let () = Extlib.safe_at_exit time
 
 (* Save Frama-c on disk if required *)
 let save_binary keep_name =
@@ -123,21 +135,24 @@ let load_binary () =
   end
 let () = Cmdline.run_after_loading_stage load_binary
 
-(* This hook cannot be registered directly  in Kernel or Cabs2cil, as
-   it depends on Ast_info *)
-let warn_for_call_to_undeclared_function vi =
+(* This hook cannot be registered directly in Kernel or Cabs2cil, as it
+   depends on Ast_info *)
+let on_call_to_undeclared_function vi =
   let name = vi.Cil_types.vname in
-  if Kernel.WarnUndeclared.get () && not (Ast_info.is_frama_c_builtin name)
-  then
-    Kernel.warning ~current:true ~once:true
-      "Calling undeclared function %s. Old style K&R code?" name
+  if not (Ast_info.is_frama_c_builtin name) then
+    let action = Kernel.ImplicitFunctionDeclaration.get () in
+    if action = "warn" then
+      Kernel.warning ~current:true ~once:true
+        "Calling undeclared function %s. Old style K&R code?" name
+    else if action = "error" then
+      Kernel.abort ~current:true
+        "calling undeclared function %s." name
 
 let () =
-  Cabs2cil.register_implicit_prototype_hook warn_for_call_to_undeclared_function
-
+  Cabs2cil.register_implicit_prototype_hook on_call_to_undeclared_function
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

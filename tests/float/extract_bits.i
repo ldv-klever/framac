@@ -1,6 +1,6 @@
-/* run.config
-  OPT: -val -slevel 10 -big-ints-hex 0 -machdep ppc_32 -float-normal -warn-decimal-float all
-  OPT: -val -slevel 10 -big-ints-hex 0 -machdep x86_32 -float-normal -warn-decimal-float all
+/* run.config*
+  OPT: -val @VALUECONFIG@ -slevel 10 -big-ints-hex 0 -machdep ppc_32 -float-normal -warn-decimal-float all
+  OPT: -val @VALUECONFIG@ -slevel 10 -big-ints-hex 0 -machdep x86_32 -float-normal -warn-decimal-float all
 */
 
 float f = 3.14;
@@ -20,4 +20,7 @@ void main() {
     fr[i] = ((unsigned char*) &f)[i];
   for (i=0; i<8; i++)
     dr[i] = ((unsigned char*) &d)[i];
+
+  long double x = 1.;
+  Frama_C_show_each(*(unsigned char *)&x);
 }

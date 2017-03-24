@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -25,7 +25,9 @@
 #define __FC_STDLIB
 #include "__fc_define_size_t.h"
 #include "__fc_define_wchar_t.h"
-#include "__fc_define_restrict.h"
+#include "features.h"
+
+__BEGIN_DECLS
 
 typedef struct __fc_div_t {
   int quot;              /* Quotient.  */
@@ -83,8 +85,21 @@ long double strtold(const char * restrict nptr,
      char ** restrict endptr);
 
 /* TODO: See ISO C 7.20.1.4 to complete these specifications */
-/*@ assigns \result \from nptr[0..], base; 
-    assigns *endptr \from nptr, nptr[0..], base; 
+/*@
+  assigns \result \from indirect:nptr, indirect:nptr[0 ..], indirect:base;
+  assigns *endptr \from nptr, indirect:nptr[0 ..], indirect:endptr, indirect:base;
+  behavior null_endptr:
+    assumes endptr == \null;
+    assigns \result \from indirect:nptr, indirect:nptr[0 ..], indirect:base;
+  behavior nonnull_endptr:
+    assumes endptr != \null;
+    requires \valid(endptr);
+    assigns \result \from indirect:nptr, indirect:nptr[0 ..], indirect:base;
+    assigns *endptr \from nptr, indirect:nptr[0 ..], indirect:endptr, indirect:base;
+    ensures \initialized(endptr);
+    ensures \subset(*endptr, nptr + (0 ..));
+  complete behaviors;
+  disjoint behaviors;
 */
 long int strtol(
      const char * restrict nptr,
@@ -115,7 +130,7 @@ unsigned long long int strtoull(
      char ** restrict endptr,
      int base);
 
-int __fc_random_counter __attribute__((unused)) __attribute__((FRAMA_C_MODEL));
+//@ ghost int __fc_random_counter __attribute__((unused)) __attribute__((FRAMA_C_MODEL));
 const unsigned long __fc_rand_max = __FC_RAND_MAX;
 /* ISO C: 7.20.2 */
 /*@ assigns \result \from __fc_random_counter ;
@@ -141,9 +156,11 @@ void srand48 (long int seed);
 void srand(unsigned int seed);
 
 /* ISO C: 7.20.3.1 */
+//@ requires nmemb * size <= __FC_SIZE_MAX;
 void *calloc(size_t nmemb, size_t size);
 
 /*@ ghost extern int __fc_heap_status __attribute__((FRAMA_C_MODEL)); */
+
 /*@ axiomatic dynamic_allocation {
   @ predicate is_allocable(size_t n) // Can a block of n bytes be allocated?
   @ reads __fc_heap_status; 
@@ -152,11 +169,11 @@ void *calloc(size_t nmemb, size_t size);
  
 /*@ allocates \result;
   @ assigns __fc_heap_status \from size, __fc_heap_status;
-  @ assigns \result \from size, __fc_heap_status;
+  @ assigns \result \from indirect:size, indirect:__fc_heap_status;
   @ behavior allocation:
   @   assumes is_allocable(size);
   @   assigns __fc_heap_status \from size, __fc_heap_status;
-  @   assigns \result \from size, __fc_heap_status;
+  @   assigns \result \from indirect:size, indirect:__fc_heap_status;
   @   ensures \fresh(\result,size);
   @ behavior no_allocation:
   @   assumes !is_allocable(size);
@@ -184,17 +201,40 @@ void *malloc(size_t size);
   @*/
 void free(void *p);
 
-#ifdef FRAMA_C_MALLOC_POSITION
-#define __FRAMA_C_STRINGIFY(x) #x
-#define __FRAMA_C_XSTRINGIFY(x) __FRAMA_C_STRINGIFY(x)
-#define FRAMA_C_LOCALIZE_WARNING (" file " __FILE__ " line " __FRAMA_C_XSTRINGIFY(__LINE__))
-#define malloc(x) (__Frama_C_malloc_at_pos(x,__FILE__ "_function_" __func__ "_line_" __FRAMA_C_XSTRINGIFY(__LINE__)))
-#define free(x) (__Frama_C_free_at_pos(x,FRAMA_C_LOCALIZE_WARNING))
-void *__Frama_C_malloc_at_pos(size_t size,const char* file);
-void __Frama_C_free_at_pos(void* ptr,const char* pos);
-#endif
+/*@
+   requires ptr == \null || \freeable(ptr);
+   allocates \result;
+   frees     ptr;
+   assigns   __fc_heap_status \from __fc_heap_status;
+   assigns   \result \from size, ptr, __fc_heap_status;
 
+   behavior alloc:
+     assumes   is_allocable(size);
+     allocates \result;
+     assigns   \result \from size, __fc_heap_status;
+     ensures   \fresh(\result,size);
+
+   behavior dealloc:
+     assumes   ptr != \null;
+     assumes   is_allocable(size);
+     requires  \freeable(ptr);
+     frees     ptr;
+     ensures   \allocable(ptr);
+     ensures   \result == \null || \freeable(\result);
+
+   behavior fail:
+     assumes !is_allocable(size);
+     allocates \nothing;
+     frees     \nothing;
+     assigns   \result \from size, __fc_heap_status;
+     ensures   \result == \null;
+
+   complete behaviors;
+   disjoint behaviors alloc, fail;
+   disjoint behaviors dealloc, fail;
+  */
 void *realloc(void *ptr, size_t size);
+
 
 /* ISO C: 7.20.4 */
 
@@ -212,13 +252,13 @@ int at_quick_exit(void (*func)(void));
   assigns \nothing;
   ensures \false;
 */
-void exit(int status);
+void exit(int status) __attribute__ ((noreturn));
 
 /*@
   assigns \nothing;
   ensures \false;
 */
-void _Exit(int status);
+void _Exit(int status) __attribute__ ((__noreturn__));
 
 /*@
   assigns \result \from name;
@@ -235,7 +275,7 @@ int unsetenv(const char *name);
 /*@
   assigns \nothing;
   ensures \false; */
-void quick_exit(int status);
+void quick_exit(int status) __attribute__ ((__noreturn__));
 
 /*@ assigns \result \from string[..]; */
 int system(const char *string);
@@ -304,5 +344,7 @@ size_t wcstombs(char * restrict s,
      const wchar_t * restrict pwcs,
      size_t n);
 
+
+__END_DECLS
 
 #endif

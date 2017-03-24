@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -104,7 +104,7 @@ type denv = {
 }
 
 let rec collect rank = function
-  | [] -> 
+  | [] ->
       {
         size_var = [] ;
         size_val = [] ;
@@ -134,7 +134,7 @@ let rec collect rank = function
           let n_val = e_var n_var in
           let k_inf = p_leq e_zero k_val in
           let k_sup = p_lt k_val n_val in
-          { 
+          {
             size_var = n_var :: denv.size_var ;
             size_val = n_val :: denv.size_val ;
             index_var = k_var :: denv.index_var ;
@@ -164,6 +164,6 @@ let rec do_merge ds1 ds2 =
         | Some n1 , Some n2 -> if n1=n2 then d1 else raise Exit
       in d :: do_merge ds1 ds2
 
-let merge ds1 ds2 = 
+let merge ds1 ds2 =
   try Some(do_merge ds1 ds2)
   with Exit -> None

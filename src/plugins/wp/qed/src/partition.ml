@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,7 +27,7 @@
 module type Explain =
 sig
   type t
-  val bot : t 
+  val bot : t
   val cup : t -> t -> t
 end
 
@@ -47,9 +47,9 @@ sig
   val join : ?explain:explain -> elt -> elt -> t -> t
   val class_of : t -> elt -> elt
   val is_equal : t -> elt -> elt -> bool
-  val members : t -> elt -> elt list 
+  val members : t -> elt -> elt list
   val repr : t -> elt -> elt * explain
-  val equal : t -> elt -> elt -> explain option 
+  val equal : t -> elt -> elt -> explain option
   val explain : t -> elt -> elt -> explain
   val iter : (elt -> elt list -> unit) -> t -> unit
   val map : (elt -> elt) -> t -> t
@@ -69,7 +69,7 @@ struct
 
   let empty = { color = M.empty ; members = M.empty }
 
-  let rec union ca cb = 
+  let rec union ca cb =
     match ca , cb with
     | [] , r | r , [] -> r
     | a :: ra , b :: rb ->
@@ -80,7 +80,7 @@ struct
 
   let rec lookup p a =
     let ((a0,e0) as w0) = M.find a p.color in
-    try 
+    try
       let (a1,e1) = lookup p a0 in
       let w = (a1,E.cup e0 e1) in
       p.color <- M.add a w p.color ; w
@@ -115,7 +115,7 @@ struct
     if cmp = 0 then p else
       let c = union (k_members p a) (k_members p b) in
       if cmp < 0 then {
-        color = M.add b (a,explain) p.color ; 
+        color = M.add b (a,explain) p.color ;
         members = M.add a c (M.remove b p.members) ;
       } else {
         color = M.add a (b,explain) p.color ;
@@ -124,9 +124,9 @@ struct
 
   let iter f p = M.iter f p.members
 
-  let map f p = 
+  let map f p =
     M.fold
-      (fun a (b,explain) p -> join ~explain (f a) (f b) p) 
+      (fun a (b,explain) p -> join ~explain (f a) (f b) p)
       p.color empty
 
 end

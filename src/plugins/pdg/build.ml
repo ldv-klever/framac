@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -737,7 +737,7 @@ let process_call pdg state stmt lvaloption funcexp argl =
   let new_state =
     match state_for_each_call with
     | [] ->
-       let stmt_str = Pretty_utils.sfprintf "%a" Printer.pp_stmt stmt in
+       let stmt_str = Format.asprintf "%a" Printer.pp_stmt stmt in
        Pdg_parameters.not_yet_implemented
          "pdg with an unknown function call: %s" stmt_str
     | st :: [] -> st
@@ -856,6 +856,7 @@ module Computer
   ;;
 
   let join a b = fst (join_and_is_included a b)
+  let is_included a b = snd (join_and_is_included a b)
 
   (** Compute the new state after 'instr' starting from state before 'state'.
     *)
@@ -1029,6 +1030,6 @@ let compute_pdg kf =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

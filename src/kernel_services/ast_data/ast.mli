@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Access to the CIL AST which must be used from Frama-C.
-    @plugin development guide *)
+(** Access to the CIL AST which must be used from Frama-C. *)
 
 exception Bad_Initialization of string
   (** May be raised by function {!get} below. *)
@@ -108,12 +107,24 @@ val apply_after_computed: (Cil_types.file -> unit) -> unit
     Functions below should not be called by casual users. *)
 (*****************************************************************************)
 
-val is_last_decl: Cil_types.global -> bool
+val is_def_or_last_decl: Cil_types.global -> bool
   (** [true] if the global is the last one in the AST to introduce a given
       variable. Used by visitor and printer to relate funspec with appropriate
-      global.
+      global, and the GUI to remove redundant declarations of globals.
+
+      Complexity: O(nb of globals) for the first call, then O(1).
+
       @since Oxygen-20120901
    *)
+
+val def_or_last_decl: Cil_types.varinfo -> Cil_types.global
+  (** [def_or_last_decl v] returns the global [g] declaring or defining
+      [g] such that [is_def_or_last_decl g] is true.
+
+      [v] must be a global variable declared in the AST.
+
+      @since Aluminium-20160501
+  *)
 
 val clear_last_decl : unit -> unit
   (** reset the mapping between a varinfo and the last global introducing it.
@@ -135,6 +146,6 @@ val add_linked_state: State.t -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

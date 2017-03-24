@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,6 +27,38 @@ val frama_c_display: bool -> unit
     and must be set to [true] in order to display the graph in the Frama-C GUI.
     @since Oxygen-20120901 *)
 
+type 'a vertex = private
+    { node: 'a; mutable is_root: bool; mutable root: 'a vertex }
+
+type edge = private Inter_services | Inter_functions | Both
+
+(** Output signature for services. *)
+module type S = sig
+
+  type node
+  type graph
+
+  module Service_graph: sig
+    include Graph.Sig.G with type V.t = node vertex and type E.label = edge
+    module Datatype: Datatype.S with type t = t
+  end
+
+  val compute: graph -> Datatype.String.Set.t -> Service_graph.t
+  val output_graph: out_channel -> Service_graph.t -> unit
+
+  val entry_point: unit -> Service_graph.V.t option
+  (** [compute] must be called before
+      @since Carbon-20101201
+      @modify Nitrogen-20111001 return an option type *)
+
+  module TP: Graph.Graphviz.GraphWithDotAttrs
+    with type t = Service_graph.t
+    and type V.t = node vertex
+    and type E.t = Service_graph.E.t
+(** @since Beryllium-20090902 *)
+
+end
+
 (** Generic functor implementing the services algorithm according to a graph
     implementation. *)
 module Make
@@ -36,7 +68,7 @@ module Make
        (** @modify Oxygen-20120901 require [compare] *)
        include Graph.Sig.COMPARABLE
        val id: t -> int
-         (** assume is >= 0 and unique for each vertices of the graph *)
+         (** assume [id >= 0] and unique for each vertices of the graph *)
        val name: t -> string
        val attributes: t -> Graph.Graphviz.DotAttributes.vertex list
        val entry_point: unit -> t option
@@ -48,36 +80,10 @@ module Make
      val fold_pred : (V.t -> 'a -> 'a) -> t -> V.t -> 'a -> 'a
      val datatype_name: string
    end) :
-sig
-
-  type vertex = private
-      { node: G.V.t; mutable is_root: bool; mutable root: vertex }
-
-  type edge = private Inter_services | Inter_functions | Both
-
-  module CallG: sig
-    include Graph.Sig.G with type V.t = vertex and type E.label = edge
-    module Datatype: Datatype.S with type t = t
-  end
-
-  val compute: G.t -> Datatype.String.Set.t -> CallG.t
-  val output_graph: out_channel -> CallG.t -> unit
-
-  val entry_point: unit -> CallG.V.t option
-  (** [compute] must be called before
-      @since Carbon-20101201
-      @modify Nitrogen-20111001 return an option type *)
-
-  module TP: Graph.Graphviz.GraphWithDotAttrs
-    with type t = CallG.t
-    and type V.t = vertex
-    and type E.t = CallG.E.t
-(** @since Beryllium-20090902 *)
-
-end
+  S with type node = G.V.t and type graph = G.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

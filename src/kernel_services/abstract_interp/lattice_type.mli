@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -39,6 +39,11 @@ end
 module type With_Top = sig
   type t
   val top: t  (** largest element *)
+end
+
+module type With_Top_Opt = sig
+  type t
+  val top_opt: t option (** optional largest element *)
 end
 
 module type With_Error_Top = sig
@@ -88,6 +93,8 @@ end
 module type With_Intersects = sig
   type t
   val intersects: t -> t -> bool
+  (** [intersects t1 t2] returns [true] iff the intersection of [t1] and [t2] is
+      non-empty. *)
 end
 
 module type With_Enumeration = sig
@@ -189,8 +196,8 @@ end
 module type Lattice_UProduct = sig
   type t1
   type t2
-  type tt = t1*t2
-  include AI_Lattice_with_cardinal_one with type t = tt
+  type t = t1*t2
+  include AI_Lattice_with_cardinal_one with type t := t
 end
 
 (** Signature for a lattice over a sum type
@@ -254,6 +261,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

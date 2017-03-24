@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -77,8 +77,8 @@ type node_type = private
   | Vcall of stmt * lval option * call_type * exp list
   | Vtest of bool * stmt * exp
   | Vswitch of stmt * exp
-  | Vloop of bool option * stmt 
-  (** boolean is is_natural.  None means the node has not been 
+  | Vloop of bool option * stmt
+  (** boolean is is_natural.  None means the node has not been
     * detected as a loop. *)
   | Vloop2 of bool * int
 
@@ -115,7 +115,7 @@ val is_back_edge : edge -> bool
  * [-wp-no-invariants]. (see also [very_strange_loops]) *)
 val strange_loops : t -> node list
 
-(** detect is there are natural loops where we didn't manage to compute 
+(** detect is there are natural loops where we didn't manage to compute
  * back edges (see [mark_loops]). At the moment, we are not able to handle those
  * loops. *)
 val very_strange_loops : t -> node list

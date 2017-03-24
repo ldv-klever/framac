@@ -1,0 +1,87 @@
+# frama-c -wp -wp-model 'Typed (Caveat)' [...]
+[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
+[kernel] Parsing tests/wp_usage/caveat.i (no preprocessing)
+tests/wp_usage/caveat.i:41:[kernel] warning: parsing obsolete ACSL construct 'logic declaration'. 'an axiomatic block' should be used instead.
+[wp] Running WP plugin...
+.................................................
+... Ref Usage
+.................................................
+... Initial state
+  Nothing
+............
+... Function implicit
+   a
+  *r
+   p
+   q
+............
+... Function explicit
+   a
+  *r
+   p
+   q
+............
+... Function observer
+   a
+  *r
+   p
+   q
+.................................................
+[wp] Loading driver 'share/wp.driver'
+[wp] warning: Missing RTE guards
+------------------------------------------------------------
+  Function explicit
+------------------------------------------------------------
+
+Goal Post-condition (file tests/wp_usage/caveat.i, line 28) in 'explicit':
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition (file tests/wp_usage/caveat.i, line 29) in 'explicit':
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition (file tests/wp_usage/caveat.i, line 30) in 'explicit':
+Prove: true.
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function implicit
+------------------------------------------------------------
+
+Goal Post-condition (file tests/wp_usage/caveat.i, line 13) in 'implicit':
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition (file tests/wp_usage/caveat.i, line 14) in 'implicit':
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Post-condition (file tests/wp_usage/caveat.i, line 15) in 'implicit':
+Prove: true.
+
+------------------------------------------------------------
+------------------------------------------------------------
+  Function observer
+------------------------------------------------------------
+
+Goal Post-condition 'KO' in 'observer':
+Let a = global(G_a_90).
+Let x = Mint_0[shiftfield_F1_S_f(a)].
+Let x_1 = Mint_0[shiftfield_F1_S_g(a)].
+Let x_2 = 1 + x.
+Let x_3 = 1 + x_1.
+Let x_4 = x + x_1.
+Assume {
+  Type: is_sint32(r) /\ is_sint32(x) /\ is_sint32(x_1) /\ is_sint32(x_2) /\
+      is_sint32(x_3) /\ is_sint32(x_4).
+  (* Pre-condition 'KO' *)
+  Have: P_OBS(x, x_1, r).
+}
+Prove: P_OBS(x_2, x_3, x_4).
+
+------------------------------------------------------------

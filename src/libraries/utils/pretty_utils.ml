@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,14 +20,17 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let sfprintf fmt =
+let ksfprintf f fmt =
   let b = Buffer.create 20 in
-  let return fmt = Format.pp_print_flush fmt (); Buffer.contents b in
+  let return fmt = Format.pp_print_flush fmt (); f (Buffer.contents b) in
   Format.kfprintf return (Format.formatter_of_buffer b) fmt
 
-let to_string pp x =
+let sfprintf = Format.asprintf
+
+let to_string ?margin pp x =
   let b = Buffer.create 20 in
   let f = Format.formatter_of_buffer b in
+  Extlib.may (Format.pp_set_margin f) margin;
   pp f x ;
   Format.pp_print_flush f () ;
   Buffer.contents b
@@ -50,6 +53,7 @@ let pp_list
     ?(sep=format_of_string "@,")
     ?(last=sep)
     ?(suf=format_of_string "@]")
+    ?(empty=format_of_string "")
     pp_elt f l =
   let rec aux f = function
     | [] -> assert false
@@ -58,16 +62,17 @@ let pp_list
     | e :: l -> Format.fprintf f "%a%(%)%a" pp_elt e sep aux l
   in
   match l with
-  | [] -> ()
+  | [] -> Format.fprintf f "%(%)" empty
   | _ :: _ as l -> Format.fprintf f "%(%)%a%(%)" pre aux l suf
 
 let pp_array
     ?(pre=format_of_string "@[")
     ?(sep=format_of_string "")
     ?(suf=format_of_string "@]")
+    ?(empty=format_of_string "")
     pp_elt f xs =
   match xs with
-    | [| |] -> ()
+    | [| |] -> Format.fprintf f "%(%)" empty
     | xs ->
         begin
           Format.fprintf f pre ;
@@ -93,13 +98,35 @@ let pp_iter
   Format.fprintf fmt suf;
 ;;
 
-let pp_opt ?(pre=format_of_string "@[")  ?(suf=format_of_string "@]") pp_elt f =
+let pp_iter2
+    ?(pre=format_of_string "@[")
+    ?(sep=format_of_string "")
+    ?(suf=format_of_string "@]")
+    ?(between=format_of_string "@ ")
+    iter pp_key pp_v fmt v =
+  let need_sep = ref false in
+  Format.fprintf fmt pre;
+  iter (fun key v ->
+      if !need_sep then Format.fprintf fmt sep else need_sep := true;
+      Format.fprintf fmt "%a%(%)%a" pp_key key between pp_v v
+    ) v;
+  Format.fprintf fmt suf;
+;;
+
+let pp_opt ?(pre=format_of_string "@[")  ?(suf=format_of_string "@]") ?(none=format_of_string "") pp_elt f =
   function
-  | None -> ()
+  | None -> Format.fprintf f "%(%)" none
   | Some v ->  Format.fprintf f "%(%)%a%(%)" pre pp_elt v suf
 
 let pp_cond ?(pr_false=format_of_string "") cond f pr_true =
   Format.fprintf f "%(%)" (if cond then pr_true else pr_false)
+
+let pp_pair
+    ?(pre=format_of_string "@[")
+    ?(sep=format_of_string ",@,")
+    ?(suf=format_of_string "@]")
+    pp_a pp_b fmt (a, b) =
+  Format.fprintf fmt "%(%)%a%(%)%a%(%)" pre pp_a a sep pp_b b suf
 
 let escape_underscores = Str.global_replace (Str.regexp_string "_") "__"
 
@@ -147,6 +174,6 @@ let pp_trail pp fmt x =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,7 +36,7 @@ type logic_lemma = {
   lem_axiom : bool ;
   lem_types : string list ;
   lem_labels : logic_label list ;
-  lem_property : predicate named ;
+  lem_property : predicate ;
   lem_depends : logic_lemma list ; (** in reverse order *)
 }
 

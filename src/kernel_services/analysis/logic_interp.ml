@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -46,63 +46,77 @@ let find_var kf x =
 module DefaultLT (X:
 sig
   val kf: Kernel_function.t
-  val stmt: stmt
+  val in_loop: bool (* Only useful for code annotations *)
 end) =
-    Logic_typing.Make
-      (struct
-         let anonCompFieldName = Cabs2cil.anonCompFieldName
-         let conditionalConversion = Cabs2cil.logicConditionalConversion
-         let compatibleTypesp = Cabs2cil.compatibleTypesp
+  Logic_typing.Make
+    (struct
+      let anonCompFieldName = Cabs2cil.anonCompFieldName
+      let conditionalConversion = Cabs2cil.logicConditionalConversion
 
-         let is_loop () = Kernel_function.stmt_in_loop X.kf X.stmt
+      let compatibleTypesp = Cabs2cil.compatibleTypesp
 
-         let find_macro _ = raise Not_found
+      let is_loop () = X.in_loop
 
-         let find_var x = find_var X.kf x
+      let find_macro _ = raise Not_found
 
-         let find_enum_tag x =
-           try
-             Globals.Types.find_enum_tag x
-           with Not_found ->
-             (* The ACSL typer tries to parse a string, first as a variable,
-                then as an enum. We report the "Unbound variable" message
-                here, as it is nicer for the user. However, this short-circuits
-                the later stages of resolution, for example global logic
-                variables. *)
-             raise (Unbound ("Unbound variable " ^ x))
+      let find_var x = find_var X.kf x
 
-         let find_comp_field info s =
-           let field = Cil.getCompField info s in
-           Field(field,NoOffset)
+      let find_enum_tag x =
+        try
+          Globals.Types.find_enum_tag x
+        with Not_found ->
+          (* The ACSL typer tries to parse a string, first as a variable,
+             then as an enum. We report the "Unbound variable" message
+             here, as it is nicer for the user. However, this short-circuits
+             the later stages of resolution, for example global logic
+             variables. *)
+          raise (Unbound ("Unbound variable " ^ x))
 
-         let find_type = Globals.Types.find_type
+      let find_comp_field info s =
+        let field = Cil.getCompField info s in
+        Field(field,NoOffset)
 
-         let find_label s = Kernel_function.find_label X.kf s
-         include Logic_env
+      let find_type = Globals.Types.find_type
 
-         let add_logic_function =
-           add_logic_function_gen Logic_utils.is_same_logic_profile
+      let find_label s = Kernel_function.find_label X.kf s
+      include Logic_env
 
-         let integral_cast ty t =
-           raise
-             (Failure
-                (Pretty_utils.sfprintf
-                   "term %a has type %a, but %a is expected."
-                   Printer.pp_term t Printer.pp_logic_type Linteger Printer.pp_typ ty))
+      let add_logic_function =
+        add_logic_function_gen Logic_utils.is_same_logic_profile
 
-       end)
+      let integral_cast ty t =
+        raise
+          (Failure
+             (Format.asprintf
+                "term %a has type %a, but %a is expected."
+                Printer.pp_term t
+                Printer.pp_logic_type Linteger
+                Printer.pp_typ ty))
 
-let wrap f stmt =
+      let error loc msg =
+        Pretty_utils.ksfprintf (fun e -> raise (Error (loc, e))) msg
+
+     end)
+
+(** Set up the parser for the infamous 'C hack' needed to parse typedefs *)
+let sync_typedefs () =
+  Logic_env.reset_typenames ();
+  Globals.Types.iter_types
+    (fun name _ ns ->
+      if ns = Logic_typing.Typedef then Logic_env.add_typename name)
+
+let wrap f loc =
   try f ()
-  with Unbound s -> raise (Error (Stmt.loc stmt, s))
+  with Unbound s -> raise (Error (loc, s))
 
 let code_annot kf stmt s =
+  sync_typedefs ();
   let module LT = DefaultLT(struct
     let kf = kf
-    let stmt = stmt
+    let in_loop = Kernel_function.stmt_in_loop kf stmt
   end) in
-  let loc = snd (Cabshelper.currentLoc ()) in
-  let pa = match snd (Logic_lexer.annot (loc, s)) with
+  let loc = Stmt.loc stmt in
+  let pa = match snd (Logic_lexer.annot (fst loc, s)) with
     | Logic_ptree.Acode_annot (_,a) -> a
     | _ ->
         raise (Error (Stmt.loc stmt,
@@ -114,28 +128,37 @@ let code_annot kf stmt s =
       (Logic_utils.get_behavior_names (Annotations.funspec kf))
       (Ctype (Kernel_function.get_return_type kf)) pa
   in
-  wrap parse stmt
+  wrap parse loc
 
-let expr kf stmt s =
+let default_term_env () =
+  Logic_typing.append_here_label (Logic_typing.Lenv.empty())
+
+let term kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
+  sync_typedefs ();
   let module LT = DefaultLT(struct
     let kf = kf
-    let stmt = stmt
+    let in_loop = false (* unused *)
   end) in
-  let (_,pa_expr) = Logic_lexer.lexpr (Lexing.dummy_pos, s) in
-  let parse () =
-    LT.term
-      (Logic_typing.append_here_label (Logic_typing.Lenv.empty()))
-      pa_expr
-  in
-  wrap parse stmt
+  let (_,pa_expr) = Logic_lexer.lexpr (fst loc, s) in
+  let parse () = LT.term env pa_expr in
+  wrap parse loc
 
-let lval kf stmt s =
-  match (expr kf stmt s).term_node with
+let term_lval kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
+  match (term kf ~loc ~env s).term_node with
   | TLval lv -> lv
-  | _ -> raise (Error (Stmt.loc stmt, "Syntax error (expecting an lvalue)"))
+  | _ -> raise (Error (loc, "Syntax error (expecting an lvalue)"))
 
-(* may raise [Invalid_argument "not an lvalue"] *)
-let error_lval () = invalid_arg "not an lvalue"
+let predicate kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
+  sync_typedefs ();
+  let module LT = DefaultLT(struct
+    let kf = kf
+    let in_loop = false (* unused *)
+  end) in
+  let (_,pa_expr) = Logic_lexer.lexpr (fst loc, s) in
+  let parse () = LT.predicate env pa_expr in
+  wrap parse loc
+
+let error_lval () = raise Db.Properties.Interp.No_conversion
 
 let rec logic_type_to_typ = function
   | Ctype typ -> typ
@@ -350,7 +373,7 @@ module To_zone : sig
   val mk_ctx_func_contrat: kernel_function -> state_opt:bool option -> ctx
   (** [mk_ctx_func_contrat] to define an interpretation context related to
       [kernel_function] contracts. 
-      The control point of the interpretation is defined as follow:
+      The control point of the interpretation is defined as follows:
       - pre-state if  [state_opt=Some true]
       - post-state if [state_opt=Some false]
       - pre-state with possible reference to the post-state if
@@ -360,7 +383,7 @@ module To_zone : sig
     kernel_function -> stmt -> state_opt:bool option -> ctx
   (** [mk_ctx_stmt_contrat] to define an interpretation context related to
       [stmt] contracts. 
-      The control point of the interpretation is defined as follow:
+      The control point of the interpretation is defined as follows:
       - pre-state if  [state_opt=Some true]
       - post-state if [state_opt=Some false]
       - pre-state with possible reference to the post-state if
@@ -386,12 +409,12 @@ module To_zone : sig
         needed to evaluate the list of [terms] relative to the [ctx] of
 	interpretation. *) 
 
-  val from_pred: predicate named -> ctx -> (zone_info * decl)
+  val from_pred: predicate -> ctx -> (zone_info * decl)
     (** Entry point to get zones
         needed to evaluate the [predicate] relative to the [ctx] of
 	interpretation. *) 
 
-  val from_preds: predicate named list -> ctx -> (zone_info * decl)
+  val from_preds: predicate list -> ctx -> (zone_info * decl)
     (** Entry point to get zones
         needed to evaluate the list of [predicates] relative to the [ctx] of
 	interpretation. *) 
@@ -696,10 +719,10 @@ function contracts."
 	    self#change_label (AbsLabel_stmt stmt) x
 
 
-      method! vpredicate p =
+      method! vpredicate_node p =
       let fail () =
         raise (NYI (Pretty_utils.sfprintf
-                      "[logic_interp] %a" Printer.pp_predicate p))
+                      "[logic_interp] %a" Printer.pp_predicate_node p))
       in
       match p with
       | Pat (_, LogicLabel (_,"Old")) -> self#change_label_to_old p
@@ -734,6 +757,9 @@ function contracts."
              taken into account by the functions [from_...] below *)
           DoChildren
 
+      | Pvalid_function _ ->
+          DoChildren
+
       | Papp _ | Pallocable _ | Pfreeable _ | Pfresh _ | Psubtype _
         -> fail ()
 
@@ -750,7 +776,7 @@ function contracts."
               z
           in
           add_result current_before current_stmt z
-        with Invalid_argument "not an lvalue" ->
+        with Db.From.Not_lval ->
           raise (NYI "[logic_interp] dependencies of a term lval")
 
       method! vterm t =
@@ -808,7 +834,7 @@ function contracts."
         relative to the [ctx] of interpretation. *)
     let from_pred pred ctx =
         (try
-           ignore(Visitor.visitFramacPredicateNamed
+           ignore(Visitor.visitFramacPredicate
                     (new populate_zone ctx.state_opt ctx.ki_opt ctx.kf) pred)
          with NYI msg -> 
 	   add_top_zone msg) ;
@@ -822,7 +848,7 @@ function contracts."
     let from_preds preds ctx =
       let f pred =
         (try
-           ignore(Visitor.visitFramacPredicateNamed
+           ignore(Visitor.visitFramacPredicate
                     (new populate_zone ctx.state_opt ctx.ki_opt ctx.kf) pred)
          with NYI msg -> 
 	   add_top_zone msg) ;
@@ -848,7 +874,7 @@ function contracts."
       and get_zone_from_pred k x =
         (try
            ignore
-             (Visitor.visitFramacPredicateNamed
+             (Visitor.visitFramacPredicate
                 (new populate_zone (Some true) (Some (k,true)) kf) x)
          with NYI msg -> 
 	   add_top_zone msg) ;
@@ -916,7 +942,7 @@ function contracts."
           l
       | AStmtSpec _ -> (* TODO *)
         raise (NYI "[logic_interp] statement contract")
-
+      | AExtended _ -> raise (NYI "[logic_interp] extension")
     (** Used by annotations entry points. *)
     let get_from_stmt_annots code_annot_filter ((ki, _kf) as stmt) =
       Extlib.may
@@ -973,7 +999,7 @@ function contracts."
         | AAllocation _ -> others
         | AAssigns _ -> others
         | APragma (Loop_pragma _)| APragma (Impact_pragma _) | APragma (Jessie_pragma _) -> others
-        | AStmtSpec _  (* TODO: statement contract *) -> false
+        | AStmtSpec _ | AExtended _  (* TODO: statement contract *) -> false
   end
 
 exception Prune
@@ -990,7 +1016,7 @@ let to_result_from_pred p =
   end
   in
   (try
-     ignore(Visitor.visitFramacPredicateNamed visitor p);
+     ignore(Visitor.visitFramacPredicate visitor p);
      false
    with Prune -> 
      true)
@@ -998,8 +1024,10 @@ let to_result_from_pred p =
 
 let () =
   Db.Properties.Interp.code_annot := code_annot;
-  Db.Properties.Interp.lval := lval;
-  Db.Properties.Interp.expr := expr;
+  Db.Properties.Interp.term_lval := term_lval;
+  Db.Properties.Interp.term := term;
+  Db.Properties.Interp.predicate := predicate;
+
   Db.Properties.Interp.term_lval_to_lval := term_lval_to_lval;
   Db.Properties.Interp.term_to_exp := term_to_exp;
 
@@ -1029,6 +1057,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

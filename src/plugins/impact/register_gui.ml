@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -143,6 +143,7 @@ let apply_on_stmt f = function
 
 let impact_highlighter buffer loc ~start ~stop =
   if Enabled.get () then
+    let buffer = buffer#buffer in
     let tag name color =
       let t = make_tag buffer name [`BACKGROUND color ] in
       apply_tag buffer t start stop
@@ -201,7 +202,7 @@ let impact_statement restrict s =
       List.iter (Highlighted_stmt.add kf) stmts'
     ) impact;
   let impact = List.concat !stmts in
-  if Slicing.get () then !Db.Impact.slice impact;
+  if Slicing.get () then Register.slice impact;
   Enabled.set true;
   impact
 
@@ -403,6 +404,6 @@ let () = Design.register_extension main
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

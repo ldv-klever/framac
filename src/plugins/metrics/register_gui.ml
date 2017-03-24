@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -43,20 +43,25 @@ module HalsteadMetricsGUI = struct
   let compute = Metrics_cabs.compute_on_cabs 
   let name = "Halstead" 
 
-  let display_result (parent_win:GPack.box) =
-    let padder = GBin.alignment
-      ~padding:(5, 5, 15, 15) ~packing:parent_win#pack () in
-    let box = GPack.vbox ~homogeneous:false () in
-    padder#add (box:>GObj.widget);
-    ignore(GMisc.label ~markup:(Printf.sprintf "<b>%s</b>" name)
-             ~justify:`LEFT ~packing:box#pack ());
-    ignore(GMisc.separator `HORIZONTAL ~packing:box#pack ());
-    let metrics = Metrics_cabs.Halstead.get_metrics () in
-    let table_contents = Metrics_cabs.Halstead.to_list metrics in
-    Metrics_gui.display_as_table table_contents box
-  
+  let display_result (main_ui:Design.main_window_extension_points) (parent_win:GPack.box) =
+    try
+      let padder = GBin.alignment
+          ~padding:(5, 5, 15, 15) ~packing:parent_win#pack () in
+      let box = GPack.vbox ~homogeneous:false () in
+      padder#add (box:>GObj.widget);
+      ignore(GMisc.label ~markup:(Printf.sprintf "<b>%s</b>" name)
+               ~justify:`LEFT ~packing:box#pack ());
+      ignore(GMisc.separator `HORIZONTAL ~packing:box#pack ());
+      let metrics = Metrics_cabs.Halstead.get_metrics () in
+      let table_contents = Metrics_cabs.Halstead.to_list metrics in
+      Metrics_gui.display_as_table table_contents box
+    with
+    | Ast.NoUntypedAst ->
+      main_ui#error "Cannot compute Halstead metrics: untyped AST not present.\n\
+                     It has been removed either by user request or \
+                     by some AST transformation."
 
-  let register _ = Metrics_gui.register_metrics name display_result 
+  let register main_ui = Metrics_gui.register_metrics name (display_result main_ui)
 end
 
 module CyclomaticMetricsGUI = struct
@@ -247,8 +252,8 @@ module ValueCoverageGUI = struct
             let pure_syntactic =
               Varinfo.Set.diff metrics.syntactic metrics.semantic in
             let hilit color =
-              let tag = make_tag buffer "metrics" [`BACKGROUND color] in
-              apply_tag buffer tag start stop
+              let tag = make_tag buffer#buffer "metrics" [`BACKGROUND color] in
+              apply_tag buffer#buffer tag start stop
             in
             let syn_hilit () = hilit "yellow"
             and sem_hilit () = hilit "green"

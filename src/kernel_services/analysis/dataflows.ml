@@ -42,6 +42,9 @@
 (****************************************************************************)
 
 let dkey = Kernel.register_category "dataflows"
+let dkeyscc = Kernel.register_category "dataflows_scc"
+
+
 
 open Ordered_stmt;;
 open Cil_types;;
@@ -52,25 +55,24 @@ open Cil_types;;
 module type FUNCTION_ENV = sig
   val to_ordered: stmt -> ordered_stmt
   val to_stmt: ordered_stmt -> stmt
+  val connected_component: ordered_stmt -> int
   val nb_stmts: int
   val kf: Kernel_function.t
 end
 
 let function_env kf =
   (module struct
-    let (order,unorder,_connex) = Ordered_stmt.get_conversion_tables kf;;
+    let (order,unorder,connex) = Ordered_stmt.get_conversion_tables kf;;
     let nb_stmts = Array.length unorder;;
     let to_stmt ordered = Ordered_stmt.to_stmt unorder ordered;;
     let to_ordered stmt = Ordered_stmt.to_ordered order stmt;;
+    let connected_component ord = connex.(ord)
     let kf = kf
   end : FUNCTION_ENV)
 
 (****************************************************************)
 (* Worklists. *)
 
-(* TODO:
-   - Retrieve the efficient worklists from Dataflow2.
-*)
 module type WORKLIST = sig
 
   (** Add a statement to the worklist. The statement can already be in
@@ -83,9 +85,22 @@ module type WORKLIST = sig
   val extract: unit -> ordered_stmt option
 end
 
+module type CONSULTABLE_WORKLIST = sig
+  include WORKLIST
+
+  (** [in_worklist x] returns true if it is guaranteed that a further
+      call to [extract()] will return [x] (Thus it is safe for a
+      worklist implementation to always return false here). *)
+  val in_worklist: ordered_stmt -> bool
+
+end
+
+(** {2 Examples of use} *)
+[@@@ warning "-60"]
+
 (* Worklist for a "rapid" framework. Just iterate over all statements
    until none has changed. *)
-module Rapid_forward_worklist(Fenv:FUNCTION_ENV):WORKLIST = struct
+module Rapid_forward_worklist(Fenv:FUNCTION_ENV):CONSULTABLE_WORKLIST = struct
 
   type t = { mutable changed: bool;
 	     mutable current_index: ordered_stmt; }
@@ -107,11 +122,14 @@ module Rapid_forward_worklist(Fenv:FUNCTION_ENV):WORKLIST = struct
       (w.current_index <- w.current_index + 1;
        Some w.current_index)
   ;;
+
+  let in_worklist ord = w.changed || ord > w.current_index
+
 end
 
 (* Iterates on all statements in order, but do something only on those
    for which there is a pending change. *)
-module Simple_forward_worklist(Fenv:FUNCTION_ENV):WORKLIST = struct
+module Simple_forward_worklist(Fenv:FUNCTION_ENV):CONSULTABLE_WORKLIST = struct
 
   (* The worklist, and the current index. *)
   type t = { bv: Bitvector.t;
@@ -138,73 +156,177 @@ module Simple_forward_worklist(Fenv:FUNCTION_ENV):WORKLIST = struct
 	  Some next
       (* Nothing to do left. *)
       with Not_found -> None
+
+  let in_worklist ord = Bitvector.mem w.bv ord
 end
 ;;
 
-(****************************************************************)
-(* Influence describes how a change in the value attached to a
-   statement may influence the value of other statements. In forward
-   dataflow, a statement can influence the following statements, while
-   in backward dataflow, it influences the previous ones. *)
-module type INFLUENCE = sig
-  val influence: ordered_stmt -> ordered_stmt list
+[@@@ warning "+60"]
+
+type direction = Forward | Backward;;
+
+(* Iterate over statements by strongly connected components: i.e. do
+   not leave a scc if there is still work to do in this scc. All
+   statements inside a scc are handled before starting over on that
+   scc. Iteration is done using the topological order of sccs. *)
+module Connected_component_worklist
+  (Dir:sig val direction:direction end)
+  (Fenv:FUNCTION_ENV)
+  :CONSULTABLE_WORKLIST =
+struct
+
+  (** Workqueue, implemented as a bit vector. Because the
+      [find_next_true] operation only operates in ascending indices,
+      we need to put statements in the reverse order for the backward
+      dataflow. *)
+  module Workqueue:sig
+    val clear: ordered_stmt -> unit
+    val set: ordered_stmt -> unit
+    val mem: ordered_stmt -> bool
+    val find_next_true: ordered_stmt -> ordered_stmt
+  end = struct
+    let rev = match Dir.direction with
+      | Forward -> fun x -> x
+      | Backward -> fun x -> (Fenv.nb_stmts - 1) - x
+    ;;
+    let bv = Bitvector.create Fenv.nb_stmts
+    let clear i = Bitvector.clear bv (rev i)
+    let set i = Bitvector.set bv (rev i)
+    let mem i = Bitvector.mem bv (rev i)
+    let find_next_true current = rev (Bitvector.find_next_true bv (rev current))
+  end
+
+  (* Forward iteration follows topological order, while backward
+     iteration follows reverse topological order. Further, nearer etc.
+     reflects topological distance to the first node. *)
+  let first = match Dir.direction with
+    | Forward -> 0
+    | Backward -> Fenv.nb_stmts - 1
+
+  let get_next = match Dir.direction with
+    | Forward -> fun x -> x + 1
+    | Backward -> fun x -> x - 1
+
+  let is_further = match Dir.direction with
+    | Forward -> (>=)
+    | Backward -> (<=)
+
+  let is_strictly_nearer = match Dir.direction with
+    | Forward -> (<)
+    | Backward -> (>)
+
+  let nearest a b = match Dir.direction with
+    | Forward -> min a b
+    | Backward -> max a b
+
+
+  (* Next statement to be retrieved. *)
+  let next = ref first
+
+    (* The current strongly connected component. Set it initially to
+       the one of [next] so that extraction directly returns the
+       initial [next]. *)
+  let current_scc = ref (Fenv.connected_component !next);;
+
+  Kernel.debug ~dkey:dkeyscc
+    "First statement %d, first scc %d" !next !current_scc;;
+
+    (* We normally iterate using the ordered_stmt order. The only
+       exception is when we have to restart iteration on the current
+       strongly connected component. If this is the case,
+       must_restart_cc is set to [Some(x)], where [x] is the first
+       statement to be processed when we restart iterating on the
+       current scc. *)
+  let must_restart_scc = ref None
+
+  let insert ord =
+    (* We always iterate in topological order or stay in same connected component order. *)
+    assert ((is_further ord !next)
+	    || (Fenv.connected_component ord) = !current_scc);
+    Workqueue.set ord;
+    if is_strictly_nearer ord !next
+    then must_restart_scc := match !must_restart_scc with
+    | None -> Some ord
+    | Some(x) -> Some(nearest ord x)
+
+  let extract () =
+
+    (* Note: these functions are called in tail position, and should
+       be optimized as jumps. *)
+
+    (* Remove i from the worklist, set up next for the next call, and return i.  *)
+    let select i =
+      Kernel.debug ~dkey:dkeyscc "Selecting %d" i;
+      Workqueue.clear i;
+      next := get_next i;
+      Some i
+    in
+
+    (* We reached the end of the current scc, and we need to further iterate on it. *)
+    let select_restart_scc i =
+      Kernel.debug ~dkey:dkeyscc
+        "Restarting to %d in same scc %d (current_scc = %d)"
+        i (Fenv.connected_component i) !current_scc;
+      assert((Fenv.connected_component i) == !current_scc);
+      must_restart_scc := None;
+      select i
+    in
+
+    (* We reached the end of the current scc, and we can switch to the next. *)
+    let select_new_scc i =
+      Kernel.debug ~dkey:dkeyscc "Changing to %d in scc %d  (current_scc = %d)"
+        i (Fenv.connected_component i) !current_scc;
+      assert((Fenv.connected_component i) != !current_scc);
+      current_scc := Fenv.connected_component i;
+      must_restart_scc := None;
+      select i
+    in
+
+    (* We did not reach the end of the current scc. *)
+    let select_same_scc i =
+      Kernel.debug ~dkey:dkeyscc
+        "Continuing to %d in scc %d  (current_scc = %d)"
+        i (Fenv.connected_component i) !current_scc;
+      assert((Fenv.connected_component i) == !current_scc);
+      select i
+    in
+
+    try
+      let next_true = Workqueue.find_next_true !next in
+      let next_true_scc = Fenv.connected_component next_true in
+      if next_true_scc = !current_scc
+      then
+	select_same_scc next_true
+      else
+	(* We reached the end of the current connected
+           component. The trick is that OCamlgraph's topological
+           ordering guarantees that elements of the same connected
+           component have contiguous indexes, so we know that we
+           have reached the end of the current scc. Check if we
+           should start over in the same scc, or continue to the
+           next scc. *)
+	match !must_restart_scc with
+	| None -> select_new_scc next_true
+	| Some(i) -> select_restart_scc i
+    with Not_found ->
+      (* We found no further statement with work to do, but the
+	 current scc may still contain some work. *)
+      match !must_restart_scc with
+      | None -> None
+      | Some(i) -> select_restart_scc i
+  ;;
+
+  let in_worklist ord = Workqueue.mem ord
+
 end
 
-module Forward_influence(Fenv:FUNCTION_ENV):INFLUENCE = struct
-  let influence ord =
-    let stmt = Fenv.to_stmt ord in
-    List.map Fenv.to_ordered stmt.succs
-end
-
-module Backward_influence(Fenv:FUNCTION_ENV):INFLUENCE = struct
-  let influence ord =
-    let stmt = Fenv.to_stmt ord in
-    List.map Fenv.to_ordered stmt.preds
-end
-
-(****************************************************************)
-(* The worklist algorithm, that iterates until there is no more work
-   left to do. This is the one described in Principles of program
-   analysis, by Nielson, Nielson and Hankin, page 369. *)
-module type ITERATE = sig
-  (** [iter f] executes f on all statements until there is no more
-      work to do. The [f ord] function must return [true] if something
-      has changed for statement [ord], and [false] otherwise. *)
-  val iter: (ordered_stmt -> bool) -> unit
-end
-
-(* Note: This is not used by the forward dataflow, that records and
-   updates worklists based on edges between statements. But this could
-   still be useful for the backward dataflow, or for a simpler forward
-   dataflow that would not handle guards specially (like the dominator
-   computation). *)
-module Iterate(Inf:INFLUENCE)(W:WORKLIST):ITERATE = struct
-  (* Iterates over the worklist until there is nothing to do left.
-     When the data for the current stmt has changed, update the
-     worklist to recompute stmts influenced by the current stmt. *)
-  let iter f =
-    let rec loop () =
-      match W.extract() with
-      | None -> ()
-      | Some(x) ->
-	let changed = f x in
-	if changed
-	then List.iter W.insert (Inf.influence x)
-	else ();
-	loop()
-    in loop()
-end
-
-(* Default simple instanciations for forward and backward
-   dataflows. This is what everybody should use for direct
-   iteration. *)
-module Forward_Iterate(Fenv:FUNCTION_ENV):ITERATE =
-  Iterate(Forward_influence(Fenv))(Simple_forward_worklist(Fenv))
+module Forward_connected_component_worklist =
+  Connected_component_worklist(struct let direction = Forward end)
 ;;
 
-(* Note: usages of this functor: for the dominator/postdominator
-   computation; for "bit-framework" based analysis; for the backward
-   dataflow... *)
+module Backward_connected_component_worklist =
+  Connected_component_worklist(struct let direction = Backward end)
+;;
 
 (****************************************************************)
 (* Monotone Framework (see Nielson, Nielson, Hankin) *)
@@ -212,15 +334,15 @@ module Forward_Iterate(Fenv:FUNCTION_ENV):ITERATE =
 module type JOIN_SEMILATTICE = sig
   type t
 
-  (* Must be idempotent (join a a = a), commutative, and associative. *)
+  (* Must be idempotent ([join a a = a]), commutative, and associative. *)
   val join: t -> t -> t
 
-  (* Must verify that forall a, join a bottom = a. *)
+  (* Must verify that [join a bottom = a]. *)
   val bottom: t
 
-  (* Must verify: a is_included b <=> a join b = b. The dataflow does
+  (* Must verify: [is_included a b <=> join a b = b]. The dataflow does
      not require this function. *)
-  (* val is_included: t -> t -> bool *)
+  val is_included: t -> t -> bool
 
   (* This function is used by the dataflow algorithm to determine if
      something has to be recomputed. Joining and inclusion testing are
@@ -245,6 +367,90 @@ module CurrentLoc = Cil_const.CurrentLoc;;
 
 (****************************************************************)
 
+(* Statement-based backward dataflow. Contrary to the forward dataflow,
+   the transfer function cannot differentiate the state before a
+   statement between different predecessors. *)
+module type BACKWARD_MONOTONE_PARAMETER = sig
+  include JOIN_SEMILATTICE
+
+  (* [transfer_stmt s state] must implement the transfer function for [s]. *)
+  val transfer_stmt: stmt -> t -> t
+
+  (* The initial value for each statement. Statements in this list are
+     given the associated value, and are added to the worklist. Other
+     statements are initialized to bottom. *)
+  val init: (stmt * t) list
+end
+
+module Simple_backward(Fenv:FUNCTION_ENV)(P:BACKWARD_MONOTONE_PARAMETER) = struct
+  module W = Backward_connected_component_worklist(Fenv)
+
+  let after = Array.make Fenv.nb_stmts P.bottom;;
+  List.iter (fun (stmt,state) ->
+      let ord = Fenv.to_ordered stmt in
+      after.(ord) <- state;
+      W.insert ord
+    ) P.init;;
+
+  let rec loop () =
+    match W.extract() with
+    | None -> ()
+    | Some(ord) ->
+      let stmt = Fenv.to_stmt ord in
+      let before_state = P.transfer_stmt stmt after.(ord) in
+      Kernel.debug ~dkey "backward: %d before_state = %a"
+        stmt.sid P.pretty before_state;
+      let to_update = List.map Fenv.to_ordered stmt.preds in
+      let update_f upd =
+        let join =
+          (* If we know that we already have to recompute before.(ord), we
+             can omit the inclusion testing, and only perform the join. The
+             rationale is that querying the worklist is cheap, while
+             inclusion testing can be costly. *)
+          if W.in_worklist upd
+          then P.join after.(upd) before_state
+          else
+            (* compute join and check inclusion between computed state
+               ([before_state]) and stored state for [upd] ([after.(upd)]) *)
+            let (join,is_included) =
+              P.join_and_is_included before_state after.(upd)
+            in
+            Kernel.debug ~dkey "%a + %a -> %b, %a"
+              P.pretty after.(upd)
+              P.pretty before_state
+              is_included P.pretty join;
+            if not is_included then W.insert upd;
+            join
+        in
+        Kernel.debug ~dkey "backward: updating %d,  %a"
+          (Fenv.to_stmt upd).sid  P.pretty join;
+        after.(upd) <- join
+      in
+      List.iter update_f to_update;
+      loop()
+  ;;
+
+  loop();;
+
+
+  (* Easy access to the result of computation. *)
+  let fold_on_result f init =
+    let rec loop acc = function
+      | i when i = Fenv.nb_stmts -> acc
+      | i -> let acc = f acc (Fenv.to_stmt i) after.(i)
+	     in loop acc (i+1)
+    in loop init 0;;
+
+  let iter_on_result f =
+    for i = 0 to (Fenv.nb_stmts - 1) do
+      f (Fenv.to_stmt i) after.(i)
+    done;;
+
+  let post_state stmt = after.(Fenv.to_ordered stmt)
+  let pre_state stmt = P.transfer_stmt stmt (post_state stmt)
+
+    
+end
 (* Edge-based forward dataflow. It is edge-based because the transfer
    function can differentiate the state after a statement between
    different successors. In particular, the state can be reduced
@@ -275,7 +481,9 @@ module type FORWARD_MONOTONE_PARAMETER_GENERIC_STORAGE = sig
 end
 
 module Forward_monotone_generic_storage
-  (Fenv:FUNCTION_ENV)(P:FORWARD_MONOTONE_PARAMETER_GENERIC_STORAGE)(W:WORKLIST) =
+  (Fenv:FUNCTION_ENV)
+  (P:FORWARD_MONOTONE_PARAMETER_GENERIC_STORAGE)
+  (W:CONSULTABLE_WORKLIST) =
 struct
   List.iter (fun (stmt,state) ->
     let ord = Fenv.to_ordered stmt in
@@ -284,21 +492,28 @@ struct
 
   let update_before (stmt, new_state) =
     let ord = Fenv.to_ordered stmt in
-    (* TODO: if we know that we already have to recompute
-       before.(ord), we can omit the inclusion testing, and only
-       perform the join. We only need to query the worklist. *)
     CurrentLoc.set (Cil_datatype.Stmt.loc stmt);
-    let (join, is_included) =
-      P.join_and_is_included new_state (P.get_before ord)
+    let join =
+      (* If we know that we already have to recompute before.(ord), we
+	 can omit the inclusion testing, and only perform the join. The
+	 rationale is that querying the worklist is cheap, while
+	 inclusion testing can be costly. *)
+      if W.in_worklist ord
+      then P.join new_state (P.get_before ord)
+      else
+	let (join, is_included) =
+	  P.join_and_is_included new_state (P.get_before ord)
+	in
+	if not is_included then W.insert ord;
+	join
     in
-    if not is_included then W.insert ord;
     P.set_before ord join
   ;;
 
   let do_stmt ord =
     let cur_state = P.get_before ord  in
     let stmt = Fenv.to_stmt ord in
-    Kernel.debug ~dkey "doing stmt %d" stmt.sid;
+    Kernel.debug ~dkey "forward: doing stmt %d" stmt.sid;
     CurrentLoc.set (Cil_datatype.Stmt.loc stmt);
     let l = P.transfer_stmt stmt cur_state in
     List.iter update_before l
@@ -325,10 +540,11 @@ struct
       f (Fenv.to_stmt i) (P.get_before i)
     done;;
 
+  let pre_state stmt = P.get_before (Fenv.to_ordered stmt)
+  let post_state stmt =
+    let post_states = List.map snd (P.transfer_stmt stmt (pre_state stmt)) in
+    List.fold_left P.join P.bottom post_states
 end
-
-module Simple_forward_generic_storage(Fenv:FUNCTION_ENV)(P:FORWARD_MONOTONE_PARAMETER_GENERIC_STORAGE) =
-  Forward_monotone_generic_storage(Fenv)(P)(Simple_forward_worklist(Fenv));;
 
 (****************************************************************)
 (* Edge-based forward dataflow with array-based storage. Should be
@@ -353,7 +569,7 @@ module type FORWARD_MONOTONE_PARAMETER = sig
 end
 
 module Simple_forward(Fenv:FUNCTION_ENV)(P:FORWARD_MONOTONE_PARAMETER) = struct
-  module W = Simple_forward_worklist(Fenv);;
+  module W = Forward_connected_component_worklist(Fenv);;
 
   module P_array = struct
     include P

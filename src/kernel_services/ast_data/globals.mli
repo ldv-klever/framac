@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,19 +38,23 @@ module Vars: sig
   val find_from_astinfo: string -> localisation -> varinfo
 
   val get_astinfo: varinfo -> string * localisation
+  (** Linear in the number of locals and formals of the program. *)
 
   (** {2 Iterators} *)
 
   val iter: (varinfo -> initinfo -> unit) -> unit
   val fold: (varinfo -> initinfo -> 'a -> 'a) -> 'a -> 'a
 
+  (** The next four iterators iter on all global variables present in
+      the AST, following the order in which they are declared/defined. The only
+      exception is for variables that are both declared and defined. In
+      this case, the declarations are skipped altogether. *)
   val iter_in_file_order: (varinfo -> initinfo -> unit) -> unit
   val fold_in_file_order: (varinfo -> initinfo -> 'a -> 'a) -> 'a -> 'a
   (** @since Fluorine-20130401 *)
 
   val iter_in_file_rev_order: (varinfo -> initinfo -> unit) -> unit
   (** @since Neon-20140301 *)
-
   val fold_in_file_rev_order: (varinfo -> initinfo -> 'a -> 'a) -> 'a -> 'a
   (** @since Neon-20140301 *)
 
@@ -94,6 +98,10 @@ module Functions: sig
 
   val find_def_by_name : string -> kernel_function
     (** @raise Not_found if there is no function definition of this name. *)
+
+  val find_decl_by_name : string -> kernel_function
+    (** @raise Not_found if there is no function declaration of this name.
+        @since Aluminium-20160501 *)
 
   (** {2 Iterators} *)
 
@@ -185,6 +193,16 @@ module Types : sig
   val find_type: Logic_typing.type_namespace -> string -> typ
   (** Find a type from its name in the AST.
       @raise Not_found when no such type  exists. *)
+
+  val iter_types: (string -> typ -> Logic_typing.type_namespace -> unit) -> unit
+  (** Iteration on named types (typedefs, structs, unions, enums). The first
+      argument is the name of type. *)
+
+  val global: Logic_typing.type_namespace -> string -> global
+  (** Find the global that defines the corresponding type.
+      @raise Not_found if no such type has been defined.
+
+      @since Magnesium-20151001 *)
 end
 
 (* ************************************************************************* *)
@@ -253,6 +271,6 @@ val find_enclosing_block: (stmt -> block) ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

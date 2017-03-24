@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,10 +40,10 @@ let occurs_opt x = function
   | Some t -> occurs x t
 
 let occurs_vset x = function
-  | Set(_,t) 
+  | Set(_,t)
   | Singleton t -> occurs x t
   | Range(a,b) -> occurs_opt x a || occurs_opt x b
-  | Descr(xs,t,p) -> 
+  | Descr(xs,t,p) ->
       if List.exists (Var.equal x) xs then false
       else (occurs x t || occursp x p)
 
@@ -56,11 +56,11 @@ let vars_vset = function
   | Singleton t -> F.vars t
   | Range(a,b) -> Vars.union (vars_opt a) (vars_opt b)
   | Descr(xs,t,p) ->
-      List.fold_left 
+      List.fold_left
         (fun xs x -> Vars.remove x xs)
         (Vars.union (F.vars t) (F.varsp p)) xs
 
-let vars vset = List.fold_left 
+let vars vset = List.fold_left
     (fun xs s -> Vars.union xs (vars_vset s))
     Vars.empty vset
 
@@ -68,51 +68,25 @@ let vars vset = List.fold_left
 (* --- Pretty                                                             --- *)
 (* -------------------------------------------------------------------------- *)
 
-(* 
-let is_elt = function Set _ | Descr _ -> false | Singleton _ | Range _ -> true
-
-let pp_elt fmt = function
-  | Set _ | Descr _ -> ()
-  | Singleton t -> F.pp_term fmt t
-  | Range(Some a,Some b) -> Format.fprintf fmt "%a..%a" F.pp_term a F.pp_term b
-  | Range(None,Some b) -> Format.fprintf fmt "..%a" F.pp_term b
-  | Range(Some a,None) -> Format.fprintf fmt "%a.." F.pp_term a
-  | Range(None,None) -> Format.pp_print_string fmt ".."
-
-let pp_elts fmt = function
-  | [] -> ()
-  | x::xs -> 
-      pp_elt fmt x ; 
-      List.iter (fun x -> Format.fprintf fmt ",@,%a" pp_elt x) xs
+let pp_bound fmt = function
+  | None -> ()
+  | Some e -> F.pp_term fmt e
 
 let pp_vset fmt = function
-  | (Singleton _ | Range _) as e -> Format.fprintf fmt "@[{%a}@]" pp_elt e
   | Set(_,t) -> F.pp_term fmt t
-  | Descr(xs,t,p) ->
-      begin
-	Format.fprintf fmt "@[<hv 2>{ @[<hov 2>%a@]" F.pp_term t  ;
-	if xs <> [] then
-	  ( Format.fprintf fmt "@ @[<hov 2>for" ;
-	    List.iter (fun x -> Format.fprintf fmt "@ %a" Var.pretty x) xs ) ;
-	Format.fprintf fmt "@ @[<hov 2>with <hov 2>%a@] }@]" F.pp_pred p ;
-      end
+  | Singleton x -> Format.fprintf fmt "@[<hov 2>{ %a }@]" F.pp_term x
+  | Range(None,None) -> Format.pp_print_string fmt "[..]"
+  | Range(a,b) -> Format.fprintf fmt "@[<hov 2>[%a@,..%a]@]" pp_bound a pp_bound b
+  | Descr _ -> Format.fprintf fmt "{ <comprehension> }"
 
- let pretty fmt = function
-  | [] -> Format.fprintf fmt "{}"
-  | s ->
-      begin
-	let es,ds = List.partition is_elt s in
-	Format.fprintf fmt "@[<hv 0>" ;
-	if es <> [] then Format.fprintf fmt "@[<hov 1>{%a}@]" pp_elts es ;
-	match ds with
-	  | [] -> ()
-	  | ds when es <> [] ->
-	      List.iter (fun d -> Format.fprintf fmt "@ + %a" pp_vset d) ds
-	  | d::ds ->
-	      pp_vset fmt d ;
-	      List.iter (fun d -> Format.fprintf fmt "@ + %a" pp_vset d) ds
-      end
-*)
+let pretty fmt = function
+  | [] -> Format.pp_print_string fmt "{}"
+  | [v] -> pp_vset fmt v
+  | v::vs ->
+      Format.fprintf fmt "@[<hov 2>(%a" pp_vset v ;
+      List.iter (fun v -> Format.fprintf fmt "@ + %a" pp_vset v) vs ;
+      Format.fprintf fmt ")@]"
+
 (* -------------------------------------------------------------------------- *)
 (* --- Set Operations                                                     --- *)
 (* -------------------------------------------------------------------------- *)
@@ -147,7 +121,7 @@ let sub_range x y a b =
 
 let in_size x n = p_and (p_leq e_zero x) (p_lt x (e_int n))
 
-let in_range x a b = 
+let in_range x a b =
   match single a b with
   | Some y -> p_equal x y
   | None -> test_range x x a b
@@ -157,7 +131,7 @@ let ordered ~limit ~strict a b =
   | Some x , Some y -> if strict then p_lt x y else p_leq x y
   | _ -> if limit then p_true else p_false
 
-let member x xs = p_all
+let member x xs = p_any
     (function
       | Set(_,s) -> p_call p_member [x;s]
       | Singleton e -> p_equal x e
@@ -172,7 +146,7 @@ let range a b = [Range(a,b)]
 let union xs ys = (xs @ ys)
 
 let descr = function
-  | Set(t,s) -> 
+  | Set(t,s) ->
       let x = Lang.freshvar t in
       let e = e_var x in
       [x] , e , p_call p_member [e;s]
@@ -181,7 +155,7 @@ let descr = function
       let x = Lang.freshvar ~basename:"k" Logic.Int in
       let e = e_var x in
       [x] , e , in_range e a b
-  | Descr(xs,t,p) -> 
+  | Descr(xs,t,p) ->
       xs, t, p
 
 (* -------------------------------------------------------------------------- *)
@@ -195,7 +169,7 @@ let concretize_vset = function
   | Range(None,Some b) -> e_fun f_range_inf [b]
   | Range(Some a,None) -> e_fun f_range_sup [a]
   | Range(Some a,Some b) -> e_fun f_range [a;b]
-  | Descr _ -> 
+  | Descr _ ->
       Warning.error "Concretization for comprehension sets not implemented yet"
 
 let concretize = function
@@ -212,7 +186,7 @@ let inter xs ys = e_fun f_inter [xs;ys]
 (* -------------------------------------------------------------------------- *)
 
 let subrange a b = function
-  | [Range(c,d)] -> 
+  | [Range(c,d)] ->
       p_and
         (match c,a with
          | None,_ -> p_true
@@ -222,14 +196,14 @@ let subrange a b = function
          | _,None -> p_true
          | None,Some _ -> p_false
          | Some b,Some d -> p_leq b d)
-  | ys -> 
+  | ys ->
       let x = Lang.freshvar ~basename:"k" Logic.Int in
       let k = e_var x in
       p_forall [x] (p_imply (in_range k a b) (member k ys))
 
 let subset xs ys =
   p_all (function
-      | Set(t,s) -> 
+      | Set(t,s) ->
           let x = Lang.freshvar t in
           let e = e_var x in
           p_forall [x] (p_imply (p_call p_member [e;s]) (member e ys))
@@ -244,7 +218,7 @@ let subset xs ys =
 (* --- Equality                                                           --- *)
 (* -------------------------------------------------------------------------- *)
 
-let equal xs ys = 
+let equal xs ys =
   p_and (subset xs ys) (subset ys xs)
 
 (* -------------------------------------------------------------------------- *)
@@ -264,23 +238,23 @@ let disjoint_bounds left right =
 let disjoint_vset x y =
   match x , y with
 
-  | Singleton x , Singleton y -> 
+  | Singleton x , Singleton y ->
       p_neq x y
 
-  | Singleton e , Range(a,b) 
-  | Range(a,b) , Singleton e -> 
+  | Singleton e , Range(a,b)
+  | Range(a,b) , Singleton e ->
       p_not (in_range e a b)
 
-  | Range(a,b) , Range(c,d) -> 
-      p_disj [ 
+  | Range(a,b) , Range(c,d) ->
+      p_disj [
         empty_range a b ;
         empty_range c d ;
         disjoint_bounds b c ;
         disjoint_bounds d a ;
       ]
 
-  | Singleton x , Descr(xs,t,p) 
-  | Descr(xs,t,p) , Singleton x -> 
+  | Singleton x , Descr(xs,t,p)
+  | Descr(xs,t,p) , Singleton x ->
       p_forall xs (p_imply p (p_neq x t))
 
   | Range(a,b) , Descr(xs,t,p)
@@ -288,11 +262,11 @@ let disjoint_vset x y =
       p_forall xs (p_imply p (p_not (in_range t a b)))
 
   | Descr(xs,ta,pa) , Descr(ys,tb,pb) ->
-      p_forall xs 
-        (p_forall ys 
+      p_forall xs
+        (p_forall ys
            (p_hyps [pa;pb] (p_neq ta tb)))
 
-  | Singleton e , Set(_,s) 
+  | Singleton e , Set(_,s)
   | Set(_,s) , Singleton e ->
       p_not (p_call p_member [e;s])
 
@@ -320,22 +294,22 @@ let disjoint xs ys =
 (* -------------------------------------------------------------------------- *)
 
 let cartesian f xs ys =
-  let zs = 
+  let zs =
     List.fold_left
-      (fun w x -> 
+      (fun w x ->
          List.fold_left (fun w y -> f x y :: w) w ys
       ) [] xs
   in List.rev zs
 
 let map_vset f x = let xs,t,p = descr x in Descr(xs,f t,p)
 
-let map f xs = List.map 
+let map f xs = List.map
     (function Singleton x -> Singleton (f x) | u -> map_vset f u) xs
 
 let map_opt f = function None -> None | Some x -> Some (f x)
 
 let map_opp xs = List.map
-    (function 
+    (function
       | Singleton x -> Singleton (e_opp x)
       | Range(a,b) -> Range(map_opt e_opp b,map_opt e_opp a)
       | Descr(xs,t,p) -> Descr(xs,e_opp t,p)
@@ -348,16 +322,12 @@ let lift_vset f x y =
   Descr (xs @ ys , f ta tb , p_and pa pb)
 
 let lift f xs ys =
-  cartesian 
+  cartesian
     (fun x y ->
        match x , y with
        | Singleton a , Singleton b -> Singleton (f a b)
        | _ -> lift_vset f x y
     ) xs ys
-
-let pp_bound fmt = function
-  | None -> ()
-  | Some e -> F.pp_term fmt e
 
 let bound_shift a k =
   match a with
@@ -379,9 +349,9 @@ let lift_add xs ys =
     (fun x y ->
        match x , y with
        | Singleton a , Singleton b -> Singleton(e_add a b)
-       | Singleton u , Range(a,b) | Range(a,b) , Singleton u -> 
+       | Singleton u , Range(a,b) | Range(a,b) , Singleton u ->
            Range(map_opt (e_add u) a, map_opt (e_add u) b)
-       | Range(a,b) , Range(c,d) -> 
+       | Range(a,b) , Range(c,d) ->
            Range(bound_add a c,bound_add b d)
        | _ -> lift_vset e_add x y
     ) xs ys
@@ -391,9 +361,9 @@ let lift_sub xs ys =
     (fun x y ->
        match x , y with
        | Singleton a , Singleton b -> Singleton(e_sub a b)
-       | Singleton u , Range(a,b) -> 
+       | Singleton u , Range(a,b) ->
            Range(bound_sub (Some u) b , bound_sub (Some u) a)
-       | Range(a,b) , Singleton u -> 
+       | Range(a,b) , Singleton u ->
            Range(bound_sub a (Some u) , bound_sub b (Some u))
        | Range(a,b) , Range(c,d) ->
            Range(bound_sub a d , bound_sub b c)

@@ -197,6 +197,6 @@ module Make (Ord : Set.OrderedType) : S with type elt = Ord.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,7 +25,7 @@
 (* ************************************************************************* *)
 
 val get_selection_context: ?is_set:bool -> unit -> State_selection.t
-(** Selection of all the parameters which may have an impact on some
+(** Selection of all the parameters that may have an impact on some
     analysis. *)
 
 val get_selection: ?is_set:bool -> unit -> State_selection.t
@@ -68,8 +68,10 @@ end
 
 (**/**)
 
+val collections: State.Set.t ref
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

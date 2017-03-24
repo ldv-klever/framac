@@ -1,0 +1,7 @@
+DEFAULT_SUITES= wp wp_plugin wp_acsl wp_bts wp_store wp_hoare wp_typed wp_usage
+TOPLEVEL_PATH=/home/schrodi/repos/Old_Frama-C/bin/toplevel.opt
+FRAMAC_SHARE=/home/schrodi/repos/Old_Frama-C/share
+FRAMAC_LIB=/home/schrodi/repos/Old_Frama-C/lib/fc
+FRAMAC_PLUGIN=/home/schrodi/repos/Old_Frama-C/lib/plugins
+FRAMAC_PLUGIN_GUI=/home/schrodi/repos/Old_Frama-C/lib/plugins/gui
+OCAMLRUNPARAM=

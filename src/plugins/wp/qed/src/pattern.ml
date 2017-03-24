@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -57,7 +57,7 @@ struct
     | [] , _ | _ , [] -> raise Not_found
     | p::ps , e::es -> unify s p e ; unify_all s ps es
 
-  and unify s p e = 
+  and unify s p e =
     match p , T.repr e with
     | Pvar k , _ -> assign s k e
     | Pguard(k,f) , _ when f e -> assign s k e
@@ -70,11 +70,11 @@ struct
   let extract = function Some e -> e | None -> raise Not_found
 
   let pmatch p e =
-    let s = Array.create (size p) None in
+    let s = Array.make (size p) None in
     unify s p e ; Array.map extract s
 
   let pmatch_all ps es =
-    let s = Array.create (size_list ps) None in
+    let s = Array.make (size_list ps) None in
     unify_all s ps es ; Array.map extract s
 
   let rec pretty fmt = function

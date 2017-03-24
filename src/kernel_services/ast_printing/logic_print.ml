@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -39,7 +39,12 @@ let rec print_logic_type name fmt typ =
     | None -> (fun _ -> ())
   in
   match typ with
-      LTvoid -> fprintf fmt "void%t" pname
+    | LTattribute (t,attr) -> 
+        let pname fmt =
+	  fprintf fmt "%a" Cil_printer.pp_attribute attr
+        in 
+        print_logic_type (Some pname) fmt t
+    | LTvoid -> fprintf fmt "void%t" pname
     | LTinteger ->
         fprintf fmt "%s%t"
 	  (if Kernel.Unicode.get () then Utf8_logic.integer else "integer")
@@ -115,6 +120,7 @@ let getParenthLevel e =
     | PLand _ | PLor _ | PLxor _ -> 80
     | PLif _ -> 77
     | PLbinop (_,(Bbw_and | Bbw_or | Bbw_xor),_) -> 75
+    | PLrepeat _ -> 72
     | PLrel _ -> 70
     | PLbinop (_,(Badd|Badd_mod|Bsub|Bsub_mod|Blshift|Blshift_mod|Brshift),_) -> 60
     | PLbinop (_,(Bmul|Bmul_mod|Bdiv|Bdiv_mod|Bmod),_) -> 40
@@ -126,11 +132,12 @@ let getParenthLevel e =
     | PLapp _ | PLold _ | PLat _ 
     | PLoffset _ | PLoffset_max _ | PLoffset_min _ | PLbase_addr _ | PLblock_length _
     | PLupdate _  | PLinitField _ | PLinitIndex _
-    | PLvalid _ | PLvalid_read _ | PLinitialized _ | PLdangling _
+    | PLvalid _ | PLvalid_read _ | PLvalid_function _
+    | PLinitialized _ | PLdangling _
     | PLallocable _ | PLfreeable _ | PLfresh _ 
     | PLseparated _ | PLsubtype _ | PLunion _ | PLinter _ -> 10
     | PLvar _ | PLconstant _ | PLresult | PLnull | PLtypeof _ | PLtype _
-    | PLfalse | PLtrue | PLcomprehension _ | PLempty | PLsingleton _ -> 0
+    | PLfalse | PLtrue | PLcomprehension _ | PLempty | PLset _ | PLlist _ -> 0
 
 let rec print_path_elt fmt = function
     | PLpathField s -> fprintf fmt ".%s" s
@@ -190,6 +197,12 @@ and print_lexpr_level n fmt e =
       | PLarrow(e,f) -> fprintf fmt "%a->%s" print_lexpr e f
       | PLarrget(b,i) ->
           fprintf fmt "%a[@;@[%a@]@;]" print_lexpr b print_lexpr i
+      | PLlist(args) ->
+          fprintf fmt "[@[%a@]]"
+            (pp_list ~sep:",@ " print_lexpr_plain) args
+      | PLrepeat(e1,e2) ->
+          fprintf fmt "%a@ *^@ %a"
+            print_lexpr e1 print_lexpr e2
       | PLold(e) -> fprintf fmt "\\old(@;@[%a@]@;)" print_lexpr_plain e
       | PLat(e,s) -> fprintf fmt "\\at(@;@[%a,@ %s@]@;)" print_lexpr_plain e s
       | PLbase_addr (l,e) -> fprintf fmt "\\base_addr%a(@;@[%a@])" print_label_1 l print_lexpr_plain e
@@ -250,6 +263,8 @@ and print_lexpr_level n fmt e =
             print_quantifiers q print_lexpr e
       | PLvalid (l,e) -> fprintf fmt "\\valid%a(@;@[%a@]@;)" print_label_1 l print_lexpr_plain e
       | PLvalid_read (l,e) -> fprintf fmt "\\valid_read%a(@;@[%a@]@;)" print_label_1 l print_lexpr_plain e
+      | PLvalid_function e ->
+        fprintf fmt "\\valid_function(@;@[%a@]@;)" print_lexpr_plain e
       | PLinitialized (l,e) ->
           fprintf fmt "\\initialized%a(@;@[%a@]@;)" print_label_1 l print_lexpr_plain e
       | PLdangling (l,e) ->
@@ -271,7 +286,9 @@ and print_lexpr_level n fmt e =
           fprintf fmt "{@ @[%a;@ %a%a@]@ }"
             print_lexpr e print_quantifiers q
             (pp_opt ~pre:"@ |@ " print_lexpr) p
-      | PLsingleton e -> fprintf fmt "{@ @[%a@]@ }" print_lexpr e
+      | PLset l -> 
+          fprintf fmt "{@ @[%a@]@ }"
+            (pp_list ~pre:"@;@[" ~sep:",@ " ~suf:"@]@;" print_lexpr_plain) l
       | PLempty -> pp_print_string fmt "\\empty"
       | PLunion l->
           fprintf fmt "\\union(%a)"
@@ -381,7 +398,7 @@ let print_assigns fmt a =
   match a with
       WritesAny -> ()
     | Writes l ->
-      pp_list ~sep:"@\n"
+      pp_list ~pre:"" ~sep:"" ~suf:""
         (fun fmt (loc,deps) ->
           fprintf fmt "@\nassigns@ %a%a;"
             print_lexpr loc
@@ -463,6 +480,9 @@ let print_pragma fmt p =
     | Impact_pragma p -> fprintf fmt "impact@ pragma@ %a;" print_impact_pragma p
     | Jessie_pragma p -> fprintf fmt "jessie@ pragma@ %a;" print_jessie_pragma p
 
+let print_extension fmt (name, ext) =
+  fprintf fmt "%s %a" name (pp_list ~sep:",@ " print_lexpr) ext
+
 let print_code_annot fmt ca =
   let print_behaviors fmt bhvs =
     (pp_list ~pre:"for@ " ~sep:",@ " ~suf:":@ " pp_print_string) fmt bhvs
@@ -470,10 +490,10 @@ let print_code_annot fmt ca =
   match ca with
       AAssert(bhvs,e) ->
         fprintf fmt "%aassert@ %a;" print_behaviors bhvs print_lexpr e
-    | AStmtSpec (bhvs,s) -> 
-	fprintf fmt "%a%a" 
-	  print_behaviors bhvs 
-	  print_spec s
+    | AStmtSpec (bhvs,s) ->
+      fprintf fmt "%a%a"
+        print_behaviors bhvs
+        print_spec s
     | AInvariant (bhvs,loop,e) ->
         fprintf fmt "%a%ainvariant@ %a;"
           print_behaviors bhvs (pp_cond loop) "loop@ " print_lexpr e
@@ -483,7 +503,8 @@ let print_code_annot fmt ca =
     | AAllocation (bhvs,fa) ->
         fprintf fmt "%a%a" print_behaviors bhvs (print_allocation ~isloop:true) fa
     | APragma p -> print_pragma fmt p
-
+    | AExtended (bhvs,e) ->
+      fprintf fmt "%aloop %a" print_behaviors bhvs print_extension e
 (*
 Local Variables:
 compile-command: "make -C ../../.."

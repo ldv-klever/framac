@@ -35,19 +35,25 @@
 *.vo
 *.glob
 
+# Generated makefiles
+*.generated
+
+# Generated scripts
+*.check_mli_exists
+
 # Generated files and dirs
 .settings
 .project
 .paths
 .make-wp-coq
 autom4te.cache/
-cil/src/frontc/clexer.ml
-cil/src/frontc/cparser.ml
-cil/src/frontc/cparser.mli
-cil/src/logic/logic_lexer.ml
-cil/src/logic/logic_parser.ml
-cil/src/logic/logic_parser.mli
-cil/src/logic/logic_preprocess.ml
+src/kernel_internals/parsing/clexer.ml
+src/kernel_internals/parsing/cparser.ml
+src/kernel_internals/parsing/cparser.mli
+src/kernel_internals/parsing/logic_lexer.ml
+src/kernel_internals/parsing/logic_parser.ml
+src/kernel_internals/parsing/logic_parser.mli
+src/kernel_internals/parsing/logic_preprocess.ml
 config.log
 config.status
 configure
@@ -60,22 +66,22 @@ share/Makefile.config
 share/Makefile.dynamic_config
 share/Makefile.kernel
 share/frama-c.rc
-src/aorai/Makefile
-src/aorai/autom4te.cache/
-src/aorai/configure
-src/aorai/ltllexer.ml
-src/aorai/ltlparser.ml
-src/aorai/ltlparser.mli
-src/aorai/promelalexer.ml
-src/aorai/promelalexer_withexps.ml
-src/aorai/promelaparser.ml
-src/aorai/promelaparser.mli
-src/aorai/promelaparser_withexps.ml
-src/aorai/promelaparser_withexps.mli
-src/aorai/tests/ptests_config
-src/aorai/yalexer.ml
-src/aorai/yaparser.ml
-src/aorai/yaparser.mli
+src/plugins/aorai/Makefile
+src/plugins/aorai/autom4te.cache/
+src/plugins/aorai/configure
+src/plugins/aorai/ltllexer.ml
+src/plugins/aorai/ltlparser.ml
+src/plugins/aorai/ltlparser.mli
+src/plugins/aorai/promelalexer.ml
+src/plugins/aorai/promelalexer_withexps.ml
+src/plugins/aorai/promelaparser.ml
+src/plugins/aorai/promelaparser.mli
+src/plugins/aorai/promelaparser_withexps.ml
+src/plugins/aorai/promelaparser_withexps.mli
+src/plugins/aorai/tests/ptests_config
+src/plugins/aorai/yalexer.ml
+src/plugins/aorai/yaparser.ml
+src/plugins/aorai/yaparser.mli
 src/kernel/config.ml
 src/kernel/frama_c_config.ml
 src/lib/dynlink_common_interface.ml
@@ -102,6 +108,17 @@ src/wp/rformat.ml
 src/wp/script.ml
 src/wp/tests/ptests_config
 src/wp/why3_xml.ml
+src/kernel_internals/runtime/config.ml
+src/kernel_internals/runtime/frama_c_config.ml
+src/libraries/stdlib/FCDynlink.ml
+src/libraries/stdlib/integer.ml
+src/libraries/utils/json.ml
+src/plugins/print_api/grammar.ml
+src/plugins/print_api/grammar.mli
+src/plugins/print_api/lexer.ml
+src/plugins/value/domains/apron/apron_domain.ml
+src/plugins/wp/Wp.mli
+src/plugins/wp/share/instwp
 
 # ? some dummy empty _DEP files
 *_DEP

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,11 +33,11 @@ class model =
   object(self)
     val mutable index = Windex.empty
     method reload = index <- Windex.empty
-    method add w = index <- Windex.add w index 
+    method add w = index <- Windex.add w index
     method size = Windex.size index
-    method index w = Windex.index w index 
+    method index w = Windex.index w index
     method get k = Windex.get k index
-    method coerce = (self :> Wpo.t Custom.List.model)
+    method coerce = (self :> Wpo.t Wtable.listmodel)
   end
 
 let render_prover_result p =
@@ -51,9 +51,9 @@ let render_prover_result p =
   let icn_failed  = icn_stock "gtk-dialog-warning" in
   let icn_cut     = icn_stock "gtk-cut" in
   let icn_running = icn_stock "gtk-execute" in
-  let open VCS in 
+  let open VCS in
   let icon_of_verdict = function
-    | NoResult -> icn_none
+    | Checked | NoResult -> icn_none
     | Valid    -> icn_valid
     | Invalid  -> icn_invalid
     | Unknown  -> icn_unknown
@@ -67,13 +67,13 @@ let render_prover_result p =
 
 class pane (enabled:GuiConfig.provers) =
   let model = new model in
-  let list = new Custom.List.view ~headers:true ~rules:true model#coerce in
+  let list = new Wtable.list ~headers:true ~rules:true model#coerce in
   object(self)
 
     method coerce = list#coerce
     method reload = list#reload
 
-    method add wpo = 
+    method add wpo =
       begin
         model#add wpo ;
         list#insert_row wpo ;
@@ -119,13 +119,13 @@ class pane (enabled:GuiConfig.provers) =
         List.iter
           (fun (vcs,column) ->
              match vcs with
-             | VCS.Why3 p when not (wanted p dps) -> 
+             | VCS.Why3 p when not (wanted p dps) ->
                  ignore (list#view#remove_column column)
              | _ -> ()
           ) provers ;
         (* Installing Missing Columns *)
         List.iter
-          (fun dp -> 
+          (fun dp ->
              let p = VCS.Why3 dp.dp_prover in
              match self#column_of_prover p with
              | None -> self#create_prover p
@@ -135,18 +135,18 @@ class pane (enabled:GuiConfig.provers) =
 
     initializer
       begin
-        let render w = 
+        let render w =
           [`TEXT (Pretty_utils.to_string Wpo.pp_index w.po_idx)] in
         ignore (list#add_column_text ~title:"Module" [] render) ;
-        let render w = 
+        let render w =
           [`TEXT (Pretty_utils.to_string Wpo.pp_title w)] in
         ignore (list#add_column_text ~title:"Goal" [] render) ;
         let render w = [`TEXT (Wpo.get_model_name w)] in
         ignore (list#add_column_text ~title:"Model" [] render) ;
-        List.iter 
-          self#create_prover 
+        List.iter
+          self#create_prover
           [ VCS.Qed ; VCS.AltErgo ; VCS.Coq ; VCS.Why3ide ] ;
-        list#add_column_empty ;
+        ignore (list#add_column_empty) ;
         list#set_selection_mode `MULTIPLE ;
         enabled#connect self#configure ;
         self#configure enabled#get ;

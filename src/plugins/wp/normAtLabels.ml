@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,7 +51,7 @@ class norm_at label_map = object(self)
 
   method private restore_pred old_label x =
     current_label <- old_label;
-    let x = match x.content with
+    let x = match x.pred_content with
       | Pnot x -> (* Pnot is used as a dummy unary construct *) x
       | _ -> assert false
     in x
@@ -89,19 +89,19 @@ class norm_at label_map = object(self)
         Cil.ChangeDoChildrenPost (t,post)
     | _ -> Cil.DoChildren
 
-  method! vpredicate_named p = match p.content with
+  method! vpredicate p = match p.pred_content with
     | Pat (p, l) ->
         let old_label = self#change_label l in
-        let new_p = {p with content = Pnot p} in
+        let new_p = {p with pred_content = Pnot p} in
         Cil.ChangeDoChildrenPost (new_p, self#restore_pred old_label)
     | Papp _ ->
         let post = function
-          | {content=Papp(predicate,labels,args)} as p ->
+          | {pred_content=Papp(predicate,labels,args)} as p ->
               let new_labels =
                 List.map
                   (fun (logic,stmt) -> logic, label_map stmt)
                   labels
-              in { p with content=Papp(predicate,new_labels,args) }
+              in { p with pred_content=Papp(predicate,new_labels,args) }
           | _ -> assert false
         in
         Cil.ChangeDoChildrenPost (p,post)
@@ -121,7 +121,6 @@ let labels_fct_pre = function
   | LogicLabel (None, ("Pre" | "Here")) -> Logic_const.pre_label
   | l -> raise (LabelError l)
 
-
 let labels_fct_post = function
   | LogicLabel (None, "Init") -> Logic_const.init_label
   | LogicLabel (None, ("Pre" | "Old"))  -> Logic_const.pre_label
@@ -137,6 +136,7 @@ let labels_fct_assigns = function
 (* -------------------------------------------------------------------------- *)
 (* --- Statements Contracts                                               --- *)
 (* -------------------------------------------------------------------------- *)
+
 let labels_stmt_pre s = function
   | LogicLabel (None, "Init") -> Logic_const.init_label
   | LogicLabel (None, "Pre") -> Logic_const.pre_label (* fct pre-state *)
@@ -219,7 +219,7 @@ let labels_axiom = function
  * with the [labels] translation *)
 let preproc_annot labels p =
   let visitor = new norm_at labels in
-  Visitor.visitFramacPredicateNamed visitor p
+  Visitor.visitFramacPredicate visitor p
 
 (** @raise LabelError if there is a label in [p] that is incompatible
  * with the [labels] translation *)

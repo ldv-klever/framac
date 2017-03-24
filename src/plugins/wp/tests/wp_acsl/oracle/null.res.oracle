@@ -3,14 +3,12 @@
 [kernel] Parsing tests/wp_acsl/null.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
 ------------------------------------------------------------
   Function null_is_zero
 ------------------------------------------------------------
 
 Goal Post-condition (file tests/wp_acsl/null.c, line 6) in 'null_is_zero':
-Assume { }
-Prove: 0=(cast null).
+Prove: 0 = cast(null).
 
 ------------------------------------------------------------

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,19 +41,25 @@ module Location_Bytes : sig
     val shape: t -> Ival.t Hptmap.Shape(Base.Base).t
   end
 
-  type z =
+  type t =
     | Top of Base.SetLattice.t * Origin.t
        (** Garbled mix of the addresses in the set *)
     | Map of M.t (** Precice set of addresses+offsets *)
   (** This type should be considered private *)
   (* TODO: make it private when OCaml 4.01 is mandatory *)
 
+  type size_widen_hint = Ival.size_widen_hint
+  type generic_widen_hint = Base.t -> Ival.generic_widen_hint
+  type widen_hint = size_widen_hint * generic_widen_hint
+
   (** Those locations have a lattice structure, including standard operations
       such as [join], [narrow], etc. *)
   include Lattice_type.AI_Lattice_with_cardinal_one
-    with type t = z
-    and type  widen_hint = Base.t -> Ival.widen_hint
+    with type t := t
+    and type widen_hint := widen_hint
   include Lattice_type.With_Error_Top
+
+  include Datatype.S_with_collections with type t := t
 
   val singleton_zero : t
     (** the set containing only the value for to the C expression [0] *)
@@ -70,7 +76,7 @@ module Location_Bytes : sig
 
   val inject : Base.t -> Ival.t -> t
   val inject_ival : Ival.t -> t
-  val inject_float : Ival.F.t -> t
+  val inject_float : Fval.F.t -> t
 
   val add : Base.t -> Ival.t ->  t ->  t
   (** [add b i loc] binds [b] to [i] in [loc] when [i] is not {!Ival.bottom},
@@ -88,6 +94,10 @@ module Location_Bytes : sig
   val shift_under : Ival.t -> t -> t
   (** Over- and under-approximation of shifting the value by the given Ival. *)
 
+  val sub_pointwise: ?factor:Int_Base.t -> t -> t -> Ival.t
+  (** Subtracts the offsets of two locations [loc1] and [loc2].
+      Returns the pointwise substraction of their offsets
+      [off1 - factor * off2]. [factor] defaults to [1]. *)
 
   (** Topifying of values, in case of imprecise accesses *)
   val topify_arith_origin : t -> t
@@ -129,7 +139,9 @@ module Location_Bytes : sig
     f:(Base.t -> Ival.t -> 'a) ->
     projection:(Base.t -> Ival.t) ->
     joiner:('a -> 'a -> 'a) -> empty:'a -> t -> 'a
-    (** Cached version of [fold_i], for advanced users *)
+  (** Cached version of [fold_i], for advanced users *)
+
+  val filter_base : (Base.t -> bool) -> t -> t
 
 
   (** {2 Number of locations} *)
@@ -152,6 +164,7 @@ module Location_Bytes : sig
 
 
   (** {2 Destructuring} *)
+  val find: Base.t -> t -> Ival.t
   val find_or_bottom : Base.t -> M.t -> Ival.t
   val split : Base.t -> t -> Ival.t * t
 
@@ -185,12 +198,25 @@ module Location_Bytes : sig
     (** Is there a possibly-non empty intersection between the two supplied
         locations, assuming they have size [size] *)
 
+  (** [is_relationable loc] returns [true] iff [loc] represents a single
+      memory location. *)
   val is_relationable: t -> bool
 
   val may_reach : Base.t -> t -> bool
     (** [may_reach base loc] is true if [base] might be accessed from [loc]. *)
 
+
+  val get_garbled_mix: unit -> t list
+    (** All the garbled mix that have been created so far, sorted by "temporal"
+        order of emission. *)
+
+  val clear_garbled_mix: unit -> unit
+    (** Clear the information on created garbled mix. *)
+
+  val do_track_garbled_mix: bool -> unit
+  
 (**/**)
+  val pretty_debug: t Pretty_utils.formatter
   val clear_caches: unit -> unit
 end
 
@@ -207,9 +233,9 @@ module Zone : sig
 
   (** This type should be considered private *)
   (* TODO: make it private when OCaml 4.01 is mandatory *)
-  type tt = private Top of Base.SetLattice.t * Origin.t | Map of map_t
+  type t = private Top of Base.SetLattice.t * Origin.t | Map of map_t
 
-  include Datatype.S_with_collections with type t = tt
+  include Datatype.S_with_collections with type t := t
   val pretty_debug: t Pretty_utils.formatter
 
   include Lattice_type.Bounded_Join_Semi_Lattice with type t := t
@@ -227,6 +253,7 @@ module Zone : sig
 
   val find_lonely_key : t -> Base.t * Int_Intervals.t
   val find_or_bottom : Base.t -> map_t -> Int_Intervals.t
+  val find: Base.t -> t -> Int_Intervals.t
 
   val mem_base : Base.t -> t -> bool
     (** [mem_base b m] returns [true] if [b] is associated to something
@@ -268,7 +295,7 @@ module Zone : sig
     joiner:('b -> 'b -> 'b) -> empty:'b -> t -> 'b
 
   val fold2_join_heterogeneous:
-    cache:Hptmap.cache_type ->
+    cache:Hptmap_sig.cache_type ->
     empty_left:('a Hptmap.Shape(Base.Base).t -> 'b) ->
     empty_right:(t -> 'b) ->
     both:(Base.t -> Int_Intervals.t -> 'a -> 'b) ->
@@ -310,14 +337,14 @@ val is_valid : for_writing:bool -> location -> bool
     operation if [for_writing] is true, as the destination of a read
     otherwise. *)
 
-val is_valid_or_function : location -> bool
-(** Is the location entirely valid for reading, or is it a valid function
-    pointer. *)
-
-val valid_part : for_writing:bool -> location -> location
+val valid_part : for_writing:bool -> ?bitfield:bool -> location -> location
 (** Overapproximation of the valid part of the given location. Beware that
     [is_valid (valid_part loc)] does not necessarily hold, as garbled mix
-    are not reduced by [valid_part]. *)
+    may not be reduced by [valid_part].
+    [bitfield] indicates whether the location may be the one of a bitfield, and
+    is true by default. If it is set to false, the location is assumed to be
+    byte aligned, and its offset (expressed in bits) is reduced to be congruent
+    to 0 modulo 8. *)
 
 val invalid_part : location -> location
 (** Overapproximation of the invalid part of a location *)
@@ -362,6 +389,6 @@ val loc_of_typoffset : Base.t -> typ -> offset -> location
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

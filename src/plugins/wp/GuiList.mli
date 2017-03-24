@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -39,7 +39,7 @@ class pane : GuiConfig.provers ->
     method iter_selected : (Wpo.t -> unit) -> unit
     method add : Wpo.t -> unit
     method size : int
-    method index : Wpo.t -> int 
+    method index : Wpo.t -> int
     method get : int -> Wpo.t
     method coerce : GObj.widget
 

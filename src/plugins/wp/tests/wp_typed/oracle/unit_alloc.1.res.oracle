@@ -3,15 +3,12 @@
 [kernel] Parsing tests/wp_typed/unit_alloc.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
-[wp] Collecting variable usage
 ------------------------------------------------------------
   Function f
 ------------------------------------------------------------
 
 Goal Assigns nothing in 'f':
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------
@@ -21,7 +18,6 @@ Prove: true.
 
 Goal Assigns nothing in 'g':
 Effect at line 31
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------
@@ -30,8 +26,8 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Post-condition (file tests/wp_typed/unit_alloc.i, line 33) in 'h':
-Assume { (* Heap *) Have: (linked Malloc_2). }
-Prove: not (valid_rw Malloc_2[P_x_87->0] (shift_sint32 (global P_x_87) 0) 1).
+Assume { (* Heap *) Have: linked(Malloc_0). }
+Prove: !valid_rw(Malloc_0[P_x_87 <- 0], global(P_x_87), 1).
 
 ------------------------------------------------------------
 ------------------------------------------------------------
@@ -39,38 +35,29 @@ Prove: not (valid_rw Malloc_2[P_x_87->0] (shift_sint32 (global P_x_87) 0) 1).
 ------------------------------------------------------------
 
 Goal Assertion (file tests/wp_typed/unit_alloc.i, line 15):
-Assume { (* Heap *) Have: (linked Malloc_2) /\ ((region (base p_1))<=0). }
 Prove: true.
 
 ------------------------------------------------------------
 
 Goal Assertion (file tests/wp_typed/unit_alloc.i, line 21):
-Assume { (* Heap *) Have: (linked Malloc_2) /\ ((region (base p_1))<=0). }
-Prove: (valid_rw Malloc_2[L_y_72->1] (shift_sint32 (global L_y_72) 0) 1).
+Assume { (* Heap *) Have: (region(p.base) <= 0) /\ linked(Malloc_0). }
+Prove: valid_rw(Malloc_0[L_y_72 <- 1], global(L_y_72), 1).
 
 ------------------------------------------------------------
 
 Goal Assertion (file tests/wp_typed/unit_alloc.i, line 22):
-Assume {
-  (* Heap *)
-  Have: (linked Malloc_2) /\ ((region (base p_1))<=0).
-  (* Assertion (file tests/wp_typed/unit_alloc.i, line 21) *)
-  (* tests/wp_typed/unit_alloc.i:21: Assertion: *)
-  Have: (valid_rw Malloc_2[L_y_72->1] (shift_sint32 (global L_y_72) 0) 1).
-}
 Prove: true.
 
 ------------------------------------------------------------
 
 Goal Assertion (file tests/wp_typed/unit_alloc.i, line 24):
-Let a_0 = (shift_sint32 (global L_y_72) 0).
+Let a = global(L_y_72).
 Assume {
   (* Heap *)
-  Have: (linked Malloc_2) /\ ((region (base p_1))<=0).
-  (* Assertion (file tests/wp_typed/unit_alloc.i, line 21) *)
-  (* tests/wp_typed/unit_alloc.i:21: Assertion: *)
-  Have: (valid_rw Malloc_2[L_y_72->1] a_0 1).
+  Have: (region(p.base) <= 0) /\ linked(Malloc_0).
+  (* Assertion *)
+  Have: valid_rw(Malloc_0[L_y_72 <- 1], a, 1).
 }
-Prove: not (valid_rw Malloc_2[L_y_72->0] a_0 1).
+Prove: !valid_rw(Malloc_0[L_y_72 <- 0], a, 1).
 
 ------------------------------------------------------------

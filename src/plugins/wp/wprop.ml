@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,18 +19,6 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
-
-(* -------------------------------------------------------------------------- *)
-(* --- WP Internal State                                                  --- *)
-(* -------------------------------------------------------------------------- *)
-
-module WP = State_builder.Ref
-    (Datatype.Unit)
-    (struct
-      let name = "WP"
-      let dependencies = [Ast.self]
-      let default () = ()
-    end)
 
 (* -------------------------------------------------------------------------- *)
 (* --- Indexed Interface                                                  --- *)
@@ -88,10 +76,10 @@ struct
       let ip =
         match Info.property key with
         | Later ip -> ip
-        | Proxy(ip,emitter,ips) -> 
+        | Proxy(ip,emitter,ips) ->
             Property_status.logical_consequence emitter ip ips ; ip
       in
-      List.iter (fun f -> f key ip) !hooks ; 
+      List.iter (fun f -> f key ip) !hooks ;
       H.add key ip ; ip
 
 end

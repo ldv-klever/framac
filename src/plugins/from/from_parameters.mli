@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,15 +35,9 @@ module ShowIndirectDeps: Parameter_sig.Bool
 (** Option -from-verify-assigns. *)
 module VerifyAssigns: Parameter_sig.Bool
 
-(** Option -experimental-path-deps *)
-module PathDeps: Parameter_sig.Bool
-
-(** Option -experimental-mem-deps *)
-module MemDeps: Parameter_sig.Bool
-
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

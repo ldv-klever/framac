@@ -1,19 +1,14 @@
-# frama-c -wp -wp-model 'Typed' [...]
-[wp] user error: In model spec "Store" : unknown 'STORE' selector
+# frama-c -wp [...]
 [kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp/wp_strategy.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-tests/wp/wp_strategy.c:88:[wp] warning: Deprecated 'Store' model.
-              Use 'Typed' instead.
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
 ------------------------------------------------------------
   Function default_behaviors with behavior default_for_stmt_55
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------
@@ -22,7 +17,6 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at program point (file tests/wp/wp_strategy.c, line 37):
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------
@@ -31,7 +25,6 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at program point (file tests/wp/wp_strategy.c, line 45):
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------
@@ -40,7 +33,6 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------
@@ -49,7 +41,6 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------
@@ -58,7 +49,6 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------

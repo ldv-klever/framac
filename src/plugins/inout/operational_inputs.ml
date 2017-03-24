@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,7 +28,7 @@ open Locations
    under-approximed outputs.
 *)
 
-type tt = Inout_type.tt = {
+type t = Inout_type.t = {
   over_inputs: Locations.Zone.t;
   over_inputs_if_termination: Locations.Zone.t;
   under_outputs_if_termination: Locations.Zone.t;
@@ -88,17 +88,9 @@ let join_and_is_included smaller larger =
   join, equal join larger
 ;;
 
-let catenate c1 c2 = {
-  over_inputs_d =
-    Zone.join c1.over_inputs_d (Zone.diff c2.over_inputs_d c1.under_outputs_d);
-  under_outputs_d = Zone.link c1.under_outputs_d c2.under_outputs_d;
-  over_outputs_d = Zone.join  c1.over_outputs_d c2.over_outputs_d;
-}
-
-
 let externalize_zone ~with_formals kf =
   Zone.filter_base
-    (!Db.Semantic_Callgraph.accept_base ~with_formals ~with_locals:false kf)
+    (Callgraph.Uses.accept_base ~with_formals ~with_locals:false kf)
 
 (* This code evaluates an assigns, computing in particular a sound approximation
    of sure outputs. For an assigns [locs_out \from locs_from], the process
@@ -119,7 +111,7 @@ let eval_assigns kf state assigns =
     let clean_deps =
       Locations.Zone.filter_base
         (function
-           | Base.Var (v, _) | Base.Initialized_Var (v, _) ->
+           | Base.Var (v, _) | Base.Allocated (v, _) ->
                not (Kernel_function.is_formal v kf)
            | Base.CLogic_Var _ | Base.Null | Base.String _ -> true)
     in
@@ -227,15 +219,44 @@ module CallwiseResults =
    end)
 
 module Computer(Fenv:Dataflows.FUNCTION_ENV)(X:sig
-  val version: string (* Callwise or functionwise *)
-  val kf: kernel_function (* Function being analyzed *)
+  val _version: string (* Debug: Callwise or functionwise *)
+  val _kf: kernel_function (* Debug: Function being analyzed *)
   val stmt_state: stmt -> Db.Value.state (* Memory state at the given stmt *)
   val at_call: stmt -> kernel_function -> Inout_type.t (* Results of the
       analysis for the given call. Must not contain locals or formals *)
 end) = struct
 
-  let non_terminating_callees_inputs = ref Zone.bottom
-  let non_terminating_callees_outputs = ref Zone.bottom
+  (* We want to compute the in/out for all terminating and
+     non-terminating points of the function. This is not immediate
+     with a dataflow, as all (1) infinite loops, (2) branches that call a non
+     terminating function, or (3) branches that fail, will not appear in the
+     final state. Hence, we two use auxiliary variables into which we add
+     all partial results. *)
+  let non_terminating_inputs = ref Zone.bottom
+  let non_terminating_outputs = ref Zone.bottom
+
+  let store_non_terminating_inputs inputs =
+    non_terminating_inputs := Zone.join !non_terminating_inputs inputs;
+  ;;
+
+  let store_non_terminating_outputs outputs =
+    non_terminating_outputs := Zone.join !non_terminating_outputs outputs;
+  ;;
+
+  (* Store the 'non-termination' information of a function subcall into
+     the current call. [under_outputs] are the current call sure outputs. *)
+  let store_non_terminating_subcall under_outputs subcall =
+    store_non_terminating_inputs (Zone.diff subcall.over_inputs under_outputs);
+    store_non_terminating_outputs subcall.over_outputs;
+  ;;
+
+  let catenate c1 c2 =
+    let inputs = Zone.diff c2.over_inputs_d c1.under_outputs_d in
+    store_non_terminating_inputs inputs;
+    { over_inputs_d = Zone.join c1.over_inputs_d inputs;
+      under_outputs_d = Zone.link c1.under_outputs_d c2.under_outputs_d;
+      over_outputs_d = Zone.join  c1.over_outputs_d c2.over_outputs_d;
+    }
 
   type t = compute_t
 
@@ -251,12 +272,12 @@ end) = struct
   let join = join
   let is_included = is_included
 
-
   (* Transfer function on expression. *)
   let transfer_exp s exp data =
     let state = X.stmt_state s in
     let inputs = !Db.From.find_deps_no_transitivity_state state exp in
     let new_inputs = Zone.diff inputs data.under_outputs_d in
+    store_non_terminating_inputs new_inputs;
     {data with over_inputs_d = Zone.join data.over_inputs_d new_inputs}
   ;;
 
@@ -268,7 +289,9 @@ end) = struct
         !Db.Value.lval_to_zone_with_deps_state state
           ~deps:(Some deps) ~for_writing:true lv
       in
+      store_non_terminating_outputs new_outs;
       let new_inputs = Zone.diff deps data.under_outputs_d in
+      store_non_terminating_inputs new_inputs;
       let new_sure_outs =
         if exact then
           (* There is only one modified zone. So, this is an exact output.
@@ -296,7 +319,6 @@ end) = struct
                  state
                  funcexp
              in
-
              let acc_funcexp_arg_inputs =
                (* add the inputs of [argl] to the inputs of the
                   function expression *)
@@ -319,15 +341,7 @@ end) = struct
                Kernel_function.Hptset.fold
                  (fun kf acc  ->
                     let res = X.at_call stmt kf in
-                    non_terminating_callees_inputs :=
-                      Zone.join
-                        !non_terminating_callees_inputs
-                        (Zone.diff res.Inout_type.over_inputs
-                           data.under_outputs_d);
-                    non_terminating_callees_outputs :=
-                      Zone.join
-                        !non_terminating_callees_outputs
-                        res.over_outputs;
+                    store_non_terminating_subcall data.over_outputs_d res;
                     let for_function = {
                       over_inputs_d = res.over_inputs_if_termination;
                       under_outputs_d = res.under_outputs_if_termination;
@@ -403,32 +417,15 @@ end) = struct
 
   let init = [(Kernel_function.find_first_stmt Fenv.kf), empty];;
 
-  (* We want to compute the in/out for all terminating and
-     non-terminating points of the function. It is computed by joining
-     the result over all statements, not all "end" statements (this is
-     acceptable because if s is before s' in the order of evaluation,
-     then the inouts of s will be included in those of s'; hence the
-     joining "too many statements" does not degrade the result). This
-     takes care of in-out of statements in infinite loops.
-
-     However, the in-out done in functions that do not terminate is
-     not taken into account by this. That is why they are stored
-     separately during the analysis in non_terminating_callees_*. *)
-  let end_dataflow before =
-    let res_if_termination = !return_data in
-    Array.iteri (fun _ data ->
-      non_terminating_callees_inputs :=
-        Zone.join data.over_inputs_d !non_terminating_callees_inputs;
-      non_terminating_callees_outputs :=
-        Zone.join data.over_outputs_d !non_terminating_callees_outputs;
-    ) before;
-    {
+  let end_dataflow () =
+    let res_if_termination = !return_data in {
       over_inputs_if_termination = res_if_termination.over_inputs_d;
       under_outputs_if_termination = res_if_termination.under_outputs_d ;
       over_outputs_if_termination = res_if_termination.over_outputs_d;
-
-      over_inputs = Zone.join !non_terminating_callees_inputs res_if_termination.over_inputs_d;
-      over_outputs = Zone.join !non_terminating_callees_outputs res_if_termination.over_outputs_d;
+      over_inputs =
+        Zone.join !non_terminating_inputs res_if_termination.over_inputs_d;
+      over_outputs =
+        Zone.join !non_terminating_outputs res_if_termination.over_outputs_d;
     }
 
 end
@@ -465,6 +462,29 @@ let get_external_aux ?stmt kf =
             CallwiseResults.add (kf, Kstmt stmt) r;
             r
           else !Db.Operational_inputs.get_external kf
+
+let extract_inout_from_froms froms =
+  let open Function_Froms in 
+  let {deps_return; deps_table } = froms in
+  let in_return = Deps.to_zone deps_return in
+  let in_, out_ =
+    match deps_table with
+    | Memory.Top -> Zone.top, Zone.top
+    | Memory.Bottom -> Zone.bottom, Zone.bottom
+    | Memory.Map m ->
+      let aux_from out in_ (acc_in,acc_out as acc) =
+        let open DepsOrUnassigned in
+        (* Skip zones fully unassigned, they are not really port of the
+           dependencies, but just present in the offsetmap to avoid "holes" *)
+        match in_ with
+        | DepsBottom | Unassigned -> acc
+        | AssignedFrom in_ | MaybeAssignedFrom in_ ->
+          Zone.join acc_in (Deps.to_zone in_),
+          Zone.join acc_out out
+      in
+      Memory.fold aux_from m (Zone.bottom, Zone.bottom)
+  in
+  (Zone.join in_return in_), out_
 
 
 module Callwise = struct
@@ -503,28 +523,39 @@ module Callwise = struct
 
   let call_inout_stack = ref []
 
-  let call_for_callwise_inout (state, call_stack) =
+  let call_for_callwise_inout (call_type, state, call_stack) =
     if compute_callwise () then begin
       let (current_function, ki as call_site) = List.hd call_stack in
-      if not (!Db.Value.use_spec_instead_of_definition current_function) then
-        let table_current_function = CallsiteHash.create 7 in
-        call_inout_stack :=
-          (current_function, table_current_function) :: !call_inout_stack
-      else 
-        let inout = compute_using_prototype_state state current_function in
+      let merge_inout inout =
         if ki = Kglobal 
         then merge_call_in_global_tables call_site inout
         else
-          try
-            let _above_function, table = 
-              try List.hd !call_inout_stack 
-              with Failure "hd" -> assert false
-            in
-            merge_call_in_local_table call_site table inout;
-          with Failure "hd" ->
-            Inout_parameters.fatal "inout: empty stack"
-              Kernel_function.pretty current_function
-    end
+          let _above_function, table =
+            try List.hd !call_inout_stack
+            with Failure _ -> assert false
+          in
+          merge_call_in_local_table call_site table inout
+      in
+      match call_type with
+      | `Builtin {Value_types.c_from = Some (froms,sure_out) } ->
+         let in_, out_ = extract_inout_from_froms froms in
+         let inout = {
+           over_inputs_if_termination = in_;
+           over_inputs = in_;
+           over_outputs_if_termination = out_ ;
+           over_outputs = out_;
+           under_outputs_if_termination = sure_out;
+         } in
+         merge_inout inout
+      | `Def | `Memexec ->
+        let table_current_function = CallsiteHash.create 7 in
+        call_inout_stack :=
+          (current_function, table_current_function) :: !call_inout_stack
+      | `Spec | `Builtin { Value_types.c_from = None } ->
+        let inout = compute_using_prototype_state state current_function in
+        merge_inout inout
+    end;;
+
 
   module MemExec =
     State_builder.Hashtbl
@@ -560,8 +591,8 @@ module Callwise = struct
     let module Fenv = (val Dataflows.function_env kf: Dataflows.FUNCTION_ENV) in
     let module Computer = Computer(Fenv)(
       struct
-        let version = "callwise"
-        let kf = kf
+        let _version = "callwise"
+        let _kf = kf
 
         let stmt_state stmt =
           try Cil_datatype.Stmt.Hashtbl.find states stmt
@@ -581,7 +612,7 @@ module Callwise = struct
           with Not_found -> Inout_type.bottom
       end) in
     let module Compute = Dataflows.Simple_forward(Fenv)(Computer) in
-    Computer.end_dataflow Compute.before
+    Computer.end_dataflow ()
 
   let record_for_callwise_inout ((call_stack: Db.Value.callstack), value_res) =
     if compute_callwise () then
@@ -590,10 +621,12 @@ module Callwise = struct
         | Value_types.NormalStore ((states, _after_states), _) ->
             let kf = fst (List.hd call_stack) in
             let inout =
-              if !Db.Value.no_results (Kernel_function.get_definition kf) then
-                top
+              try
+                if !Db.Value.no_results (Kernel_function.get_definition kf) then
+                  top
               else
                 compute_call_from_value_states kf (Lazy.force states)
+              with Kernel_function.No_Definition -> top
             in
             Db.Operational_inputs.Record_Inout_Callbacks.apply
               (call_stack, inout);
@@ -613,7 +646,7 @@ module Callwise = struct
 
   let add_hooks () =
     Db.Value.Record_Value_Callbacks_New.extend_once record_for_callwise_inout;
-    Db.Value.Call_Value_Callbacks.extend_once call_for_callwise_inout
+    Db.Value.Call_Type_Value_Callbacks.extend_once call_for_callwise_inout;;
 
   let () = Inout_parameters.ForceCallwiseInout.add_update_hook
     (fun _bold bnew -> if bnew then add_hooks ())
@@ -640,8 +673,8 @@ module FunctionWise = struct
             (val Dataflows.function_env kf: Dataflows.FUNCTION_ENV)
       in
       let module Computer = Computer(Fenv)(struct
-        let version = "functionwise"
-        let kf = kf
+        let _version = "functionwise"
+        let _kf = kf
         let stmt_state = Db.Value.get_stmt_state
         let at_call stmt kf = get_external_aux ~stmt kf
       end) in
@@ -658,7 +691,7 @@ module FunctionWise = struct
       Stack.push kf call_stack;
 
       let module Compute = Dataflows.Simple_forward(Fenv)(Computer) in
-      let result = Computer.end_dataflow Compute.before in
+      let result = Computer.end_dataflow () in
       ignore (Stack.pop call_stack);
       result
 
@@ -679,7 +712,7 @@ module FunctionWise = struct
         (let s = ref "" in
          Stack.iter
            (fun kf -> s := !s^" <-"^
-             (Pretty_utils.sfprintf "%a" Kernel_function.pretty kf))
+             (Format.asprintf "%a" Kernel_function.pretty kf))
            call_stack;
          !s);
       let r = compute_internal_using_cfg kf in
@@ -761,6 +794,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

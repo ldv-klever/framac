@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,7 +32,7 @@ open Lang.F
 (* --- Latice                                                             --- *)
 (* -------------------------------------------------------------------------- *)
 
-type 'a occur = 
+type 'a occur =
   | TOP
   | TRUE
   | FALSE
@@ -65,7 +65,7 @@ let rec add_pred m p =
   match F.pred p with
   | And ps -> List.fold_left add_pred m ps
   | If(e,a,b) -> add_pred (add_pred (set_top m e) a) b
-  | Eq(a,b) -> 
+  | Eq(a,b) ->
       begin
         match F.pred a , F.pred b with
         | Fvar x , Fvar y -> add_var x y (add_var y x m)
@@ -103,6 +103,7 @@ type usage = {
 let create () = { eq_var = Vmap.empty ; eq_fun = Vmap.empty }
 let as_atom m p = m.eq_var <- set_top m.eq_var p
 let as_have m p = m.eq_var <- add_pred m.eq_var p
+let as_init m p = m.eq_fun <- add_type m.eq_fun p
 let as_type m p = m.eq_fun <- add_type m.eq_fun p
 
 (* -------------------------------------------------------------------------- *)
@@ -111,17 +112,17 @@ let as_type m p = m.eq_fun <- add_type m.eq_fun p
 
 let get x m = try Some (Vmap.find x m) with Not_found -> None
 
-let is_true x m = 
-  try match Vmap.find x m with TRUE -> true | _ -> false 
+let is_true x m =
+  try match Vmap.find x m with TRUE -> true | _ -> false
   with Not_found -> false
 
-let is_false x m = 
-  try match Vmap.find x m with FALSE -> true | _ -> false 
+let is_false x m =
+  try match Vmap.find x m with FALSE -> true | _ -> false
   with Not_found -> false
 
-let is_var x m = 
-  try match Vmap.find x m.eq_var with 
-    | EQ y -> 
+let is_var x m =
+  try match Vmap.find x m.eq_var with
+    | EQ y ->
         begin
           match get x m.eq_fun , get y m.eq_fun with
           | None , _ -> true  (* we eliminate x, which has no guard... *)
@@ -135,11 +136,13 @@ let is_var x m =
 (* --- Filtering                                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
+let pp_vars fmt xs = Vars.iter (fun x -> Format.fprintf fmt "@ %a" F.pp_var x) xs
+
 let rec filter_pred m p =
   match F.pred p with
   | And ps -> F.p_all (filter_pred m) ps
   | If(e,a,b) -> p_if e (filter_pred m a) (filter_pred m b)
-  | Eq(a,b) -> 
+  | Eq(a,b) ->
       begin
         match F.pred a , F.pred b with
         | Fvar x , Fvar y when is_var x m || is_var y m -> p_true

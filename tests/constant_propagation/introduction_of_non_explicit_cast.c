@@ -1,8 +1,8 @@
 /* run.config
-   EXECNOW: make -s tests/constant_propagation/introduction_of_non_explicit_cast.opt
-   CMD: tests/constant_propagation/introduction_of_non_explicit_cast.opt
-   OPT: -deps -journal-disable
+   OPT: -load-script tests/constant_propagation/introduction_of_non_explicit_cast.ml -val -deps -journal-disable
 */
+
+
 int x,y,z;
 int TAB[10];
 struct st { int a, b ; } s1, s2;

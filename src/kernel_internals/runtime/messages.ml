@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,6 +30,7 @@ module DatatypeMessages =
        let reprs =
          [ { evt_kind = Failure;
              evt_plugin = "";
+             evt_dkey = None;
              evt_source = None;
              evt_message = "" } ]
        let mem_project = Datatype.never_any_project
@@ -79,15 +80,10 @@ let self = Messages.self
 let iter f = List.iter f (List.rev (Messages.get ()))
 let dump_messages () = iter Log.echo
 
-let enable_collect =
-  let not_yet = ref true in
-  fun () ->
-    if !not_yet then begin
-      Kernel.debug "enable collection of error messages.";
-      Log.add_listener ~kind:[ Log.Error ] add_error;
-      Log.add_listener ~kind:[ Log.Warning ] add_warning;
-      not_yet := false
-    end
+let () =
+  Log.add_listener ~kind:[ Log.Error ] add_error;
+  Log.add_listener ~kind:[ Log.Warning ] add_warning;
+;;
 
 module OnceTable = 
   State_builder.Hashtbl
@@ -110,17 +106,9 @@ let () = Log.check_not_yet := check_not_yet
 
 let reset_once_flag () = OnceTable.clear ()
 
-let () =
-  let run () = if Kernel.Collect_messages.get () then enable_collect () in
-  (* Set by the user on the command-line *)
-  Cmdline.run_after_early_stage run;
-  (* Set by a plugin *)
-  Cmdline.run_after_configuring_stage run;
-;;
-
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

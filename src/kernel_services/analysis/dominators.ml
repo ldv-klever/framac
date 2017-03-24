@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,7 +48,7 @@ module type DIRECTION = sig
   val nb_stmts: int
 
   (* Conversion between statements and ordered statements. *)
-  (* val to_ordered: stmt -> Ordered_stmt.ordered_stmt *)
+  val to_ordered: stmt -> Ordered_stmt.ordered_stmt
   val to_stmt: Ordered_stmt.ordered_stmt -> stmt
 
   (* Iterates on all the statements, except the roots of the
@@ -75,19 +75,19 @@ end
 module Compute(D:DIRECTION) = struct
 
 (* Computes the smallest common dominator between two statements. *)
-let nearest_common_ancestor domtree ord1 ord2 =
+let nearest_common_ancestor find_domtree ord1 ord2 =
   Kernel.debug ~dkey ~level:2 "computing common ancestor %d %d"
     (D.to_stmt ord1).sid (D.to_stmt ord2).sid;
   let finger1 = ref ord1 in
   let finger2 = ref ord2 in
   while (!finger1 != !finger2) do (
     while ( D.is_further_from_root !finger1 !finger2) do
-      finger1 := (match domtree.(!finger1) with
+      finger1 := (match find_domtree !finger1 with
       | None -> assert false
       | Some x -> x)
     done;
     while ( D.is_further_from_root !finger2 !finger1) do
-      finger2 := (match domtree.(!finger2) with
+      finger2 := (match find_domtree !finger2 with
       | None -> assert false
       | Some x -> x)
     done;)
@@ -98,8 +98,8 @@ let nearest_common_ancestor domtree ord1 ord2 =
 (* Note: None means either unprocessed, or that the statement has no
    predecessor or that all its ancestors are at None *)
 (* based on "A Simple, Fast Dominance Algorithm" by K.D. Cooper et al *)
-let domtree =
-  let domtree = Array.create D.nb_stmts None in
+let domtree () =
+  let domtree = Array.make D.nb_stmts None in
 
   (* Initialize the dataflow: for each root, add itself to its own
      set of dominators. *)
@@ -119,8 +119,9 @@ let domtree =
       match processed_preds with
       | [] -> () (* No predecessor (e.g. unreachable stmt): leave it to None.*)
       | first::rest ->
+        let find i = domtree.(i) in
 	let new_idom =
-	  List.fold_left (nearest_common_ancestor domtree) first rest
+	  List.fold_left (nearest_common_ancestor find) first rest
 	in
 	(match domtree.(b) with
 	| Some(old_idom) when old_idom == new_idom -> ()
@@ -145,7 +146,7 @@ let display domtree =
 
 end
 
-let compute_dom kf =
+let direction_dom kf =
   let (stmt_to_ordered,ordered_to_stmt,_) =
     Ordered_stmt.get_conversion_tables kf
   in
@@ -166,11 +167,25 @@ let compute_dom kf =
     let name = "dom"
   end
   in
-  let module ComputeDom = Compute(Dominator) in
-  let domtree = ComputeDom.domtree in
-  (* Fill the project table. *)
+  (module Dominator: DIRECTION)
+;;
+
+(* Fill the project table with the dominators of a given function. *)
+let store_dom domtree to_stmt =
   Array.iteri( fun ord idom ->
-    Dom_tree.add (to_stmt ord) (Extlib.opt_map to_stmt idom)) domtree;
+    let idom = Extlib.opt_map to_stmt idom in
+    let stmt = to_stmt ord in
+    Kernel.debug ~dkey ~level:2 "storing dom for %d: %s"
+      stmt.sid (match idom with None -> "self" | Some s ->string_of_int s.sid);
+    Dom_tree.add stmt idom
+  ) domtree
+
+let compute_dom kf =
+  let direction = direction_dom kf in
+  let module Dominator = (val direction: DIRECTION) in
+  let module ComputeDom = Compute(Dominator) in
+  let domtree = ComputeDom.domtree () in
+  store_dom domtree Dominator.to_stmt
 ;;
 
 (* Note: The chosen semantics for postdominator is the following one: a
@@ -216,7 +231,7 @@ let _compute_pdom kf =
   end
   in
   let module ComputePDom = Compute(PostDominator) in
-  let domtree = ComputePDom.domtree in
+  let domtree = ComputePDom.domtree () in
   ComputePDom.display domtree
 ;;
 
@@ -240,3 +255,27 @@ let rec dominates (s1: stmt) (s2: stmt) =
   match (get_idom s2) with
   | None -> false
   | Some s2idom -> dominates s1 s2idom
+
+let nearest_common_ancestor l =
+  match l with
+  | [] -> failwith ""
+  | s :: _ ->
+    let kf = Kernel_function.find_englobing_kf s in
+    let direction = direction_dom kf in
+    let module Dominator = (val direction: DIRECTION) in
+    let module ComputeDom = Compute(Dominator) in
+    (try ignore (Dom_tree.find s)
+     with Not_found ->
+       let domtree = ComputeDom.domtree () in
+       store_dom domtree Dominator.to_stmt
+    );
+    let to_ordered = Dominator.to_ordered in
+    let to_stmt = Dominator.to_stmt in
+    let find i = Extlib.opt_map to_ordered (Dom_tree.find (to_stmt i)) in
+    let rec aux = function
+      | [] -> assert false
+      | [s] -> to_ordered s
+      | s :: (_ :: _ as q) ->
+        ComputeDom.nearest_common_ancestor find (to_ordered s) (aux q)
+    in
+    Dominator.to_stmt (aux l)

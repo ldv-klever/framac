@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Operations on (natural) loops.
-    @plugin development guide *)
+(** Operations on (natural) loops. *)
 
 open Cil_types
 
@@ -36,6 +35,6 @@ val back_edges : kernel_function -> stmt -> stmt list
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

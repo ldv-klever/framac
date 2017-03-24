@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,11 +48,19 @@ module Static = struct
   module G = Dependency_graph   
   let graph = Dependency_graph.create ~size:7 ()
 
+  let add_vertex graph v =
+    assert (not (State.is_dummy v));
+    Dependency_graph.add_vertex graph v
+
+  let add_edge graph v1 v2 =
+    assert (Dependency_graph.(mem_vertex graph v1 && mem_vertex graph v2));
+    Dependency_graph.add_edge graph v1 v2
+
   let add_dependencies ~from deps = 
-    List.iter (Dependency_graph.add_edge graph from) deps
+    List.iter (add_edge graph from) deps
 
   let add_codependencies ~onto codeps =
-    List.iter (fun c -> Dependency_graph.add_edge graph c onto) codeps
+    List.iter (fun c -> add_edge graph c onto) codeps
 
   let remove_dependencies ~from deps =
     List.iter (Dependency_graph.remove_edge graph from) deps
@@ -61,7 +69,7 @@ module Static = struct
     List.iter (fun c -> Dependency_graph.remove_edge graph c onto) codeps
 
   let add_state v deps =
-    Dependency_graph.add_vertex graph v;
+    add_vertex graph v;
     add_codependencies ~onto:v deps
 
 end
@@ -89,6 +97,6 @@ include Dot(Attributes)
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
  *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,7 +40,7 @@ let create () = {
 (* Requires n > length elt *)
 let do_grow w n =
   begin
-    let elt = Array.create n w.dumb in
+    let elt = Array.make n w.dumb in
     Array.blit w.elt 0 elt 0 w.top ;
     w.elt <- elt ;
   end

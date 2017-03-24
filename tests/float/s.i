@@ -1,6 +1,6 @@
-/* run.config
-   OPT: -all-rounding-modes -val -deps -out -input -journal-disable -float-hex
-   OPT: -val -deps -out -input -journal-disable -float-hex
+/* run.config*
+   STDOPT: #"-all-rounding-modes -float-hex"
+   STDOPT: #"-float-hex"
 */
 
 typedef float T1;

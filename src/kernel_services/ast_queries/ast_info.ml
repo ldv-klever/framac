@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -351,6 +351,41 @@ module Function = struct
 
 end
 
+exception FoundBlock of block
+
+let block_of_local (fdec:fundec) vi =
+  let find_in_block bl =
+    if is_block_local vi bl then raise (FoundBlock bl)
+  in
+  let find_in_stmt stmt =
+    match stmt.skind with
+    | Block b
+    | Switch (_, b, _, _)
+    | Loop (_, b, _, _, _) -> find_in_block b
+    | If (_, be, bt, _) -> find_in_block be; find_in_block bt
+    | TryExcept (b1, _, b2, _)
+    | TryFinally (b1, b2, _) -> find_in_block b1; find_in_block b2
+    | TryCatch (b, l, _) ->
+      find_in_block b;
+      let aux (cb, b) =
+        find_in_block b;
+        match cb with
+        | Catch_all -> ()
+        | Catch_exn (vi', _l) ->
+          (* note: vars in [_l] (related to exception subtyping)
+             are generated and never pretty-printed, so need not be compared *)
+          if Cil_datatype.Varinfo.equal vi vi' then raise (FoundBlock b)
+      in
+      List.iter aux l
+    | _ -> ()
+  in
+  try
+    find_in_block fdec.sbody;
+    List.iter find_in_stmt fdec.sallstmts;
+    Kernel.abort "[local_declaration_block]: block not found for %a in %a"
+      Cil_datatype.Varinfo.pretty vi Cil_datatype.Varinfo.pretty fdec.svar
+  with FoundBlock bl-> bl
+
 (* ************************************************************************** *)
 (** {2 Types} *)
 (* ************************************************************************** *)
@@ -400,22 +435,17 @@ let pointed_type ty =
 (* ************************************************************************** *)
 
 let can_be_cea_function name =
-  (String.length name >= 4 &&
-     name.[0] = 'C' && name.[1] = 'E' && name.[2] = 'A' && name.[3] = '_')
-  ||
   (String.length name >= 6 &&
     name.[0] = 'F' && name.[1] = 'r' && name.[2] = 'a' &&
        name.[3] = 'm' && name.[4] = 'a' && name.[5] = '_')
 
 let is_cea_function name =
-  (String.length name >= 4  && (String.sub name 0 4  = "CEA_" )) ||
-  (String.length name >= 17 && (String.sub name 0 17 = "Frama_C_show_each" ))
+  Extlib.string_prefix "Frama_C_show_each" name
 
-let is_cea_dump_function name = name = "CEA_DUMP" || name = "Frama_C_dump_each"
+let is_cea_dump_function name = (name = "Frama_C_dump_each")
 
 let is_cea_dump_file_function name =
-  (String.length name >= 22 &&
-  (String.sub name 0 22 = "Frama_C_dump_each_file" ))
+  Extlib.string_prefix "Frama_C_dump_each_file" name
 
 let is_frama_c_builtin n =
   can_be_cea_function n &&
@@ -427,6 +457,6 @@ let () = Cil.add_special_builtin_family is_frama_c_builtin
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

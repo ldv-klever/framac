@@ -1,5 +1,5 @@
-/* run.config
-   STDOPT: +"-warn-decimal-float all" +"-float-hex"
+/* run.config*
+   STDOPT: #"-warn-decimal-float all -float-hex"
 */
 
 volatile v;
@@ -51,7 +51,7 @@ void test_is_finite(void) {
   /*@ assert \is_finite((float)(0.1/0.0)); */
 
   extern int undet;
-  extern int top_int;
+  extern volatile int top_int;
 
   /* Reduces f1 from top_ival to top_float. */
   float f1;

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -67,14 +67,14 @@ let pp_warnings fmt ws =
 let kf_context = function Axiomatic _ -> `Always | Function(kf,_) -> `Context kf
 
 let pp_dependency context fmt d =
-  Format.fprintf fmt " - Assumes %a" 
+  Format.fprintf fmt " - Assumes %a"
     (Description.pp_localized ~kf:context ~ki:false ~kloc:true) d
 
-let pp_dependencies context fmt ds = 
+let pp_dependencies context fmt ds =
   List.iter (fun d -> Format.fprintf fmt "%a@\n" (pp_dependency context) d) ds
 
 let pp_depend fmt d =
-  Format.fprintf fmt " - Assumes %a" 
+  Format.fprintf fmt " - Assumes %a"
     (Description.pp_localized ~kf:`Always ~ki:false ~kloc:true) d
 
 (* ------------------------------------------------------------------------ *)
@@ -90,7 +90,7 @@ struct
     let buffer = Buffer.create 80 in
     let fmt = Format.formatter_of_buffer buffer in
     Format.fprintf fmt "%s/%s/%s" dir mid id ;
-    (match prover with None -> () | Some p -> 
+    (match prover with None -> () | Some p ->
       Format.fprintf fmt "_%s" (filename_for_prover p)) ;
     (match suffix with None -> () | Some s ->
       Format.fprintf fmt "_%s" s) ;
@@ -104,7 +104,7 @@ struct
   let file_logerr ~pid ~model ~prover =
     let id = WpPropId.get_propid pid in
     file ~id ~model ~prover ~ext:"err" ()
-  let file_goal ~pid ~model ~prover = 
+  let file_goal ~pid ~model ~prover =
     let ext = match prover with
       | Qed -> "qed"
       | AltErgo -> "mlw"
@@ -115,7 +115,7 @@ struct
     let id = WpPropId.get_propid pid in
     file ~id ~model ~prover ~ext ()
 
-  let file_kf ~kf ~model ~prover = 
+  let file_kf ~kf ~model ~prover =
     let ext = match prover with
       | Qed -> "qed"
       | AltErgo -> "mlw"
@@ -127,7 +127,7 @@ struct
     file ~id ~model ~prover ~ext ()
 
   let dump_file fmt title file =
-    if Sys.file_exists file then 
+    if Sys.file_exists file then
       begin
         Format.fprintf fmt "--- %s ---------------------------------@\n" title ;
         Command.pp_from_file fmt file
@@ -135,7 +135,7 @@ struct
 
   let pretty ~pid ~model ~prover ~result fmt =
     begin
-      Format.fprintf fmt "[%a] Goal %a : %a@\n" 
+      Format.fprintf fmt "[%a] Goal %a : %a@\n"
         pp_prover prover WpPropId.pp_propid pid pp_result result ;
       dump_file fmt "StdOut" (file_logout ~pid ~model ~prover) ;
       dump_file fmt "StdErr" (file_logerr ~pid ~model ~prover) ;
@@ -166,7 +166,7 @@ struct
     mutable obligation : F.pred ;
   }
 
-  let empty = Conditions.hypotheses Conditions.empty
+  let empty = Conditions.empty
 
   let dummy = {
     time = 0.0 ;
@@ -193,28 +193,36 @@ struct
 
   let apply phi g = g.sequent <- phi g.sequent
 
+  let default_simplifiers =
+    [Wp_parameters.SimplifyIsCint.get, Cint.is_cint_simplifier]
+
   let preprocess g =
-    if Wp_parameters.Let.get () then 
+    if Wp_parameters.Let.get () then
       begin
-        let solvers = [] in
+        let fold acc (get,solver) = if get () then solver::acc else acc in
+        let solvers = List.fold_left fold [] default_simplifiers in
         apply (Conditions.letify ~solvers) g ;
-        if Wp_parameters.Prune.get () 
+        if Wp_parameters.Prune.get ()
         then apply (Conditions.pruning ~solvers) g ;
+        if Wp_parameters.Filter.get ()
+        then apply Conditions.filter g
       end
-    else 
-    if Wp_parameters.Clean.get () 
-    then apply Conditions.clean g ;
+    else
+      begin
+        if Wp_parameters.Clean.get ()
+        then apply Conditions.clean g ;
+      end ;
     g.obligation <- Conditions.close g.sequent
 
   let dkey = Wp_parameters.register_category "prover"
   let compute g =
     if not g.simplified then
       begin
-        g.simplified <- true ; 
+        g.simplified <- true ;
         let timer = ref 0.0 in
         Wp_parameters.debug ~dkey "Simplify goal" ;
         Command.time ~rmax:timer preprocess g ;
-        Wp_parameters.debug ~dkey "Simplification time: %a" 
+        Wp_parameters.debug ~dkey "Simplification time: %a"
           Rformat.pp_time !timer ;
         g.time <- !timer ;
       end
@@ -277,7 +285,7 @@ struct
     effect : (stmt * WpPropId.effect_source) option ;
   }
 
-  let repr = { 
+  let repr = {
     goal = GOAL.dummy ;
     tags = [] ;
     warn = [] ;
@@ -291,16 +299,16 @@ struct
 
   let pp_effect fmt = function
     | None -> ()
-    | Some(s,e) -> 
+    | Some(s,e) ->
         let loc = fst (Stmt.loc s) in
         let line = loc.Lexing.pos_lnum in
-        let desc = match e with 
+        let desc = match e with
           | WpPropId.FromCode -> "Effect"
           | WpPropId.FromCall -> "Call Effect"
           | WpPropId.FromReturn -> "Call Result"
         in
         Format.fprintf fmt "%s at line %d@\n" desc line
-
+    
   let pretty fmt pid vc results =
     begin
       Format.fprintf fmt "@{<bf>Goal@} %a:@\n" WpPropId.pretty pid ;
@@ -312,7 +320,7 @@ struct
           Format.fprintf fmt "@].@\n" ;
         end ;
       pp_warnings fmt vc.warn ;
-      Conditions.pretty fmt (GOAL.compute_descr vc.goal) ;
+      Pcond.pretty fmt (GOAL.compute_descr vc.goal) ;
       List.iter
         (fun (prover,result) ->
            if result.verdict <> NoResult then
@@ -335,7 +343,7 @@ module VC_Check =
 struct
   type t = { qed : F.term ; raw : F.term ; goal : F.pred }
   let pretty fmt v =
-    Format.fprintf fmt "Class %d - instance %d@\n" 
+    Format.fprintf fmt "Class %d - instance %d@\n"
       (F.id v.qed) (F.id v.raw) ;
     Format.fprintf fmt "@[<hov 2>Prove %a@]@."
       F.pp_pred v.goal
@@ -345,34 +353,35 @@ end
 (* ---  Proof Obligations Database                                      --- *)
 (* ------------------------------------------------------------------------ *)
 
-type formula = 
+type formula =
   | GoalLemma of VC_Lemma.t
   | GoalAnnot of VC_Annot.t
   | GoalCheck of VC_Check.t
 
 type po = t and t = {
-  po_gid   : string ;  (* goal identifier *)
-  po_name  : string ;  (* goal informal name *)
-  po_idx   : index ;   (* goal index *)
-  po_model : Model.t ;
-  po_pid   : WpPropId.prop_id ; (* goal target property *)
-  po_updater : Emitter.t ; (* property status updater *)
-  po_formula : formula ; (* proof obligation *)
-}
+    po_gid   : string ;  (* goal identifier *)
+    po_sid   : string ;  (* goal short identifier (without model) *)
+    po_name  : string ;  (* goal informal name *)
+    po_idx   : index ;   (* goal index *)
+    po_model : Model.t ;
+    po_pid   : WpPropId.prop_id ; (* goal target property *)
+    po_updater : Emitter.t ; (* property status updater *)
+    po_formula : formula ; (* proof obligation *)
+  }
 
 let get_index w = w.po_idx
 let get_label w = WpPropId.label_of_prop_id w.po_pid
 let get_model x = x.po_model
 let get_model_id w = Model.get_id (get_model w)
 let get_model_name w = Model.get_descr (get_model w)
-let get_depend = function 
-  | { po_formula = GoalAnnot { VC_Annot.deps = ips } } -> 
+let get_depend = function
+  | { po_formula = GoalAnnot { VC_Annot.deps = ips } } ->
       Property.Set.elements ips
-  | { po_formula = GoalLemma { VC_Lemma.depends = ips } } -> 
+  | { po_formula = GoalLemma { VC_Lemma.depends = ips } } ->
       List.map LogicUsage.ip_lemma ips
   | { po_formula = GoalCheck _ } -> []
 
-let get_file_logout w prover = 
+let get_file_logout w prover =
   DISK.file_logout ~pid:w.po_pid ~model:(get_model w) ~prover
 
 let get_file_logerr w prover =
@@ -381,7 +390,7 @@ let get_file_logerr w prover =
 module Index =
 struct
   type t = index
-  let cmpopt a b = 
+  let cmpopt a b =
     match a,b with
     | Some a,Some b -> String.compare a b
     | None,Some _ -> (-1)
@@ -392,11 +401,11 @@ struct
     | Axiomatic a , Axiomatic b -> cmpopt a b
     | Axiomatic _ , Function _ -> (-1)
     | Function _ , Axiomatic _ -> 1
-    | Function(f,a) , Function(g,b) -> 
-        let c = 
+    | Function(f,a) , Function(g,b) ->
+        let c =
           if Kernel_function.equal f g then 0 else
-            String.compare 
-              (Kernel_function.get_name f) 
+            String.compare
+              (Kernel_function.get_name f)
               (Kernel_function.get_name g)
         in
         if c=0 then cmpopt a b else c
@@ -425,6 +434,7 @@ module PODatatype =
         [{
           po_idx = Function(List.hd Kernel_function.reprs,Some "default") ;
           po_pid = List.hd WpPropId.PropId.reprs;
+          po_sid = "xxx";
           po_gid = "xxx";
           po_model = Model.repr ;
           po_updater = List.hd Emitter.reprs;
@@ -483,31 +493,21 @@ let is_check t = match t.po_formula with
   | GoalCheck _ -> true
   | _ -> false
 
-let is_verdict r = match r.verdict with
-  | Valid | Unknown | Invalid | Timeout | Stepout | Failed -> true
-  | NoResult | Computing _ -> false
-
 module Hproof = Hashtbl.Make(Datatype.Pair(Datatype.String)(Property))
 (* Table indexed by ( Model name , Property proved ) *)
 
 module Results =
 struct
 
-  module Pmap = Map.Make
-      (struct
-        type t = VCS.prover
-        let compare = VCS.cmp_prover
-      end)
-
   module Cmap = Map.Make(String)
 
   type t = {
     mutable dps : result Pmap.t ;
-    mutable cps : result Cmap.t ; 
+    mutable cps : result Cmap.t ;
     (* result per class of Why3 provers *)
   }
 
-  let not_computing _ r = 
+  let not_computing _ r =
     match r.verdict with VCS.Computing _ -> false | _ -> true
 
   let class_of_prover = function
@@ -516,7 +516,7 @@ struct
         let cp =
           try String.sub dp 0 (String.index dp ':')
           with Not_found -> dp
-        in Some (String.uppercase cp)
+        in Some (Transitioning.String.uppercase_ascii cp)
 
   let create () = { dps = Pmap.empty ; cps = Cmap.empty }
 
@@ -528,7 +528,7 @@ struct
       | Some cp ->
           try Cmap.find cp w.cps
           with Not_found -> VCS.no_result
-                              
+
   let replace w p r =
     begin
       if p = Qed then
@@ -537,8 +537,8 @@ struct
           w.cps <- Cmap.filter not_computing w.cps ;
         end ;
       w.dps <- Pmap.add p r w.dps ;
-      match class_of_prover p with 
-      | None -> () 
+      match class_of_prover p with
+      | None -> ()
       | Some c -> w.cps <- Cmap.add c r w.cps
     end
 
@@ -628,17 +628,13 @@ let clear () = clear_system (SYSTEM.get ())
    4. The target prop-id
 *)
 
-let gid ~model ~propid =
-  let gname = WpPropId.get_propid propid in
-  Printf.sprintf "%s_%s" model gname
-
 (* -------------------------------------------------------------------------- *)
 (* --- Registry of POs                                                    --- *)
 (* -------------------------------------------------------------------------- *)
 
 let added = ref 0
 
-let age g = 
+let age g =
   let system = SYSTEM.get () in
   try WPOmap.find g system.age with Not_found -> 0
 
@@ -665,11 +661,11 @@ let add g =
     if !added >= 100 then
       begin
         added := 0 ;
-        Gmap.iter 
+        Gmap.iter
           (fun _ ws -> WPOset.iter (fun _ -> incr added) ws)
           system.wpo_idx ;
         if not (Wp_parameters.has_dkey "no-goals-info") then
-          Wp_parameters.feedback "Computing [%d goals...]" !added ;
+          Wp_parameters.feedback ~ontty:`Feedback "Computing [%d goals...]" !added ;
         added := 0 ;
       end ;
   end
@@ -721,8 +717,8 @@ let update_property_status g r =
         Hproof.add system.proofs pi proof ; proof
     in
     if is_valid r then WpAnnot.add_proof proof g.po_pid (get_depend g) ;
-    let status = 
-      if WpAnnot.is_proved proof then Property_status.True 
+    let status =
+      if WpAnnot.is_proved proof then Property_status.True
       else Property_status.Dont_know
     in
     let target = WpAnnot.target proof in
@@ -786,9 +782,9 @@ let pp_title fmt w = WpPropId.pretty_local fmt w.po_pid
 let pp_goal fmt w =
   begin
     match w.po_formula with
-    | GoalAnnot vcq -> 
+    | GoalAnnot vcq ->
         VC_Annot.pretty fmt w.po_pid vcq (get_results w)
-    | GoalLemma vca -> 
+    | GoalLemma vca ->
         VC_Lemma.pretty fmt vca (get_results w)
     | GoalCheck vck ->
         VC_Check.pretty fmt vck
@@ -815,9 +811,9 @@ type part =
 let iter ?ip ?index ?on_axiomatics ?on_behavior ?on_goal () =
   let system = SYSTEM.get () in
   let current = ref Pnone in
-  let apply_lemma a = 
+  let apply_lemma a =
     match on_axiomatics with None -> () | Some phi -> phi a in
-  let apply_behavior f bhv = 
+  let apply_behavior f bhv =
     match on_behavior with None -> () | Some phi -> phi f bhv in
   let on_part idx =
     match !current , idx with
@@ -836,15 +832,15 @@ let iter ?ip ?index ?on_axiomatics ?on_behavior ?on_goal () =
       end
   in
   match index,ip with
-  | None,None -> 
+  | None,None ->
       Gmap.iter (fun idx ws -> on_part idx ; on_goals ws) system.wpo_idx
   | _,Some ip ->
       begin
         match on_goal with
         | None -> ()
         | Some phi ->
-            let poset = 
-              try Pmap.find ip system.wpo_ip 
+            let poset =
+              try Pmap.find ip system.wpo_ip
               with Not_found -> WPOset.empty in
             WPOset.iter phi poset
       end
@@ -891,7 +887,7 @@ let prover_of_name =
 let get_model w = w.po_model
 
 let get_logfile w prover result =
-  let model = get_model w in 
+  let model = get_model w in
   DISK.cache_log ~pid:w.po_pid ~model ~prover ~result
 
 let _ =
@@ -899,7 +895,7 @@ let _ =
     (Datatype.func2
        PODatatype.ty ProverType.ty
        (Datatype.pair Datatype.string Datatype.string))
-    (fun w p -> 
+    (fun w p ->
        (DISK.file_logout w.po_pid (get_model w) p,
         DISK.file_logerr w.po_pid (get_model w) p))
 
@@ -913,13 +909,13 @@ let is_computing = function VCS.Computing _ -> true | _ -> false
 let get_files w =
   let results = get_results w in
   let descr_files = match w.po_formula with
-    | GoalAnnot vcq -> 
-        [ "Goal" , VC_Annot.cache_descr ~pid:w.po_pid vcq results ] 
-    | GoalLemma vca -> 
-        [ "Lemma" , VC_Lemma.cache_descr vca results ] 
+    | GoalAnnot vcq ->
+        [ "Goal" , VC_Annot.cache_descr ~pid:w.po_pid vcq results ]
+    | GoalLemma vca ->
+        [ "Lemma" , VC_Lemma.cache_descr vca results ]
     | GoalCheck _ -> []
   in
-  let result_files = 
+  let result_files =
     List.fold_right
       (fun (prover,result) files ->
          if prover <> VCS.Qed && not (is_computing result.verdict) then

@@ -3,15 +3,12 @@
 [kernel] Parsing tests/wp_typed/unit_ite.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
-[wp] Collecting variable usage
 ------------------------------------------------------------
   Function check
 ------------------------------------------------------------
 
 Goal Post-condition (file tests/wp_typed/unit_ite.i, line 2) in 'check':
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------

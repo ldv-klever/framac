@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,24 +26,32 @@
 
 open Cil_types
 open Cil
-open Abstract_interp
 
 (** [sizeof(char)] in bits *)
-let sizeofchar () = Int.of_int (bitsSizeOf charType)
+let sizeofchar () = Integer.of_int (bitsSizeOf charType)
 
 (** [sizeof(char* )] in bits *)
 let sizeofpointer () =  bitsSizeOf theMachine.upointType
 
-let max_bit_size () =
-  Int.mul
-  (sizeofchar())
-  (Int.two_power_of_int (sizeofpointer()))
+(** 2^(8 * sizeof( void * )) *)
+let max_byte_size () =
+  Integer.two_power_of_int (sizeofpointer())
 
-let max_bit_address () = Int.pred (max_bit_size())
+(** 8 * 2^(8 * sizeof( void * )) *)
+let max_bit_size () =
+  Integer.mul
+  (sizeofchar())
+  (max_byte_size ())
+
+(** 2^(8 x sizeof( void * )) - 1 *)
+let max_byte_address () = Integer.pred (max_byte_size())
+
+(** 8 * 2^(8 x sizeof( void * )) - 1 *)
+let max_bit_address () = Integer.pred (max_bit_size())
 
 let warn_if_zero ty r =
   if r = 0 then
-    Kernel.abort
+    Kernel.warning
       "size of '%a' is zero. Check target code or Frama-C -machdep option."
       Printer.pp_typ ty;
   r
@@ -54,7 +62,7 @@ let sizeof ty =
   (match ty with
   | TVoid _ -> Kernel.warning ~current:true ~once:true "using size of 'void'"
   | _ -> ()) ;
-  try Int_Base.inject (Int.of_int (bitsSizeOf ty))
+  try Int_Base.inject (Integer.of_int (bitsSizeOf ty))
   with SizeOfError _ ->
     Int_Base.top
 
@@ -65,7 +73,7 @@ let osizeof ty =
   | TVoid _ -> Kernel.warning ~once:true ~current:true "using size of 'void'"
   | _ -> ()) ;
   try
-    Int_Base.inject (Int.of_int (warn_if_zero ty (bitsSizeOf ty) / 8))
+    Int_Base.inject (Integer.of_int (warn_if_zero ty (bitsSizeOf ty) / 8))
   with SizeOfError _ -> Int_Base.top
 
 exception Neither_Int_Nor_Enum_Nor_Pointer
@@ -100,7 +108,7 @@ let sizeof_lval lv =
       | Field (f,NoOffset) ->
           (match f.fbitfield with
            | None -> sizeof typ
-           | Some i -> Int_Base.inject (Int.of_int i))
+           | Some i -> Int_Base.inject (Integer.of_int i))
       | Field (_,f) | Index(_,f) -> get_size f
     in get_size (snd lv)
 
@@ -113,7 +121,7 @@ let sizeof_pointed typ =
     | TPtr (typ,_) -> sizeof typ
     | TArray(typ,_,_,_) -> sizeof typ
     | _ ->
-        Kernel.abort "TYPE IS: %a (unrolled as %a)"
+        Kernel.fatal "TYPE IS: %a (unrolled as %a)"
           Printer.pp_typ typ
           Printer.pp_typ (unrollType typ)
 
@@ -151,71 +159,74 @@ let update_types types t = match types with
 type ppenv = {
   fmt : Format.formatter ;
   use_align : bool ;
-  rh_size : Int.t ;
+  rh_size : Integer.t ;
   mutable misaligned : bool ;
   mutable types: types ;
 }
 type bfinfo = Other | Bitfield of int64
 type fieldpart =
-  | NamedField of string * bfinfo * typ * Int.t * Int.t * Int.t
+  | NamedField of string * bfinfo * typ * Integer.t * Integer.t * Integer.t
       (* name, parameters to pretty_bits_internal for the field *)
-  | RawField of char * Int.t * Int.t
+  | RawField of char * Integer.t * Integer.t
       (* parameters for raw_bits of the raw field *)
 
 type arraypart =
-  | ArrayPart of Int.t * Int.t * typ * Int.t * Int.t * Int.t
+  | ArrayPart of Integer.t * Integer.t * typ * Integer.t * Integer.t * Integer.t
       (* start index, stop index, typ of element , align , start, stop *)
 
 let rec pretty_bits_internal env bfinfo typ ~align ~start ~stop =
-  assert ( Int.le Int.zero align
-           && Int.lt align env.rh_size);
-  assert (if (Int.lt start Int.zero
-              || Int.lt stop Int.zero) then
-            (Format.printf "start: %a stop: %a@\n"
-               Int.pretty start
-               Int.pretty stop;
+  assert ( Integer.le Integer.zero align
+           && Integer.lt align env.rh_size);
+  assert (if (Integer.lt start Integer.zero
+              || Integer.lt stop Integer.minus_one) then
+            (Format.printf "start: %a stop: %a@."
+               Abstract_interp.Int.pretty start
+               Abstract_interp.Int.pretty stop;
              false) else true);
   let update_types typ = env.types <- update_types env.types typ in
 
-  let req_size = Int.length start stop in
+  let req_size = Integer.length start stop in
   (*    Format.printf "align:%Ld size: %Ld start:%Ld stop:%Ld req_size:%Ld@\n"
         align size start stop req_size;*)
   let raw_bits c start stop =
     let cond =
-      env.use_align && ((not (Int.equal (Int.pos_rem start env.rh_size) align))
-                         || (not (Int.equal req_size env.rh_size)))
+      env.use_align
+      && ((not (Integer.equal (Integer.pos_rem start env.rh_size) align))
+          || (not (Integer.equal req_size env.rh_size)))
     in
     Format.fprintf env.fmt "[%s%t]%s"
       (if Kernel.debug_atleast 1 then String.make 1 c else "")
       (fun fmt ->
-         if Int.equal stop (max_bit_address ()) then
-           Format.fprintf fmt "bits %a to .." Int.pretty start
+         if Integer.equal stop (max_bit_address ()) then
+           Format.fprintf fmt "bits %a to .." Abstract_interp.Int.pretty start
          else
-           Format.fprintf fmt "bits %a to %a" Int.pretty start Int.pretty stop
+           Format.fprintf fmt "bits %a to %a"
+             Abstract_interp.Int.pretty start
+             Abstract_interp.Int.pretty stop
       )
       (if cond then (env.misaligned <- true ; "#") else "")
   in
-  assert (if (Int.le req_size Int.zero
-              || Int.lt start Int.zero
-              || Int.lt stop Int.zero) then
-            (Format.printf "req_s: %a start: %a stop: %a@\n"
-               Int.pretty req_size
-               Int.pretty start
-               Int.pretty stop;
+  assert (if (Integer.lt req_size Integer.zero
+              || Integer.lt start Integer.zero
+              || Integer.lt stop Integer.minus_one) then
+            (Format.printf "req_s: %a start: %a stop: %a@."
+               Abstract_interp.Int.pretty req_size
+               Abstract_interp.Int.pretty start
+               Abstract_interp.Int.pretty stop;
              false) else true);
   match (unrollType typ) with
     | TInt (_ , _) | TPtr (_, _) | TEnum (_, _)  | TFloat (_, _)
     | TVoid _ | TBuiltin_va_list _ | TNamed _ | TFun (_, _, _, _) as typ ->
         let size =
           match bfinfo with
-            | Other -> Int.of_int (bitsSizeOf typ)
-            | Bitfield i -> Int.of_int64 i
+            | Other -> Integer.of_int (bitsSizeOf typ)
+            | Bitfield i -> Integer.of_int64 i
         in
-        (if Int.is_zero start
-           && Int.equal size req_size then
+        (if Integer.is_zero start
+           && Integer.equal size req_size then
              (** pretty print a full offset *)
              (if not env.use_align ||
-                (Int.equal start align && Int.equal env.rh_size size)
+                (Integer.equal start align && Integer.equal env.rh_size size)
               then update_types typ
               else (env.types <- Mixed;
                     env.misaligned <- true ;
@@ -226,10 +237,10 @@ let rec pretty_bits_internal env bfinfo typ ~align ~start ~stop =
         )
 
     | TComp (compinfo, _, _) as typ ->
-        let size = Int.of_int (try bitsSizeOf typ
+        let size = Integer.of_int (try bitsSizeOf typ
                                with SizeOfError _ -> 0)
         in
-        if (not env.use_align) && Int.compare req_size size = 0
+        if (not env.use_align) && Integer.compare req_size size = 0
         then
           update_types typ (* do not print sub-fields if the size is exactly
                             the right one and the alignement is not important *)
@@ -239,28 +250,31 @@ let rec pretty_bits_internal env bfinfo typ ~align ~start ~stop =
             (fun acc field ->
                let current_offset = Field (field,NoOffset) in
                let start_o,width_o = bitsOffset typ current_offset in
-               let start_o,width_o = Int.of_int start_o, Int.of_int width_o in
+               let start_o,width_o =
+                 Integer.of_int start_o, Integer.of_int width_o
+               in
 
                let new_start =
                  if compinfo.cstruct then
-                   Int.max Int.zero (Int.sub start start_o)
+                   Integer.max Integer.zero (Integer.sub start start_o)
                  else start
                in
                let new_stop =
                  if compinfo.cstruct then
-                   Int.min
-                     (Int.sub stop start_o)
-                     (Int.pred width_o)
+                   Integer.min
+                     (Integer.sub stop start_o)
+                     (Integer.pred width_o)
                  else stop
                in
-               if Int.le new_start new_stop then
-		 let new_bfinfo = match field.fbitfield with
+               if Integer.le new_start new_stop then
+                 let new_bfinfo = match field.fbitfield with
                    | None -> Other
-                   | Some i -> Bitfield (Int.to_int64 (Int.of_int i))
-		 in
-		 let new_align = Int.pos_rem (Int.sub align start_o) env.rh_size
-		 in
-                 let name = Pretty_utils.sfprintf "%a" Printer.pp_field field in
+                   | Some i -> Bitfield (Integer.to_int64 (Integer.of_int i))
+                 in
+                 let new_align =
+                   Integer.pos_rem (Integer.sub align start_o) env.rh_size
+                 in
+                 let name = Format.asprintf "%a" Printer.pp_field field in
                  NamedField( name ,
                              new_bfinfo , field.ftype ,
                              new_align , new_start , new_stop ) :: acc
@@ -277,25 +291,25 @@ let rec pretty_bits_internal env bfinfo typ ~align ~start ~stop =
                    let current_offset = Field (field,NoOffset) in
                    let start_o,width_o = bitsOffset typ current_offset in
                    let start_o,width_o =
-                     Int.of_int start_o, Int.of_int width_o
+                     Integer.of_int start_o, Integer.of_int width_o
                    in
-                   let succ_stop_o = Int.add start_o width_o in
-                   if Int.gt start_o stop then acc
-                   else if Int.le succ_stop_o start then acc
-                   else if Int.gt start_o last_field_offset then
+                   let succ_stop_o = Integer.add start_o width_o in
+                   if Integer.gt start_o stop then acc
+                   else if Integer.le succ_stop_o start then acc
+                   else if Integer.gt start_o last_field_offset then
                      (* found a hole *)
-                     (RawField('c', last_field_offset,Int.pred start_o)::s,
+                     (RawField('c', last_field_offset,Integer.pred start_o)::s,
                       succ_stop_o)
                    else
                      (s,succ_stop_o)
                 )
                 (full_fields_to_print,start)
                 compinfo.cfields
-            else full_fields_to_print, Int.zero
+            else full_fields_to_print, Integer.zero
           in
           let overflowing =
-            if compinfo.cstruct && Int.le succ_last stop
-            then RawField('o',Int.max start succ_last,stop)::non_covered
+            if compinfo.cstruct && Integer.le succ_last stop
+            then RawField('o',Integer.max start succ_last,stop)::non_covered
             else non_covered
           in
           let pretty_one_field = function
@@ -328,65 +342,65 @@ let rec pretty_bits_internal env bfinfo typ ~align ~start ~stop =
 
       | TArray (typ, _, _, _) ->
           let size =
-            try Int.of_int (bitsSizeOf typ)
-            with Cil.SizeOfError _ -> Int.zero
+            try Integer.of_int (bitsSizeOf typ)
+            with Cil.SizeOfError _ -> Integer.zero
           in
-          if Int.is_zero size then
+          if Integer.is_zero size then
             raw_bits 'z' start stop
           else
-          let start_case = Int.pos_div start size in
-          let stop_case =  Int.pos_div stop size in
-          let rem_start_size = Int.pos_rem start size in
-          let rem_stop_size = Int.pos_rem stop size in
-          if Int.equal start_case stop_case then (** part of one element *)
+          let start_case = Integer.pos_div start size in
+          let stop_case =  Integer.pos_div stop size in
+          let rem_start_size = Integer.pos_rem start size in
+          let rem_stop_size = Integer.pos_rem stop size in
+          if Integer.equal start_case stop_case then (** part of one element *)
             let new_align =
-              Int.pos_rem
-                (Int.sub align (Int.mul start_case size))
+              Integer.pos_rem
+                (Integer.sub align (Integer.mul start_case size))
                 env.rh_size
             in
-            Format.fprintf env.fmt "[%a]" Int.pretty start_case ;
+            Format.fprintf env.fmt "[%a]" Abstract_interp.Int.pretty start_case;
             pretty_bits_internal env Other typ
               ~align:new_align
               ~start:rem_start_size
               ~stop:rem_stop_size
-          else if Int.equal (Int.rem start env.rh_size) align
-              && (Int.is_zero (Int.rem size env.rh_size))
+          else if Integer.equal (Integer.rem start env.rh_size) align
+              && (Integer.is_zero (Integer.rem size env.rh_size))
           then
-                let pred_size = Int.pred size in
+                let pred_size = Integer.pred size in
                 let start_full_case =
-                  if Int.is_zero rem_start_size then start_case
-                  else Int.succ start_case
+                  if Integer.is_zero rem_start_size then start_case
+                  else Integer.succ start_case
                 in
                 let stop_full_case =
-                  if Int.equal rem_stop_size pred_size then stop_case
-                  else Int.pred stop_case
+                  if Integer.equal rem_stop_size pred_size then stop_case
+                  else Integer.pred stop_case
                 in
-                let first_part = if Int.is_zero rem_start_size
+                let first_part = if Integer.is_zero rem_start_size
                 then []
                 else [ArrayPart(start_case,start_case,
                                 typ,align,rem_start_size,pred_size)]
                 in
                 let middle_part =
-                  if Int.lt stop_full_case start_full_case
+                  if Integer.lt stop_full_case start_full_case
                   then []
                   else [ArrayPart(start_full_case,stop_full_case,
-                                  typ,align,Int.zero,pred_size)]
+                                  typ,align,Integer.zero,pred_size)]
                 in
                 let last_part =
-                  if Int.equal rem_stop_size pred_size
+                  if Integer.equal rem_stop_size pred_size
                   then []
                   else [ArrayPart(stop_case,stop_case,
-                                  typ,align,Int.zero,rem_stop_size)]
+                                  typ,align,Integer.zero,rem_stop_size)]
                 in
                 let do_part = function
                   | ArrayPart(start_index,stop_index,typ,align,start,stop) ->
-                      if Int.equal start_index stop_index then
+                      if Integer.equal start_index stop_index then
                         Format.fprintf env.fmt "[%a]"
-                          Int.pretty start_index
+                          Abstract_interp.Int.pretty start_index
                       else
                         Format.fprintf env.fmt "[%a..%a]"
-                          Int.pretty start_index
-                          Int.pretty stop_index ;
+                          Abstract_interp.Int.pretty start_index
+                          Abstract_interp.Int.pretty stop_index ;
                       pretty_bits_internal env Other typ ~align ~start ~stop
                 in
                 let rec do_all_parts = function
@@ -412,13 +426,16 @@ let pretty_bits typ ~use_align ~align ~rh_size ~start ~stop fmt =
   (* It is simpler to perform all computation using an absolute offset:
      Cil easily gives offset information in terms of offset since the start,
      but not easily the offset between two fields (with padding) *)
-  let align = Int.pos_rem (Rel.add_abs start align) rh_size in
-  assert (Int.le Int.zero align
-          && Int.lt align rh_size);
-  if Int.lt start Int.zero then
+  let align =
+    Integer.pos_rem (Abstract_interp.Rel.add_abs start align) rh_size
+  in
+  assert (Integer.le Integer.zero align
+          && Integer.lt align rh_size);
+  if Integer.lt start Integer.zero then
     (Format.fprintf fmt "[%sbits %a to %a]#(negative offsets)"
        (if Kernel.debug_atleast 1 then "?" else "")
-       Int.pretty start Int.pretty stop ; true, None)
+       Abstract_interp.Int.pretty start Abstract_interp.Int.pretty stop;
+     true, None)
   else
     let env = {
       fmt = fmt ;
@@ -453,7 +470,7 @@ let rec equal_type_no_attribute t1 t2 =
   | TPtr (t1, _), TPtr (t2, _) -> equal_type_no_attribute t1 t2
   | TArray (t1', s1, _, _), TArray (t2', s2, _, _) ->
     equal_type_no_attribute t1' t2' &&
-      (s1 == s2 || try Int.equal (Cil.lenOfArray64 s1) (Cil.lenOfArray64 s2)
+      (s1 == s2 || try Integer.equal (Cil.lenOfArray64 s1) (Cil.lenOfArray64 s2)
                    with Cil.LenOfArray -> false)
   | TFun (r1, a1, v1, _), TFun (r2, a2, v2, _) ->
     v1 = v2 && equal_type_no_attribute r1 r2 &&
@@ -477,7 +494,7 @@ let rec equal_type_no_attribute t1 t2 =
 let offset_matches om typ =
   match om with
   | MatchFirst -> true
-  | MatchSize size -> Int.equal size (Int.of_int (Cil.bitsSizeOf typ))
+  | MatchSize size -> Integer.equal size (Integer.of_int (Cil.bitsSizeOf typ))
   | MatchType typ' -> equal_type_no_attribute typ typ'
 
 (* Can we match [om] inside a cell of an array whose elements have size
@@ -485,41 +502,61 @@ let offset_matches om typ =
 let offset_match_cell om size_elt =
   match om with
   | MatchFirst -> true
-  | MatchSize size -> Int.le size size_elt
-  | MatchType typ' -> Int.le (Int.of_int (Cil.bitsSizeOf typ')) size_elt
+  | MatchSize size -> Integer.le size size_elt
+  | MatchType typ' -> Integer.le (Integer.of_int (Cil.bitsSizeOf typ')) size_elt
+
+let minus_one_expr = Cil.mone ~loc:Cil_datatype.Location.unknown
 
 let rec find_offset typ ~offset om =
   (* Format.printf "Searching offset %a in %a, size %a@."
-     Int.pretty offset Printer.pp_typ typ Int.pretty size; *)
+     Abstract_interp.Int.pretty offset
+     Printer.pp_typ typ
+     Abstract_interp.Int.pretty size; *)
   let loc = Cil_datatype.Location.unknown in
-  if Int.is_zero offset && offset_matches om typ then
+  if Integer.is_zero offset && offset_matches om typ then
     NoOffset, typ
   else
     match Cil.unrollType typ with
     | TArray (typ_elt, _, _, _) ->
-      let size_elt = Int.of_int (Cil.bitsSizeOf typ_elt) in
-      let start = Integer.pos_div offset size_elt in
-      let exp_start = Cil.kinteger64 ~loc start in
-      let rem = Integer.pos_rem offset size_elt in
-      if offset_match_cell om size_elt then
-        (* [size] covers at most one cell; we continue in the relevant one *)
-        let off, typ = find_offset typ_elt rem om in
-        Index (exp_start, off), typ
-      else begin
-        match om with
-        | MatchFirst | MatchType _ -> raise NoMatchingOffset
-        | MatchSize size ->
-          if Int.is_zero rem && Int.is_zero (Int.rem size size_elt) then
-            (* We cover more than one cell, but we are aligned. *)
-            let nb = Int.div size size_elt in
-            let exp_nb = Cil.kinteger64 ~loc nb in
-            let typ =
-              TArray (typ_elt, Some exp_nb, Cil.empty_size_cache (),[])
-            in
-            Index (exp_start, NoOffset), typ
-          else (* We match different parts of multiple cells: too imprecise. *)
-            raise NoMatchingOffset
-      end
+      let size_elt = Integer.of_int (Cil.bitsSizeOf typ_elt) in
+      if Integer.(equal size_elt zero) then
+        begin
+          (* array of elements of size 0 - trying to recompute the original
+             offset in the case of multidimensional incomplete arrays is
+             too complicated, to we just "normalize" everything to -1, which
+             should be a noticeable visual indicator that the element size is 0.
+             Since the sizeof each element is zero, any offset is valid anyway.
+          *)
+          let typ =
+            TArray (typ_elt, Some minus_one_expr, Cil.empty_size_cache (),[])
+          in
+          Index (minus_one_expr, NoOffset), typ
+        end
+      else
+        let start = Integer.pos_div offset size_elt in
+        let exp_start = Cil.kinteger64 ~loc start in
+        let rem = Integer.pos_rem offset size_elt in
+        if offset_match_cell om size_elt then
+          (* [size] covers at most one cell; we continue in the relevant one *)
+          let off, typ = find_offset typ_elt rem om in
+          Index (exp_start, off), typ
+        else begin
+          match om with
+          | MatchFirst | MatchType _ -> raise NoMatchingOffset
+          | MatchSize size ->
+            if Integer.is_zero rem
+            && Integer.is_zero (Integer.rem size size_elt)
+            then
+              (* We cover more than one cell, but we are aligned. *)
+              let nb = Integer.div size size_elt in
+              let exp_nb = Cil.kinteger64 ~loc nb in
+              let typ =
+                TArray (typ_elt, Some exp_nb, Cil.empty_size_cache (),[])
+              in
+              Index (exp_start, NoOffset), typ
+            else (* We match different parts of multiple cells: too imprecise. *)
+              raise NoMatchingOffset
+        end
 
     | TComp (ci, _, _) ->
       let rec find_field = function
@@ -527,14 +564,14 @@ let rec find_offset typ ~offset om =
         | fi :: q ->
           try
             let off_fi, len_fi = Cil.bitsOffset typ (Field (fi, NoOffset)) in
-            let off_fi, len_fi = Int.of_int off_fi, Int.of_int len_fi in
+            let off_fi, len_fi = Integer.of_int off_fi, Integer.of_int len_fi in
             if Integer.(ge offset (add off_fi len_fi)) then
               (* [offset] is not in the interval occupied by [fi]. Try the next
                  one (including for union: maybe the next fields are larger). *)
               find_field q
             else
               let off, typ =
-                find_offset fi.ftype (Int.sub offset off_fi) om
+                find_offset fi.ftype (Integer.sub offset off_fi) om
               in
               Field (fi, off), typ
           with NoMatchingOffset when not ci.cstruct ->
@@ -554,6 +591,6 @@ let find_offset typ ~offset om =
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
  *)

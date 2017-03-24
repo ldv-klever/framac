@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,9 +20,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Type of AST's extensible printers. 
-    @since Fluorine-20130401
-    @plugin development guide *)
+(* Modified by TrustInSoft *)
+
+(** Type of AST's extensible printers.
+    @since Fluorine-20130401 *)
 
 open Cil_types
 
@@ -105,8 +106,8 @@ class type extensible_printer_type = object
       various manipulation of the name, such as unmangling. *)
 
   method vdecl: Format.formatter -> varinfo -> unit
-  (** Invoked for each variable declaration. Note that variable
-      declarations are all the [GVar], [GVarDecl], [GFun], all the [varinfo]
+  (** Invoked for each variable declaration. Note that variable  declarations
+      are all the [GVar], [GVarDecl], [GFun], [GFunDecl],  all the [varinfo]
       in formals of function types, and the formals and locals for function
       definitions. *)
 
@@ -158,7 +159,7 @@ class type extensible_printer_type = object
   (** Print a line-number. This is assumed to come always on an empty line. If
       the forcefile argument is present and is true then the file name will be
       printed always. Otherwise the file name is printed only if it is
-      different from the last time time this function is called. The last file
+      different from the last time this function is called. The last file
       name is stored in a private field inside the cilPrinter object. *)
 
   method stmt_labels: Format.formatter -> stmt -> unit
@@ -224,8 +225,8 @@ class type extensible_printer_type = object
   method logic_info: Format.formatter -> logic_info -> unit
   method logic_var: Format.formatter -> logic_var -> unit
   method quantifiers: Format.formatter -> quantifiers -> unit
+  method predicate_node: Format.formatter -> predicate_node -> unit
   method predicate: Format.formatter -> predicate -> unit
-  method predicate_named: Format.formatter -> predicate named -> unit
   method identified_predicate: 
     Format.formatter -> identified_predicate -> unit
   method behavior: Format.formatter -> funbehavior -> unit
@@ -265,6 +266,19 @@ class type extensible_printer_type = object
   (* ******************************************************************* *)
   (** {3 Modifying pretty-printer behavior}                              *)
   (* ******************************************************************* *)
+  method pp_keyword: Format.formatter -> string -> unit
+  (** All C99 keywords except types "char", "int", "long", "signed",
+      "short", "unsigned", "void" and "_XXX" (like "_Bool") **)
+  method pp_acsl_keyword: Format.formatter -> string -> unit
+  (** All ACSL keywords except logic types *)
+
+  method pp_open_annotation: ?block:bool -> ?pre:Pretty_utils.sformat
+    -> Format.formatter -> unit
+  method pp_close_annotation: ?block:bool -> ?suf:Pretty_utils.sformat
+    -> Format.formatter -> unit
+  (** Called before/after printing an annotation comment.
+      Put the annotation in a block according to the optional argument. If
+      it is not set, the annotation is put in a block.  **)
 
   method without_annot:
     'a.
@@ -294,7 +308,7 @@ end
 type line_directive_style =
   | Line_comment (** Before every element, print the line number in
                      comments. This is ignored by processing tools
-                     (thus errors are reproted in the CIL output),
+                     (thus errors are reported on the lines of the CIL output),
                      but useful for visual inspection *)
   | Line_comment_sparse (** Like LineComment but only print a line directive for
                             a new source line *)
@@ -378,8 +392,8 @@ module type S = sig
   val pp_term_offset: Format.formatter -> term_offset -> unit
   val pp_logic_label: Format.formatter -> logic_label -> unit
 
+  val pp_predicate_node: Format.formatter -> predicate_node -> unit
   val pp_predicate: Format.formatter -> predicate -> unit
-  val pp_predicate_named: Format.formatter -> predicate named -> unit
   val pp_identified_predicate: Format.formatter -> identified_predicate -> unit
   val pp_code_annotation: Format.formatter -> code_annotation -> unit
   val pp_funspec: Format.formatter -> funspec -> unit
@@ -432,21 +446,50 @@ module type S = sig
   (* ********************************************************************* *)
 
   class extensible_printer: unit -> extensible_printer_type
-  (** Extend this class if you want to modify the default behavior of the
-      printer. *)
+  (** Extend this class if you want to obtain a custom pretty-printer. *)
 
-  val change_printer: (unit -> extensible_printer) -> unit
-  (** [change_printer extension] let the pp_* function use 
-      [extension] as printer *)
+  (** Auxiliary module type for a pretty-printer *)
+  module type PrinterClass = sig
+    class printer : extensible_printer_type
+  end
 
-  val printer: unit -> extensible_printer
-(** @return the current printer.
-    @since Neon-20140301 *)
+  (** Signature for extending an existing pretty-printer. OCaml forbids
+      inheriting from a class received as argument, so we use a functor
+      instead. *)
+  module type PrinterExtension = functor (X: PrinterClass) -> PrinterClass
+
+  val update_printer: (module PrinterExtension) -> unit
+  (** Register a pretty-printer extension. The pretty-printer passed as
+      argument [X] in the functor {!PrinterExtension} is the current
+      pretty-printer, which you should inherit from.
+
+      This is how this function should be used:
+
+{[
+module PrinterClassDeferred (X: Printer.PrinterClass) = struct
+ class printer : Printer.extensible_printer = object(self)
+   inherit X.printer as super
+   (* Override the standard methods *)
+ end
+end
+let () = Printer.update_printer
+   (module PrinterClassDeferred: Printer.PrinterExtension)
+]}
+*)
+
+  val current_printer: unit -> (module PrinterClass)
+  (** Returns the current pretty-printer, with all the extensions added
+      using {!update_printer}. *)
+
+  val set_printer: (module PrinterClass) -> unit
+  (** Set the current pretty-printer, typically to a printer previously
+      obtained through {!current_printer}. This can be useful to cancel a
+      modification performed through {!update_printer}. *)
 
 end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

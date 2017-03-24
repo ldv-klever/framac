@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -85,10 +85,10 @@ let pretty_value fmt p = match p.accessor with
   | Int(a, _) -> Format.fprintf fmt "%d" (a.get ())
   | String(a, _) -> Format.fprintf fmt "%s" (a.get ())
 
-let get_value p = Pretty_utils.sfprintf "%a" pretty_value p
+let get_value p = Format.asprintf "%a" pretty_value p
  
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

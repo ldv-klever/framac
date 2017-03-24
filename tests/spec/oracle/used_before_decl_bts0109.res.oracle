@@ -7,7 +7,7 @@ tests/spec/used_before_decl_bts0109.i:3:[kernel] warning: Calling undeclared fun
     assigns \result \from a; */
 extern int f(int a);
 
-/*@ ensures \result ≡ \old(b)+1; */
+/*@ ensures \result ≡ \old(b) + 1; */
 extern int h(int b);
 
 int g(void)
@@ -15,8 +15,7 @@ int g(void)
   int __retres;
   int tmp;
   int tmp_0;
-  {
-    /*sequence*/
+  { /* sequence */
     tmp = f(0);
     tmp_0 = h(1);
   }

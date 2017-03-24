@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -23,10 +23,15 @@
 #ifndef __FC_DEFINE_INTPTR_T
 #define __FC_DEFINE_INTPTR_T
 #include "__fc_machdep.h"
+#include "features.h"
+
+__BEGIN_DECLS
 
 #ifdef __INTPTR_T
 typedef __INTPTR_T intptr_t;
 #endif
+
+__END_DECLS
 
 #endif
 

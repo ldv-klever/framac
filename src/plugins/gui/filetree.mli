@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -73,6 +73,14 @@ class type t =  object
     (** Return the names and the attributes (currently only the strikethrough
         property) of the globals in the file passed as argument *)
 
+  method find_visible_global:
+    string -> Cil_types.global option
+    (** [find_visible_global str] searches for the next occurrence of a visible
+        global whose name contains [str], starting at the currently selected
+        element. Returns the global found (if any).
+
+        @since Magnesium-20151001 *)
+
   method add_select_function :
     (was_activated:bool -> activating:bool -> filetree_node -> unit) -> unit
     (** Register a callback that is called whenever an element of the file tree
@@ -139,6 +147,6 @@ val make : GTree.view -> t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

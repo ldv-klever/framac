@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -146,14 +146,12 @@ let get_external =
   Externals.memo
     (fun kf ->
       Zone.filter_base
-        (!Db.Semantic_Callgraph.accept_base
-           ~with_formals:false ~with_locals:false kf)
+        (Callgraph.Uses.accept_base ~with_formals:false ~with_locals:false kf)
         (get_internal kf))
 
 let get_with_formals kf =
   Zone.filter_base
-    (!Db.Semantic_Callgraph.accept_base
-       ~with_formals:true ~with_locals:false kf)
+    (Callgraph.Uses.accept_base ~with_formals:true ~with_locals:false kf)
     (get_internal kf)
 
 let compute_external kf = ignore (get_external kf)
@@ -183,6 +181,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "LC_ALL=C make -C ../.. -j"
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,7 +42,7 @@ let empty_execution_count = (0,0);;
 *)
 type trace_node =
 | In_basic_block of stmt * execution_count
-| Disjunction of Property.t * predicate named * execution_count
+| Disjunction of Property.t * predicate * execution_count
 | Initial
 
 (* Note: this could be generalized as a functor put in AI,
@@ -122,7 +122,7 @@ let pretty_trace_node fmt = function
     Format.fprintf fmt "%s[%d-%d]" strstmt mincount maxcount
   | Initial -> Format.fprintf fmt "initial"
   | Disjunction (ip,pred,(start,end_)) ->
-    let name = match pred.name with
+    let name = match pred.pred_name with
       | a::_ -> a
       | _ -> "unnamed"
     in
@@ -462,6 +462,6 @@ let initial kf =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

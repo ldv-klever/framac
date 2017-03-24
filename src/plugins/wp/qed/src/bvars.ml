@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,7 +36,7 @@ let is_empty a = (a.upper = 0)
 let closed s = s.upper <= s.order
 let closed_at d s = s.upper = 0 || d <= s.lower
 
-let union a b = 
+let union a b =
   if is_empty a then b else
   if is_empty b then a else
     {
@@ -61,8 +61,8 @@ let bind s = {
   order = succ s.order ;
 }
 
-let pretty fmt s = 
+let pretty fmt s =
   if is_empty s then
-    Format.fprintf fmt "<empty>" 
+    Format.fprintf fmt "<empty>"
   else
     Format.fprintf fmt "\\%d.[%d-%d]" s.order s.lower (s.upper - 1)

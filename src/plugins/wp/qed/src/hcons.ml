@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,11 +24,11 @@
 (* --- Hash Consing Utilities                                             --- *)
 (* -------------------------------------------------------------------------- *)
 
-let primes = [| 2 ; 3 ; 5 ; 7 ; 11 ; 13 ; 17 ; 19 ; 23 ; 29 ; 
-                31 ; 37 ; 41 ; 43 ; 47 ; 53 ; 59 ; 61 ; 67 ; 71 ; 
-                73 ; 79 ; 83 ; 89 ; 97 ; 101 ; 103 ; 107 ; 109 ; 113 ; 
-                127 ; 131 ; 137 ; 139 ; 149 ; 151 ; 157 ; 163 ; 167 ; 173 ; 
-                179 ; 181 ; 191 ; 193 ; 197 ; 199 ; 211 ; 223 ; 227 ; 229 ; 
+let primes = [| 2 ; 3 ; 5 ; 7 ; 11 ; 13 ; 17 ; 19 ; 23 ; 29 ;
+                31 ; 37 ; 41 ; 43 ; 47 ; 53 ; 59 ; 61 ; 67 ; 71 ;
+                73 ; 79 ; 83 ; 89 ; 97 ; 101 ; 103 ; 107 ; 109 ; 113 ;
+                127 ; 131 ; 137 ; 139 ; 149 ; 151 ; 157 ; 163 ; 167 ; 173 ;
+                179 ; 181 ; 191 ; 193 ; 197 ; 199 ; 211 ; 223 ; 227 ; 229 ;
                 233 ; 239 ; 241 ; 251 ; 257 ; 263 ; 269 ; 271 ; 277 ; 281 |]
 let n_primes = Array.length primes
 
@@ -69,7 +69,7 @@ let rec equal_list eq xs ys =
 let equal_array eq xs ys =
   let n = Array.length xs in
   let m = Array.length ys in
-  n = m && 
+  n = m &&
   begin
     try
       for i=0 to n-1 do
@@ -101,7 +101,7 @@ let rec eq_list xs ys =
 let eq_array xs ys =
   let n = Array.length xs in
   let m = Array.length ys in
-  n = m && 
+  n = m &&
   begin
     try
       for i=0 to n-1 do

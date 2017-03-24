@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -47,7 +47,6 @@ module Make
 struct
 
   open M
-  module Hmap = Heap.Map
   module Dom = Heap.Set
 
   type region = (c_object * loc sloc list) list
@@ -79,7 +78,7 @@ struct
   let rec assigned_seq hs s = function
     | [] -> Bag.concat (M.Sigma.assigned s.pre s.post Dom.empty) hs
 
-    | [obj,sloc] -> 
+    | [obj,sloc] ->
         let hs_sloc = Bag.list (M.assigned s obj sloc) in
         let hs_sdom = M.Sigma.assigned s.pre s.post (dsloc obj sloc) in
         Bag.concat (Bag.concat hs_sloc hs_sdom) hs
@@ -91,7 +90,7 @@ struct
         let hs_sloc = Bag.list (M.assigned s_local obj sloc) in
         assigned_seq (Bag.concat hs_sloc hs) s_other tail
 
-  let assigned (s:sigma sequence) (r:region) = 
+  let assigned (s:sigma sequence) (r:region) =
     let hs = assigned_seq Bag.empty s
         begin
           List.fold_left

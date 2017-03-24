@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -72,47 +72,51 @@ Defined.
 (* Why3 goal *)
 Lemma addr_le_def : forall (p:addr) (q:addr), ((base p) = (base q)) ->
   ((addr_le p q) <-> ((offset p) <= (offset q))%Z).
-unfold addr_le.
-intuition.
+Proof.
+  unfold addr_le.
+  intuition.
 Qed.
 
 (* Why3 goal *)
 Lemma addr_lt_def : forall (p:addr) (q:addr), ((base p) = (base q)) ->
   ((addr_lt p q) <-> ((offset p) < (offset q))%Z).
-unfold addr_lt.
-intuition.
+Proof.
+  unfold addr_lt.
+  intuition.
 Qed.
 
 (* Why3 goal *)
 Lemma addr_le_bool_def : forall (p:addr) (q:addr), (addr_le p q) <->
   ((addr_le_bool p q) = true).
-unfold addr_le. unfold addr_le_bool.
-intros. split; intro H.
-destruct H as [H0 H1].
-rewrite Zeq_is_eq_bool in H0.
-apply Zle_imp_le_bool in H1.
-rewrite H0. rewrite H1.
-compute;reflexivity.
-symmetry in H.
-apply Bool.andb_true_eq in H.
-destruct H as [H1 H2].
-split;[apply Zeq_bool_eq|apply Zle_bool_imp_le];symmetry; assumption.
+Proof.
+  unfold addr_le. unfold addr_le_bool.
+  intros. split; intro H.
+  destruct H as [H0 H1].
+  rewrite Zeq_is_eq_bool in H0.
+  apply Zle_imp_le_bool in H1.
+  rewrite H0. rewrite H1.
+  compute;reflexivity.
+  symmetry in H.
+  apply Bool.andb_true_eq in H.
+  destruct H as [H1 H2].
+  split;[apply Zeq_bool_eq|apply Zle_bool_imp_le];symmetry; assumption.
 Qed.
 
 (* Why3 goal *)
 Lemma addr_lt_bool_def : forall (p:addr) (q:addr), (addr_lt p q) <->
   ((addr_lt_bool p q) = true).
-unfold addr_lt. unfold addr_lt_bool.
-intros. split; intro H.
-destruct H as [H0 H1].
-rewrite Zeq_is_eq_bool in H0.
-rewrite Zlt_is_lt_bool in H1.
-rewrite H0. rewrite H1.
-compute;reflexivity.
-symmetry in H.
-apply Bool.andb_true_eq in H.
-destruct H as [H1 H2].
-split;[apply Zeq_bool_eq|rewrite Zlt_is_lt_bool];symmetry; assumption.
+Proof.
+  unfold addr_lt. unfold addr_lt_bool.
+  intros. split; intro H.
+  destruct H as [H0 H1].
+  rewrite Zeq_is_eq_bool in H0.
+  rewrite Zlt_is_lt_bool in H1.
+  rewrite H0. rewrite H1.
+  compute;reflexivity.
+  symmetry in H.
+  apply Bool.andb_true_eq in H.
+  destruct H as [H1 H2].
+  split;[apply Zeq_bool_eq|rewrite Zlt_is_lt_bool];symmetry; assumption.
 Qed.
 
 (* Why3 assumption *)
@@ -159,9 +163,10 @@ Definition valid_rw (m:(map.Map.map Z Z)) (p:addr) (n:Z): Prop :=
 (* Why3 goal *)
 Lemma valid_rw_rd : forall (m:(map.Map.map Z Z)), forall (p:addr),
   forall (n:Z), (valid_rw m p n) -> (valid_rd m p n).
-intros m p n.
-unfold valid_rw. unfold valid_rd.
-intuition (auto with zarith).
+Proof.
+  intros m p n.
+  unfold valid_rw. unfold valid_rd.
+  intuition (auto with zarith).
 Qed.
 
 (* Why3 goal *)
@@ -169,9 +174,10 @@ Lemma valid_string : forall (m:(map.Map.map Z Z)), forall (p:addr),
   ((base p) < 0%Z)%Z -> (((0%Z <= (offset p))%Z /\
   ((offset p) < (map.Map.get m (base p)))%Z) -> ((valid_rd m p 1%Z) /\
   ~ (valid_rw m p 1%Z))).
-intros m p.
-unfold valid_rd. unfold valid_rw.
-intuition (auto with zarith).
+Proof.
+  intros m p.
+  unfold valid_rd. unfold valid_rw.
+  intuition (auto with zarith).
 Qed.
 
 Lemma separated_neq : forall p a q b p' q',
@@ -217,7 +223,6 @@ Lemma separated_1 : forall (p:addr) (q:addr), forall (a:Z) (b:Z) (i:Z) (j:Z),
   (i < ((offset p) + a)%Z)%Z) -> ((((offset q) <= j)%Z /\
   (j < ((offset q) + b)%Z)%Z) -> ~ ((mk_addr (base p) i) = (mk_addr (base q)
   j)))).
-Proof.
 Admitted.
 
 (* Why3 goal *)
@@ -240,6 +245,7 @@ Definition framed (m:(map.Map.map addr addr)): Prop := forall (p:addr),
 Lemma separated_included : forall (p:addr) (q:addr), forall (a:Z) (b:Z),
   (0%Z < a)%Z -> ((0%Z < b)%Z -> ((separated p a q b) -> ~ (included p a q
   b))).
+Proof.
 intros p q a b h1 h2 h3.
   unfold separated. unfold included. unfold not.
   intuition.
@@ -257,10 +263,10 @@ Proof.
 Qed.
 *)
 
-
 (* Why3 goal *)
 Lemma included_trans : forall (p:addr) (q:addr) (r:addr), forall (a:Z) (b:Z)
   (c:Z), (included p a q b) -> ((included q b r c) -> (included p a r c)).
+Proof.
   intros p a q b r c.
   unfold included. intuition.
 Qed.
@@ -268,12 +274,14 @@ Qed.
 (* Why3 goal *)
 Lemma separated_trans : forall (p:addr) (q:addr) (r:addr), forall (a:Z) (b:Z)
   (c:Z), (included p a q b) -> ((separated q b r c) -> (separated p a r c)).
+Proof.
   intros p a q b r c.
 Admitted.
 
 (* Why3 goal *)
 Lemma separated_sym : forall (p:addr) (q:addr), forall (a:Z) (b:Z),
   (separated p a q b) <-> (separated q b p a).
+Proof.
   intros p q a b.
   unfold separated. intuition.
 Qed.
@@ -283,14 +291,16 @@ Lemma eqmem_included : forall {a:Type} {a_WT:WhyType a},
   forall (m1:(map.Map.map addr a)) (m2:(map.Map.map addr a)), forall (p:addr)
   (q:addr), forall (a1:Z) (b:Z), (included p a1 q b) -> ((eqmem m1 m2 q b) ->
   (eqmem m1 m2 p a1)).
-intros a a_WT m1 m2 p q a1 b h1 h2.
+Proof.
+  intros a a_WT m1 m2 p q a1 b h1 h2.
 Admitted.
 
 (* Why3 goal *)
 Lemma eqmem_sym : forall {a:Type} {a_WT:WhyType a}, forall (m1:(map.Map.map
   addr a)) (m2:(map.Map.map addr a)), forall (p:addr), forall (a1:Z), (eqmem
   m1 m2 p a1) -> (eqmem m2 m1 p a1).
- intros A m1 m2 p a. unfold eqmem.
+Proof.
+  intros A m1 m2 p a. unfold eqmem.
 Admitted.
 
 (* Why3 goal *)
@@ -306,7 +316,8 @@ Admitted.
 (* Why3 goal *)
 Lemma cast_injective : forall (p:addr) (q:addr), ((cast p) = (cast q)) ->
   (p = q).
-intros p q h1.
+Proof.
+  intros p q h1.
 Admitted.
 
 (* Why3 goal *)

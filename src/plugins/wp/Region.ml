@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,7 +30,7 @@ open Lang.F
 open Vset
 
 type path = offset list
-and offset = 
+and offset =
   | Oindex of term
   | Ofield of field
 
@@ -54,7 +54,7 @@ let rec update e path v =
 (* -------------------------------------------------------------------------- *)
 
 type rpath = roffset list
-and roffset = 
+and roffset =
   | Rindex of set
   | Rfield of field
 
@@ -62,8 +62,8 @@ type region =
   | Empty
   | Full
   | Fields of (field * region) list (* SORTED, DEFAULT : empty *)
-  | Indices of set * ( set * region ) list 
-  (* Indices for FULL region. 
+  | Indices of set * ( set * region ) list
+  (* Indices for FULL region.
      	 Then indices for non-FULL and non-EMPTY regions *)
 
 let empty = Empty
@@ -71,7 +71,7 @@ let full = Full
 
 let rec path = function
   | [] -> Full
-  | Oindex k :: tail -> 
+  | Oindex k :: tail ->
       let r = path tail in
       let s = Vset.singleton k in
       begin
@@ -101,10 +101,10 @@ let rec merge a b =
   | Fields fxs , Fields gys -> Fields (merge_fields fxs gys)
   | Indices(s1,kxs) , Indices(s2,kys) ->
       Indices(Vset.union s1 s2,kxs @ kys)
-  | Fields _ , Indices _ 
+  | Fields _ , Indices _
   | Indices _ , Fields _ -> assert false
 
-and merge_fields fxs gys = 
+and merge_fields fxs gys =
   match fxs , gys with
   | [] , w | w , [] -> w
   | (f,x)::fxstail , (g,y)::gystail ->
@@ -122,13 +122,13 @@ let rec disjoint a b =
   | Empty , _ | _ , Empty -> p_true
   | Full , _ | _ , Full -> p_false
 
-  | Fields fxs , Fields gys -> 
+  | Fields fxs , Fields gys ->
       p_conj (disjoint_fields fxs gys)
 
-  | Indices(s,xs) , Indices(t,ts) -> 
+  | Indices(s,xs) , Indices(t,ts) ->
       p_conj (disjoint_indices [Vset.disjoint s t] xs ts)
 
-  | Fields _ , Indices _ 
+  | Fields _ , Indices _
   | Indices _ , Fields _ -> assert false
 
 and disjoint_fields frs grs =
@@ -161,10 +161,10 @@ let rec subset r1 r2 =
   | Full , _ -> p_false
   | Fields frs , Fields grs -> subset_fields frs grs
   | Indices(s1,ks1) , Indices(s2,ks2) ->
-      p_and 
+      p_and
         (Vset.subset s1 s2) (* because FULL never appears in ks2 *)
         (p_all (fun (s1,r1) -> subset_indices s1 r1 ks2) ks1)
-  | Fields _ , Indices _ 
+  | Fields _ , Indices _
   | Indices _ , Fields _ -> assert false
 
 and subset_fields frs grs =
@@ -174,7 +174,7 @@ and subset_fields frs grs =
   | (f,r)::ftail , (g,s)::gtail ->
       let c = Field.compare f g in
       if c < 0 then p_false (* only f is present *) else
-      if c > 0 then subset_fields frs gtail (* g is not present *) 
+      if c > 0 then subset_fields frs gtail (* g is not present *)
       else (* f=g *)
         p_and (subset r s) (subset_fields ftail gtail)
 
@@ -185,7 +185,7 @@ and subset_fields frs grs =
    = AND (k in s1 -> subset_index k r1 ks2)
 *)
 and subset_indices s1 r1 ks2 =
-  p_all (fun w -> 
+  p_all (fun w ->
       let xs,e,p = Vset.descr w in
       p_forall xs
         (p_imply p (subset_index e r1 ks2))
@@ -205,7 +205,7 @@ let rec equal_but t r a b =
   match t , r with
   | _ , Full -> p_true
   | _ , Empty -> p_equal a b
-  | _ , Fields grs -> 
+  | _ , Fields grs ->
       let fs = List.sort Field.compare (fields_of_tau t) in
       p_conj (equal_but_fields a b fs grs)
   | Array(ta,tb) , Indices(s,krs) ->
@@ -219,11 +219,11 @@ let rec equal_but t r a b =
 and equal_but_fields a b fts grs =
   match fts , grs with
   | [] , _ -> []
-  | _ , [] -> 
+  | _ , [] ->
       List.map (fun f -> p_equal (e_getfield a f) (e_getfield b f)) fts
   | f::ftail , (g,r)::gtail ->
       let c = Field.compare f g in
-      if c < 0 then 
+      if c < 0 then
         let eqf = p_equal (e_getfield a f) (e_getfield b f) in
         eqf :: equal_but_fields a b ftail grs
       else
@@ -253,12 +253,12 @@ and occurs_idx x (s,r) = Vset.occurs x s || occurs x r
 
 let rec vars = function
   | Empty | Full -> Vars.empty
-  | Fields frs -> 
-      List.fold_left 
-        (fun xs (_,r) -> Vars.union xs (vars r)) 
+  | Fields frs ->
+      List.fold_left
+        (fun xs (_,r) -> Vars.union xs (vars r))
         Vars.empty frs
-  | Indices(s,srs) -> 
-      List.fold_left 
+  | Indices(s,srs) ->
+      List.fold_left
         (fun xs (s,r) -> Vars.union xs (Vars.union (Vset.vars s) (vars r)))
         (Vset.vars s) srs
 

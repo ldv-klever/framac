@@ -1,15 +1,15 @@
-/* run.config
-   OPT: -slevel 30 -val -cpp-extra-args="-DFLOAT=double" share/builtin.c -float-hex -journal-disable -subdivide-float-var 0
-   OPT: -slevel 30 -val -cpp-extra-args="-DFLOAT=double" share/builtin.c -float-hex -journal-disable -subdivide-float-var 10
-   OPT: -slevel 30 -val -cpp-extra-args="-DFLOAT=float" share/builtin.c -float-hex -journal-disable -subdivide-float-var 0
-   OPT: -slevel 30 -val -cpp-extra-args="-DFLOAT=float" share/builtin.c -float-hex -journal-disable -subdivide-float-var 10
+/* run.config*
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=double" -float-hex -journal-disable -val-subdivide-non-linear 0 -then -no-float-hex -no-val-print -val-print
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=double" -float-hex -journal-disable -val-subdivide-non-linear 10  -then -no-float-hex -no-val-print -val-print
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=float" -float-hex -journal-disable -val-subdivide-non-linear 0 -then -no-float-hex -no-val-print -val-print
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=float" -float-hex -journal-disable -val-subdivide-non-linear 10 -then -no-float-hex -no-val-print -val-print
 */
 
-#include "share/builtin.h"
+#include "__fc_builtin.h"
 
 FLOAT a, b, c, r1, r2, d, i, s, zf, s2, sq, h;
 
-int t[10]={1,2,3,4,5,6,7,8,9,10},r,z;
+int t[10]={1,2,3,4,5,6,7,8,9,10},r,x,y,z;
 
 void nonlin_f()
 {
@@ -38,7 +38,7 @@ void nonlin_f()
     || (6.75 <= a <= 6.875)
     || (6.875 <= a <= 7.0) ; */
 
-  r2 = a + (b * (c - a));
+  r2 = (b * (c - a)) + a;
   Frama_C_show_each_a_r2("a", a, "r2", r2);
 }
 
@@ -53,11 +53,9 @@ int access_bits(FLOAT X )
   return 0;
 }
 
+volatile float v;
 
-main()
-{
-  nonlin_f();
-
+void other() {
   i = Frama_C_float_interval(-133.0,142.0);
   s = Frama_C_float_interval(-133.0,142.0);
   r = 1 + t[(int)(i*i+2.0)];
@@ -67,4 +65,25 @@ main()
   sq = s * s;
   h = s * (1 - s);
   rbits2 = access_bits(i);
+
+  x = Frama_C_interval(0,42);
+  y = (1 / x) * x;
+}
+
+void split_alarm() { // No alarm with sufficient subdivide-float-var
+  float ff = v;
+  double d = 1 / ((double)ff * ff + 0.000000001);
+}
+
+void norm() {
+  float v1 = v;
+  float v2 = v;
+  double square = (double)v1*v1+(double)v2*v2;
+}
+
+void main() {
+  nonlin_f();
+  other ();
+  split_alarm();
+  norm();
 }

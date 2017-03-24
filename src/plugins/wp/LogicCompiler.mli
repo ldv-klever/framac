@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,6 +33,8 @@ open Lang.F
 open Memory
 open Definitions
 
+type polarity = [ `Positive | `Negative | `NoPolarity ]
+
 module Make( M : Memory.Model ) :
 sig
 
@@ -45,13 +47,14 @@ sig
 
   (** {3 Frames} *)
 
+  type call
   type frame
   val pp_frame : Format.formatter -> frame -> unit
 
   val frame : kernel_function -> frame
-  val frame_copy : frame -> frame
-  val call_pre   : sigma -> kernel_function -> value list -> sigma -> frame
-  val call_post  : sigma -> kernel_function -> value list -> sigma sequence -> frame
+  val call : kernel_function -> value list -> call
+  val call_pre   : sigma -> call -> sigma -> frame
+  val call_post  : sigma -> call -> sigma sequence -> frame
 
   val formal : varinfo -> value option
   val return : unit -> typ
@@ -76,17 +79,18 @@ sig
   val env_at : env -> c_label -> env
   val mem_at : env -> c_label -> sigma
   val env_let : env -> logic_var -> logic -> env
+  val env_letp : env -> logic_var -> pred -> env
   val env_letval : env -> logic_var -> value -> env
 
   (** {3 Compiler} *)
 
   val term : env -> Cil_types.term -> term
-  val pred : bool -> env -> predicate named -> pred
-  val logic : env -> Cil_types.term -> logic 
-  val region : env -> Cil_types.term -> M.loc sloc list 
+  val pred : polarity -> env -> predicate -> pred
+  val logic : env -> Cil_types.term -> logic
+  val region : env -> Cil_types.term -> M.loc sloc list
 
   val bootstrap_term : (env -> Cil_types.term -> term) -> unit
-  val bootstrap_pred : (bool -> env -> predicate named -> pred) -> unit
+  val bootstrap_pred : (polarity -> env -> predicate -> pred) -> unit
   val bootstrap_logic : (env -> Cil_types.term -> logic) -> unit
   val bootstrap_region : (env -> Cil_types.term -> M.loc sloc list) -> unit
 
@@ -103,6 +107,7 @@ sig
   (** {3 Logic Variable and ACSL Constants} *)
 
   val logic_var : env -> logic_var -> logic
+  val logic_info : env -> logic_info -> pred option
 
   (** {3 Logic Lemmas} *)
 

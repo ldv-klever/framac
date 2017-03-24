@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -66,6 +66,10 @@ class metricsCabsVisitor = object(self)
   method private record_and_clear metrics =
     let filename = metrics.cfile_name
     and funcname = metrics.cfunc_name in
+    local_metrics := BasicMetrics.set_cyclo !local_metrics
+           (BasicMetrics.compute_cyclo !local_metrics);
+    global_metrics := BasicMetrics.set_cyclo !global_metrics
+           (!global_metrics.ccyclo + !local_metrics.ccyclo);
     (try
        let fun_tbl = Datatype.String.Map.find filename metrics_map in
        self#update_metrics_map filename
@@ -661,6 +665,6 @@ let compute_on_cabs () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

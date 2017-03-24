@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -96,13 +96,6 @@ module String
       include X 
      end)
 
-module EmptyString(X: Input_with_arg) =
-  P.Empty_string
-    (struct
-      let () = Parameter_customize.set_module_name X.module_name 
-      include X 
-     end)
-
 module String_set(X: Input_with_arg) =
   P.String_set
     (struct
@@ -128,26 +121,51 @@ let () = Parameter_customize.set_negative_option_name ""
 module GeneralHelp =
   False
     (struct
-      let option_name = "-help"
+      let option_name = "--help"
       let help = "display a general help"
       let module_name = "GeneralHelp"
      end)
-
 let run_help () = if GeneralHelp.get () then Cmdline.help () else Cmdline.nop
 let () = Cmdline.run_after_exiting_stage run_help
-let () = GeneralHelp.add_aliases [ "--help"; "-h" ]
+let () = GeneralHelp.add_aliases [ "-h"; "-help"]
+
+let () = Parameter_customize.set_group help
+let () = Parameter_customize.set_cmdline_stage Cmdline.Exiting
+let () = Parameter_customize.do_not_journalize ()
+let () = Parameter_customize.set_negative_option_name ""
+module ListPlugins =
+  False
+    (struct
+      let option_name = "--list-plugins"
+      let help = "display a general help"
+      let module_name = "ListPlugins"
+    end)
+let run_list_plugins () =
+  if ListPlugins.get () then Cmdline.list_plugins () else Cmdline.nop
+let () = Cmdline.run_after_exiting_stage run_list_plugins
+let () = ListPlugins.add_aliases ["-plugins"; "--plugins"]
+
+let () = Parameter_customize.set_group help
+let () = Parameter_customize.set_cmdline_stage Cmdline.Early
+let () = Parameter_customize.set_negative_option_name ""
+module PrintConfig =
+  False
+    (struct
+       let option_name = "-print-config"
+       let module_name = "PrintConfig"
+       let help = "print full config information"
+     end)
 
 let () = Parameter_customize.set_group help
 let () = Parameter_customize.set_cmdline_stage Cmdline.Early
 let () = Parameter_customize.set_negative_option_name ""
 module PrintVersion =
-  False
-    (struct
-       let option_name = "-version"
-       let module_name = "PrintVersion"
-       let help = "print version information"
-     end)
-let () = PrintVersion.add_aliases [ "-v"; "--version" ]
+  False(struct
+          let option_name = "-print-version"
+          let module_name = "PrintVersion"
+          let help = "print the Frama-C version"
+        end)
+let () = PrintVersion.add_aliases [ "-v"; "-version" ; "--version" ]
 
 let () = Parameter_customize.set_group help
 let () = Parameter_customize.set_cmdline_stage Cmdline.Early
@@ -193,7 +211,7 @@ module DumpDependencies =
        let arg_name = ""
      end)
 let () =
-  at_exit
+  Extlib.safe_at_exit
     (fun () ->
        if not (DumpDependencies.is_default ()) then
          State_dependency_graph.dump (DumpDependencies.get ()))
@@ -317,6 +335,18 @@ end
 
 let () = Parameter_customize.set_group messages
 let () = Parameter_customize.do_not_projectify ()
+let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
+module TTY =
+  True
+    (struct
+      let option_name = "-tty"
+      let module_name = "TTY"
+      let help = "use terminal capabilities for feedback (when available)"
+    end)
+let () = Log.tty := TTY.get
+
+let () = Parameter_customize.set_group messages
+let () = Parameter_customize.do_not_projectify ()
 module Time =
   P.Empty_string
     (struct
@@ -325,20 +355,31 @@ module Time =
        let help = "append process time and timestamp to <filename> at exit"
      end)
 
-let () = Parameter_customize.set_group messages
+let () = Parameter_customize.is_invisible ()
 let () = Parameter_customize.set_negative_option_name "-do-not-collect-messages"
 let () = Parameter_customize.do_not_projectify ()
-let () = Parameter_customize.set_cmdline_stage Cmdline.Early
-module Collect_messages =
+module Collect_messages = (* TODO: remove in Silicon *)
   Bool
     (struct
       let module_name = "Collect_messages"
       let option_name = "-collect-messages"
       let help = "collect warning and error messages for displaying them in \
-the GUI (set by default iff the GUI is launched)"
+                  the GUI (set by default iff the GUI is launched)"
       let default = !Fc_config.is_gui
-     (* ok: Config.is_gui already initialised by Gui_init *)
-     end)
+      (* ok: Config.is_gui already initialised by Gui_init *)
+    end)
+let () =
+  Collect_messages.add_set_hook
+    (fun _ b ->
+       match b, !Fc_config.is_gui with
+       | true, false ->
+         warning "option -collect-messages is obsolete; messages are always \
+                  collected"
+       | false, true ->
+         error "option -do-not-collect-messages is obsolete and no longer has \
+                an effect"
+       | _ -> ())
+
 
 let () = Parameter_customize.set_group messages
 let () = Parameter_customize.do_not_projectify ()
@@ -424,7 +465,7 @@ module CodeOutput = struct
              file s)
       streams
 
-  let () = at_exit close_all
+  let () = Extlib.safe_at_exit close_all
 
 end
 
@@ -523,52 +564,35 @@ module AddPath =
     (struct
        let option_name = "-add-path"
        let module_name = "AddPath"
-       let arg_name = "p1, ..., pn"
-       let help = "prepend paths to dynamic plugins search path"
+       let arg_name = "DIR,..."
+       let help = "Prepend directories to FRAMAC_PLUGIN for loading dynamic plug-ins"
      end)
-let () =
-  AddPath.add_set_hook
-    (fun _ _ -> AddPath.iter (fun s -> ignore (Dynamic.add_path s)))
 
 let () = Parameter_customize.set_group saveload
 let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
 let () = Parameter_customize.do_not_projectify ()
 module LoadModule =
-  String_set
+  String_list
     (struct
        let option_name = "-load-module"
        let module_name = "LoadModule"
-       let arg_name = "m1, ..., mn"
-       let help = "load the given modules dynamically"
-     end)
-let () =
-  LoadModule.add_set_hook (fun _ _ -> LoadModule.iter Dynamic.load_module)
+       let arg_name = "SPEC,..."
+       let help = "Dynamically load plug-ins, modules and scripts. \
+                   Each <SPEC> can be an OCaml source or object file, with \
+                   or without extension, or a directory of object OCaml \
+                   files to load, or a Findlib package. \
+                   Loading order is preserved and \
+                   additional dependencies can be listed in *.depend files."
+    end)
+let () = LoadModule.add_aliases [ "-load-script" ]
 
-let () = Parameter_customize.set_group saveload
-let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
-let () = Parameter_customize.do_not_projectify ()
-module Dynlink =
-  True
-    (struct
-      let option_name = "-dynlink"
-      let module_name = "Dynlink"
-      let help = "if set, load all the found dynamic plug-ins"
-     end)
-let () = Dynlink.add_set_hook (fun _ -> Dynamic.set_default)
+let bootstrap_loader () =
+  begin
+    Dynamic.load_plugin_path (AddPath.get()) ;
+    List.iter Dynamic.load_module (LoadModule.get()) ;
+  end
 
-let () = Parameter_customize.set_group saveload
-let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
-let () = Parameter_customize.do_not_projectify ()
-module LoadScript =
-  String_set
-    (struct
-      let option_name = "-load-script"
-      let module_name = "LoadScript"
-      let arg_name = "m1, ..., mn"
-      let help = "load the given OCaml scripts dynamically"
-     end)
-let () =
-  LoadScript.add_set_hook (fun _ _ -> LoadScript.iter Dynamic.load_script)
+let () = Cmdline.load_all_plugins := bootstrap_loader
 
 module Journal = struct
   let () = Parameter_customize.set_negative_option_name "-journal-disable"
@@ -656,6 +680,22 @@ module Machdep =
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
+module CustomAnnot =
+  P.Empty_string(
+      struct
+        let option_name = "-custom-annot-char"
+        let help = "use a custom character <c> for starting ACSL annotations"
+        let arg_name = "c"
+      end)
+let () = CustomAnnot.add_set_hook 
+           (fun _ s ->
+            if CamlString.length s <> 1 then
+              abort
+                "-custom-annot expects a single character. Invalid argument %s"
+                s)
+
+let () = Parameter_customize.set_group parsing
+let () = Parameter_customize.do_not_reset_on_copy ()
 module ReadAnnot =
   True(struct
          let module_name = "ReadAnnot"
@@ -683,7 +723,7 @@ module CppCommand =
        let arg_name = "cmd"
        let help = "<cmd> is used to build the preprocessing command.\n\
 Default to $CPP environment variable or else \"gcc -C -E -I.\".\n\
-If unset, the command is built as follow:\n\
+If unset, the command is built as follows:\n\
   CPP -o <preprocessed file> <source file>\n\
 %1 and %2 can be used into CPP string to mark the position of <source file> \
 and <preprocessed file> respectively"
@@ -761,12 +801,16 @@ module Orig_name =
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
-module WarnUndeclared =
-  True(struct
-    let option_name = "-warn-undeclared-callee"
-    let help = "Warn when a function is called before it has been declared."
-    let module_name = "WarnUndeclared"
+module ImplicitFunctionDeclaration =
+  String(struct
+    let option_name = "-implicit-function-declaration"
+    let arg_name = "action"
+    let help = "Warn or abort when a function is called before it has been declared \
+                (non-C99 compliant); action must be ignore, warn, or error"
+    let default = "warn"
+    let module_name = "ImplicitFunctionDeclaration"
   end)
+let () = ImplicitFunctionDeclaration.set_possible_values ["ignore"; "warn"; "error"]
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
@@ -780,6 +824,15 @@ module WarnDecimalFloat =
     let module_name = "WarnDecimalFloat"
   end)
 let () = WarnDecimalFloat.set_possible_values ["none"; "once"; "all"]
+
+let () = Parameter_customize.set_group parsing
+let () = Parameter_customize.do_not_reset_on_copy ()
+module C11 =
+  False(struct
+    let option_name = "-c11"
+    let help = "allow C11 constructs (experimental; partial support only)"
+    let module_name = "C11"
+  end)
 
 (* ************************************************************************* *)
 (** {2 Customizing Normalization} *)
@@ -892,7 +945,28 @@ module AggressiveMerging =
     (struct
        let option_name = "-aggressive-merging"
        let module_name = "AggressiveMerging"
-       let help = "merge function definitions modulo renaming"
+       let help = "merge function definitions modulo renaming \
+                   (defaults to false)"
+     end)
+
+let () = Parameter_customize.set_group normalisation
+module AsmContractsGenerate =
+  True
+    (struct
+        let option_name = "-asm-contracts"
+        let module_name = "AsmContractsGenerate"
+        let help = "generate contracts for assembly code written according \
+                    to gcc's extended syntax"
+     end)
+
+let () = Parameter_customize.set_group normalisation
+module AsmContractsAutoValidate =
+  False
+    (struct
+        let option_name = "-asm-contracts-auto-validate"
+        let module_name = "AsmContractsAutoValidate"
+        let help = "automatically mark contracts generated from asm as valid \
+                    (defaults to false)"
      end)
 
 let () = Parameter_customize.set_group normalisation
@@ -1093,10 +1167,10 @@ destination range"
      end)
 
 (* ************************************************************************* *)
-(** {2 Others options} *)
+(** {2 Sequencing options} *)
 (* ************************************************************************* *)
 
-let misc = add_group "Miscellaneous Options"
+let misc = add_group "Sequencing Options"
 
 let () =
   Cmdline.add_option_without_action
@@ -1122,6 +1196,16 @@ on the last project created by a program transformer."
 
 let () =
   Cmdline.add_option_without_action
+    "-then-replace"
+    ~plugin:""
+    ~group:(misc :> Cmdline.Group.t)
+    ~help:"like `-then-last', but also remove the previous current project."
+    ~visible:true
+    ~ext_help:""
+    ()
+
+let () =
+  Cmdline.add_option_without_action
     "-then-on"
     ~plugin:""
     ~argname:"p"
@@ -1132,9 +1216,80 @@ on project <p>"
     ~ext_help:""
     ()
 
+(* ************************************************************************* *)
+(** {2 Project-related options} *)
+(* ************************************************************************* *)
+
+let misc = add_group "Project-related Options"
+
 let () = Parameter_customize.set_group misc
+let () = Parameter_customize.do_not_projectify ()
+module Set_project_as_default =
+  False(struct
+    let module_name = "Set_project_as_default"
+    let option_name = "-set-project-as-default"
+    let help = "the current project becomes the default one \
+(and so future '-then' sequences are applied on it)"
+  end)
+
+let () = Parameter_customize.set_group misc
+let () = Parameter_customize.do_not_projectify ()
+module Remove_projects =
+  P.Make_set
+    (struct
+      include Project.Datatype
+      let of_singleton_string = P.no_element_of_string
+      let of_string s =
+        try Project.from_unique_name s
+        with Project.Unknown_project ->
+          raise (P.Cannot_build ("no project '" ^ s ^ "'"))
+      let to_string = Project.get_unique_name
+     end)
+    (struct
+      let option_name = "-remove-projects"
+      let arg_name = "p1, ..., pn"
+      let help = "remove the given projects <p1>, ..., <pn>. \
+@all_but_current removes all projects but the current one."
+      let default = Project.Datatype.Set.empty
+      let dependencies = []
+     end)
+
+let _ =
+  Remove_projects.Category.enable_all
+    []
+    (object
+      method fold: 'a. (Project.t -> 'a -> 'a) -> 'a -> 'a =
+        fun f acc -> Project.fold_on_projects (fun acc p -> f p acc) acc
+      method mem _p = true (* impossible to build an unregistred project *)
+     end)
+
+let _ =
+  Remove_projects.Category.add
+    "all_but_current"
+    []
+    (object
+      method fold: 'a. (Project.t -> 'a -> 'a) -> 'a -> 'a =
+        fun f acc ->
+          Project.fold_on_projects
+            (fun acc p -> if Project.is_current p then acc else f p acc)
+            acc
+      method mem p = not (Project.is_current p)
+     end)
+
+let () =
+  Cmdline.run_after_configuring_stage
+    (fun () -> Remove_projects.iter (fun project -> Project.remove ~project ()))
+
+(* ************************************************************************* *)
+(** {2 Others options} *)
+(* ************************************************************************* *)
+
+[@@@warning "-60"]
+(* Warning this three options are parsed and used directly from Cmdline *)
+
 let () = Parameter_customize.set_negative_option_name ""
 let () = Parameter_customize.set_cmdline_stage Cmdline.Early
+let () = Parameter_customize.is_invisible ()
 module NoType =
   Bool
     (struct
@@ -1144,9 +1299,9 @@ module NoType =
        let help = ""
      end)
 
-let () = Parameter_customize.set_group misc
 let () = Parameter_customize.set_negative_option_name ""
 let () = Parameter_customize.set_cmdline_stage Cmdline.Early
+let () = Parameter_customize.is_invisible ()
 module NoObj =
   Bool
     (struct
@@ -1155,6 +1310,20 @@ module NoObj =
        let option_name = "-no-obj"
        let help = ""
      end)
+
+let () = Parameter_customize.set_group misc
+let () = Parameter_customize.set_negative_option_name ""
+let () = Parameter_customize.set_cmdline_stage Cmdline.Early
+module Deterministic =
+  Bool
+    (struct
+       let module_name = "Deterministic"
+       let default = not Cmdline.deterministic
+       let option_name = "-deterministic"
+       let help = ""
+     end)
+
+[@@@warning "+60"]
 
 (* ************************************************************************* *)
 (** {2 Checks} *)
@@ -1193,6 +1362,6 @@ module TypeCheck =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

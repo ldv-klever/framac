@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,7 +42,7 @@ let pretty fmt = function
   | ELSE _ -> Format.fprintf fmt "Else"
   | CASE(_,[]) -> Format.fprintf fmt "Case(s)"
   | CASE(_,[k]) -> Format.fprintf fmt "Case %s" (Int64.to_string k)
-  | CASE(_,k::ks) -> 
+  | CASE(_,k::ks) ->
       Format.fprintf fmt "@[Cases %s" (Int64.to_string k) ;
       List.iter (fun k -> Format.fprintf fmt ",@,%s" (Int64.to_string k)) ks ;
       Format.fprintf fmt "@]"
@@ -52,7 +52,7 @@ let pretty fmt = function
 
 let loc = function
   | THEN s | ELSE s | MARK s | CASE(s,_) | CALL(s,_) | DEFAULT s -> Stmt.loc s
-  | ASSERT(p,_,_) -> p.ip_loc
+  | ASSERT(p,_,_) -> p.ip_content.pred_loc
 
 let compare p q =
   if p == q then 0 else
@@ -66,7 +66,7 @@ let compare p q =
     | ELSE s , ELSE t -> Stmt.compare s t
     | ELSE _ , _ -> (-1)
     | _ , ELSE _ -> 1
-    | CASE(s1,k1) , CASE(s2,k2) -> 
+    | CASE(s1,k1) , CASE(s2,k2) ->
         let c = Stmt.compare s1 s2 in
         if c = 0 then Pervasives.compare k1 k2 else c
     | CASE _ , _ -> (-1)
@@ -79,7 +79,7 @@ let compare p q =
         if c = 0 then Kernel_function.compare f1 f2 else c
     | CALL _ , _ -> (-1)
     | _ , CALL _ -> 1
-    | ASSERT(ip1,k1,_) , ASSERT(ip2,k2,_) -> 
+    | ASSERT(ip1,k1,_) , ASSERT(ip2,k2,_) ->
         let c = Pervasives.compare ip1.ip_id ip2.ip_id in
         if c = 0 then k1 - k2 else c
 
@@ -88,35 +88,35 @@ let compare p q =
 (* -------------------------------------------------------------------------- *)
 
 let rec disjunction p =
-  try unwrap p 
+  try unwrap p
   with Exit -> [p]
 
 and unwrap p =
-  match p.content with
+  match p.pred_content with
   | Por(a,b) -> disjunction a @ disjunction b
-  | Plet(f,a) -> 
-      List.map 
-        (fun q -> { p with content = Plet(f,q) }) 
+  | Plet(f,a) ->
+      List.map
+        (fun q -> { p with pred_content = Plet(f,q) })
         (unwrap a)
   | Pexists(qs,p) ->
       List.map
-        (fun q -> { p with content = Pexists(qs,q) })
+        (fun q -> { p with pred_content = Pexists(qs,q) })
         (unwrap p)
   | Pat(p,l) ->
       List.map
-        (fun q -> { p with content = Pat(q,l) })
+        (fun q -> { p with pred_content = Pat(q,l) })
         (unwrap p)
   | _ -> raise Exit
 
-let predicate ip = 
-  { name = ip.ip_name ; loc = ip.ip_loc ; content = ip.ip_content }
+let predicate ip =
+  ip.ip_content
 
 let rec enumerate ip k n = function
   | [] -> []
   | p::ps -> (ASSERT(ip,k,n),p) :: enumerate ip (succ k) n ps
 
 let cases ip =
-  try 
+  try
     let ps = unwrap (predicate ip) in
     Some (enumerate ip 1 (List.length ps) ps)
   with Exit -> None
@@ -137,9 +137,9 @@ let call stmt kf = CALL(stmt,kf)
 (* -------------------------------------------------------------------------- *)
 
 module Tags = Qed.Listset.Make
-    (struct 
-      type t = tag 
-      let compare = compare 
+    (struct
+      type t = tag
+      let compare = compare
       let equal x y = (compare x y = 0)
     end)
 module M = Qed.Listmap.Make(Tags)
@@ -164,13 +164,13 @@ and collect merge k vs = function
 
 let bytags (k,_) (k',_) = Tags.compare k k'
 
-let group tag merge m = 
+let group tag merge m =
   let compaction = ref false in
-  let m = List.sort bytags 
-      (List.map 
-         (fun (tgs,v) -> 
+  let m = List.sort bytags
+      (List.map
+         (fun (tgs,v) ->
             if not !compaction && Tags.mem tag tgs then compaction := true ;
-            Tags.add tag tgs , v) m) 
+            Tags.add tag tgs , v) m)
   in if !compaction then compact merge m else m
 
 (* let filter phi m = M.filter (fun key _ -> phi key) m *)
@@ -200,10 +200,10 @@ let merge_all merge = function
   | [m1;m2] -> M.union (fun _ u v -> merge [u;v]) m1 m2
   | ms ->
       let t = ref I.empty in
-      List.iter 
-        (List.iter 
-           (fun (k,v) -> 
-              try 
+      List.iter
+        (List.iter
+           (fun (k,v) ->
+              try
                 let r = (I.find k !t) in r := v :: !r
               with Not_found ->
                 t := I.add k (ref [v]) !t))

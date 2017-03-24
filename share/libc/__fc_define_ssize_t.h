@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,7 +22,10 @@
 
 #ifndef __FC_DEFINE_SSIZE_T
 #define __FC_DEFINE_SSIZE_T
+#include "features.h"
 #include "__fc_machdep.h"
+__BEGIN_DECLS
 typedef __SSIZE_T ssize_t;
+__END_DECLS
 #endif
 

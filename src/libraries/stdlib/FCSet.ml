@@ -467,6 +467,6 @@ module Make(Ord: Set.OrderedType) =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

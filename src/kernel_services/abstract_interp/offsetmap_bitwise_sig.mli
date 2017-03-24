@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -64,15 +64,29 @@ val find_iset : validity:Base.validity -> intervals -> t -> v
 (** {2 Adding values} *)
 
 val add_binding_intervals :
-  validity:Base.validity -> exact:bool -> intervals -> v -> t -> [`Map of t | `Bottom]
+  validity:Base.validity ->
+  exact:bool -> intervals -> v -> t -> t Bottom.or_bottom
+
 val add_binding_ival :
   validity:Base.validity ->
-  exact:bool -> Ival.t -> size:Int_Base.t -> v -> t -> [`Map of t | `Bottom]
+  exact:bool -> Ival.t -> size:Int_Base.t -> v -> t -> t Bottom.or_bottom
 
 
 (** {2 Creating an offsetmap} *)
 
+(** [size] must be strictly greater than zero. *)
 val create: size:Integer.t -> v -> t
+
+val empty: t
+(** offsetmap containing no interval. *)
+
+val size_from_validity:
+  Base.validity -> Integer.t Bottom.or_bottom
+(** [size_from_validity v] returns the size to be used when creating a
+    new offsetmap for a base with validity [v]. This is a convention that
+    should be shared by all modules that create offsetmaps.
+    Returns [`Bottom] iff [v] is [Invalid].
+    @since Aluminium-20160501 *)
 
 
 (** {2 Iterators} *)
@@ -84,7 +98,7 @@ type map2_decide =
 (** See the documentation of type {!Offsetmap_sig.map2_decide} *)
 
 val map2:
-  Hptmap.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
+  Hptmap_sig.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
 (** See the documentation of function {!Offsetmap_sig.map2_on_values}. *)
 
 
@@ -96,7 +110,12 @@ val fold_fuse_same: (intervals -> v -> 'a -> 'a) -> t -> 'a -> 'a
     directly on [r1 U r2], where U is the join on sets of intervals. *)
 
 val fold_itv:
-  (Int_Intervals_sig.itv -> v -> 'a -> 'a) -> Int_Intervals_sig.itv -> t -> 'a -> 'a
+  ?direction:[`LTR | `RTL] ->
+  entire:bool ->
+  (Int_Intervals_sig.itv -> v -> 'a -> 'a) ->
+  Int_Intervals_sig.itv ->
+  t -> 'a -> 'a
+(** See documentation of {!Offsetmap_sig.fold_between}. *)
 
 (** [fold_join f join vempty itvs m] is an implementation of [fold] that
     restricts itself to the intervals in [itvs]. Unlike in [fold] (where the
@@ -107,7 +126,7 @@ val fold_itv:
     applied to its first three arguments. If you do not need a cache, use
     [fold] instead. *)
 val fold_join_itvs:
-  cache:Hptmap.cache_type ->
+  cache:Hptmap_sig.cache_type ->
   (Integer.t -> Integer.t -> v -> 'a) ->
   ('a -> 'a -> 'a) ->
   'a ->
@@ -116,14 +135,17 @@ val fold_join_itvs:
 
 (** {2 Shape} *)
 
-(** [is_single_interval ?f o] is true if
-    (1) the offsetmap [o] contains a single binding
-    (2) either [f] is [None], or the bound value [v] verifies [f v]. *)
-val is_single_interval: ?f:(v -> bool) -> t -> bool
+val is_single_interval: t -> bool
+(** [is_single_interval o] is true if the offsetmap [o] contains a single
+    binding. *)
 
 val single_interval_value: t -> v option
 (** [single_interval_value o] returns [Some v] if [o] contains a single
     interval, to which [v] is bound, and [None] otherwise. *)
+
+val is_same_value: t -> v -> bool
+(** [is_same_value o v] is true if the offsetmap [o] contains a single
+    binding to [v], or is the empty offsetmap. *)
 
 
 (** {2 Misc} *)

@@ -70,7 +70,7 @@ and structure =
   | Sum of t array array
   | Dependent_pair of t * (Obj.t -> t)
   | Array of t
-;;
+
 (** Type [t] is used to describe the type of the data to be read and
 the transformations to be applied to the data.
 
@@ -118,13 +118,13 @@ irrelevant.
 new data of the current type is encountered.
 *)
 
-val input_val : in_channel -> t -> 'a;;
+val input_val : in_channel -> t -> 'a
 (** [input_val c t]
     Read a value from the input channel [c], applying the transformations
     described by [t].
 *)
 
-val null : Obj.t;;
+val null : Obj.t
 (** recursive values cannot be completely formed at the time
 they are passed to their transformation function.  When traversing
 a recursive value, the transformation function must check the
@@ -132,30 +132,30 @@ fields for physical equality to [null] (with the function [==])
 and avoid using any field that is equal to [null].
 *)
 
-val id : Obj.t -> Obj.t;;
+val id : Obj.t -> Obj.t
 (** Use this function when you don't want to change the value
 unmarshaled by input_val.  You can also use your own identity
 function, but using this one is more efficient. *)
 
-(** Convenience functions for describing transformations. *)
+(** {2 Convenience functions for describing transformations.} *)
 
-val t_unit : t;;
-val t_int : t;;
-val t_string : t;;
-val t_float : t;;
-val t_bool : t;;
-val t_int32 : t;;
-val t_int64 : t;;
-val t_nativeint : t;;
+val t_unit : t
+val t_int : t
+val t_string : t
+val t_float : t
+val t_bool : t
+val t_int32 : t
+val t_int64 : t
+val t_nativeint : t
 
-val t_record : t array -> t;;
-val t_tuple : t array -> t;;
-val t_list : t -> t;;
-val t_ref : t -> t;;
-val t_option : t -> t;;
-val t_array : t -> t;;
+val t_record : t array -> t
+val t_tuple : t array -> t
+val t_list : t -> t
+val t_ref : t -> t
+val t_option : t -> t
+val t_array : t -> t
 
-val t_queue: t -> t;;
+val t_queue: t -> t
 
 val t_hashtbl_unchangedhashs :t -> t -> t
 val t_hashtbl_changedhashs :
@@ -164,21 +164,21 @@ val t_hashtbl_changedhashs :
 val t_set_unchangedcompares : t -> t
 val t_map_unchangedcompares : t -> t -> t
 
-(** Functions for writing deserializers. *)
+(** {2 Functions for writing deserializers.} *)
 
-val register_custom : string -> (in_channel -> Obj.t) -> unit;;
+val register_custom : string -> (in_channel -> Obj.t) -> unit
 
-val arch_sixtyfour : bool;;
-val arch_bigendian : bool;;
+val arch_sixtyfour : bool
+val arch_bigendian : bool
 
-val getword : in_channel -> Int32.t;;
-val read8s : in_channel -> int;;
-val read16s : in_channel -> int;;
-val read32s : in_channel -> int;;
-val read64s : in_channel -> int;;
-val read8u : in_channel -> int;;
-val read16u : in_channel -> int;;
-val read32u : in_channel -> int;;
-val read64u : in_channel -> int;;
-val readblock : in_channel -> Obj.t -> int -> int -> unit;;
-val readblock_rev : in_channel -> Obj.t -> int -> int -> unit;;
+val getword : in_channel -> Int32.t
+val read8s : in_channel -> int
+val read16s : in_channel -> int
+val read32s : in_channel -> int
+val read64s : in_channel -> int
+val read8u : in_channel -> int
+val read16u : in_channel -> int
+val read32u : in_channel -> int
+val read64u : in_channel -> int
+val readblock : in_channel -> Obj.t -> int -> int -> unit
+val readblock_rev : in_channel -> Obj.t -> int -> int -> unit

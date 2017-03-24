@@ -1,0 +1,48 @@
+# frama-c -wp [...]
+[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
+[kernel] Parsing tests/wp_plugin/subset_fopen.c (with preprocessing)
+[wp] Running WP plugin...
+[wp] Loading driver 'share/wp.driver'
+[wp] warning: Missing RTE guards
+------------------------------------------------------------
+  Function f
+------------------------------------------------------------
+
+Goal Assertion 'Ok_A' (file tests/wp_plugin/subset_fopen.c, line 17):
+Assume { Type: is_sint32(i). (* Heap *) Have: linked(Malloc_0). }
+Prove: (0 <= i) /\ (i <= 9).
+
+------------------------------------------------------------
+
+Goal Assertion 'Ok_B' (file tests/wp_plugin/subset_fopen.c, line 18):
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Assertion 'Ok_C' (file tests/wp_plugin/subset_fopen.c, line 19):
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Assertion 'Ok_D' (file tests/wp_plugin/subset_fopen.c, line 22):
+Prove: true.
+
+------------------------------------------------------------
+
+Goal Assertion 'Ok_E' (file tests/wp_plugin/subset_fopen.c, line 26):
+Assume {
+  Type: is_sint32(i).
+  (* Goal *)
+  When: p != null.
+  (* Heap *)
+  Have: linked(Malloc_0).
+  (* Assertion 'Ok_A' *)
+  Have: (0 <= i) /\ (i <= 9).
+  (* Call 'fopen' *)
+  Have: included(p, 2,
+          shift___fc_FILE(shift_A512___fc_FILE(global(G___fc_fopen_68), 0),
+            0), 1024).
+}
+Prove: valid_rw(Malloc_0, p, 2).
+
+------------------------------------------------------------

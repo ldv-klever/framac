@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -77,15 +77,15 @@ struct
   (* ---  Term Set,Map and Vars                                           --- *)
   (* ------------------------------------------------------------------------ *)
 
-  module E = 
-  struct 
-    type t = term 
-    let id t = t.id 
+  module E =
+  struct
+    type t = term
+    let id t = t.id
     let hash t = t.hash
     let equal = (==)
   end
-  module Tset   = Idxset.Make(E)
-  module Tmap   = Idxmap.Make(E)
+  module Tset = Idxset.Make(E)
+  module Tmap = Idxmap.Make(E)
 
   (* ------------------------------------------------------------------------ *)
   (* ---  Parameters                                                      --- *)
@@ -123,8 +123,8 @@ struct
   let add_term pool t = Vars.iter (POOL.add pool) t.vars
 
   let fresh pool ?basename tau =
-    let base = match basename with 
-      | Some base -> base | None -> Tau.basename tau 
+    let base = match basename with
+      | Some base -> base | None -> Tau.basename tau
     in POOL.fresh pool base tau
 
   let alpha pool x = POOL.alpha pool x
@@ -151,13 +151,13 @@ struct
     | Kreal x -> R.hash x
     | Times(n,t) -> Z.hash n * t.hash
     | Add xs | Mul xs | And xs | Or xs -> hash_list hash 0 xs
-    | Div(x,y) | Mod(x,y) | Eq(x,y) | Neq(x,y) | Leq(x,y) | Lt(x,y) 
+    | Div(x,y) | Mod(x,y) | Eq(x,y) | Neq(x,y) | Leq(x,y) | Lt(x,y)
     | Aget(x,y) -> hash_pair x.hash y.hash
     | Not e -> succ e.hash
     | Imply(hs,p) -> hash_list hash p.hash hs
     | If(e,a,b) | Aset(e,a,b) -> hash_triple e.hash a.hash b.hash
     | Fun(f,xs) -> hash_list hash (Fun.hash f) xs
-    | Rdef fxs -> 
+    | Rdef fxs ->
         hash_list (fun (f,x) -> hash_pair (Field.hash f) x.hash) 0 fxs
     | Rget(e,f) -> hash_pair e.hash (Field.hash f)
     | Fvar x -> Var.hash x
@@ -214,11 +214,11 @@ struct
     | Eq(x,y) , Eq(x',y')
     | Neq(x,y) , Neq(x',y')
     | Leq(x,y) , Leq(x',y')
-    | Lt(x,y) , Lt(x',y') 
+    | Lt(x,y) , Lt(x',y')
     | Aget(x,y) , Aget(x',y') -> x==x' && y==y'
     | Not a , Not b -> a==b
     | Imply(hs,p) , Imply(hs',q) -> p==q && eq_list hs hs'
-    | If(e,a,b) , If(e',a',b') 
+    | If(e,a,b) , If(e',a',b')
     | Aset(e,a,b) , Aset(e',a',b') -> e==e' && a==a' && b==b'
     | Fun(f,xs) , Fun(g,ys) -> Fun.equal f g && eq_list xs ys
     | Fvar x , Fvar y -> Var.equal x y
@@ -228,7 +228,7 @@ struct
     | Rget(x,f) , Rget(x',g) -> x==x' && Field.equal f g
     | Rdef fxs , Rdef gys ->
         equal_list (fun (f,x) (g,y) -> x==y && Field.equal f g) fxs gys
-    | _ -> 
+    | _ ->
         assert (hash_head a <> hash_head b) ; false
 
   let sort x = x.sort
@@ -281,13 +281,16 @@ struct
     | Rdef _ -> Sdata
     | Div(x,y) | Mod(x,y) -> Kind.merge x.sort y.sort
     | Leq _ | Lt _ -> Sbool
-    | Eq(x,y) | Neq(x,y) -> Kind.merge x.sort y.sort
     | Apply(x,_) -> x.sort
     | If(_,a,b) -> Kind.merge a.sort b.sort
     | Fvar x -> Kind.of_tau x.vtau
     | Bvar(_,t) -> Kind.of_tau t
     | Bind((Forall|Exists),_,_) -> Sprop
     | Bind(Lambda,_,e) -> e.sort
+    | Eq(a,b) | Neq(a,b) ->
+        match a.sort , b.sort with
+        | Sprop , _ | _ , Sprop -> Sprop
+        | _ -> Sbool
 
   let rec size_list n w = function
     | [] -> n+w
@@ -316,10 +319,58 @@ struct
     | Bind(_,_,p) -> 3 + p.size
 
   (* -------------------------------------------------------------------------- *)
+  (* --- Symbols                                                            --- *)
+  (* -------------------------------------------------------------------------- *)
+
+  type t = term
+  let equal = (==)
+
+  let is_atomic e =
+    match e.repr with
+    | True | False | Kint _ | Kreal _ | Fvar _ | Bvar _ -> true
+    | _ -> false
+
+  let is_simple e =
+    match e.repr with
+    | True | False | Kint _ | Kreal _ | Fvar _ | Bvar _ | Fun(_,[]) -> true
+    | _ -> false
+
+  let is_closed e = Vars.is_empty e.vars
+
+  let is_prop e = match e.sort with
+    | Sprop | Sbool -> true
+    | _ -> false
+
+  let is_int e = match e.sort with
+    | Sint -> true
+    | _ -> false
+
+  let is_real e = match e.sort with
+    | Sreal -> true
+    | _ -> false
+
+  let is_arith e = match e.sort with
+    | Sreal | Sint -> true
+    | _ -> false
+
+  (* -------------------------------------------------------------------------- *)
+  (* --- Recursion Breakers                                                 --- *)
+  (* -------------------------------------------------------------------------- *)
+
+  let cached_not = ref (fun _ -> assert false)
+  let extern_not = ref (fun _ -> assert false)
+  let extern_ite = ref (fun _ -> assert false)
+  let extern_eq = ref (fun _ -> assert false)
+  let extern_neq = ref (fun _ -> assert false)
+  let extern_leq = ref (fun _ -> assert false)
+  let extern_lt = ref (fun _ -> assert false)
+  let extern_fun = ref (fun _ -> assert false)
+
+  (* -------------------------------------------------------------------------- *)
   (* --- Comparison                                                         --- *)
   (* -------------------------------------------------------------------------- *)
 
-  module COMPARE = 
+  module COMPARE =
   struct
 
     let cmp_size a b = Pervasives.compare a.size b.size
@@ -361,45 +412,60 @@ struct
       | Lt(a1,b1) , Lt(a2,b2)
       | Leq(a1,b1) , Leq(a2,b2)
       | Div(a1,b1) , Div(a2,b2)
-      | Mod(a1,b1) , Mod(a2,b2) -> 
+      | Mod(a1,b1) , Mod(a2,b2) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           let cmp = phi a1 a2 in
           if cmp <> 0 then cmp else phi b1 b2
-      | Eq _ , _ -> (-1)
+      | Fun(f,xs) , Fun(g,ys) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
+          let cmp = Fun.compare f g in
+          if cmp <> 0 then cmp else
+            Hcons.compare_list phi xs ys
+      | Fun (_,[]) , _ -> (-1)  (* (a) as a variable *)
+      | _ , Fun (_,[]) -> 1
+      | Eq _ , _ -> (-1)        (* (b) equality *)
       |  _ , Eq _ -> 1
-      | Neq _ , _ -> (-1)
+      | Neq _ , _ -> (-1)       (* (c) other comparison *)
       |  _ , Neq _ -> 1
       | Lt _ , _ -> (-1)
       |  _ , Lt _ -> 1
       | Leq _ , _ -> (-1)
       |  _ , Leq _ -> 1
-
-      | Fun(f,xs) , Fun(g,ys) ->
-          let cmp = Fun.compare f g in
-          if cmp <> 0 then cmp else 
-            Hcons.compare_list phi xs ys
-      | Fun _ , _ -> (-1)
+      | Fun _ , _ -> (-1)       (* (d) predicate *)
       | _ , Fun _ -> 1
 
-      | Times(a,x) , Times(b,y) -> 
-          let cmp = Z.compare a b in
+      | Times(a1,x) , Times(a2,y) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
+          let cmp = Z.compare a1 a2 in
           if cmp <> 0 then cmp else phi x y
       | Times _ , _ -> (-1)
       | _ , Times _ -> 1
 
-      | Not x , Not y -> phi x y
+      | Not x , Not y ->           
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
+            phi x y
       | Not _ , _ -> (-1)
       |  _ , Not _ -> 1
 
       | Imply(h1,p1) , Imply(h2,p2) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           Hcons.compare_list phi (p1::h1) (p2::h2)
       | Imply _ , _ -> (-1)
       |  _ , Imply _ -> 1
 
-      | Add xs , Add ys 
-      | Mul xs , Mul ys 
-      | And xs , And ys 
-      | Or xs , Or ys -> Hcons.compare_list phi xs ys
-
+      | Add xs , Add ys
+      | Mul xs , Mul ys
+      | And xs , And ys
+      | Or xs , Or ys ->           
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
+            Hcons.compare_list phi xs ys
+              
       | Add _ , _ -> (-1)
       | _ , Add _ -> 1
       | Mul _ , _ -> (-1)
@@ -414,6 +480,8 @@ struct
       |  _ , Mod _ -> 1
 
       | If(a1,b1,c1) , If(a2,b2,c2) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           let cmp = phi a1 a2 in
           if cmp <> 0 then cmp else
             let cmp = phi b1 b2 in
@@ -422,12 +490,16 @@ struct
       |  _ , If _ -> 1
 
       | Aget(a1,b1) , Aget(a2,b2) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           let cmp = phi a1 a2 in
           if cmp <> 0 then cmp else phi b1 b2
       | Aget _ , _ -> (-1)
       |  _ , Aget _ -> 1
 
       | Aset(a1,k1,v1) , Aset(a2,k2,v2) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           let cmp = phi a1 a2 in
           if cmp <> 0 then cmp else
             let cmp = phi k1 k2 in
@@ -436,38 +508,64 @@ struct
       |  _ , Aset _ -> 1
 
       | Rget(r1,f1) , Rget(r2,f2) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           let cmp = phi r1 r2 in
           if cmp <> 0 then cmp else Field.compare f1 f2
       | Rget _ , _ -> (-1)
       |  _ , Rget _ -> 1
 
       | Rdef fxs , Rdef gys ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           Hcons.compare_list (cmp_field phi) fxs gys
       | Rdef _ , _ -> (-1)
       |  _ , Rdef _ -> 1
 
       | Apply(a,xs) , Apply(b,ys) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           Hcons.compare_list phi (a::xs) (b::ys)
       | Apply _ , _ -> (-1)
       | _ , Apply _ -> 1
 
       | Bind(q1,t1,p1) , Bind(q2,t2,p2) ->
+          let cmp = cmp_size a b in
+          if cmp <> 0 then cmp else
           let cmp = cmp_bind q1 q2 in
           if cmp <> 0 then cmp else
             let cmp = phi p1 p2 in
-            if cmp <> 0 then cmp else 
+            if cmp <> 0 then cmp else
               Tau.compare t1 t2
 
     let rec compare a b =
       if a == b then 0 else
-        let cmp = cmp_size a b in
-        if cmp <> 0 then cmp else 
-          cmp_struct compare a b
+        cmp_struct compare a b
 
   end
 
   let weigth e = e.size
-  let compare = COMPARE.compare
+  let atom_min a b = if 0 < COMPARE.compare a b then b else a
+
+  let compare a b =
+    if a == b then 0
+    else
+      let a' = if is_prop a then !extern_not a else a in
+      let b' = if is_prop b then !extern_not b else b in
+      if a == b' || a' == b
+      then COMPARE.compare a b
+      else COMPARE.compare (atom_min a a') (atom_min b b')
+
+  exception Absorbant
+
+  let compare_raising_absorbant a b =
+    if a == b then 0
+    else
+      let a' = if is_prop a then (let na = !extern_not a in if na == b then raise Absorbant; na) else a in
+      let b' = if is_prop b then (let nb = !extern_not b in if nb == a then raise Absorbant; nb) else b in
+      if a == b' || a' == b
+      then COMPARE.compare a b
+      else COMPARE.compare (atom_min a a') (atom_min b b')
 
   (* -------------------------------------------------------------------------- *)
   (* ---  Hconsed                                                           --- *)
@@ -492,7 +590,7 @@ struct
 
   type cmp = EQ | NEQ | LT | LEQ
 
-  type operation = 
+  type operation =
     | NOT of term (* Only AND, OR and IMPLY *)
     | CMP of cmp * term * term
     | FUN of Fun.t * term list
@@ -500,7 +598,7 @@ struct
   module C = Cache.Unary
       (struct
         type t = operation
-        let hash_op = function 
+        let hash_op = function
           | EQ -> 2 | NEQ -> 3 | LT -> 5 | LEQ -> 7
         let hash = function
           | NOT p -> 5 * p.hash
@@ -540,24 +638,33 @@ struct
   let state = ref (empty ())
   let get_state () = !state
   let set_state st = state := st
-  let clr_state st = 
-    begin
-      C.clear st.cache ;
-      st.checks <- Tmap.empty ;
-    end
-  let release () = clr_state !state
+  let release () =
+      C.clear !state.cache ;
+      !state.checks <- Tmap.empty
 
   let clock = ref true
   let constants = ref Tset.empty
   let constant c = assert !clock ; constants := Tset.add c !constants ; c
 
-  let create () = 
+  let create () =
     begin
       clock := false ;
       let s = empty () in
       let add s c = W.add s.weak c ; s.kid <- max s.kid (succ c.id) in
       Tset.iter (add s) !constants ; s
     end
+
+  let clr_state st =
+    st.kid <- 0 ;
+    W.clear st.weak;
+    C.clear st.cache;
+    st.checks <- Tmap.empty;
+    st.builtins_fun <- BUILTIN.empty ;
+    st.builtins_eq  <- BUILTIN.empty ;
+    st.builtins_leq <- BUILTIN.empty ;
+    let add s c = W.add s.weak c ; s.kid <- max s.kid (succ c.id) in
+    Tset.iter (add st) !constants
+
 
   (* -------------------------------------------------------------------------- *)
   (* --- Hconsed insertion                                                  --- *)
@@ -588,7 +695,7 @@ struct
         bind = bind_repr r ;
         sort = sort_repr r ;
         size = size_repr r ;
-      } 
+      }
       in W.add !state.weak e ; e
 
   (* -------------------------------------------------------------------------- *)
@@ -599,20 +706,20 @@ struct
     let y = insert r in
     if x != y then
       begin
-        let s = 
+        let s =
           try Tmap.find x !state.checks
           with Not_found -> Tset.empty in
         !state.checks <- Tmap.add x (Tset.add y s) !state.checks
       end ;
     x
 
-  let check_unit ~qed ~raw = 
+  let check_unit ~qed ~raw =
     let p = insert (Eq(qed,raw)) in p
-  (* TODO:VAR: Vars.fold (fun x p -> insert (Bind(Forall,x,p))) p.vars p *) 
+  (* TODO:VAR: Vars.fold (fun x p -> insert (Bind(Forall,x,p))) p.vars p *)
 
-  let iter_checks f = 
-    Tmap.iter 
-      (fun qed s -> Tset.iter (fun raw -> f ~qed ~raw) s) 
+  let iter_checks f =
+    Tmap.iter
+      (fun qed s -> Tset.iter (fun raw -> f ~qed ~raw) s)
       !state.checks
 
   (* -------------------------------------------------------------------------- *)
@@ -660,14 +767,16 @@ struct
   let c_and = function
     | [] -> e_true
     | [x] -> x
-    | xs -> insert(And(List.sort compare xs))
+    | xs -> insert(And(xs))
 
   let c_or = function
     | [] -> e_false
     | [x] -> x
-    | xs -> insert(Or(List.sort compare xs))
+    | xs -> insert(Or(xs))
 
-  let c_imply hs p = insert(Imply(List.sort compare hs,p))
+  let c_imply hs p = match hs with
+    | [] -> p
+    | hs -> insert(Imply(hs,p))
 
   let c_not x = insert(Not x)
 
@@ -675,7 +784,7 @@ struct
 
   let c_apply a es = if es=[] then a else insert(Apply(a,es))
 
-  let c_bind q t e = 
+  let c_bind q t e =
     if Bvars.closed e.bind then e else
       insert(Bind(q,t,e))
 
@@ -690,7 +799,7 @@ struct
     | [] | [_] -> insert(Rdef fxs)
     | fx::gys ->
         try
-          let base (f,v) = 
+          let base (f,v) =
             match v.repr with
             | Rget(r,g) when Field.equal f g -> r
             | _ -> raise Exit
@@ -728,7 +837,7 @@ struct
   (* --- Cache & Builtin Simplifiers                                        --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let builtin_fun f es = 
+  let builtin_fun f es =
     try (BUILTIN.find f !state.builtins_fun) es
     with Not_found -> c_fun f es
 
@@ -753,23 +862,14 @@ struct
     | _ -> (match b.repr with | Fun(g,_) -> simplify g b a | _ -> raise Not_found)
 
 
-  let cached_not = ref (fun _ -> assert false)
-  let extern_not = ref (fun _ -> assert false)
-  let extern_ite = ref (fun _ -> assert false)
-  let extern_eq = ref (fun _ -> assert false)
-  let extern_neq = ref (fun _ -> assert false)
-  let extern_leq = ref (fun _ -> assert false)
-  let extern_lt = ref (fun _ -> assert false)
-  let extern_fun = ref (fun _ -> assert false)
-
   let builtin_cmp cmp a b =
-    try 
+    try
       match cmp with
       | EQ -> builtin_eq a b
       | LEQ -> builtin_leq a b
       | NEQ -> !extern_not (builtin_eq a b)
       | LT  -> !extern_not (builtin_leq b a)
-    with Not_found -> 
+    with Not_found ->
       match cmp with
       | EQ  -> c_eq a b
       | NEQ -> c_neq a b
@@ -782,16 +882,14 @@ struct
     | FUN(f,es) -> builtin_fun f es
   let operation op = C.compute !state.cache dispatch op
 
-  let distribute_if_over_operation op x y f a b =
+  let distribute_if_over_operation force op x y f a b =
     match a.repr, b.repr with
-    | _, _ when true (* [PB] true: until alt-ergo 0.95.2 trouble *)
-      -> op x y
-    | If(ac,a1,a2), _ when (is_primitive a1 || is_primitive a2) && is_primitive b
-      -> !extern_ite ac (f a1 b) (f a2 b)
-    | _, If(bc,b1,b2) when (is_primitive b1 || is_primitive b2) && is_primitive a
-      -> !extern_ite bc (f a b1) (f a b2)
     | If(ac,a1,a2), If(bc,b1,b2) when ac == bc
       -> !extern_ite ac (f a1 b1) (f a2 b2)
+    | If(ac,a1,a2), _ when force || ((is_primitive a1 || is_primitive a2) && is_primitive b)
+      -> !extern_ite ac (f a1 b) (f a2 b)
+    | _, If(bc,b1,b2) when force || ((is_primitive b1 || is_primitive b2) && is_primitive a)
+      -> !extern_ite bc (f a b1) (f a b2)
     | If(ac,a1,a2), If(_,b1,b2) when (is_primitive a1 && is_primitive a2) && (is_primitive b1 || is_primitive b2)
       -> !extern_ite ac (f a1 b) (f a2 b)
     | If(_,a1,a2), If(bc,b1,b2) when (is_primitive a1 || is_primitive a2) && (is_primitive b1 && is_primitive b2)
@@ -802,33 +900,33 @@ struct
     | x::[] as xs -> (match x.repr with
         | If(c,a,b) ->  !extern_ite c (!extern_fun f [a]) (!extern_fun f [b])
         | _ -> operation (FUN(f,xs)))
-    | a::b::[] as xs ->   distribute_if_over_operation (fun f xs -> operation (FUN(f,xs))) f xs (fun a b -> !extern_fun f [a;b]) a b
+    | a::b::[] as xs ->   distribute_if_over_operation false (fun f xs -> operation (FUN(f,xs))) f xs (fun a b -> !extern_fun f [a;b]) a b
     | xs -> operation (FUN(f,xs))
-  let c_builtin_eq  a b = distribute_if_over_operation (fun a b -> operation (CMP(EQ ,a,b))) a b !extern_eq  a b
-  let c_builtin_neq a b = distribute_if_over_operation (fun a b -> operation (CMP(NEQ,a,b))) a b !extern_neq a b
-  let c_builtin_lt  a b = distribute_if_over_operation (fun a b -> operation (CMP(LT ,a,b))) a b !extern_lt  a b
-  let c_builtin_leq a b = distribute_if_over_operation (fun a b -> operation (CMP(LEQ,a,b))) a b !extern_leq a b
+  let c_builtin_eq  a b = distribute_if_over_operation true (fun a b -> operation (CMP(EQ ,a,b))) a b !extern_eq  a b
+  let c_builtin_neq a b = distribute_if_over_operation true (fun a b -> operation (CMP(NEQ,a,b))) a b !extern_neq a b
+  let c_builtin_lt  a b = distribute_if_over_operation true (fun a b -> operation (CMP(LT ,a,b))) a b !extern_lt  a b
+  let c_builtin_leq a b = distribute_if_over_operation true (fun a b -> operation (CMP(LEQ,a,b))) a b !extern_leq a b
 
-  let prepare_builtin f m = 
+  let prepare_builtin f m =
     release () ;
     if BUILTIN.mem f m then
-      let msg = Printf.sprintf 
+      let msg = Printf.sprintf
           "Builtin already registered for '%s'" (Fun.debug f) in
       raise (Failure msg)
 
-  let set_builtin f p = 
+  let set_builtin f p =
     begin
-      prepare_builtin f !state.builtins_fun ; 
+      prepare_builtin f !state.builtins_fun ;
       !state.builtins_fun <- BUILTIN.add f p !state.builtins_fun ;
     end
 
-  let set_builtin_eq f p = 
+  let set_builtin_eq f p =
     begin
-      prepare_builtin f !state.builtins_eq ; 
+      prepare_builtin f !state.builtins_eq ;
       !state.builtins_eq <- BUILTIN.add f p !state.builtins_eq ;
     end
 
-  let set_builtin_leq f p = 
+  let set_builtin_leq f p =
     begin
       prepare_builtin f !state.builtins_leq ;
       !state.builtins_leq <- BUILTIN.add f p !state.builtins_leq ;
@@ -842,8 +940,8 @@ struct
     match p.repr with
     | True -> e_false
     | False -> e_true
-    | Lt(x,y) -> c_leq y x
-    | Leq(x,y) -> c_lt y x
+    | Lt(x,y) -> !extern_leq y x
+    | Leq(x,y) -> !extern_lt y x
     | Eq(x,y) -> c_neq x y
     | Neq(x,y) -> c_eq x y
     | Not x -> x
@@ -860,8 +958,8 @@ struct
     | [] -> xs
     | e::es ->
         match e.repr with
-        | Fun(f,ts) when Fun.equal f phi -> 
-            op_revassoc phi (op_revassoc f xs ts) es 
+        | Fun(f,ts) when Fun.equal f phi ->
+            op_revassoc phi (op_revassoc f xs ts) es
         | _ -> op_revassoc phi (e::xs) es
 
   let rec op_idempotent = function
@@ -872,10 +970,10 @@ struct
   let op_inversible xs ys =
     let rec simpl modified turn xs ys = match xs , ys with
       | x::xs , y::ys when x==y -> simpl true turn xs ys
-      | _ -> 
+      | _ ->
           let xs = List.rev xs in
           let ys = List.rev ys in
-          if turn 
+          if turn
           then simpl modified false xs ys
           else modified,xs,ys
     in simpl false true xs ys
@@ -910,21 +1008,21 @@ struct
     let xs =
       if op.associative then
         let xs = op_revassoc f [] xs in
-        if op.commutative 
-        then List.sort compare xs 
+        if op.commutative
+        then List.sort compare xs
         else List.rev xs
       else
       if op.commutative
       then List.sort compare xs
       else xs
     in
-    if op.absorbant <> E_none && 
-       List.exists (is_element op.absorbant) xs 
+    if op.absorbant <> E_none &&
+       List.exists (is_element op.absorbant) xs
     then element op.absorbant
     else
-      let xs = 
-        if op.neutral <> E_none 
-        then List.filter (isnot_element op.neutral) xs 
+      let xs =
+        if op.neutral <> E_none
+        then List.filter (isnot_element op.neutral) xs
         else xs in
       let xs = if op.idempotent then op_idempotent xs else xs in
       match xs with
@@ -938,43 +1036,8 @@ struct
     | _ -> c_builtin_fun f xs
 
   let e_funraw = c_fun
-  let e_fun = e_fungen 
+  let e_fun = e_fungen
   let () = extern_fun := e_fun
-
-  (* -------------------------------------------------------------------------- *)
-  (* --- Symbols                                                            --- *)
-  (* -------------------------------------------------------------------------- *)
-
-  type t = term
-  let equal = (==)
-
-  let is_atomic e =
-    match e.repr with
-    | True | False | Kint _ | Kreal _ | Fvar _ | Bvar _ -> true
-    | _ -> false
-
-  let is_simple e =
-    match e.repr with
-    | True | False | Kint _ | Kreal _ | Fvar _ | Bvar _ | Fun(_,[]) -> true
-    | _ -> false
-
-  let is_closed e = Vars.is_empty e.vars
-
-  let is_prop e = match e.sort with
-    | Sprop | Sbool -> true
-    | _ -> false
-
-  let is_int e = match e.sort with
-    | Sint -> true
-    | _ -> false
-
-  let is_real e = match e.sort with
-    | Sreal -> true
-    | _ -> false
-
-  let is_arith e = match e.sort with
-    | Sreal | Sint -> true
-    | _ -> false
 
   (* -------------------------------------------------------------------------- *)
   (* --- Ground & Arithmetics                                               --- *)
@@ -986,17 +1049,17 @@ struct
     | _ -> c x y
 
   type sign = Null | Negative | Positive
-  let sign z = 
+  let sign z =
     if Z.lt z Z.zero then Negative else
     if Z.lt Z.zero z then Positive else
       Null
 
-  let affine_rel fc fe c xs ys = 
+  let affine_rel fc fe c xs ys =
     match xs , ys with
     | [] , [] -> if fc c Z.zero then e_true else e_false
     | [] , _ -> fe (e_zint c) (c_add ys) (* c+0 R ys <-> c R ys *)
     | _ , [] -> fe (c_add xs) (e_zint (Z.neg c)) (* c+xs R 0 <-> xs R -c *)
-    | _ -> 
+    | _ ->
         match sign c with
         | Null -> fe (c_add xs) (c_add ys)
         (* 0+xs R ys <-> xs R ys *)
@@ -1014,8 +1077,8 @@ struct
     else affine_rel Z.leq c_builtin_leq c xs ys
 
   let affine_lt c xs ys =
-    if not (Z.equal c Z.zero) && List.for_all is_int xs && List.for_all is_int ys 
-    then affine_rel Z.leq c_builtin_leq (Z.succ c) xs ys 
+    if not (Z.equal c Z.zero) && List.for_all is_int xs && List.for_all is_int ys
+    then affine_rel Z.leq c_builtin_leq (Z.succ c) xs ys
     else affine_rel Z.lt c_builtin_lt c xs ys
 
   let rec ground f c xs = function
@@ -1066,7 +1129,7 @@ struct
         fold_affine f (f a k t) kts
     | [] -> a
 
-  let affine a = 
+  let affine a =
     let kts = unfold_affine1 [] Z.one a in
     let fact,const = List.partition (fun (_,base) -> base.id = e_one.id) kts in
     let base = List.fold_left (fun z (k,_) -> Z.add z k) Z.zero const in
@@ -1088,7 +1151,7 @@ struct
   let rec partition_monoms phi c xs ys = function
     | [] -> phi c xs ys
     | (k,t) :: kts ->
-        if t == e_one 
+        if t == e_one
         then partition_monoms phi (Z.add k c) xs ys kts
         else
         if Z.leq Z.zero k
@@ -1123,21 +1186,41 @@ struct
 
   (* --- Divisions --- *)
 
-  let e_div a b = match b.repr with
-    | Kint z when Z.equal z Z.one -> a
+  let e_times k x =
+    if Z.equal k Z.zero then e_zero else
+    if Z.equal k Z.one then x else
+      times k x
+
+  let e_div a b =
+    match a.repr , b.repr with
+    | _ , Kint z when Z.equal z Z.one -> a
+    | _ , Kint z when Z.equal z Z.minus_one -> times Z.minus_one a
+    | Times(k,e) , Kint k' when not (Z.equal k' Z.zero) ->
+        let q,r = Z.div_rem k k' in
+        if Z.equal r Z.zero
+        then e_times q e
+        else c_div a b
+    | Kint k , Kint k' when not (Z.equal k' Z.zero) -> e_zint (Z.div k k')
     | _ -> c_div a b
 
-  let e_mod a b = match b.repr with
-    | Kint z when Z.equal z Z.one -> a
+  let e_mod a b =
+    match a.repr , b.repr with
+    | _ , Kint z when Z.equal z Z.one -> e_zero
+    | Times(k,e) , Kint k' when not (Z.equal k' Z.zero) ->
+        let r = Z.rem k k' in
+        if Z.equal r Z.zero
+        then e_zero
+        else c_mod (e_times r e) b
+    | Kint k , Kint k' when not (Z.equal k' Z.zero) -> e_zint (Z.rem k k')
     | _ -> c_mod a b
 
   (* --- Comparisons --- *)
 
-  let e_lt x y = 
-    if x==y then e_false else relation c_builtin_lt affine_lt x y 
+  let e_lt x y =
+    if x==y then e_false else relation c_builtin_lt affine_lt x y
   let () = extern_lt := e_lt
 
-  let e_leq x y = 
+  let e_leq x y =
     if x==y then e_true else relation c_builtin_leq affine_leq x y
   let () = extern_leq := e_leq
 
@@ -1157,8 +1240,6 @@ struct
     | False -> Logic.Yes
     | _ -> Logic.Maybe
 
-  exception Absorbant
-
   let rec fold_and acc xs =
     match xs with
     | [] -> acc
@@ -1167,7 +1248,7 @@ struct
         | False  -> raise Absorbant
         | True   -> fold_and acc others
         | And xs -> fold_and (fold_and acc xs) others
-        | _      -> fold_and ((x,e_not x)::acc) others
+        | _      -> fold_and (x::acc) others
 
   let rec fold_or acc xs =
     match xs with
@@ -1177,56 +1258,146 @@ struct
         | True  -> raise Absorbant
         | False -> fold_or acc others
         | Or xs -> fold_or (fold_or acc xs) others
-        | _     -> fold_or ((x,e_not x)::acc) others
+        | _     -> fold_or (x::acc) others
 
-  (* an atom is (t,not t) *)
-
-  let atom_eq a b = fst a == fst b
-  let atom_opp a b = fst a == snd b || snd a == fst a
-
-  let compare_atom (x1,nx1) (x2,nx2) =
-    Pervasives.compare (min x1.id nx1.id) (min x2.id nx2.id)
-
-  let rec fact_atom acc ms =
-    match acc , ms with
-    | a::_ , b::qs when atom_eq a b -> fact_atom acc qs
-    | a::_ , b::_ when atom_opp a b -> raise Absorbant
-    | _ , b::qs -> fact_atom (b::acc) qs
-    | _ , [] -> acc
+  let rec check_conjugate = function
+    | []  -> ()
+    | a::b::_ when a == e_not b -> raise Absorbant
+    | _::qs  -> check_conjugate qs
 
   let conjunction ts =
     try
       let ms = fold_and [] ts in
-      let ms = fact_atom [] (List.sort compare_atom ms) in
-      c_and (List.map fst ms)
+      let ms = List.sort_uniq compare_raising_absorbant ms in
+      c_and ms
     with Absorbant -> e_false
 
   let disjunction ts =
     try
       let ms = fold_or [] ts in
-      let ms = fact_atom [] (List.sort compare_atom ms) in
-      c_or (List.map fst ms)
+      let ms = List.sort_uniq compare_raising_absorbant ms in
+      c_or ms
     with Absorbant -> e_true
 
-  let rec implication a b =
-    match a.repr , b.repr with
-    | True , _ -> b
-    | False , _ -> e_true
-    | _ , True -> e_true
-    | _ , False -> e_not a
-    | Not p , Not q -> implication q p
-    | And ts , _ ->
-        if List.memq b ts then e_true else
-          let c = e_not b in
-          begin
-            match List.filter (fun t -> t != c) ts with
-            | [] -> b
-            | ts -> c_imply ts b
+  module Consequence =
+  struct
+    type p = CONJ | DISJ
+    type t = { mutable modif : bool ; polarity : p }
+
+    let mark w = w.modif <- true ; w
+    
+    let rec gen w hs ts =
+      match hs with
+      | [] -> ts
+      | h :: hws ->
+          match w.polarity with
+          | CONJ -> aux w ~absorb:(e_not h) ~filter:h hws ts
+          | DISJ -> aux w ~absorb:h ~filter:(e_not h) hws ts
+
+    and aux w ~absorb ~filter hws ts =
+      match ts with
+      | [] -> ts
+      | t :: tws ->
+          if absorb == t then raise Absorbant ;
+          let cmp = compare filter t in
+          if cmp < 0
+          then gen w hws ts else
+          if cmp > 0
+          then t :: aux (mark w) ~absorb ~filter hws tws
+          else gen (mark w) hws tws
+
+    let filter polarity hs ts =
+      let w = { modif = false ; polarity } in
+      let ws = gen w hs ts in
+      if w.modif then ws else ts
+    
+  end
+  
+  let consequence_and = Consequence.(filter CONJ)
+  let consequence_or  = Consequence.(filter DISJ)
+          
+  let merge hs hs0 = List.sort_uniq compare_raising_absorbant (hs@hs0)
+                     
+  let rec implication hs b = match b.repr with
+    | Imply(hs0,b0) -> implication_imply hs b hs0 b0
+    | And bs -> implication_and [] hs b bs
+    | Or bs  -> implication_or  [] hs b bs
+    | _ -> c_imply hs b
+  and implication_and hs0 hs b0 bs = try
+      let hs'= merge hs0 hs in
+      try 
+	match consequence_and hs bs with
+	| []  -> e_true (* [And hs] implies [b0] *)
+	| [b] -> implication hs' b
+	| bs' -> c_imply hs' (if bs'==bs then b0 else c_and bs')
+      with Absorbant -> implication_false hs' (* [And hs] implies [Not b0] *)
+    with Absorbant -> e_true (* [False = And (hs@hs0)] *)
+  and implication_or hs0 hs b0 bs = try
+      let hs'= merge hs0 hs in
+      match consequence_or hs bs with
+      | []  -> implication_false hs' (* [And hs] implies [Not b0] *)
+      | [b] -> implication hs' b
+      | bs' -> c_imply hs' (if bs'==bs then b0 else c_or bs')
+    with Absorbant -> e_true (* [False = And (hs@hs0)] or [And hs] implies [b] *)
+  and implication_imply hs b hs0 b0 = try
+      match consequence_and hs [b0] with
+      | [] -> e_true (* [And hs] implies [b0] *)
+      | _ -> try
+            match consequence_and hs0 hs with
+            | [] -> b (* [And hs0] implies [And hs] *)
+            | hs ->
+                match b0.repr with
+                | And bs -> implication_and hs0 hs b0 bs
+                | Or bs  -> implication_or  hs0 hs b0 bs
+                | _ -> c_imply (merge hs0 hs) b0
+          with Absorbant -> e_true (* [False = And (hs@hs0)] *)
+    with Absorbant -> (* [And hs] implies [Not b0] *)
+      try implication_false (merge hs hs0)
+      with Absorbant -> e_true  (* [False = And (hs@hs0)] *)
+  and implication_false hs =
+    e_not (c_and hs)
+
+  let rec consequence_aux hs x = match x.repr with
+    | And xs -> begin try 
+          match consequence_and hs xs with
+          | [] -> e_true
+          | [x] -> consequence_aux hs x
+          | hs -> if hs==xs then x else c_and hs
+        with Absorbant -> e_false
+      end
+    | Or xs -> begin try 
+          match consequence_and hs xs with
+          | [] -> e_false
+          | [x] -> consequence_aux hs x
+          | hs -> if hs==xs then x else c_or hs
+        with Absorbant -> e_true
+      end
+    | Not x -> e_not (consequence_aux hs x)
+    | Imply (xs, b) -> begin
+        let b' = consequence_aux hs b in
+        match b'.repr with
+        | True -> b'
+        | _ -> begin try
+              let xs' = consequence_and hs xs in
+              match b==b', xs==xs', xs' with
+              | true,  true,  _  -> x
+              | _,     false, [] -> b'
+              | true,  false, _  -> c_imply xs' b'
+              | false, _,     _  -> implication xs' b'
+           with Absorbant -> e_false
           end
-    | _ ->
-        if a == b then e_true else
-          let c = e_not b in
-          if c == a then c else c_imply [a] b
+       end
+    | _ -> x
+      
+  let rec consequence h x = 
+    let not_x = e_not x in
+    match h.repr with
+    | True -> x
+    | False -> (* what_ever *) x
+    | _ when h == x     -> e_true
+    | _ when h == not_x -> e_false
+    | And hs -> consequence_aux hs x
+    | _      -> consequence_aux [h] x
 
   type structural =
     | S_equal        (* equal constants or constructors *)
@@ -1319,7 +1490,7 @@ struct
           | S_inversible ->
               let modified,xs,ys = op_inversible xs ys in
               if modified
-              then c_builtin_eq (e_fun f xs) (e_fun g ys) 
+              then c_builtin_eq (e_fun f xs) (e_fun g ys)
               else c_builtin_eq x y
         end
     | Rdef fxs , Rdef gys ->
@@ -1331,7 +1502,7 @@ struct
     | Fun _ , _ | _ , Fun _ -> c_builtin_eq x y
     | _ -> c_eq x y
 
-  and eq_maybe x y = function 
+  and eq_maybe x y = function
     | Yes -> e_true | No -> e_false | Maybe -> c_builtin_eq x y
 
   and eq_field (f,x) (g,y) =
@@ -1364,8 +1535,8 @@ struct
           | S_functions -> c_builtin_neq x y
           | S_inversible ->
               let modified,xs,ys = op_inversible xs ys in
-              if modified 
-              then c_builtin_neq (e_fun f xs) (e_fun g ys) 
+              if modified
+              then c_builtin_neq (e_fun f xs) (e_fun g ys)
               else c_builtin_neq x y
         end
     | Rdef fxs , Rdef gys ->
@@ -1377,7 +1548,7 @@ struct
     | Fun _ , _ | _ , Fun _ -> c_builtin_neq x y
     | _ -> c_neq x y
 
-  and neq_maybe x y = function 
+  and neq_maybe x y = function
     | Yes -> e_true | No -> e_false | Maybe -> c_builtin_neq x y
 
   and neq_field (f,x) (g,y) =
@@ -1398,13 +1569,42 @@ struct
     | [t] -> t
     | ts -> conjunction ts
 
+  let rec imply1 a b =
+    match a.repr , b.repr with
+    | _ , False -> e_not a
+    | Not p , Not q -> imply1 q p
+    | _  when a == b -> e_true
+    | _  when a == e_not b -> b
+    | _, _ -> implication [a] b
+                
+  let imply2 hs b =
+    match b.repr with
+    | And bs -> implication_and [] hs b bs
+    | _ -> try
+          match consequence_and hs [b] with
+          | [] -> e_true (* [And hs] implies [b] *)
+          | _  -> 
+              match b.repr with
+              | Or bs -> implication_or [] hs b bs
+              | Imply(hs0,b0) -> implication_imply hs b hs0 b0
+              | _ -> c_imply hs b
+        with Absorbant -> implication_false hs (* [And hs] implies [Not b] *)
+
   let e_imply hs p =
     match p.repr with
-    | Imply(hs',p') -> implication (e_and (hs @ hs')) p'
-    | _ -> implication (e_and hs) p
-
+    | True -> e_true
+    | _ -> 
+        try
+          let hs = fold_and [] hs in
+          let hs = List.sort_uniq compare_raising_absorbant hs in
+          match hs with
+          | []  -> p
+          | [a] -> imply1 a p
+          | _   -> imply2 hs p
+        with Absorbant -> e_true
+          
   let () = cached_not := function
-      | And xs -> e_or (List.map e_not xs) 
+      | And xs -> e_or (List.map e_not xs)
       | Or  xs -> e_and (List.map e_not xs)
       | Imply(hs,p) -> e_and (e_not p :: hs)
       | _ -> assert false
@@ -1420,14 +1620,14 @@ struct
           | _ , False -> conjunction [e;a]
           | False , _ -> conjunction [e_not e;b]
           | _ , True  -> disjunction [e_not e;a]
-          | _ -> 
+          | _ ->
               match e.repr with
               | Not e0 -> c_if e0 b a
               | Neq(u,v) -> c_if (e_eq u v) b a
               | _ -> c_if e a b
   let () = extern_ite := e_if
 
-  let e_bool = function true -> e_true | false -> e_false 
+  let e_bool = function true -> e_true | false -> e_false
   let e_literal v p = if v then p else e_not p
   let literal p = match p.repr with
     | Neq(a,b) -> false , c_eq a b
@@ -1514,7 +1714,7 @@ struct
   (* --- Locally Memoized                                                   --- *)
   (* -------------------------------------------------------------------------- *)
 
-  type sigma = term Tmap.t ref 
+  type sigma = term Tmap.t ref
 
   let sigma () = ref Tmap.empty
 
@@ -1525,19 +1725,22 @@ struct
   (* --- Locally Nameless                                                   --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let rec lc_bind m x v e =
+  let rec lc_subst_var m x v e =
     if not (Vars.mem x e.vars) then e else
       match e.repr with
       | Fvar y when Var.equal x y -> v
       | _ ->
           try cache_find m e
-          with Not_found -> cache_bind m e (rebuild (lc_bind m x v) e)
+          with Not_found -> cache_bind m e (rebuild (lc_subst_var m x v) e)
 
-  let lc_bind x e = 
+  let lc_bind x e =
     let k = Bvars.order e.bind in
     let t = tau_of_var x in
-    lc_bind (sigma ()) x (e_bvar k t) e
-      
+    lc_subst_var (sigma ()) x (e_bvar k t) e
+
+  let e_subst_var x v e =
+    lc_subst_var (sigma ()) x v e
+
   let rec lc_open m k v e =
     if not (Bvars.contains k e.bind) then e else
       match e.repr with
@@ -1546,10 +1749,14 @@ struct
           try cache_find m e
           with Not_found -> cache_bind m e (rebuild (lc_open m k v) e)
 
-  let lc_open x e = 
+  let lc_open_term t e =
+    let k = Bvars.order e.bind in
+    lc_open (sigma ()) k t e
+
+  let lc_open x e =
     let k = Bvars.order e.bind in
     lc_open (sigma ()) k (e_var x) e
-        
+
   let lc_closed e = Bvars.closed e.bind
   let lc_closed_at n e = Bvars.closed_at n e.bind
   let lc_vars e = e.bind
@@ -1561,11 +1768,11 @@ struct
 
   let e_bind q x a =
     assert (lc_closed a) ;
-    let do_bind = 
+    let do_bind =
       match q with Forall | Exists -> Vars.mem x a.vars | Lambda -> true in
     if do_bind then c_bind q (tau_of_var x) (lc_bind x a) else a
 
-  let rec bind_xs q xs e = 
+  let rec bind_xs q xs e =
     match xs with [] -> e | x::xs -> e_bind q x (bind_xs q xs e)
 
   let e_forall = bind_xs Forall
@@ -1584,9 +1791,9 @@ struct
     then e else
       match e.repr with
       | Bvar(k,_) -> xs.(k-d)
-      | _ -> 
+      | _ ->
           try cache_find sigma e
-          with Not_found -> 
+          with Not_found ->
             cache_bind sigma e
               begin match e.repr with
                 | Apply(e,es) ->
@@ -1597,16 +1804,16 @@ struct
                     rebuild (subst sigma xs d) e
               end
 
-  let rec apply xs a es = 
+  let rec apply xs a es =
     match a.repr , es with
     | Bind(_,_,a) , e::es -> apply (e::xs) a es
     | _ ->
-        let core = 
+        let core =
           if xs=[] then a else
             let sigma = sigma () in
             let xs = Array.of_list xs in
             let d = Bvars.order a.bind + 1 - Array.length xs in
-            subst sigma xs d a 
+            subst sigma xs d a
         in c_apply core es
 
   let () = r_apply := apply
@@ -1626,11 +1833,11 @@ struct
           cache_bind mu e
             (if lc_closed e
              then
-               try sigma e 
+               try sigma e
                with Not_found -> rebuild (gsubst mu sigma) e
              else rebuild (gsubst mu sigma) e)
-            
-  let e_subst ?sigma f e = 
+
+  let e_subst ?sigma f e =
     let cache = match sigma with None -> ref Tmap.empty | Some c -> c in
     gsubst cache f e
 
@@ -1645,10 +1852,6 @@ struct
   let e_add x y = addition [x;y]
   let e_sub x y = addition [x;e_opp y]
   let e_mul x y = multiplication [x;y]
-  let e_times k x =
-    if Z.equal k Z.zero then e_zero else
-    if Z.equal k Z.one then x else
-      times k x
 
   (* -------------------------------------------------------------------------- *)
   (* --- Congruence                                                         --- *)
@@ -1689,7 +1892,7 @@ struct
           | S_injection -> concat2 congr_argneq xs ys
           | S_functions -> raise NO_CONGRUENCE
         end
-    | Rdef fxs , Rdef gys -> 
+    | Rdef fxs , Rdef gys ->
         begin
           try concat2 congr_fieldneq fxs gys
           with FIELD_NEQ -> []
@@ -1706,12 +1909,12 @@ struct
   (* --- List All2/Any2                                                     --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let e_all2 phi xs ys = 
+  let e_all2 phi xs ys =
     let n = List.length xs in
     let m = List.length ys in
     if n <> m then e_false else conjunction (List.map2 phi xs ys)
 
-  let e_any2 phi xs ys = 
+  let e_any2 phi xs ys =
     let n = List.length xs in
     let m = List.length ys in
     if n <> m then e_true else disjunction (List.map2 phi xs ys)
@@ -1733,7 +1936,7 @@ struct
         end
     | Rdef fxs , Rdef gys ->
         begin
-          try e_all2 (fun (f,x) (g,y) -> 
+          try e_all2 (fun (f,x) (g,y) ->
               if Field.equal f g then flat_eq x y else raise Exit
             ) fxs gys
           with Exit -> e_false
@@ -1753,7 +1956,7 @@ struct
         end
     | Rdef fxs , Rdef gys ->
         begin
-          try e_any2 (fun (f,x) (g,y) -> 
+          try e_any2 (fun (f,x) (g,y) ->
               if Field.equal f g then flat_neq x y else raise Exit
             ) fxs gys
           with Exit -> e_true
@@ -1829,7 +2032,7 @@ struct
     match e.repr with
     | Apply(a,xs) -> e_apply (f a) (List.map f xs)
     | _ -> rebuild f e
-  
+
   let lc_iter f e =
     match e.repr with
     | True | False | Kint _ | Kreal _ | Fvar _ | Bvar _ -> ()
@@ -1843,14 +2046,14 @@ struct
     | Fun(_,xs) -> List.iter f xs
     | Apply(x,xs) -> f x ; List.iter f xs
     | Bind(_,_,e) -> f e
-             
+
   let e_iter pool f e =
     match e.repr with
-    | Bind(_,t,e) -> 
+    | Bind(_,t,e) ->
         add_term pool e ;
         let x = fresh pool t in
         lc_iter f (lc_open x e)
-    | _ -> lc_iter f e 
+    | _ -> lc_iter f e
 
   let f_iter f n e =
     match e.repr with
@@ -1878,7 +2081,7 @@ struct
           match e.repr with
           | True | False | Kint _ | Kreal _ | Fvar _ | Bvar _ ->
               bad_position ()
-          | Times (_,e) when i = 0 && l = [] -> 
+          | Times (_,e) when i = 0 && l = [] ->
               begin
                 match child.repr with
                   Kint n -> times n e
@@ -1985,7 +2188,7 @@ struct
   let rec pp_debug disp fmt e =
     if not (Intset.mem e.id !disp) then
       begin
-        Format.fprintf fmt "%a{%a} = %a@." 
+        Format.fprintf fmt "%a{%a} = %a@."
           pp_id e Bvars.pretty e.bind pp_repr e.repr ;
         disp := Intset.add e.id !disp ;
         pp_children disp fmt e ;
@@ -1993,7 +2196,7 @@ struct
 
   and pp_children disp fmt e = lc_iter (pp_debug disp fmt) e
 
-  let debug fmt e = 
+  let debug fmt e =
     Format.fprintf fmt "%a with:@." pp_id e ;
     pp_debug (ref Intset.empty) fmt e
 
@@ -2010,9 +2213,9 @@ struct
       (fun (f,v) ->
          match v.repr with
          | Rget(base,g) when Field.equal f g ->
-             let count = 
-               try succ (Tmap.find base !bases) 
-               with Not_found -> 1 
+             let count =
+               try succ (Tmap.find base !bases)
+               with Not_found -> 1
              in
              bases := Tmap.add base count !bases ;
              ( match !best with
@@ -2022,11 +2225,11 @@ struct
       ) fvs ;
     match !best with
     | None -> None
-    | Some(base,_) -> 
-        let fothers = List.filter 
+    | Some(base,_) ->
+        let fothers = List.filter
             (fun (f,v) ->
                match v.repr with
-               | Rget( other , g ) -> 
+               | Rget( other , g ) ->
                    other != base || not (Field.equal f g)
                | _ -> true)
             fvs
@@ -2052,14 +2255,14 @@ struct
   (* ------------------------------------------------------------------------ *)
 
   let rec count k m e =
-    if not (Tset.mem e !m) then 
+    if not (Tset.mem e !m) then
       begin
         incr k ;
         m := Tset.add e !m ;
         lc_iter (count k m) e ;
       end
 
-  let size e = 
+  let size e =
     let k = ref 0 in count k (ref Tset.empty) e ; !k
 
   (* ------------------------------------------------------------------------ *)
@@ -2080,13 +2283,13 @@ struct
   }
 
   let get_mark m e =
-    try Tmap.find e m.mark 
+    try Tmap.find e m.mark
     with Not_found -> Unmarked
 
   let set_mark m e t =
     m.mark <- Tmap.add e t m.mark
 
-  (* r is the order of the root term being marked, 
+  (* r is the order of the root term being marked,
      it is constant during the recursive traversal.
      This is also the floor of bound variables ;
      bvars k > r can not be shared, as they are not free in the term.
@@ -2096,9 +2299,9 @@ struct
       begin
         match get_mark m e with
         | Unmarked ->
-            if m.marked e then 
+            if m.marked e then
               set_mark m e Marked
-            else 
+            else
               begin
                 set_mark m e FirstMark ;
                 lc_iter (walk m r) e ;
@@ -2112,20 +2315,30 @@ struct
             ()
       end
 
-  let mark m e = 
-    m.roots <- e :: m.roots ; 
+  let mark m e =
+    m.roots <- e :: m.roots ;
     walk m (Bvars.order e.bind) e
 
+  let share m e =
+    if lc_closed e then
+      begin
+        m.roots <- e :: m.roots ;
+        m.shared <- Tset.add e m.shared ;
+        m.mark <- Tmap.add e Marked m.mark ;
+        lc_iter (walk m (Bvars.order e.bind)) e
+      end
+    else mark m e
+  
   type defs = {
     mutable stack : term list ;
-    mutable defined : Tset.t ; 
+    mutable defined : Tset.t ;
   }
 
   let rec collect shared defs e =
     if not (Tset.mem e defs.defined) then
       begin
         lc_iter (collect shared defs) e ;
-        if Tset.mem e shared then 
+        if Tset.mem e shared then
           defs.stack <- e :: defs.stack ;
         defs.defined <- Tset.add e defs.defined ;
       end
@@ -2141,15 +2354,15 @@ struct
       mark = Tmap.empty ;
       roots = [] ;
     }
-    
+
   let defs m =
     let defines = { stack=[] ; defined=Tset.empty } in
-    List.iter (collect m.shared defines) m.roots ; 
+    List.iter (collect m.shared defines) m.roots ;
     List.rev defines.stack
 
   let shared ?shared ?shareable es =
     let m = marks ?shared ?shareable () in
-    List.iter (mark m) es ; 
+    List.iter (mark m) es ;
     defs m
 
 end

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,9 +20,26 @@
 (*                                                                        *)
 (**************************************************************************)
 
+type c_rounding_mode =
+    FE_ToNearest | FE_Upward | FE_Downward | FE_TowardZero
+
+let string_of_c_rounding_mode = function
+  | FE_ToNearest -> "FE_NEAREST"
+  | FE_Upward -> "FE_UPWARD"
+  | FE_Downward -> "FE_DOWNWARD"
+  | FE_TowardZero -> "FE_TOWARDZERO"
+
+(* replace "noalloc" with [@@noalloc] for OCaml version >= 4.03.0 *)
+[@@@ warning "-3"]
+
 external set_round_downward: unit -> unit = "set_round_downward" "noalloc"
 external set_round_upward: unit -> unit = "set_round_upward" "noalloc"
 external set_round_nearest_even: unit -> unit = "set_round_nearest_even" "noalloc"
+external set_round_toward_zero : unit -> unit = "set_round_toward_zero" "noalloc"
+external get_rounding_mode: unit -> c_rounding_mode = "get_rounding_mode" "noalloc"
+external set_rounding_mode: c_rounding_mode -> unit = "set_rounding_mode" "noalloc"
+
+[@@@ warning "+3"]
 
 external round_to_single_precision_float: float -> float = "round_to_float" 
 external sys_single_precision_of_string: string -> float = 
@@ -116,14 +133,14 @@ let make_float ~num ~den ~exp ~man_size ~min_exp ~max_exp =
 	f_upper = upb ;
       }
 
-let exp = "[eE][+]?\\(-?[0-9]+\\)"
-let dot = "[.]"
-let numopt = "\\([0-9]*\\)"
-let num = "\\([0-9]+\\)"
+let reg_exp = "[eE][+]?\\(-?[0-9]+\\)"
+let reg_dot = "[.]"
+let reg_numopt = "\\([0-9]*\\)"
+let reg_num = "\\([0-9]+\\)"
 
-let numdotfrac = Str.regexp (numopt ^ dot ^ numopt)
-let numdotfracexp = Str.regexp (numopt ^ dot ^ numopt ^ exp)
-let numexp = Str.regexp (num ^ exp)
+let numdotfrac = Str.regexp (reg_numopt ^ reg_dot ^ reg_numopt)
+let numdotfracexp = Str.regexp (reg_numopt ^ reg_dot ^ reg_numopt ^ reg_exp)
+let numexp = Str.regexp (reg_num ^ reg_exp)
 
 exception Shortcut of parsed_float
 
@@ -275,7 +292,7 @@ let pretty_normal ~use_hex fmt f =
       in
       let d = d *. 1e16 in
       let decdigits = Int64.add re (Int64.of_float d) in
-      if exp = 0
+      if exp = 0 || (firstdigit = 0 && decdigits = 0L && exp = -1022)
       then
 	Format.fprintf fmt "%s%d.%016Ld"
 	  s
@@ -297,7 +314,12 @@ let pretty_normal ~use_hex fmt f =
 
 let pretty fmt f =
   let use_hex = Kernel.FloatHex.get() in
-  set_round_nearest_even();
+  (* should always arrive here with nearest_even *)
+  if get_rounding_mode () <> FE_ToNearest then begin
+    Kernel.failure "pretty: rounding mode (%s) <> FE_TONEAREST"
+      (string_of_c_rounding_mode (get_rounding_mode ()));
+    set_round_nearest_even();
+  end;
   if use_hex || (Kernel.FloatNormal.get ())
   then
     pretty_normal ~use_hex fmt f
@@ -352,10 +374,70 @@ let bits_of_most_negative_float =
   let v = Int64.of_int32 0xFF7FFFFFl in(* cast to int32 to get negative value *)
   Integer.of_int64 v
 
+external fround: float -> float = "c_round"
+external trunc: float -> float = "c_trunc"
+
+(** Single-precision (32-bit) functions. We round the result computed
+    as a double, since float32 functions are rarely precise. *)
+
+external expf: float -> float = "c_expf"
+external logf: float -> float = "c_logf"
+external log10f: float -> float = "c_log10f"
+external powf: float -> float -> float = "c_powf"
+external sqrtf: float -> float = "c_sqrtf"
+
+
+(** C math-like functions *)
+
+let isnan f =
+  match classify_float f with
+  | FP_nan -> true
+  | _ -> false
+
+let isfinite f =
+  match classify_float f with
+  | FP_nan | FP_infinite -> false
+  | _ -> true
+
+let min_denormal = Int64.float_of_bits 1L
+let neg_min_denormal = -. min_denormal
+let min_single_precision_denormal = Int32.float_of_bits 1l
+let neg_min_single_precision_denormal = -. min_single_precision_denormal
+
+(* auxiliary functions for nextafter/nextafterf *)
+let min_denormal_float ~is_f32 =
+  if is_f32 then min_single_precision_denormal else min_denormal
+let nextafter_aux ~is_f32 fincr fdecr x y =
+  if x = y (* includes cases "(0.0, -0.0) => -0.0" and its symmetric *)
+  then y
+  else if isnan x || isnan y then nan
+  else if x = 0.0 (* or -0.0 *) then
+    if x < y then min_denormal_float is_f32 else -. (min_denormal_float is_f32)
+    (* the following conditions might be simpler if we had unsigned ints
+       (uint32/uint64) *)
+  else if x = neg_infinity (* && y = neg_infinity *) then fdecr x
+  else if (x < y && x > 0.0) || (x > y && x < 0.0) then fincr x else fdecr x
+let incr_f64 f =
+  Int64.float_of_bits (Int64.succ (Int64.bits_of_float f))
+let decr_f64 f =
+  if f = infinity then max_float
+  else Int64.float_of_bits (Int64.pred (Int64.bits_of_float f))
+let incr_f32 f =
+  if f = neg_infinity then most_negative_single_precision_float
+  else Int32.float_of_bits (Int32.succ (Int32.bits_of_float f))
+let decr_f32 f =
+  if f = infinity then max_single_precision_float
+  else Int32.float_of_bits (Int32.pred (Int32.bits_of_float f))
+
+let nextafter x y =
+  nextafter_aux ~is_f32:false incr_f64 decr_f64 x y
+
+let nextafterf x y =
+  nextafter_aux ~is_f32:true incr_f32 decr_f32 x y
 
 
 (*
 Local Variables:
-compile-command: "make -C ../.. byte"
+compile-command: "make -C ../../.. byte"
 End:
 *)

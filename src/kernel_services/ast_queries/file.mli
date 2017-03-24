@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Frama-c preprocessing and Cil AST initialization.
-    @plugin development guide *)
+(** Frama-c preprocessing and Cil AST initialization. *)
 
 (** Whether a given preprocessor supports gcc options used in some
     configurations. *)
@@ -57,6 +56,15 @@ val new_machdep: string -> Cil_types.mach -> unit
     @modify Sodium-20150201 Receives directly the machdep as argument
     @raise Invalid_argument if the given name already exists *)
 
+val machdep_macro: string -> string
+ (** [machdep_macro machine] returns the name of a macro __FC_MACHDEP_XXX so
+     that the preprocessor can select std lib definition consistent with
+     the selected machdep. This function will emit a warning if [machine] is
+     not known by default by the kernel and return __FC_MACHDEP_MACHINE in that
+     case.
+     @since Magnesium-20151001 (exported in the API)
+  *)
+
 type code_transformation_category
 (** type of registered code transformations
    @since Neon-20140301 
@@ -86,8 +94,6 @@ val add_code_transformation_before_cleanup:
       (e.g. after a [-then]) will trigger the transformation over the already
       computed AST. If several transformations are triggered by the same
       option, their relative order is preserved.
-      Note that it is the responsibility of the hook to use
-      {!Ast.mark_as_changed} or {!Ast.mark_as_grown} whenever it is the case.
 
       At this level, globals and ACSL annotations have not been registered.
      
@@ -103,8 +109,14 @@ val add_code_transformation_after_cleanup:
       At this level, globals and ACSL annotations have been registered. If
       the hook adds some new globals or annotations, it must take care of
       adding them in the appropriate tables.
+      Note that it is the responsibility of the hook to use
+      {!Ast.mark_as_changed} or {!Ast.mark_as_grown} whenever it is the case.
       @since Neon-20140301 
       @plugin development guide *)
+
+val constfold: code_transformation_category
+(** category for syntactic constfolding (done after cleanup)
+    @since Silicon-20161101 *)
 
 val must_recompute_cfg: Cil_types.fundec -> unit
   (** [must_recompute_cfg f] must be called by code transformation hooks
@@ -136,12 +148,6 @@ val from_filename: ?cpp:string -> string -> t
 (* ************************************************************************* *)
 (** {2 Initializers} *)
 (* ************************************************************************* *)
-
-class check_file: string -> Visitor.frama_c_visitor
-  (** visitor that performs various consistency checks over the AST.
-      The string argument will be used in the error message in case of
-      inconsistency, in order to trace the issue.
-  *)
 
 val prepare_from_c_files: unit -> unit
   (** Initialize the AST of the current project according to the current
@@ -237,6 +243,6 @@ val pretty_ast : ?prj:Project.t -> ?fmt:Format.formatter -> unit -> unit
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

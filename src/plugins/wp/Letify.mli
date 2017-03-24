@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,7 +48,8 @@ sig
   val empty : t
   val merge : t -> t -> t
   val extract : pred -> t
-  val domain : t -> Vars.t 
+  val add : t ref -> pred -> unit
+  val domain : t -> Vars.t
 end
 
 val bind : Sigma.t -> Defs.t -> Vars.t -> Sigma.t

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -113,34 +113,6 @@ module Toplevel: sig
 end
 
 (* ************************************************************************* *)
-(** {2 Graphs} *)
-(* ************************************************************************* *)
-
-(** Callgraph computed by value analysis. It contains function pointers! *)
-module Semantic_Callgraph : sig
-  val dump: (unit -> unit) ref
-    (** Dump the semantic callgraph in stdout or in a file. *)
-
-  val topologically_iter_on_functions : ((kernel_function -> unit) -> unit) ref
-    (** Compute values if required. *)
-
-  val iter_on_callers :
-    ((kernel_function -> unit) -> kernel_function -> unit) ref
-    (** Compute values if required. *)
-
-  val accept_base :
-    (with_formals:bool ->
-     with_locals:bool ->
-     kernel_function -> Base.t -> bool
-     (** [accept_base formals locals kf b] returns [true] if and only [b] is
-         - a global
-         - a formal or local of one of the callers of [kf]
-         - a formal or local of [kf] and the corresponding argument is [true]
-     *)
-    ) ref
-end
-
-(* ************************************************************************* *)
 (** {2 Values} *)
 (* ************************************************************************* *)
 
@@ -155,6 +127,9 @@ module Value : sig
       (** Internal representation of a value. *)
 
   exception Aborted
+
+  val emitter: Emitter.t ref
+    (** Emitter used by Value to emit statuses *)
 
   val self : State.t
     (** Internal state of the value analysis from projects viewpoint.
@@ -213,12 +188,22 @@ module Value : sig
       (Cil_types.exp * Cvalue.V.t * Cvalue.V_Offsetmap.t) list ->
     Value_types.call_result
 
-  val register_builtin: (string -> builtin_sig -> unit) ref
-    (** [!record_builtin name ?override f] registers an abstract function [f]
+  val register_builtin: (string -> ?replace:string -> builtin_sig -> unit) ref
+    (** [!register_builtin name ?replace f] registers an abstract function [f]
         to use everytime a C function named [name] is called in the program.
+        If [replace] is supplied and option [-val-builtins-auto] is active,
+        calls to [replace] will also be substituted by the builtin.
         See also option [-val-builtin] *)
 
+  val registered_builtins: (unit -> (string * builtin_sig) list) ref
+  (** Returns a list of the pairs (name, builtin_sig) registered via
+      [register_builtin].
+      @since Aluminium-20160501 *)
+
   val mem_builtin: (string -> bool) ref
+  (** returns whether there is an abstract function registered by
+      {!register_builtin} with the given name. *)
+
   val use_spec_instead_of_definition: (kernel_function -> bool) ref
   (** To be called by derived analyses to determine if they must use
       the body of the function (if available), or only its spec. Used for
@@ -251,7 +236,7 @@ module Value : sig
 
   (** {4 Initial state of the analysis} *)
 
-  (** The functions below are related to the the value of the global variables
+  (** The functions below are related to the value of the global variables
       when the value analysis is started. If [globals_set_initial_state] has not
       been called, the given state is used. A default state (which depends on
       the option [-libentry]) is used when [globals_use_default_initial_state]
@@ -278,6 +263,8 @@ module Value : sig
   (** State of the analysis at various points *)
 
   val get_initial_state : kernel_function -> state
+  val get_initial_state_callstack :
+    kernel_function -> state Value_types.Callstack.Hashtbl.t option
   val get_state : kinstr -> state
 
     
@@ -286,6 +273,12 @@ module Value : sig
 
   val get_stmt_state : stmt -> state
   (** @plugin development guide *)
+
+  val fold_stmt_state_callstack :
+    (state -> 'a -> 'a) -> 'a -> after:bool -> stmt -> 'a
+
+  val fold_state_callstack :
+    (state -> 'a -> 'a) -> 'a -> after:bool -> kinstr -> 'a
 
   val find : state -> Locations.location ->  t
 
@@ -443,7 +436,7 @@ module Value : sig
       to change between Frama-C versions. *)
 
     val eval_predicate:
-      (pre:state -> here:state -> predicate named ->
+      (pre:state -> here:state -> predicate ->
        Property_status.emitted_status) ref
       (** Evaluate the given predicate in the given states for the Pre
           and Here ACSL labels.
@@ -483,9 +476,20 @@ module Value : sig
       on [Record_Value_Callbacks] and [Record_Value_Callbacks_New]
       should not force their lazy argument *)
 
-  (** Actions to perform at each treatment of a "call" statement. *)
+  (** Actions to perform at each treatment of a "call"
+      statement. [state] is the state before the call.
+      @deprecated Use Call_Type_Value_Callbacks instead. *)
   module Call_Value_Callbacks:
     Hook.Iter_hook with type param = state * callstack
+
+  (** Actions to perform at each treatment of a "call"
+      statement. [state] is the state before the call.
+      @since Aluminium-20160501  *)
+  module Call_Type_Value_Callbacks:
+    Hook.Iter_hook with type param =
+    [`Builtin of Value_types.call_result | `Spec | `Def | `Memexec]
+    * state * callstack
+
 
   (** Actions to perform whenever a statement is handled. *)
   module Compute_Statement_Callbacks:
@@ -525,10 +529,8 @@ module Value : sig
        -> Cvalue.V_Offsetmap.t option (** returned value of [kernel_function] *) * state) ref
 *)
   val merge_initial_state : callstack -> state -> unit
-    (** Store an additional possible initial state for the given callstack as
-        well as its values for actuals. *)
-  (** @modify Neon-TIS now takes the current callstack instead of just
-      the current kernel function. *)
+  (** Store an additional possible initial state for the given callstack as
+      well as its values for actuals. *)
 
   val initial_state_changed: (unit -> unit) ref
 end
@@ -536,6 +538,12 @@ end
 (** Functional dependencies between function inputs and function outputs.
     @see <../from/index.html> internal documentation. *)
 module From : sig
+
+  (** exception raised by [find_deps_no_transitivity_*] if the given expression
+      is not an lvalue. 
+      @since Aluminium-20160501
+   *)
+  exception Not_lval
 
   val compute_all : (unit -> unit) ref
   val compute_all_calldeps : (unit -> unit) ref
@@ -550,10 +558,13 @@ module From : sig
   val get : (kernel_function -> Function_Froms.t) ref
   val access : (Locations.Zone.t -> Function_Froms.Memory.t
                 -> Locations.Zone.t) ref
+  
   val find_deps_no_transitivity : (stmt -> exp -> Locations.Zone.t) ref
+
   val find_deps_no_transitivity_state :
     (Value.state -> exp -> Locations.Zone.t) ref
 
+  (** @raise Not_lval if the given expression is not a C lvalue. *)
   val find_deps_term_no_transitivity_state :
     (Value.state -> term -> Value_types.logic_dependencies) ref
 
@@ -592,7 +603,8 @@ end
 (** {2 Properties} *)
 (* ************************************************************************* *)
 
-(** Dealing with logical properties. *)
+(** Dealing with logical properties.
+    @plugin development guide *)
 module Properties : sig
 
   (** Interpretation of logic terms. *)
@@ -600,45 +612,81 @@ module Properties : sig
 
     (** {3 Parsing logic terms and annotations} *)
 
-    val lval : (kernel_function -> stmt -> string -> Cil_types.term_lval) ref
-    val expr : (kernel_function -> stmt -> string -> Cil_types.term) ref
+    (** For the three functions below, [env] can be used to specify which
+        logic labels are parsed. By default, only [Here] is accepted. All
+        the C labels inside the function are also  accepted, regardless of
+        [env]. [loc] is used as the source for the beginning of the string.
+        All three functions may raise {!Logic_interp.Error} or
+        {!Parsing.Parse_error}. *)
+
+    val term_lval :
+      (kernel_function -> ?loc:location -> ?env:Logic_typing.Lenv.t -> string ->
+       Cil_types.term_lval) ref
+    val term :
+      (kernel_function -> ?loc:location -> ?env:Logic_typing.Lenv.t -> string ->
+       Cil_types.term) ref
+    val predicate :
+      (kernel_function -> ?loc:location -> ?env:Logic_typing.Lenv.t -> string ->
+       Cil_types.predicate) ref
+
     val code_annot : (kernel_function -> stmt -> string -> code_annotation) ref
 
 
     (** {3 From logic terms to C terms} *)
 
+    (** Exception raised by the functions below when their given argument
+        cannot be interpreted in the C world. 
+        @since Aluminium-20160501
+     *)
+    exception No_conversion
+
     val term_lval_to_lval:
       (result: Cil_types.varinfo option -> term_lval -> Cil_types.lval) ref
-      (** @raise Invalid_argument if the argument is not a left value. *)
+      (** @raise No_conversion if the argument is not a left value. 
+          @modify Aluminium-20160501 raises a custom exn instead of generic Invalid_arg
+       *)
 
     val term_to_lval:
       (result: Cil_types.varinfo option -> term -> Cil_types.lval) ref
-      (** @raise Invalid_argument if the argument is not a left value. *)
+      (** @raise No_conversion if the argument is not a left value.
+          @modify Aluminium-20160501 raises a custom exn instead of generic Invalid_arg
+       *)
 
     val term_to_exp:
       (result: Cil_types.varinfo option -> term -> Cil_types.exp) ref
-      (** @raise Invalid_argument if the argument is not a valid expression. *)
+      (** @raise No_conversion if the argument is not a valid expression.
+          @modify Aluminium-20160501 raises a custom exn instead of generic Invalid_arg
+       *)
 
     val loc_to_exp:
       (result: Cil_types.varinfo option -> term -> Cil_types.exp list) ref
       (** @return a list of C expressions.
-          @raise Invalid_argument if the argument is not a valid set of
-          expressions. *)
+          @raise No_conversion if the argument is not a valid set of
+          expressions. 
+          @modify Aluminium-20160501 raises a custom exn instead of generic Invalid_arg
+       *)
 
     val loc_to_lval:
       (result: Cil_types.varinfo option -> term -> Cil_types.lval list) ref
       (** @return a list of C locations.
-          @raise Invalid_argument if the argument is not a valid set of
-          left values. *)
+          @raise No_conversion if the argument is not a valid set of
+          left values.
+          @modify Aluminium-20160501 raises a custom exn instead of generic Invalid_arg
+       *)
 
     val term_offset_to_offset:
       (result: Cil_types.varinfo option -> term_offset -> offset) ref
-      (** @raise Invalid_argument if the argument is not a valid offset. *)
+      (** @raise No_conversion if the argument is not a valid offset. 
+          @modify Aluminium-20160501 raises a custom exn instead of generic Invalid_arg
+       *)
 
     val loc_to_offset:
       (result: Cil_types.varinfo option -> term -> Cil_types.offset list) ref
-      (** @return a list of C offset provided the term denotes location who
-          have all the same base address.  *)
+      (** @return a list of C offset provided the term denotes locations who
+          have all the same base address.
+          @raise No_conversion if the given term does not match the precondition
+          @modify Aluminium-20160501 raises a custom exn instead of generic Invalid_arg
+       *)
 
 
     (** {3 From logic terms to Locations.location} *)
@@ -646,7 +694,10 @@ module Properties : sig
     val loc_to_loc:
       (result: Cil_types.varinfo option -> Value.state -> term -> 
        Locations.location) ref
-      (** @raise Invalid_argument if the translation fails. *)
+      (** @raise No_conversion if the translation fails.
+          @modify Aluminium-20160501 raises a custom exn instead of generic
+          Invalid_arg
+      *)
 
     val loc_to_loc_under_over:
       (result: Cil_types.varinfo option -> Value.state -> term -> 
@@ -658,7 +709,10 @@ module Properties : sig
           over-approximation of locations that have been read during evaluation.
           Warning: This API is not stabilized, and may change in
           the future.
-          @raise Invalid_argument in some cases. *)
+          @raise No_conversion if the translation fails.
+          @modify Aluminium-20160501 raises a custom exn instead of generic
+          Invalid_arg
+       *)
 
     (** {3 From logic terms to Zone.t} *)
 
@@ -703,11 +757,11 @@ module Properties : sig
         (** Entry point to get zones needed to evaluate the list of [terms]
             relative to the [ctx] of interpretation. *)
 
-      val from_pred: (predicate named -> t_ctx -> t_zone_info * t_decl) ref
+      val from_pred: (predicate -> t_ctx -> t_zone_info * t_decl) ref
         (** Entry point to get zones needed to evaluate the [predicate]
             relative to the [ctx] of interpretation. *)
 
-      val from_preds: (predicate named list -> t_ctx -> t_zone_info * t_decl) ref
+      val from_preds: (predicate list -> t_ctx -> t_zone_info * t_decl) ref
         (** Entry point to get zones needed to evaluate the list of
             [predicates] relative to the [ctx] of interpretation. *)
 
@@ -746,7 +800,7 @@ module Properties : sig
         of the term result?
         @since Carbon-20110201 *)
     val to_result_from_pred:
-      (predicate named -> bool) ref
+      (predicate -> bool) ref
 
 
   end
@@ -766,14 +820,6 @@ end
 (* ************************************************************************* *)
 (** {2 Plugins} *)
 (* ************************************************************************* *)
-
-(** Interface for the syntactic_callgraph plugin.
-    @see <../syntactic_callgraph/index.html> internal documentation. *)
-module Syntactic_Callgraph: sig
-  val dump: (unit -> unit) ref
-end
-
-
 
 (** Declarations common to the various postdominators-computing modules *)
 module PostdominatorsTypes: sig
@@ -827,10 +873,11 @@ module RteGen : sig
 				     kf? *) 
   val get_all_status : (unit -> status_accessor list) ref
   val get_precond_status : (unit -> status_accessor) ref
-  val get_signedOv_status : (unit -> status_accessor) ref
   val get_divMod_status : (unit -> status_accessor) ref
-  val get_downCast_status : (unit -> status_accessor) ref
   val get_memAccess_status : (unit -> status_accessor) ref
+  val get_pointerCall_status: (unit -> status_accessor) ref
+  val get_signedOv_status : (unit -> status_accessor) ref
+  val get_signed_downCast_status : (unit -> status_accessor) ref
   val get_unsignedOv_status : (unit -> status_accessor) ref
   val get_unsignedDownCast_status : (unit -> status_accessor) ref
 end
@@ -873,8 +920,6 @@ module Impact : sig
     (** Compute the impact analysis of the given set of PDG nodes,
         that come from the given function.
         @return the impacted nodes *)
-  val slice: (stmt list -> unit) ref
-    (** Slice the given statement according to the impact analysis. *)
 end
 
 (** Security analysis.
@@ -1234,8 +1279,8 @@ module Scope : sig
     (kernel_function -> stmt -> code_annotation ->
        Stmt.Hptset.t * code_annotation list) ref
     (** compute the set of statements where the given annotation has the same
-    * value than it has before the given stmt.
-    * Also return the *)
+      value as before the given stmt. Also returns the eventual code annotations
+      that are implied by the one given as argument. *)
 
   val check_asserts : (unit -> code_annotation list) ref
     (** Print how many assertions could be removed based on the previous
@@ -1243,8 +1288,7 @@ module Scope : sig
     * that can be removed. *)
 
   val rm_asserts : (unit -> unit) ref
-    (** Same analysis than [check_asserts] but change assert to remove by true
-      * *)
+    (** Same analysis than [check_asserts] but mark the assertions as proven. *)
 
   val get_defs :
     (kernel_function -> stmt -> lval ->
@@ -1290,7 +1334,7 @@ module Sparecode : sig
       * (the current one if no project given).
       * The source project is not modified.
       * The result is in the returned new project.
-      * optional argument [new_proj_name] added @since Carbon-20110201
+      * @modify Carbon-20110201 optional argument [new_proj_name] added
       * *)
 end
 
@@ -1490,28 +1534,29 @@ module Slicing : sig
        rd:Datatype.String.Set.t ->
        wr:Datatype.String.Set.t ->
        stmt ->
-       scope:stmt ->
        eval:stmt ->
        kernel_function -> set) ref
       (** To select rw accesses to lvalues (given as string) related to a statement.
           Variables of [~rd] and [~wr] string are bounded
-          relatively to the scope of the statement [~scope].
+          relatively to the whole scope of the function.
           The interpretation of the address of the lvalues is
           done just before the execution of the statement [~eval].
           The selection preserve the [~rd] and ~[wr] accesses contained into the statement [ki].
-          Note: add also a transparent selection on the whole statement. *)
+          Note: add also a transparent selection on the whole statement.
+	  @modify Magnesium-20151001 argument [~scope] removed. *)
 
     val select_stmt_lval :
       (set -> Mark.t -> Datatype.String.Set.t -> before:bool -> stmt ->
-        scope:stmt -> eval:stmt -> kernel_function -> set) ref
+        eval:stmt -> kernel_function -> set) ref
       (** To select lvalues (given as string) related to a statement.
           Variables of [lval_str] string are bounded
-          relatively to the scope of the statement [~scope].
+          relatively to the whole scope of the function.
           The interpretation of the address of the lvalue is
           done just before the execution of the statement [~eval].
           The selection preserve the value of these lvalues before or
           after (c.f. boolean [~before]) the statement [ki].
-          Note: add also a transparent selection on the whole statement. *)
+          Note: add also a transparent selection on the whole statement.
+	  @modify Magnesium-20151001 argument [~scope] removed.  *)
 
     val select_stmt_zone :
       (set -> Mark.t -> Locations.Zone.t -> before:bool -> stmt ->
@@ -1526,7 +1571,7 @@ module Slicing : sig
           Note: add also a transparent selection on the whole statement. *)
 
     val select_stmt_pred :
-      (set -> Mark.t -> predicate named -> stmt ->
+      (set -> Mark.t -> predicate -> stmt ->
         kernel_function -> set) ref
       (** To select a predicate value related to a statement.
           Note: add also a transparent selection on the whole statement. *)
@@ -1546,13 +1591,14 @@ module Slicing : sig
 
     val select_func_lval_rw :
       (set -> Mark.t -> rd:Datatype.String.Set.t -> wr:Datatype.String.Set.t ->
-        scope:stmt -> eval:stmt -> kernel_function -> set) ref
+        eval:stmt -> kernel_function -> set) ref
       (** To select rw accesses to lvalues (given as a string) related to a function.
           Variables of [~rd] and [~wr] string are bounded
-          relatively to the scope of the statement [~scope].
+          relatively to the whole scope of the function.
           The interpretation of the address of the lvalues is
           done just before the execution of the statement [~eval].
-          The selection preserve the value of these lvalues into the whole project. *)
+          The selection preserve the value of these lvalues into the whole project.
+          @modify Magnesium-20151001 argument [~scope] removed. *)
 
     val select_func_lval :
       (set -> Mark.t -> Datatype.String.Set.t -> kernel_function -> set) ref
@@ -1964,6 +2010,6 @@ exception Cancel
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

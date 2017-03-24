@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -97,23 +97,22 @@ module Vars = struct
   let iter_globals f l =
     let treat_global = function
       | GVar(vi,init,_) -> f vi init
-      | GVarDecl (_,vi,_) when
-          not (Cil.isFunctionType vi.vtype) && not vi.vdefined
-        (** If it is defined it will appear with the right init later *)
-        -> f vi { init = None }
+      | GVarDecl (vi,_) ->
+         (* If it is defined it will appear with the right init later *)
+         if not vi.vdefined then f vi { init = None }
       | GType _ | GCompTag _ | GCompTagDecl _ | GEnumTag _ | GEnumTagDecl _
-      | GVarDecl _ | GFun _ | GAsm _ | GPragma _ | GText _ | GAnnot _ -> ()
+      | GFunDecl _ | GFun _ | GAsm _ | GPragma _ | GText _ | GAnnot _ -> ()
     in
     List.iter treat_global l
 
   let fold_globals f acc l =
     let treat_global acc = function
       | GVar(vi,init,_) -> f vi init acc
-      | GVarDecl (_,vi,_) when
-          not (Cil.isFunctionType vi.vtype) && not vi.vdefined
-        -> f vi { init = None } acc
+      | GVarDecl (vi,_) ->
+         (* If it is defined it will appear with the right init later *)
+         if vi.vdefined then acc else f vi { init = None } acc
       | GType _ | GCompTag _ | GCompTagDecl _ | GEnumTag _ | GEnumTagDecl _
-      | GVarDecl _ | GFun _ | GAsm _ | GPragma _ | GText _ | GAnnot _ -> acc
+      | GFunDecl _ | GFun _ | GAsm _ | GPragma _ | GText _ | GAnnot _ -> acc
     in
     List.fold_left treat_global acc l
 
@@ -176,7 +175,7 @@ module Functions = struct
   end
 
   let init_kernel_function f spec =
-    { fundec = f; return_stmt = None; spec = spec }
+    { fundec = f; spec = spec }
 
   let fundec_of_decl spec v l =
     let args =
@@ -209,8 +208,7 @@ module Functions = struct
       | Definition (_, loc) | Declaration (_, _, _, loc) -> loc 
     in
     Cil.CurrentLoc.set loc;
-    Logic_utils.merge_funspec kf.spec spec;
-    kf.return_stmt <- None
+    Logic_utils.merge_funspec kf.spec spec
 
   let replace_by_declaration s v l=
 (*    Kernel.feedback "replacing %a by decl" Cil_datatype.Varinfo.pretty v;*)
@@ -237,12 +235,12 @@ module Functions = struct
     | Definition (n, l) ->
       Kernel.debug ~dkey
 	"@[<hov 2>Register definition %a with specification@. \"%a\"@]"
-        Varinfo.pretty_vname n.svar Cil_printer.pp_funspec n.sspec ;
+        Varinfo.pretty n.svar Cil_printer.pp_funspec n.sspec ;
       replace_by_definition n.sspec n l;
     | Declaration (spec, v,_,l) ->
       Kernel.debug ~dkey
 	"@[<hov 2>Register declaration %a with specification@ \"%a\"@]"
-        Varinfo.pretty_vname v Cil_printer.pp_funspec spec;
+        Varinfo.pretty v Cil_printer.pp_funspec spec;
       replace_by_declaration spec v l
 
   let iter f = Iterator.iter (fun v -> f (State.find v))
@@ -310,9 +308,18 @@ module Functions = struct
     else
       raise Not_found
 
+  let find_decl_by_name fct_name =
+    let vi = Datatype.String.Map.find fct_name (Iterator.State.get ()) in
+    let res = State.find vi in
+    if Ast_info.Function.is_definition res.fundec then
+      raise Not_found
+    else
+      res
+
   let () =
     Parameter_builder.find_kf_by_name := find_by_name;
     Parameter_builder.find_kf_def_by_name := find_def_by_name;
+    Parameter_builder.find_kf_decl_by_name := find_decl_by_name;
     Parameter_customize.find_kf_by_name := find_by_name
 
   exception Found of kernel_function
@@ -356,22 +363,26 @@ module Functions = struct
       [ self ]
       o
 
-  let def_category =
+  let generate_kf_category is_definition =
     let o = object
       method fold: 'a. (kernel_function -> 'a -> 'a) -> 'a -> 'a =
         fun f acc ->
           fold
             (fun kf acc -> match kf.fundec with
-            | Definition _ -> f kf acc
-            | Declaration _ -> acc)
+            | Definition _ -> if is_definition then f kf acc else acc
+            | Declaration _ -> if is_definition then acc else f kf acc)
             acc
       method mem kf =
-        State.mem (get_vi kf) && Ast_info.Function.is_definition kf.fundec
+        State.mem (get_vi kf) &&
+          (is_definition = Ast_info.Function.is_definition kf.fundec)
     end in
     Parameter_category.create "functions" Cil_datatype.Kf.ty
       ~register:true
       [ self ]
       o
+
+  let def_category = generate_kf_category true
+  let decl_category = generate_kf_category false
 
   let fundec_category =
     let o = object
@@ -403,6 +414,7 @@ module Functions = struct
   let () =
     Parameter_builder.kf_category := (fun () -> category);
     Parameter_builder.kf_def_category := (fun () -> def_category);
+    Parameter_builder.kf_decl_category := (fun () -> decl_category);
     Parameter_builder.kf_string_category := (fun () -> string_category);
     Parameter_builder.fundec_category := (fun () -> fundec_category)
 
@@ -480,24 +492,11 @@ module FileIndex = struct
       let l =  try snd (S.find filename) with Not_found -> [] in
       List.fold_right
         (fun glob acc ->
-           let is_glob_varinfo x =
-             if x.vglob then
-               match x.vtype with
-                 | TFun _ -> None
-                 | _ -> Some x
-             else
-               None
-           in
-           let is_glob_var v = match v with
-             | Cil_types.GVar (vi, _, _) ->
-                 is_glob_varinfo vi
-             | Cil_types.GVarDecl(_,vi, _) ->
-                 is_glob_varinfo vi
-             | _ -> None
-           in
-           match is_glob_var glob with
-           | None -> acc
-           | Some vi -> Varinfo.Set.add vi acc)
+           match glob with
+             | Cil_types.GVar (vi, _, _) | Cil_types.GVarDecl(vi, _)
+                 when vi.vglob -> Varinfo.Set.add vi acc
+             | _ -> acc
+        )
         l
         Varinfo.Set.empty
     in
@@ -522,18 +521,12 @@ module FileIndex = struct
            let is_func v = match v with
              | Cil_types.GFun(fundec, _) ->
                  Some (fundec.svar)
-             | Cil_types.GVarDecl(_,x, _) ->
-                 if x.vglob then
-                   match x.vtype with
-                     | TFun _ ->
-                         if declarations ||
-                           (match (Functions.get x).fundec with
-                                Definition _ -> false | Declaration _ -> true)
-                         then Some x
-                         else None
-                     | _ -> None
-                 else
-                   None
+             | Cil_types.GFunDecl(_,x, _) ->
+                 if declarations ||
+                   (match (Functions.get x).fundec with
+                     Definition _ -> false | Declaration _ -> true)
+                 then Some x
+                 else None
              | _ -> None
            in match is_func glob with
              | None -> acc
@@ -598,28 +591,57 @@ module Types = struct
         let name = "Logic_interp.Types"
        end)
 
-  let resolve_types () =
-    let aux_glob = function
-      | GType (ti, _) ->
-        Types.replace (ti.tname, Logic_typing.Typedef) (TNamed (ti, []))
+  (* Maps a typename (with its namespace) to its corresponding global. *)
+  module TypeNameToGlobal =
+    State_builder.Hashtbl
+      (Type_Name_Namespace.Hashtbl)
+      (Cil_datatype.Global)
+      (struct
+        let name = "Globals.Types.TypeNameToGlobal"
+        let size = 7
+        let dependencies = [ Ast.self ]
+      end)
 
-      | GEnumTag (ei, _) | GEnumTagDecl (ei, _) ->
-        Types.add (ei.ename, Logic_typing.Enum) (TEnum (ei, []));
-        let aux_ei ei =
-          let exp = Cil.new_exp ~loc:ei.eiloc (Const (CEnum ei)) in
-          Enums.replace ei.einame (exp, Cil.typeOf ei.eival)
-        in
+  let resolve_types () =
+    let aux_ei ei = (* for enums *)
+      let exp = Cil.new_exp ~loc:ei.eiloc (Const (CEnum ei)) in
+      Enums.replace ei.einame (exp, Cil.typeOf ei.eival)
+    in
+    let aux_glob g = match g with
+      | GType (ti, _loc) ->
+        let name_tag = (ti.tname, Logic_typing.Typedef) in
+        Types.replace name_tag (TNamed (ti, []));
+        TypeNameToGlobal.replace name_tag g
+
+      | GEnumTag (ei, _loc) ->
+        let name_tag = (ei.ename, Logic_typing.Enum) in
+        Types.add name_tag (TEnum (ei, []));
+        List.iter aux_ei ei.eitems;
+        TypeNameToGlobal.replace name_tag g
+
+      | GEnumTagDecl (ei, _) ->
+        let name_tag = (ei.ename, Logic_typing.Enum) in
+        Types.add name_tag (TEnum (ei, []));
         List.iter aux_ei ei.eitems
 
-      | GCompTag (ci, _) | GCompTagDecl (ci, _) ->
+      | GCompTag (ci, _loc) ->
         let kind = Logic_typing.(if ci.cstruct then Struct else Union) in
-        Types.add (ci.cname, kind) (TComp (ci, Cil.empty_size_cache (), []))
+        let name_tag = (ci.cname, kind) in
+        Types.add name_tag (TComp (ci, Cil.empty_size_cache (), []));
+        TypeNameToGlobal.replace name_tag g
+
+      | GCompTagDecl (ci, _) ->
+        let kind = Logic_typing.(if ci.cstruct then Struct else Union) in
+        let name_tag = (ci.cname, kind) in
+        Types.add name_tag (TComp (ci, Cil.empty_size_cache (), []))
+
       | _ -> ()
     in
     if not (Enums.is_computed ()) || not (Types.is_computed ()) then begin
       List.iter aux_glob (Ast.get ()).globals;
       Enums.mark_as_computed ();
-      Types.mark_as_computed ()
+      Types.mark_as_computed ();
+      TypeNameToGlobal.mark_as_computed ()
     end
 
   let find_enum_tag x =
@@ -629,6 +651,14 @@ module Types = struct
   let find_type namespace s =
     resolve_types ();
     Types.find (s, namespace)
+
+  let iter_types f =
+    resolve_types ();
+    Types.iter (fun (name, namespace) typ -> f name typ namespace)
+
+  let global namespace s =
+    resolve_types ();
+    TypeNameToGlobal.find (s, namespace)
 
 end
 
@@ -777,6 +807,6 @@ let get_comments_stmt s =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

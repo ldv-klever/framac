@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,7 +63,7 @@ struct
     let cmp = E.compare a c in
     if cmp <> 0 then cmp else E.compare b d
   let pretty fmt (x,y) = Format.fprintf fmt "(%a,%a)" E.pretty x E.pretty y
-end  
+end
 
 module PSYM(E : Elt) : Pair with type elt = E.t =
 struct

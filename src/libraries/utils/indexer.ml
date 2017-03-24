@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,6 +42,7 @@ struct
   (* -------------------------------------------------------------------------- *)
 
   let size = function Empty -> 0 | Node(n,_,_,_) -> n
+  let is_empty = function Empty -> true | Node _ -> false
 
   let rec lookup n a = function
     | Empty -> raise Not_found

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -123,6 +123,8 @@ module States = struct
       acc
 end
 
+module FCDatatype = Datatype
+
 module Register
   (D: Datatype.S)
   (Local_state: State.Local with type t = D.t)
@@ -228,6 +230,9 @@ struct
   let copy src dst =
     debug ~level:4 ("copying to " ^ Project.get_unique_name dst) src;
     let v = find src in
+    if Datatype.copy == FCDatatype.undefined then
+      abort "cannot copy project: unimplemented `copy' function in datatype \
+             `%s' for state `%s'" Datatype.name !internal_name;
     change ~force:false dst { v with state = Datatype.copy v.state }
 
   (* ******* TOUCH THE FOLLOWING AT YOUR OWN RISK: DANGEROUS CODE ******** *)
@@ -486,8 +491,6 @@ module type Hashtbl = sig
   val remove: key -> unit
 end
 
-module Initial_caml_hashtbl = Hashtbl
-
 module Hashtbl
   (H: Datatype.Hashtbl)
   (Data: Datatype.S)
@@ -631,7 +634,7 @@ end
 module Caml_weak_hashtbl(Data: Datatype.S) =
   Weak_hashtbl(Weak.Make(Data))(Data)
 
-module Hashconsing_tbl
+module Hashconsing_tbl_weak
   (Data: sig
     include Datatype.S
     val equal_internal: t -> t -> bool
@@ -692,6 +695,82 @@ struct
 
 end
 
+module Hashconsing_tbl_not_weak
+  (Data: sig
+    include Datatype.S
+    val equal_internal: t -> t -> bool
+    val hash_internal: t -> int
+    val initial_values: t list
+  end)
+  (Info: Info_with_size)
+  =
+struct
+
+  (* OCaml module typing requires to name this module. Too bad :-( *)
+  module W = struct
+
+    module HW = FCHashtbl.Make
+      (struct
+        include Data
+        let equal = Data.equal_internal
+        let hash = Data.hash_internal
+       end)
+    
+    type data = Data.t
+    type t = data HW.t
+    
+    let merge h v =
+      try HW.find h v
+      with Not_found ->
+        HW.add h v v;
+        v
+
+    let count = HW.length
+    
+    let add_initial_values h =
+      List.iter (fun vi -> let _r = merge h vi in ()) Data.initial_values
+
+    let create size =
+      let h = HW.create size in
+      add_initial_values h;
+      h
+
+    let clear t =
+      HW.clear t;
+      add_initial_values t
+
+    let stats _ =
+      abort "Not implemented: stats for %s (Hashconsing_tbl_no_gc)" Info.name
+    let fold f = HW.fold_sorted (fun v _ acc -> f v acc)
+    let iter f = HW.iter_sorted (fun v _ -> f v)
+    let mem = HW.mem
+    let find_all = HW.find_all
+    let find = HW.find
+    let remove = HW.remove
+    let add h v = HW.replace h v v 
+
+  end
+
+  include Weak_hashtbl(W)(Data)(Info)
+
+end
+
+module type Hashconsing_tbl =
+  functor
+    (Data: sig
+       include Datatype.S
+       val equal_internal: t -> t -> bool
+       val hash_internal: t -> int
+       val initial_values: t list
+    end) ->
+  functor (Info: Info_with_size) ->
+    Weak_hashtbl with type data = Data.t
+
+module Hashconsing_tbl =
+  (val if Cmdline.deterministic
+       then (module Hashconsing_tbl_not_weak: Hashconsing_tbl)
+       else (module Hashconsing_tbl_weak: Hashconsing_tbl))
+
 (* ************************************************************************* *)
 (** {3 Counters} *)
 (* ************************************************************************* *)
@@ -738,8 +817,6 @@ module SharedCounter(Info : sig val name : string end) = struct
 
 end
 
-module Cpt = SharedCounter(struct let name = "State_builder.Cpt" end)
-
 module Counter(Info : sig val name : string end) = struct
 
   let create () = ref 0
@@ -783,6 +860,7 @@ end
 
 module type Queue = sig
   type elt
+  val self: State.t
   val add: elt -> unit
   val iter: (elt -> unit) -> unit
   val is_empty: unit -> bool
@@ -823,6 +901,64 @@ module Queue(Data: Datatype.S)(Info: Info) = struct
 end
 
 (* ************************************************************************* *)
+(** {3 Arrays} *)
+(* ************************************************************************* *)
+
+module type Array = sig
+  type elt
+
+  val length: unit -> int
+  val set_length: int -> unit
+  val get: int -> elt
+  val set: int -> elt -> unit
+  val iter : (elt -> unit) -> unit
+  val iteri : (int -> elt -> unit) -> unit
+  val fold_left: ('a -> elt -> 'a) -> 'a -> 'a
+  val fold_right:  (elt -> 'a -> 'a) -> 'a -> 'a
+end
+
+module Array(Data: Datatype.S)(Info: sig include Info val default: Data.t end)=
+struct
+
+  type elt = Data.t
+
+  let state = ref (Array.make 0 Info.default)
+
+  include Register
+  (Datatype.Array(Data))
+  (struct
+     type t = elt array
+     let create () = Array.make 0 Info.default
+     let clear v  = Array.iteri (fun i _ -> v.(i) <- Info.default) v
+     let get () = !state
+     let set x = state := x
+     let clear_some_projects f q =
+       if Data.mem_project == Datatype.never_any_project then
+         false
+       else
+         let removed = ref false in
+         Array.iteri
+           (fun i x -> if Data.mem_project f x then begin
+             !state.(i) <- Info.default;
+             removed := true;
+           end
+           ) q;
+         !removed
+   end)
+  (struct include Info let unique_name = name end)
+
+  let length () = Array.length !state
+  let set_length i = state := Array.make i Info.default
+  let get i = !state.(i)
+  let set i v = !state.(i) <- v
+  let iter f = Array.iter f !state
+  let iteri f = Array.iteri f !state
+  let fold_left f acc = Array.fold_left f acc !state
+  let fold_right f acc = Array.fold_right f !state acc
+
+end
+
+(* ************************************************************************* *)
 (** {3 Apply Once} *)
 (* ************************************************************************* *)
 
@@ -850,8 +986,94 @@ let apply_once name dep f =
      end),
   First.self
 
+
+(* ****************************************************************************)
+(** {3 Generic hashconsing} *)
+(* ****************************************************************************)
+
+module type Hashcons = sig
+  type elt
+
+  include Datatype.S_with_collections
+
+  val hashcons: elt -> t
+  val get: t -> elt
+
+  val id: t -> int
+
+  val self: State.t
+end
+
+
+module Hashcons (Data: Datatype.S)(Info: Info) = struct
+
+  type elt = Data.t
+
+  type hashconsed = { key : Data.t; id : int; }
+
+  let rehash_ref = ref (fun _ -> assert false)
+
+  module D = Datatype.Make_with_collections (struct
+      include Datatype.Serializable_undefined
+      type t = hashconsed
+      let name = "Hashconsed(" ^ Data.name ^ "," ^ Info.name ^ ")"
+
+      let reprs = [ { key = List.hd Data.reprs; id = 0 } ]
+
+      let structural_descr =
+        Structural_descr.t_record
+          [| Data.packed_descr; Structural_descr.p_int |]
+
+      let equal = ( == )
+      let compare { id = t1 } { id = t2 } = Datatype.Int.compare t1 t2
+      let pretty fmt { key } = Data.pretty fmt key
+      let hash { id } = id
+      let copy c = c
+
+      let rehash x = !rehash_ref x
+
+    end)
+
+  include D
+
+  module HashConsTbl =
+    Hashconsing_tbl
+      (struct
+        include D
+        let hash_internal a =  Data.hash a.key
+        let equal_internal a b = Data.equal a.key b.key
+        let initial_values = [] (* TODO? *)
+      end)
+      (struct
+        let name = "Hashconstable(" ^ Data.name ^ "," ^ Info.name ^ ")"
+        let dependencies = Info.dependencies
+        let size = 128
+      end)
+
+  let self = HashConsTbl.self
+
+  let counter = ref 0
+
+  let hashcons key =
+    let id = !counter in
+    let hashed_atom = { key; id } in
+    let hashconsed_atom = HashConsTbl.merge hashed_atom in
+    if hashconsed_atom.id = !counter then
+      (* Fresh new atom. this counter id is used. *)
+      counter := succ !counter;
+    hashconsed_atom
+
+  let () = rehash_ref := fun x -> hashcons x.key
+
+  let get { key } = key
+  let id { id } = id
+
+end
+
+
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

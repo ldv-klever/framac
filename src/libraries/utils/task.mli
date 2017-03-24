@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,8 +21,7 @@
 (**************************************************************************)
 
 (** High Level Interface to Command.
-    @since Carbon-20101201
-    @plugin development guide *)
+    @since Carbon-20101201 *)
 
 (* ************************************************************************* *)
 (** {2 Task} *)
@@ -30,21 +29,14 @@
 
 type 'a task
 type 'a status =
-  | Timeout
+  | Timeout of int
   | Canceled
   | Result of 'a
   | Failed of exn
-type 'a running =
-  | Waiting
-  | Running of (unit -> unit)
-  | Finished of 'a status
 
 val error  : exn -> string (** Extract error message form exception *)
 
-val start  : 'a task -> unit
-val cancel : 'a task -> unit
 val wait   : 'a task -> 'a status (** Blocks until termination. *)
-val ping   : 'a task -> 'a running
 
 val map : ('a -> 'b) -> 'a status -> 'b status
 val pretty : (Format.formatter -> 'a -> unit) -> Format.formatter -> 'a status -> unit
@@ -161,12 +153,33 @@ val share : 'a shared -> 'a task
 (** New instance of shared task. *)
 
 (* ************************************************************************* *)
-(** {2 Task Server} *)
+(** {2 Task Thread} *)
 (* ************************************************************************* *)
 
-val run : unit task -> unit
+type thread
+
+val thread : 'a task -> thread
+val cancel : thread -> unit
+val running : thread -> bool
+  
+val run : thread -> unit
 (** Runs one single task in the background. 
     Typically using [on_idle]. *)
+
+(* ************************************************************************* *)
+(** {2 Task Pool} *)
+(* ************************************************************************* *)
+
+type pool
+val pool : unit -> pool
+val add : pool -> thread -> unit (** Auto-flush *)
+val iter : (thread -> unit) -> pool -> unit (** Auto-flush *)
+val flush : pool -> unit (** Clean all terminated tasks *)
+val size : pool -> int (** Auto-flush. Number of living tasks *)
+
+(* ************************************************************************* *)
+(** {2 Task Server} *)
+(* ************************************************************************* *)
 
 type server
 
@@ -179,7 +192,7 @@ val server :
       Stage 0 tasks are issued first. Default is 1.
       @param procs maximum number of running tasks. Default is 4. *)
 
-val spawn : server -> ?stage:int -> unit task -> unit
+val spawn : server -> ?pool:pool -> ?stage:int -> thread -> unit
   (** Schedules a task on the server.
       The task is not immediately started. *)
 
@@ -201,8 +214,13 @@ val on_server_start    : server -> (unit -> unit) -> unit
 val on_server_stop     : server -> (unit -> unit) -> unit
 (** On-stop server callback *)
 
+val on_server_wait     : server -> (unit -> unit) -> unit
+(** On-wait server callback (all tasks are scheduled) *)
+
 val scheduled  : server -> int (** Number of scheduled process *)
 val terminated : server -> int (** Number of terminated process *)
+val waiting : server -> int option
+(** All task scheduled and server is waiting for termination *)
 
 (* ************************************************************************* *)
 (** {2 GUI Configuration} *)

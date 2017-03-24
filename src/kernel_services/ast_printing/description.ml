@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,7 +42,7 @@ let rec stmt_labels = function
   | Label _ :: ls -> stmt_labels ls
   | Case(e,_) :: ls -> 
       let cvalue = (Cil.constFold true e) in
-      Pretty_utils.sfprintf "case %a" Printer.pp_exp cvalue
+      Format.asprintf "case %a" Printer.pp_exp cvalue
       :: stmt_labels ls
   | Default _ :: ls ->
       "default" :: stmt_labels ls
@@ -54,9 +54,10 @@ let pp_labels fmt stmt =
     | ls -> Format.fprintf fmt " '%s'" (String.concat "," ls)
 
 let pp_idpred kloc fmt idpred =
-  if idpred.ip_name <> [] 
-  then Format.fprintf fmt " '%s'" (String.concat "," idpred.ip_name)
-  else pp_kloc kloc fmt idpred.ip_loc
+  let np = idpred.ip_content in
+  if np.pred_name <> [] 
+  then Format.fprintf fmt " '%s'" (String.concat "," np.pred_name)
+  else pp_kloc kloc fmt np.pred_loc
 
 let pp_allocation kloc fmt (allocation:identified_term list) =
   if allocation = [] then Format.fprintf fmt "nothing"
@@ -106,7 +107,8 @@ let pp_for fmt = function
   | bs -> Format.fprintf fmt " for '%s'" (String.concat "," bs)
 
 let pp_named fmt nx =
-  if nx.name <> [] then Format.fprintf fmt " '%s'" (String.concat "," nx.name)
+  if nx.pred_name <> [] then
+    Format.fprintf fmt " '%s'" (String.concat "," nx.pred_name)
 
 let pp_code_annot fmt ca =
   match ca.annot_content with
@@ -118,6 +120,7 @@ let pp_code_annot fmt ca =
     | APragma _ -> Format.pp_print_string fmt "pragma"
     | AVariant _ -> Format.pp_print_string fmt "variant"
     | AStmtSpec _ -> Format.pp_print_string fmt "block contract"
+    | AExtended _ -> Format.pp_print_string fmt "extension"
 
 let pp_stmt kloc fmt stmt =
   match stmt.skind with
@@ -180,6 +183,11 @@ let pp_context kfopt fmt = function
 	    if not (Kernel_function.equal kf0 kf) then 
 	      Format.fprintf fmt " of '%s'" (Kernel_function.get_name kf)
 
+let pp_active fmt active =
+  Pretty_utils.pp_list
+    ~pre:" under active behaviors" ~sep:"," Format.pp_print_string fmt
+    (Datatype.String.Set.elements active)
+
 let rec pp_prop kfopt kiopt kloc fmt = function
   | IPAxiom (s,_,_,_,_) -> Format.fprintf fmt "Axiom '%s'" s
   | IPLemma (s,_,_,_,_) -> Format.fprintf fmt "Lemma '%s'" s
@@ -198,72 +206,77 @@ let rec pp_prop kfopt kiopt kloc fmt = function
       pp_predicate kind 
       (pp_idpred kloc) idpred 
       (pp_kinstr kloc) ki
-  | IPBehavior(_,ki,bhv) ->
+  | IPBehavior(_,ki, active, bhv) ->
     if Cil.is_default_behavior bhv then
-      Format.fprintf fmt "Default behavior%a" (pp_opt kiopt (pp_kinstr kloc)) ki
+      Format.fprintf fmt "Default behavior%a%a"
+        (pp_opt kiopt (pp_kinstr kloc)) ki (pp_opt kiopt pp_active) active
     else
       Format.fprintf fmt "Behavior '%s'%a" 
 	bhv.b_name
 	(pp_opt kiopt (pp_kinstr kloc)) ki
-  | IPComplete(_,ki,bs) ->
-    Format.fprintf fmt "Complete behaviors%a%a" 
+  | IPComplete(_,ki,active, bs) ->
+    Format.fprintf fmt "Complete behaviors%a%a%a" 
+      pp_bhvs bs
+      (pp_opt kiopt (pp_kinstr kloc)) ki (pp_opt kiopt pp_active) active
+  | IPDisjoint(_,ki,active, bs) ->
+    Format.fprintf fmt "Disjoint behaviors%a%a%a" 
       pp_bhvs bs
       (pp_opt kiopt (pp_kinstr kloc)) ki
-  | IPDisjoint(_,ki,bs) ->
-    Format.fprintf fmt "Disjoint behaviors%a%a" 
-      pp_bhvs bs
-      (pp_opt kiopt (pp_kinstr kloc)) ki
+      (pp_opt kiopt pp_active) active
   | IPCodeAnnot(_,_,{annot_content=AAssert(bs,np)}) ->
     Format.fprintf fmt "Assertion%a%a%a" 
       pp_for bs 
       pp_named np 
-      (pp_kloc kloc) np.loc
+      (pp_kloc kloc) np.pred_loc
   | IPCodeAnnot(_,_,{annot_content=AInvariant(bs,_,np)}) ->
     Format.fprintf fmt "Invariant%a%a%a" 
       pp_for bs 
       pp_named np 
-      (pp_kloc kloc) np.loc
+      (pp_kloc kloc) np.pred_loc
   | IPCodeAnnot(_,stmt,_) ->
     Format.fprintf fmt "Annotation %a" (pp_stmt kloc) stmt
-  | IPAllocation(kf,Kglobal,Id_behavior bhv,(frees,allocates)) ->
+  | IPAllocation(kf,Kglobal,Id_contract (_,bhv),(frees,allocates)) ->
     Format.fprintf fmt "Frees/Allocates%a %a/%a %a" 
       pp_bhv bhv 
       (pp_allocation kloc) frees
       (pp_allocation kloc) allocates
-      (pp_context kfopt) (Some kf) 
-  | IPAssigns(kf,Kglobal,Id_behavior bhv,region) ->
+      (pp_context kfopt) (Some kf)
+  | IPAssigns(kf,Kglobal,Id_contract(_, bhv),region) ->
     Format.fprintf fmt "Assigns%a %a%a" 
       pp_bhv bhv 
       (pp_region kloc) region 
       (pp_context kfopt) (Some kf) 
-  | IPFrom (kf,Kglobal,Id_behavior bhv,depend) ->
+  | IPFrom (kf,Kglobal,Id_contract(_,bhv),depend) ->
     Format.fprintf fmt "Froms%a %a%a"
       pp_bhv bhv 
       (pp_region kloc) [depend] 
       (pp_context kfopt) (Some kf) 
-  | IPAllocation(_,ki,Id_behavior bhv,(frees,allocates)) ->
-    Format.fprintf fmt "Frees/Allocates%a %a/%a %a" 
+  | IPAllocation(_,ki,Id_contract (active,bhv),(frees,allocates)) ->
+    Format.fprintf fmt "Frees/Allocates%a %a/%a %a%a" 
       pp_bhv bhv 
       (pp_allocation kloc) frees
       (pp_allocation kloc) allocates
       (pp_opt kiopt (pp_kinstr kloc)) ki
-  | IPAssigns(_,ki,Id_behavior bhv,region) ->
-    Format.fprintf fmt "Assigns%a %a%a"
+      (pp_opt kiopt pp_active) active
+  | IPAssigns(_,ki,Id_contract (active,bhv),region) ->
+    Format.fprintf fmt "Assigns%a %a%a%a"
       pp_bhv bhv 
       (pp_region kloc) region 
       (pp_opt kiopt (pp_kinstr kloc)) ki
-  | IPFrom (_,ki,Id_behavior bhv,depend) ->
-    Format.fprintf fmt "Froms%a %a%a" 
+      (pp_opt kiopt pp_active) active
+  | IPFrom (_,ki,Id_contract (active,bhv),depend) ->
+    Format.fprintf fmt "Froms%a %a%a%a" 
       pp_bhv bhv 
       (pp_region kloc) [depend] 
       (pp_opt kiopt (pp_kinstr kloc)) ki
-  | IPAllocation(_,_,Id_code_annot _,(frees,allocates)) ->
+      (pp_opt kiopt pp_active) active
+  | IPAllocation(_,_,Id_loop _,(frees,allocates)) ->
     Format.fprintf fmt "Loop frees%a Loop allocates%a" 
       (pp_allocation kloc) frees
       (pp_allocation kloc) allocates
-  | IPAssigns(_,_,Id_code_annot _,region) ->
+  | IPAssigns(_,_,Id_loop _,region) ->
     Format.fprintf fmt "Loop assigns %a" (pp_region kloc) region
-  | IPFrom(_,_,Id_code_annot _,depend) ->
+  | IPFrom(_,_,Id_loop _,depend) ->
     Format.fprintf fmt "Loop froms %a" (pp_region kloc) [depend]
   | IPDecrease(_,Kglobal,_,_) ->
     Format.fprintf fmt "Recursion variant"
@@ -306,6 +319,7 @@ type order =
   | F of Kernel_function.t
   | K of kinstr
   | B of funbehavior
+  | A of Datatype.String.Set.t
 
 let cmp_order a b = match a , b with
   | I a , I b -> Pervasives.compare a b
@@ -328,6 +342,9 @@ let cmp_order a b = match a , b with
   | B _ , _ -> (-1)
   | _ , B _ -> 1
   | K a , K b -> Cil_datatype.Kinstr.compare a b
+  | K _, _ -> (-1)
+  | _, K _ -> 1
+  | A a1, A a2 -> Datatype.String.Set.compare a1 a2
 
 let rec cmp xs ys = match xs,ys with
   | [],[] -> 0
@@ -352,21 +369,23 @@ let for_order k = function
   | [] -> [I k] 
   | bs -> I (succ k) :: named_order bs
 let annot_order = function
-  | {annot_content=AAssert(bs,np)} -> for_order 0 bs @ named_order np.name
-  | {annot_content=AInvariant(bs,_,np)} -> for_order 2 bs @ named_order np.name
+  | {annot_content=AAssert(bs,np)} ->
+    for_order 0 bs @ named_order np.pred_name
+  | {annot_content=AInvariant(bs,_,np)} ->
+    for_order 2 bs @ named_order np.pred_name
   | _ -> [I 4]
 let loop_order = function
-  | Id_behavior b -> [B b]
-  | Id_code_annot _ -> []
+  | Id_contract (active,b) -> [B b; A active]
+  | Id_loop _ -> []
       
 let rec ip_order = function
   | IPAxiomatic(a,_) -> [I 0;S a]
   | IPAxiom(a,_,_,_,_) | IPLemma(a,_,_,_,_) -> [I 1;S a]
   | IPOther(s,None,ki) -> [I 3;K ki;S s]
   | IPOther(s,Some kf,ki) -> [I 4;F kf;K ki;S s]
-  | IPBehavior(kf,ki,bhv) -> [I 5;F kf;K ki;B bhv]
-  | IPComplete(kf,ki,bs) -> [I 6;F kf;K ki] @ for_order 0 bs
-  | IPDisjoint(kf,ki,bs) -> [I 7;F kf;K ki] @ for_order 0 bs
+  | IPBehavior(kf,ki,a,bhv) -> [I 5;F kf;K ki;B bhv; A a]
+  | IPComplete(kf,ki,a,bs) -> [I 6;F kf;K ki; A a] @ for_order 0 bs
+  | IPDisjoint(kf,ki,a, bs) -> [I 7;F kf;K ki; A a] @ for_order 0 bs
   | IPPredicate(kind,kf,ki,_) -> [I 8;F kf;K ki] @ kind_order kind
   | IPCodeAnnot(kf,st,a) -> [I 9;F kf;K(Kstmt st)] @ annot_order a
   | IPAllocation(kf,ki,ib,_) -> [I 10;F kf;K ki] @ loop_order ib
@@ -395,6 +414,6 @@ let full_compare p q =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

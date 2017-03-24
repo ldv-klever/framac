@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -49,14 +49,14 @@ module Cfg (W : Mcfg.S) = struct
   let open_scope wenv formals blocks =
     List.fold_right
       (fun b obj -> W.scope wenv b.blocals Mcfg.SC_Block_out obj)
-      blocks 
+      blocks
       (W.scope wenv formals Mcfg.SC_Function_out W.empty)
 
   let add_goal wenv obj g =
     debug "add goal %a@." WpPropId.pp_pred_info g;
     W.add_goal wenv g obj
   (*[LC] Adding scopes for loop invariant preservation: WHY ???? *)
-  (*[LC] Nevertheless, if required, this form should be used (BTS #1462) 
+  (*[LC] Nevertheless, if required, this form should be used (BTS #1462)
     match WpPropId.is_loop_preservation (fst g) with
       | None -> W.add_goal wenv g obj
       | Some stmt ->
@@ -80,15 +80,15 @@ module Cfg (W : Mcfg.S) = struct
         let obj = W.use_assigns wenv a.WpPropId.a_stmt hid a obj in
         Some (Clabels.c_label a.WpPropId.a_label), obj
     | WpPropId.AssignsAny a ->
-        Wp_parameters.warning ~current:true ~once:true 
+        Wp_parameters.warning ~current:true ~once:true
           "Missing assigns clause (assigns 'everything' instead)" ;
         let obj = W.use_assigns wenv a.WpPropId.a_stmt None a obj in
         Some (Clabels.c_label a.WpPropId.a_label), obj
     | WpPropId.NoAssignsInfo -> None, obj
 
   (** detect if the computation of the result at [edge] is possible,
-   * or if it will loop. If [strategy] are provide, 
-   * cut are done on edges with cut properties, 
+   * or if it will loop. If [strategy] are provide,
+   * cut are done on edges with cut properties,
    * and if not, cut are done on loop node back edge if any.
    * TODO: maybe this should be done while building the strategy ?
    * *)
@@ -100,12 +100,12 @@ module Cfg (W : Mcfg.S) = struct
     let rec collect_edge_preds set e =
       let cut =
         match strategy with None ->  Cil2cfg.is_back_edge e
-                          | Some strategy -> 
+                          | Some strategy ->
                               let e_annots = WpStrategy.get_annots strategy e in
                               (WpStrategy.get_cut e_annots <> [])
       in
       if cut then () (* normal loop cut *)
-      else if Cil2cfg.Eset.mem e set 
+      else if Cil2cfg.Eset.mem e set
       then (* e is already in set : loop without cut ! *)
         raise (Stop e)
       else (* add e to set and continue with its preds *)
@@ -114,7 +114,7 @@ module Cfg (W : Mcfg.S) = struct
         List.iter (collect_edge_preds set) preds
     in
     try
-      let _ = collect_edge_preds Cil2cfg.Eset.empty edge in 
+      let _ = collect_edge_preds Cil2cfg.Eset.empty edge in
       debug "[test_edge_loop_ok] ok.";
       true
     with Stop e ->
@@ -230,8 +230,8 @@ module Cfg (W : Mcfg.S) = struct
         raise Not_found
                    | Some obj ->
                        if (res.mode = Pass2)
-                       && (List.length
-                             (Cil2cfg.pred_e res.cfg (Cil2cfg.edge_src e)) < 2) then
+                          && (List.length
+                                (Cil2cfg.pred_e res.cfg (Cil2cfg.edge_src e)) < 2) then
                          begin
                            (* it should be used once only : can free it *)
                            HE.replace res.tbl e None;
@@ -288,7 +288,7 @@ module Cfg (W : Mcfg.S) = struct
      * and continue with empty. *)
     let use_assigns wenv res obj h_assigns =
       let lab, obj = add_assigns_hyp wenv obj h_assigns in
-      match lab with 
+      match lab with
       | None -> obj
       | Some label -> add_oblig res label obj; W.empty
 
@@ -401,8 +401,8 @@ module Cfg (W : Mcfg.S) = struct
         end
     in
     if WpStrategy.new_loop_computation strategy
-    && R.is_pass1 res
-    && loop_with_cut cfg strategy nloop
+       && R.is_pass1 res
+       && loop_with_cut cfg strategy nloop
     then
       loop_with_cut_pass1 ()
     else (* old mode or no inv or pass2 *)
@@ -432,14 +432,14 @@ module Cfg (W : Mcfg.S) = struct
     let obj = W.merge wenv p_post p_exit in
     let call_asgn = WpStrategy.get_call_asgn cenv.post_annots None in
     let lab, obj = add_assigns_hyp wenv obj call_asgn in
-    match lab with 
+    match lab with
     | Some _ -> obj
     | None -> assert false
 
   let wp_call_kf wenv cenv stmt lval kf args precond ~p_post ~p_exit =
     let call_asgn = WpStrategy.get_call_asgn cenv.post_annots (Some kf) in
     let assigns = match call_asgn with
-      | WpPropId.AssignsLocations (_, asgn_body) -> 
+      | WpPropId.AssignsLocations (_, asgn_body) ->
           asgn_body.WpPropId.a_assigns
       | WpPropId.AssignsAny _ -> WritesAny
       | WpPropId.NoAssignsInfo -> assert false (* see above *)
@@ -450,19 +450,19 @@ module Cfg (W : Mcfg.S) = struct
         ~post:((WpStrategy.get_call_hyp cenv.post_annots kf))
         ~pexit:((WpStrategy.get_call_hyp cenv.exit_annots kf))
         ~assigns ~p_post ~p_exit in
-    if precond 
+    if precond
     then W.call_goal_precond wenv stmt kf args ~pre:(pre_goals) obj
     else obj
 
-  let wp_calls ((caller_kf, cfg, strategy, _, wenv)) res v stmt 
-      lval call args p_post p_exit 
+  let wp_calls ((caller_kf, cfg, strategy, _, wenv)) res v stmt
+      lval call args p_post p_exit
     =
     debug "[wp_calls] %a@." Cil2cfg.pp_call_type call;
     let cenv = callenv cfg strategy v in
     match call with
-    | Cil2cfg.Static kf -> 
-        let precond = 
-          WpStrategy.is_default_behavior strategy && R.is_pass1 res 
+    | Cil2cfg.Static kf ->
+        let precond =
+          WpStrategy.is_default_behavior strategy && R.is_pass1 res
         in
         wp_call_kf wenv cenv stmt lval kf args precond ~p_post ~p_exit
     | Cil2cfg.Dynamic fct ->
@@ -472,8 +472,8 @@ module Cfg (W : Mcfg.S) = struct
           wp_call_any wenv cenv ~p_post ~p_exit
         else
           let precond = R.is_pass1 res in
-          let call kf = 
-            let wp = wp_call_kf wenv cenv stmt lval 
+          let call kf =
+            let wp = wp_call_kf wenv cenv stmt lval
                 kf args precond ~p_post ~p_exit in
             kf , wp in
           let prop = Dyncall.property ~kf:caller_kf ?bhv ~stmt ~calls in
@@ -485,11 +485,10 @@ module Cfg (W : Mcfg.S) = struct
     | Instr i ->
         begin match i with
           | (Set (lv, e, _)) -> W.assign wenv s lv e obj
-          | (Call _) -> assert false
           | (Asm _) ->
-              Wp_parameters.warning
-                "Unsupported inline assembler. Assuming no effects.@.";
-              obj
+              let asm = WpPropId.mk_asm_assigns_desc s in
+              W.use_assigns wenv asm.WpPropId.a_stmt None asm obj
+          | (Call _) -> assert false
           | Skip _ | Code_annot _ -> obj
         end
     | Break _ | Continue _ | Goto _ -> obj
@@ -530,7 +529,7 @@ module Cfg (W : Mcfg.S) = struct
     with Not_found ->
       (* Notice that other hyp and goal are handled in R.set as usual *)
       let cutp =
-        if R.is_pass1 res 
+        if R.is_pass1 res
         then WpStrategy.get_cut (WpStrategy.get_annots strategy e)
         else []
       in
@@ -558,9 +557,11 @@ module Cfg (W : Mcfg.S) = struct
 
   and get_only_succ env cfg v = match Cil2cfg.succ_e cfg v with
     | [e'] -> get_wp_edge env e'
-    | ls -> Wp_parameters.fatal "CFG node %a has %d successors instead of 1@."
-              Cil2cfg.pp_node v (List.length ls)
-
+    | ls ->
+        Wp_parameters.debug "CFG node %a has %d successors instead of 1@."
+          Cil2cfg.pp_node v (List.length ls);
+        Wp_error.unsupported "strange loop(s)."
+ 
   and compute_wp_edge ((kf, cfg, _annots, res, wenv) as env) e =
     let v = Cil2cfg.edge_dst e in
     debug "[compute_edge] before %a go...@." Cil2cfg.pp_node v;
@@ -572,7 +573,8 @@ module Cfg (W : Mcfg.S) = struct
     let formals = Kernel_function.get_formals kf in
     let res = match Cil2cfg.node_type v with
       | Cil2cfg.Vstart ->
-          Wp_parameters.fatal "No CFG edge can lead to Vstart"
+          Wp_parameters.debug "No CFG edge can lead to Vstart";
+	  Wp_error.unsupported "strange CFGs."
       | Cil2cfg.VfctIn ->
           let obj = get_only_succ env cfg v in
           let obj = wp_scope wenv formals Mcfg.SC_Function_in obj in
@@ -645,9 +647,8 @@ module Cfg (W : Mcfg.S) = struct
           match ct with
           | TArray (ty,Some {enode = (Const CInt64 (size,_,_))},_,_)
             when Integer.lt (Integer.of_int len) size  ->
-
               W.init_range wenv lv ty
-                (Int64.of_int len) (Integer.to_int64 size) obj
+                (Integer.of_int len) size None obj
 
           | TComp (cp,_,_) when len < (List.length cp.cfields) ->
 
@@ -665,20 +666,62 @@ module Cfg (W : Mcfg.S) = struct
 
           | _ -> obj
         in
-        List.fold_left
-          (fun obj (off,init) ->
-             let lv = Cil.addOffsetLval off lv in
-             init_global_variable wenv lv init obj)
-          implicit_defaults (List.rev initl)
-        
+        match ct with
+        | TArray (ty,_,_,_)
+          when Wp_parameters.InitWithForall.get () ->
+            (** delayed: the last consecutive index have the same value
+                and are not yet initialized.
+                (i0,pred,il) =def \forall x. x \in [il;i0] t[x] == pred
+            *)
+            let make_quant obj = function
+              | None -> obj
+              | Some (Index({enode=Const (CInt64 (i0,_,_))}, NoOffset),exp,il)
+                when Integer.lt il i0 ->
+                  W.init_range wenv lv ty il (Integer.succ i0) (Some exp) obj
+              | Some (off,exp,_) ->
+                  let lv = Cil.addOffsetLval off lv in
+                  W.init_value wenv lv ty (Some exp) obj in
+            let obj, delayed =
+              List.fold_left
+                (fun (obj,delayed) (off,init) ->
+                   match delayed, off, init with
+                   | None, Index({enode=Const (CInt64 (i0,_,_))}, NoOffset),
+                     SingleInit curr ->
+                       (obj,Some(off,curr,i0))
+                   | Some (i0,prev,ip), Index({enode=Const (CInt64 (i,_,_))}, NoOffset),
+                     SingleInit curr
+                     when ExpStructEq.equal prev curr
+                          && Integer.equal (Integer.pred ip) i ->
+                       (obj,Some(i0,prev,i))
+                   | _, _,_ ->
+                       let obj = make_quant obj delayed in
+                       begin match off, init with
+                         | Index({enode=Const (CInt64 (i0,_,_))}, NoOffset),
+                           SingleInit curr ->
+                             obj, Some (off,curr,i0)
+                         | _ ->
+                             let lv = Cil.addOffsetLval off lv in
+                             init_global_variable wenv lv init obj, None
+                       end)
+                (implicit_defaults,None)
+                (** decreasing order *)
+                (List.rev initl) in
+            make_quant obj delayed
+        | _ ->
+            List.fold_left
+              (fun obj (off,init) ->
+                 let lv = Cil.addOffsetLval off lv in
+                 init_global_variable wenv lv init obj)
+              implicit_defaults (List.rev initl)
+
   let compute_global_init wenv filter obj =
     Globals.Vars.fold_in_file_order
       (fun var initinfo obj ->
          if var.vstorage = Extern then obj else
-           let do_init = match filter with 
-             | `All -> true 
-             | `InitConst -> WpStrategy.isGlobalInitConst var 
-           in if not do_init then obj 
+           let do_init = match filter with
+             | `All -> true
+             | `InitConst -> WpStrategy.isGlobalInitConst var
+           in if not do_init then obj
            else
              let old_loc = Cil.CurrentLoc.get () in
              Cil.CurrentLoc.set var.vdecl ;
@@ -703,24 +746,24 @@ module Cfg (W : Mcfg.S) = struct
 
   (* WP of global initialisations. *)
   let process_global_init wenv kf obj =
-    if WpStrategy.is_main_init kf then 
+    if WpStrategy.is_main_init kf then
       begin
         let obj = W.label wenv Clabels.Init obj in
         compute_global_init wenv `All obj
       end
     else if W.has_init wenv then
       begin
-        let obj = 
-          if WpStrategy.isInitConst () 
+        let obj =
+          if WpStrategy.isInitConst ()
           then process_global_const wenv obj else obj in
         let obj = W.use_assigns wenv None None WpPropId.mk_init_assigns obj in
         let obj = W.label wenv Clabels.Init obj in
         compute_global_init wenv `All obj
       end
     else
-      if WpStrategy.isInitConst () 
-      then compute_global_init wenv `InitConst obj
-      else obj
+    if WpStrategy.isInitConst ()
+    then compute_global_init wenv `InitConst obj
+    else obj
 
   let get_weakest_precondition cfg ((kf, _g, strategy, res, wenv) as env) =
     debug "[wp-cfg] start Pass1";
@@ -745,8 +788,8 @@ module Cfg (W : Mcfg.S) = struct
   let compute cfg strategy =
     debug "[wp-cfg] start computing with the strategy for %a"
       WpStrategy.pp_info_of_strategy strategy;
-    if WpStrategy.strategy_has_prop_goal strategy 
-    || WpStrategy.strategy_has_asgn_goal strategy then
+    if WpStrategy.strategy_has_prop_goal strategy
+       || WpStrategy.strategy_has_asgn_goal strategy then
       try
         let kf = Cil2cfg.cfg_kf cfg in
 
@@ -761,14 +804,14 @@ module Cfg (W : Mcfg.S) = struct
                                                     "non natural loop(s): try [-wp-invariants] option");
 
         let lvars = match WpStrategy.strategy_kind strategy with
-          | WpStrategy.SKfroms info -> info.WpStrategy.more_vars 
+          | WpStrategy.SKfroms info -> info.WpStrategy.more_vars
           | _ -> []
         in
         let wenv = W.new_env ~lvars kf in
         let res = R.empty cfg in
         let env = (kf, cfg, strategy, res, wenv) in
-        List.iter 
-          (fun (pid,thm) -> W.add_axiom pid thm) 
+        List.iter
+          (fun (pid,thm) -> W.add_axiom pid thm)
           (WpStrategy.global_axioms strategy) ;
         let goal = get_weakest_precondition cfg env in
         debug "[get_weakest_precondition] %a@." W.pretty goal;
@@ -781,7 +824,7 @@ module Cfg (W : Mcfg.S) = struct
         [goal] , annot_cfg
       with Wp_error.Error (_, msg) ->
         Wp_parameters.warning "@[calculus failed on strategy@ @[for %a@]@ \
-                               because@ %s (abort)@]" 
+                               because@ %s (abort)@]"
           WpStrategy.pp_info_of_strategy strategy
           msg;
         let annot_cfg fmt _e = Format.fprintf fmt "" in

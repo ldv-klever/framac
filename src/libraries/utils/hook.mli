@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,7 +40,7 @@ module type S = sig
      *)
 
   val extend_once: (param -> result) -> unit
-    (** Same as [extend], but the hook is added only if is is not already
+    (** Same as [extend], but the hook is added only if it is not already
         present; the comparison is made using [(==)]
 
         @since Oxygen-20120901
@@ -110,6 +110,6 @@ module Fold_ordered(P: sig module Id:Comparable type t end):
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

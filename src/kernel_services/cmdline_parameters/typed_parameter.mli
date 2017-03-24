@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,11 +20,10 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Parameter settable through a command line option. 
+(** Parameter settable through a command line option.
     This is a low level API, internaly used by the kernel. As a plug-in
     developer, you certainly prefer to use the API of {!Plugin} instead.
-    @since Nitrogen-20111001 
-    @plugin development guide *)
+    @since Nitrogen-20111001 *)
 
 type ('a, 'b) gen_accessor = 
     { get: unit -> 'a; 
@@ -68,6 +67,6 @@ val create:
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

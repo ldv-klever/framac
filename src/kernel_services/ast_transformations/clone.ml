@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,6 +40,9 @@ let clone_function_definition old_kf =
   visitor#set_current_kf old_kf;
   visitor#set_current_func old_fundec;
   let new_fundec = Visitor.visitFramacFunction visitor old_fundec in
+  (* update the CFG and sallstmts field *)
+  Cfg.clearCFGinfo ~clear_id:false new_fundec;
+  Cfg.cfgFun new_fundec;
   let new_vi = new_fundec.svar in
   new_vi.vname <- mk_new_name old_fundec.svar.vname;
   let new_funspec =
@@ -91,6 +94,6 @@ let clone_defined_kernel_function old_kf =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

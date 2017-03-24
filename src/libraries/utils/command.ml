@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,11 +34,9 @@ let pp_to_file f pp =
   let fout = Format.formatter_of_out_channel cout in
   try
     pp fout ;
-    Format.pp_print_newline fout () ;
     Format.pp_print_flush fout () ;
     safe_close_out cout
   with err ->
-    Format.pp_print_newline fout () ;
     Format.pp_print_flush fout () ;
     safe_close_out cout ;
     raise err
@@ -53,14 +51,14 @@ let pp_from_file fmt file =
       Format.pp_print_newline fmt () ;
     done
   with
-    | End_of_file ->
-        close_in cin
-    | err ->
-        close_in cin ;
-        raise err
+  | End_of_file ->
+      close_in cin
+  | err ->
+      close_in cin ;
+      raise err
 
 let rec bincopy buffer cin cout =
-  let s = String.length buffer in
+  let s = Bytes.length buffer in
   let n = Pervasives.input cin buffer 0 s in
   if n > 0 then
     ( Pervasives.output cout buffer 0 n ; bincopy buffer cin cout )
@@ -79,10 +77,7 @@ let on_out file job =
 
 let copy src tgt =
   on_inc src
-    (fun inc ->
-       on_out tgt
-         (fun out ->
-            bincopy (String.create 2048) inc out))
+    (fun inc -> on_out tgt (fun out -> bincopy (Bytes.create 2048) inc out))
 
 let read_file file job =
   let inc = open_in file in
@@ -90,12 +85,12 @@ let read_file file job =
   Extlib.try_finally ~finally job inc
 
 let read_lines file job =
-  read_file file 
+  read_file file
     (fun inc ->
        try
-	 while true do
-	   job (input_line inc) ;
-	 done
+         while true do
+           job (input_line inc) ;
+         done
        with End_of_file -> ())
 
 let write_file file job =
@@ -127,8 +122,8 @@ let time ?rmax ?radd job data =
     let re = catch job data in
     let t1 = Sys.time () in
     let dt = t1 -. t0 in
-    dt_max rmax dt ; 
-    dt_add radd dt ; 
+    dt_max rmax dt ;
+    dt_add radd dt ;
     return re ;
   end
 
@@ -137,6 +132,11 @@ let time ?rmax ?radd job data =
 (* -------------------------------------------------------------------------- *)
 
 type process_result = Not_ready of (unit -> unit) | Result of Unix.process_status
+
+let _pp_status fmt = function
+  | Unix.WEXITED s -> Format.fprintf fmt "exit[%d]" s
+  | Unix.WSIGNALED s -> Format.fprintf fmt "sig[%d]" s
+  | Unix.WSTOPPED s -> Format.fprintf fmt "stop[%d]" s
 
 let full_command cmd args ~stdin ~stdout ~stderr =
   let pid =
@@ -153,90 +153,86 @@ let full_command_async cmd args ~stdin ~stdout ~stderr =
   in
   (fun () ->
      match !last_result with
-       | Result _ as r -> r
-       | Not_ready _ as r ->
-           let child_id,status =
-             Unix.waitpid [Unix.WNOHANG; Unix.WUNTRACED] pid
-           in
-           if child_id = 0 then r
-           else (last_result := Result status; !last_result))
-
-let cleanup_and_fill b f =
+     | Result _ as r -> r
+     | Not_ready _ as r ->
+         let child_id,status =
+           Unix.waitpid [Unix.WNOHANG; Unix.WUNTRACED] pid
+         in
+         if child_id = 0 then r
+         else (last_result := Result status; !last_result))
+  
+let flush b f =
   match b with
-    | None -> Extlib.safe_remove f
-    | Some b ->
-        try
-          let cin = open_in_bin f in
-          (try
-            while true do
-              Buffer.add_string b (input_line cin);
-              Buffer.add_char b '\n'
-            done
-          with _ -> ());
-          close_in cin
-        with _ ->
-          Extlib.safe_remove f
+  | None -> ()
+  | Some b ->
+      try read_lines f
+            (fun line -> Buffer.add_string b line ; Buffer.add_char b '\n') ;
+      with Sys_error _ -> ()
+
+(*[LC] return the cancel function *)
+let cancelable_at_exit job =
+  let later = ref (Some job) in
+  Extlib.safe_at_exit
+    (fun () -> match !later with None -> () | Some job -> job ()) ;
+  fun () -> later := None
 
 let command_generic ~async ?stdout ?stderr cmd args =
   let inf,inc = Filename.open_temp_file
-    ~mode:[Open_binary;Open_rdonly; Open_trunc; Open_creat; Open_nonblock ]
-    "in_" ".tmp"
+      ~mode:[Open_binary;Open_rdonly; Open_trunc; Open_creat; Open_nonblock ]
+      "in_" ".tmp"
   in
   let outf,outc = Filename.open_temp_file
-    ~mode:[Open_binary;Open_wronly; Open_trunc; Open_creat]
-    "out_" ".tmp"
+      ~mode:[Open_binary;Open_wronly; Open_trunc; Open_creat]
+      "out_" ".tmp"
   in
   let errf,errc = Filename.open_temp_file
-    ~mode:[Open_binary;Open_wronly; Open_trunc; Open_creat]
-    "out_" ".tmp"
+      ~mode:[Open_binary;Open_wronly; Open_trunc; Open_creat]
+      "out_" ".tmp"
   in
-  let to_terminate = ref None in
-  let do_terminate () =
-    begin match !to_terminate with
-    | None -> ()
-    | Some pid -> Extlib.terminate_process pid
-    end;
-    Extlib.safe_remove inf;
-    Extlib.safe_remove outf;
-    Extlib.safe_remove errf
+  let delete () =
+    begin
+      Extlib.safe_remove inf;
+      Extlib.safe_remove outf;
+      Extlib.safe_remove errf;
+    end in
+  let deleted = cancelable_at_exit delete in
+  let pid = Unix.create_process cmd (Array.append [|cmd|] args)
+      (Unix.descr_of_out_channel inc)
+      (Unix.descr_of_out_channel outc)
+      (Unix.descr_of_out_channel errc)
   in
-  at_exit do_terminate; (* small memory leak : pending list of ref None ... *)
-  let pid = Unix.create_process cmd (Array.concat [[|cmd|];args])
-    (Unix.descr_of_out_channel inc)
-    (Unix.descr_of_out_channel outc)
-    (Unix.descr_of_out_channel errc)
-  in
-  to_terminate:= Some pid;
-  safe_close_out inc; 
-  safe_close_out outc; 
+  let killed = cancelable_at_exit
+      begin fun () ->
+        Extlib.terminate_process pid ;
+        Unix.(try ignore (waitpid [] pid) with Unix_error _ -> ()) ;
+      end in
+  safe_close_out inc;
+  safe_close_out outc;
   safe_close_out errc;
-    (*Format.printf "Generic run: %s " cmd;
-      Array.iter (fun s -> Format.printf "%s " s) args;
-      Format.printf "@.";*)
-  let last_result= ref (Not_ready do_terminate) in
-  let wait_flags = 
-    if async 
+  let kill () = Extlib.terminate_process pid in
+  let last_result= ref (Not_ready kill) in
+  let wait_flags =
+    if async
     then [Unix.WNOHANG; Unix.WUNTRACED]
     else [Unix.WUNTRACED]
   in
-  (fun () ->
+  begin fun () ->
     match !last_result with
-    | Result _p as r ->
-        (*Format.printf "Got result %d@."
-          (match _p with Unix.WEXITED x -> x | _ -> 99);*)
-      r
+    | Result _p as r -> r
     | Not_ready _ as r ->
-      let child_id,status = Unix.waitpid wait_flags pid in
-      if child_id = 0 then (assert async;r)
-      else (
-        to_terminate := None;
-          (*Format.printf "Got (%s) result after wait %d@."
-            cmd (match status with Unix.WEXITED x -> x | _ -> 99);*)
-        last_result := Result status;
-        cleanup_and_fill stdout outf;
-        cleanup_and_fill stderr errf;
-        Extlib.safe_remove inf;
-        !last_result))
+        let child_id,status = Unix.waitpid wait_flags pid in
+        if child_id = 0 then (assert async;r)
+        else
+          begin
+            let result = Result status in
+            flush stdout outf ;
+            flush stderr errf ;
+            delete () ;
+            deleted () ;
+            killed () ;
+            result
+          end
+  end
 
 let command_async ?stdout ?stderr cmd args =
   command_generic ~async:true ?stdout ?stderr cmd args
@@ -249,20 +245,20 @@ let command ?(timeout=0) ?stdout ?stderr cmd args =
     let start = ref (Unix.gettimeofday ()) in
     let running () =
       match f () with
-        | Not_ready terminate ->
-            begin
-              try
-                !Db.progress () ;
-                if timeout > 0 && Unix.gettimeofday () -. !start > ftimeout then
-                  raise Db.Cancel ;
-                true
-              with Db.Cancel as e ->
-                terminate ();
-                raise e
-            end
-        | Result r ->
-            res := r;
-            false
+      | Not_ready terminate ->
+          begin
+            try
+              !Db.progress () ;
+              if timeout > 0 && Unix.gettimeofday () -. !start > ftimeout then
+                raise Db.Cancel ;
+              true
+            with Db.Cancel as e ->
+              terminate ();
+              raise e
+          end
+      | Result r ->
+          res := r;
+          false
     in while running () do Extlib.usleep 100000 (* 0.1s *) done ; !res
   else
     let f = command_generic ~async:false ?stdout ?stderr cmd args in
@@ -272,6 +268,6 @@ let command ?(timeout=0) ?stdout ?stderr cmd args =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

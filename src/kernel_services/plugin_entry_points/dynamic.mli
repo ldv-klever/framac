@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,10 +20,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Dynamic plug-ins: registration and use. 
+(** Value accesses through dynamic typing.
     @plugin development guide *)
-
-val default_path: unit -> string list
 
 (* ************************************************************************* *)
 (** {2 Registration} *)
@@ -33,13 +31,13 @@ val register:
   ?comment:string -> 
   plugin:string -> 
   string -> 'a Type.t -> journalize:bool -> 'a -> 'a
-  (** [register ~plugin name ty v] registers [v] with the name
-      [name], the type [ty] and the plug-in [plugin].
-      @raise Type.AlreadyExists if [name] already exists. In other words you
-      cannot register a value with the same name twice.
-      @modify Boron-20100401 add the labeled argument "plugin"
-      @modify Oxygen-20120901 add the optional labeled argument "comment"
-      @plugin development guide *)
+(** [register ~plugin name ty v] registers [v] with the name
+    [name], the type [ty] and the plug-in [plugin].
+    @raise Type.AlreadyExists if [name] already exists. In other words you
+    cannot register a value with the same name twice.
+    @modify Boron-20100401 add the labeled argument "plugin"
+    @modify Oxygen-20120901 add the optional labeled argument "comment"
+    @plugin development guide *)
 
 (* ************************************************************************* *)
 (** {2 Access} *)
@@ -51,26 +49,22 @@ exception Unbound_value of string
 exception Unloadable of string
 (** Exception that a plug-in can throw if it detects that it
     can't be loaded. It is caught by {!Dynamic.load_module} and
-   {!Dynamic.load_script}
+    {!Dynamic.load_script}
     @since Oxygen-20120901 *)
 
 val get: plugin:string -> string -> 'a Type.t -> 'a
-  (** [get ~plugin name ty] returns the value registered with the name
-      [name], the type [ty] and the plug-in [plugin]. This plug-in will be
-      loaded if required.
-      @raise Unbound_value if the name is not registered
-      @raise Incompatible_type if the name is not registered
-      with a compatible type
-      @raise Failure _ in the -no-obj mode
-      @plugin development guide *)
+(** [get ~plugin name ty] returns the value registered with the name
+    [name], the type [ty] and the plug-in [plugin]. This plug-in will be
+    loaded if required.
+    @raise Unbound_value if the name is not registered
+    @raise Incompatible_type if the name is not registered
+    with a compatible type
+    @raise Failure _ in the -no-obj mode
+    @plugin development guide *)
 
 val iter: (string -> 'a Type.t -> 'a -> unit) -> unit
 val iter_comment : (string -> string -> unit) -> unit
 (** @since Oxygen-20120901 *)
-
-val is_plugin_present: string -> bool
-(** @return true iff the given plug-in is loaded and usable.
-    @since Nitrogen-20111001 *)
 
 (* ************************************************************************* *)
 (** {2 Dedicated access to plug-in parameters} *)
@@ -110,9 +104,9 @@ module Parameter : sig
   module Bool: sig
     include Common with type t = bool
     val on: string -> unit -> unit
-      (** Set the parameter to [true]. *)
+    (** Set the parameter to [true]. *)
     val off : string -> unit -> unit
-      (** Set the parameter to [false]. *)
+    (** Set the parameter to [false]. *)
   end
 
   (** Integer parameters. *)
@@ -138,9 +132,9 @@ module Parameter : sig
     include Common with type t = string list
     val add: string -> string  -> unit
     val append_before: string -> string list -> unit
-      (** @since Neon-20140301 *)
+    (** @since Neon-20140301 *)
     val append_after: string -> string list -> unit
-      (** @since Neon-20140301 *)
+    (** @since Neon-20140301 *)
     val remove: string -> string -> unit
     val is_empty: string -> unit -> bool
     val iter: string -> (string -> unit) -> unit
@@ -148,48 +142,23 @@ module Parameter : sig
 
 end
 
-(**/**)
 (* ************************************************************************* *)
-(** {2 Kernel materials} *)
+(** {2 Dynamically Loaded Modules} *)
 (* ************************************************************************* *)
-
-val object_file_extension_regexp: string
-  (** Object file extension used when loading a module. See function
-      {!load_module}.
-      @since Sodium-20150201 *)
-
-val add_path: string -> bool
-(** Add a path into the search paths, if it is not already in the list.
-    @return true iff the path is really added to the list. *)
 
 val load_module: string -> unit
-  (** Load the module with the given name. The module is searched in
-      search paths if the name is implicit (that is if the file name is relative
-      and does not start with an explicit reference to the current directory (./
-      or ../ in Unix). Do nothing if dynamic loading is not available.
-      @modify Nitrogen-20111001 better strategy for searching modules *)
+(** Load the module specification. See -load-module option.
+    @modify Magnesium-20151001 new API. *)
 
-val load_script: string -> unit
-  (** Compile then load the OCaml script with the given name. The file is
-      searched in the current directory, next in search paths if the name is
-      implicit (that is if the file name is relative and does not start with an
-      explicit reference to the current directory (./ or ../ in Unix). Do
-      nothing if dynamic loading is not available.
-      @since Beryllium-20090601-beta1
-      @modify Nitrogen-20111001 better strategy for searching modules *)
-
-val set_default: bool -> unit
-  (** Search in all the default directories iff the parameter is [true].
-      @since Boron-20100401 *)
-
-val add_dependencies: from:string -> string -> unit
-(** [add_dependencies ~from p] indicates that the plugin [from] must be loaded
-    before [p].
-    @since Neon-20140301 *)
+(**/**)
+val load_plugin_path: string list -> unit
+(** Load all plugins in FRAMAC_PLUGIN with prepend path.
+    Must be invoked only once from boot during extending stage.
+    @since Magnesium-20151001 new API. *)
 (**/**)
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

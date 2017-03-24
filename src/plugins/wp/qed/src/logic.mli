@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -124,6 +124,15 @@ type ('f,'a) funtype = {
   params : ('f,'a) datatype list ; (** Type of parameters *)
 }
 
+(** representation of terms. type arguments are the following:
+  - 'z: representation of integral constants
+  - 'f: representation of fields
+  - 'a: representation of abstract data types
+  - 'd: representation of functions
+  - 'x: representation of free variables
+  - 'b: representation of bound term (phantom type equal to 'e)
+  - 'e: sub-expression
+*)
 type ('z,'f,'a,'d,'x,'b,'e) term_repr =
   | True
   | False
@@ -147,10 +156,10 @@ type ('z,'f,'a,'d,'x,'b,'e) term_repr =
   | Not   of 'e
   | Imply of 'e list * 'e
   | If    of 'e * 'e * 'e
-  | Fun   of 'd * 'e list
+  | Fun   of 'd * 'e list (** Complete call (no partial app.) *)
   | Fvar  of 'x
   | Bvar  of int * ('f,'a) datatype
-  | Apply of 'e * 'e list
+  | Apply of 'e * 'e list (** High-Order application (Cf. binder) *)
   | Bind  of binder * ('f,'a) datatype * 'b
 
 type ('z,'a) affine = { constant : 'z ; factors : ('z * 'a) list }
@@ -272,11 +281,14 @@ sig
   val sigma : unit -> sigma
 
   val e_subst : ?sigma:sigma -> (term -> term) -> term -> term
+  val e_subst_var : var -> term -> term -> term
 
   (** {3 Localy Nameless Representation} *)
-  
+
   val lc_bind : var -> term -> bind (** Close [x] as a new bound variable *)
   val lc_open : var -> bind -> term (** Instanciate top bound variable *)
+  val lc_open_term : term -> bind -> term
+  (** Instanciate top bound variable with the given term *)
   val lc_closed : term -> bool
   val lc_closed_at : int -> term -> bool
   val lc_vars : term -> Bvars.t
@@ -297,7 +309,7 @@ sig
 
   val set_builtin : Fun.t -> (term list -> term) -> unit
   (** Register a simplifier for function [f]. The computation code
-      	may raise [Not_found], in which case the symbol is not interpreted. 
+      	may raise [Not_found], in which case the symbol is not interpreted.
 
       	If [f] is an operator with algebraic rules (see type
       	[operator]), the children are normalized {i before} builtin
@@ -308,8 +320,8 @@ sig
   *)
 
   val set_builtin_eq : Fun.t -> (term -> term -> term) -> unit
-  (** Register a builtin equality for comparing any term with head-symbol. 
-      	{b Must} only use recursive comparison for strictly smaller terms. 
+  (** Register a builtin equality for comparing any term with head-symbol.
+      	{b Must} only use recursive comparison for strictly smaller terms.
       	The recognized term with head function symbol is passed first.
 
       	Highest priority is [0].
@@ -317,8 +329,8 @@ sig
   *)
 
   val set_builtin_leq : Fun.t -> (term -> term -> term) -> unit
-  (** Register a builtin for comparing any term with head-symbol. 
-      	{b Must} only use recursive comparison for strictly smaller terms. 
+  (** Register a builtin for comparing any term with head-symbol.
+      	{b Must} only use recursive comparison for strictly smaller terms.
       	The recognized term with head function symbol can be on both sides.
       	Strict comparison is automatically derived from the non-strict one.
 
@@ -328,6 +340,8 @@ sig
 
   (** {3 Specific Patterns} *)
 
+  val consequence : term -> term -> term
+  (** Kowning [h], [consequence h a] returns [b] such that [h -> (a<->b)] *)
   val literal : term -> bool * term
   val congruence_eq : term -> term -> (term * term) list option
   (** If [congruence_eq a b] returns [[ai,bi]], [a=b] is equivalent to [And{ai=bi}]. *)
@@ -372,9 +386,9 @@ sig
 
   (** {2 Shared sub-terms} *)
 
-  val shared : 
-    ?shared:(term -> bool) -> 
-    ?shareable:(term -> bool) -> 
+  val shared :
+    ?shared:(term -> bool) ->
+    ?shareable:(term -> bool) ->
     term list -> term list
   (** Computes the sub-terms that appear several times.
       	[shared marked linked e] returns the shared subterms of [e].
@@ -390,14 +404,31 @@ sig
   (** Low-level shared primitives: [shared] is actually a combination of
       building marks, marking terms, and extracting definitions:
 
-      {[ let m = marks ?... () in List.iter (mark m) es ; defs m ]} *)
+      {[ let share ?... e =
+           let m = marks ?... () in 
+           List.iter (mark m) es ; 
+           defs m ]} *)
 
   type marks
+
+  (** Create a marking accumulator
+      @param shared terms that are (or will be) already shared
+      (default to none) 
+      @param shareable terms that can be shared (default to all) *)
   val marks :
-    ?shared:(term -> bool) -> 
-    ?shareable:(term -> bool) -> 
+    ?shared:(term -> bool) ->
+    ?shareable:(term -> bool) ->
     unit -> marks
+
+  (** Mark a term to be printed *)
   val mark : marks -> term -> unit
+
+  (** Mark a term to be explicitely shared *)
+  val share : marks -> term -> unit
+
+  (** Returns a list of terms to be shared among all {i shared} or {i
+      marked} subterms.  The order of terms is consistent with
+      definition order: head terms might be used in tail ones. *)
   val defs : marks -> term list
 
 end

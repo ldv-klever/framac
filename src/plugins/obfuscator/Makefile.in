@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2015                                               #
+#  Copyright (C) 2007-2016                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -21,10 +21,10 @@
 ##########################################################################
 
 ifndef FRAMAC_SHARE
-FRAMAC_SHARE  :=$(shell frama-c -journal-disable -print-path)
+FRAMAC_SHARE  :=$(shell frama-c-config -print-share-path)
 endif
 ifndef FRAMAC_LIBDIR
-FRAMAC_LIBDIR :=$(shell frama-c -journal-disable -print-libpath)
+FRAMAC_LIBDIR :=$(shell frama-c-config -print-libpath)
 endif
 PLUGIN_DIR ?=.
 
@@ -38,7 +38,6 @@ PLUGIN_CMO:= options \
 	obfuscate \
 	obfuscator_register
 
-PLUGIN_HAS_MLI:=yes
 PLUGIN_DISTRIB_EXTERNAL:= Makefile.in configure.ac configure
 PLUGIN_NO_TEST:=yes
 

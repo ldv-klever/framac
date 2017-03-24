@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -49,9 +49,10 @@ let main () =
     Inout_parameters.Output.get () && ShouldOutput.get ()
   then begin
     ShouldOutput.set false;
-    !Db.Semantic_Callgraph.topologically_iter_on_functions
+    !Db.Value.compute ();
+    Callgraph.Uses.iter_in_rev_order
       (fun kf ->
-         if Kernel_function.is_definition kf
+         if Kernel_function.is_definition kf && !Db.Value.is_called kf
          then begin
            if forceout
            then Inout_parameters.result "%a" Outputs.pretty_internal kf ;
@@ -81,6 +82,6 @@ let () = Db.Main.extend main
 
 (*
 Local Variables:
-compile-command: "make -C ../.. -j"
+compile-command: "make -C ../../.."
 End:
 *)

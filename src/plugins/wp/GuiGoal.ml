@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,6 +20,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
+open Widget
+
 (* -------------------------------------------------------------------------- *)
 (* --- PO Details View                                                    --- *)
 (* -------------------------------------------------------------------------- *)
@@ -35,7 +37,7 @@ type display_state =
   | DSP_goal of Wpo.t * VCS.prover option
 
 let icon = function
-  | VCS.NoResult -> `REMOVE
+  | VCS.NoResult | VCS.Checked -> `REMOVE
   | VCS.Failed -> `DIALOG_WARNING
   | VCS.Valid -> `YES
   | VCS.Unknown | VCS.Invalid -> `NO
@@ -44,18 +46,18 @@ let icon = function
 
 class prover prv =
   let label  = VCS.name_of_prover prv in
-  let button = new Toolbox.button ~label () in
+  let button = new Widget.button ~label () in
   object(self)
     val mutable state = PS_nogoal
     val mutable run = (fun _ _ -> ())
     val mutable log = (fun _ _ -> ())
-    method widget = (button :> Toolbox.widget)    
+    method widget = (button :> widget)
     method set_display = function
-      | DSP_nogoal -> 
+      | DSP_nogoal ->
           begin
-            state <- PS_nogoal ; 
-            button#set_relief false ; 
-            button#set_icon None ;
+            state <- PS_nogoal ;
+            button#set_relief false ;
+            button#set_icon `None ;
             button#set_enabled false ;
           end
       | DSP_goal (w,p) ->
@@ -67,35 +69,35 @@ class prover prv =
                 begin
                   state <- PS_click_to_play w ;
                   button#set_relief true ;
-                  button#set_icon (Some `MEDIA_PLAY) ;
+                  button#set_icon `MEDIA_PLAY ;
                 end
-            | VCS.Computing kill -> 
+            | VCS.Computing kill ->
                 let me = match p with None -> false | Some p -> p=prv in
                 if me then
                   begin
                     state <- PS_click_to_stop(w,kill) ;
                     button#set_relief true ;
-                    button#set_icon (Some `MEDIA_STOP) ;
+                    button#set_icon `MEDIA_STOP ;
                   end
                 else
                   begin
                     state <- PS_click_to_log w ;
                     button#set_relief false ;
-                    button#set_icon (Some `EXECUTE) ;
+                    button#set_icon `EXECUTE ;
                   end
             | _ ->
                 let me = match p with None -> false | Some p -> p=prv in
-                if me then 
+                if me then
                   begin
                     state <- PS_click_to_play w ;
                     button#set_relief true ;
-                    button#set_icon (Some (icon v)) ;
+                    button#set_icon (icon v) ;
                   end
                 else
                   begin
                     state <- PS_click_to_log w ;
                     button#set_relief false ;
-                    button#set_icon (Some (icon v)) ;
+                    button#set_icon (icon v) ;
                   end
 
           end
@@ -109,7 +111,7 @@ class prover prv =
       | PS_click_to_play w -> run w prv
       | PS_click_to_stop(w,kill) -> kill () ; log w prv
 
-    initializer 
+    initializer
       begin
         self#set_display DSP_nogoal ;
         button#connect (fun () -> self#click) ;
@@ -118,12 +120,13 @@ class prover prv =
   end
 
 class pane () =
-  let goal = new Toolbox.button ~tooltip:"Proof Obligation" ~icon:`FILE () in
+  let goal = new Widget.button ~tooltip:"Proof Obligation" ~icon:`FILE () in
   let title = GMisc.label ~xalign:0.0 ~text:"Goal" () in
-  let text = new Toolbox.text () in
+  let text = new Wtext.text () in
+  let () = text#set_font "Monospace" in
   let hbox = GPack.hbox ~show:true () in
   let vbox = GPack.vbox ~show:true () in
-  let provers = List.map (new prover) 
+  let provers = List.map (new prover)
       [VCS.AltErgo ; VCS.Coq ; VCS.Why3ide] in
   object(self)
 
@@ -136,7 +139,7 @@ class pane () =
         hbox#pack ~expand:false goal#coerce ;
         hbox#pack ~padding:3 ~expand:true ~fill:true title#coerce ;
         let tabs = List.map (fun p -> p#widget) provers in
-        let rack = new Toolbox.rack tabs in
+        let rack = Wbox.hgroup tabs in
         hbox#pack ~expand:false rack#coerce ;
         vbox#pack ~expand:false hbox#coerce ;
         vbox#pack ~expand:true ~fill:true text#coerce ;
@@ -146,22 +149,22 @@ class pane () =
         List.iter (fun p -> p#on_run self#run) provers ;
       end
 
-    method private goal = 
+    method private goal =
       match state with
       | DSP_nogoal | DSP_goal(_,None) -> ()
       | DSP_goal(w,Some _) -> state <- DSP_goal(w,None) ; self#update
 
     method private log w p =
       begin
-        state <- DSP_goal(w,Some p) ; 
-        self#update ; 
+        state <- DSP_goal(w,Some p) ;
+        self#update ;
       end
 
     method private run w p =
       begin
         state <- DSP_goal(w,Some p) ;
         run w p ;
-        self#update ; 
+        self#update ;
       end
 
     method on_run f = run <- f
@@ -175,8 +178,8 @@ class pane () =
       text#clear ;
       begin
         List.iter (fun p -> p#set_display state) provers ;
-        match state with 
-        | DSP_nogoal -> 
+        match state with
+        | DSP_nogoal ->
             begin
               title#set_text "No Goal" ;
             end

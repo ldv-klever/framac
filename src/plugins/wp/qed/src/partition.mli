@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,7 @@ sig
   val class_of : t -> elt -> elt (** Amortized. *)
   val is_equal : t -> elt -> elt -> bool
   (** Returns [true] is the two elements are in the same class. *)
-  val members : t -> elt -> elt list 
+  val members : t -> elt -> elt list
   (** All members, including self. Explanations can be recover from [explain]. *)
 
 
@@ -52,14 +52,14 @@ end
 module type Explain =
 sig
   type t
-  val bot : t 
+  val bot : t
   val cup : t -> t -> t
 end
 
 (** Partitions without Explanations *)
-module Make(A : Map.OrderedType) : S 
+module Make(A : Map.OrderedType) : S
   with type elt = A.t and type explain = unit
 
 (** Partitions with Explanations *)
-module MakeExplain(A : Map.OrderedType)(E : Explain) : S 
+module MakeExplain(A : Map.OrderedType)(E : Explain) : S
   with type elt = A.t and type explain = E.t

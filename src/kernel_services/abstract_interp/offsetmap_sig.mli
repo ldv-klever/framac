@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,8 +31,6 @@ type v (** Type of the values stored in the offsetmap *)
 type widen_hint
 type alarm = bool (** [true] indicates that an alarm may have occurred *)
 include Datatype.S (** Datatype for the offsetmaps *)
-type t_bottom = [ `Bottom | `Map of t]
-type t_top_bottom = [ `Bottom | `Map of t | `Top ]
 
 
 (** {2 Pretty-printing} *)
@@ -62,6 +60,17 @@ val of_list: ((t -> v -> t) -> t -> 'l -> t) -> 'l -> Int.t -> t
     be of size [size]. [c] must be such that [fold] is called at least
     once. *)
 
+val empty: t
+(** offsetmap containing no interval. *)
+
+val size_from_validity: Base.validity -> Integer.t Bottom.or_bottom
+(** [size_from_validity v] returns the size to be used when creating a
+    new offsetmap for a base with validity [v]. This is a convention that
+    must be shared by all modules that create offsetmaps, because operations
+    such as {!join} or {!is_included} require offsetmaps of the same .
+    Returns [`Bottom] iff [v] is {!Base.Invalid}.
+    @since Aluminium-20160501 *)
+
 
 (** {2 Iterators} *)
 
@@ -69,7 +78,7 @@ val iter:
   ((Int.t * Int.t) -> (v * Int.t * Rel.t) -> unit) ->
   t -> unit
 (** [iter f m] calls [f] on all the intervals bound in [m], in increasing
-    order. The arguments of [f (min, max) (v, size, offset)] are as follow:
+    order. The arguments of [f (min, max) (v, size, offset)] are as follows:
     - [(start, stop)] are the bounds of the interval, inclusive.
     - [v] is the value bound to the interval, and [size] its size;  if [size]
       is less than [stop-start+1], [v] repeats itself until [stop].
@@ -84,15 +93,18 @@ val fold:
 (** Same as [iter], but with an accumulator. *)
 
 val fold_between:
+  ?direction:[`LTR | `RTL] ->
   entire:bool ->
   Int.t * Int.t ->
   ((Int.t * Int.t) -> (v * Int.t * Rel.t) -> 'a -> 'a) ->
   t -> 'a -> 'a
-(** [fold_between ~entire (start, stop) m acc] is similar to [fold f m acc],
-    except that only the intervals that intersect [start..stop] (inclusive)
-    are presented. If [entire] is true, intersecting intervals are presented
-    whole (ie. they may be bigger than [start..stop]). If [entire] is [false],
-    only the intersection with [ib..ie] is presented. *)
+(** [fold_between ~direction:`LTR ~entire (start, stop) m acc] is similar to
+    [fold f m acc], except that only the intervals that intersect [start..stop]
+    (inclusive) are presented. If [entire] is true, intersecting intervals are
+    presented whole (ie. they may be bigger than [start..stop]). If [entire]
+    is [false], only the intersection with [ib..ie] is presented.
+    [fold_between ~direction:`RTL] reverses the iteration order: interval
+    are passed in decreasing order. Default is [`LTR]. *)
 
 
 (** {2 Interval-unaware iterators} *)
@@ -124,7 +136,7 @@ type map2_decide =
     [f m m' = m'], etc. *)
 
 val map2_on_values:
-  Hptmap.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
+  Hptmap_sig.cache_type -> (t -> t -> map2_decide) -> (v -> v -> v) -> t -> t -> t
 (** [map2_on_values cache decide join m1 m2] applies [join] pointwise to
     all the elements of [m1] and [m2] and buils the resulting map. This function
     can only be called if [m1] and [m2] contain isotropic values. [decide]
@@ -137,13 +149,19 @@ val map2_on_values:
 (** {2 Join and inclusion testing} *)
 
 include Lattice_type.Join_Semi_Lattice with type t := t
-include Lattice_type.With_Narrow with type t := t
-
-val join_top_bottom: [< t_top_bottom] -> [<  t_top_bottom] -> [> t_top_bottom]
 
 val widen : widen_hint -> t -> t -> t
 (** [widen wh m1 m2] performs a widening step on [m2], assuming that
     [m1] was the previous state. The relation [is_included m1 m2] must hold *)
+
+(** {2 Narrowing} *)
+
+module Make_Narrow (X: sig
+    include Lattice_type.With_Top with type t := v
+    include Lattice_type.With_Narrow with type t := v
+  end) : sig
+  include Lattice_type.With_Narrow with type t := t
+end
 
 
 (** {2 Searching values} *)
@@ -154,7 +172,8 @@ val find :
   offsets:Ival.t -> size:Integer.t ->
   t -> bool * v
 (** Find the value bound to a set of intervals, expressed as an ival, in the
-    given rangemap. *)
+    given rangemap. The returned boolean (alarm) indicates that at least one
+    of the offsets does not comply with [validity]. *)
 
 val find_imprecise: validity:Base.validity-> t -> v
 (** [find_imprecise ~validity m] returns an imprecise join of the values bound
@@ -166,7 +185,7 @@ val find_imprecise_everywhere: t -> v
 val copy_slice:
   validity:Base.validity ->
   offsets:Ival.t -> size:Integer.t ->
-  t -> alarm * [`Map of t | `Bottom]
+  t -> alarm * t Bottom.or_bottom
 (** [copy_slice ~validity ~offsets ~size m] copies and merges the slices of
     [m] starting at offsets [offsets] and of  size [size]. Offsets invalid
     according to [validity] are removed. [size] must be strictly greater
@@ -190,7 +209,7 @@ val update :
   offsets:Ival.t ->
   size:Int.t ->
   v ->
-  t -> alarm * t_bottom
+  t -> alarm * t Bottom.or_bottom
 (** [update ?origin ~validity ~exact ~offsets ~size v m] writes [v],
     of size [size], each [offsets] in [m]; [m] must be of the size implied by
     [validity]. [~exact=true] results in a strong update, while
@@ -206,7 +225,7 @@ val update_under :
   offsets:Ival.t ->
   size:Int.t ->
   v ->
-  t -> alarm * t_bottom
+  t -> alarm * t Bottom.or_bottom
 (** Same as {!update}, except that no over-approximation on the set
     of offsets or on the value written occurs. In case of imprecision,
     [m] is not updated. *)
@@ -215,7 +234,7 @@ val update_under :
 val update_imprecise_everywhere:
   validity:Base.validity ->
   Origin.t -> v ->
-  t -> t_bottom
+  t -> t Bottom.or_bottom
 (** [update_everywhere ~validity o v m] computes the offsetmap resulting
     from imprecisely writing [v] potentially anywhere where [m] is valid
     according to [validity]. If a value becomes too imprecise, [o] is used
@@ -227,7 +246,7 @@ val paste_slice:
   from:t ->
   size:Int.t ->
   offsets:Ival.t ->
-  t -> alarm * t_bottom
+  t -> alarm * t Bottom.or_bottom
 
 
 (** {2 Shape} *)
@@ -236,14 +255,17 @@ val cardinal_zero_or_one: t -> bool
 (** Returns [true] if and only if all the interval bound in the
     offsetmap are mapped to values with cardinal at most 1. *)
 
-(** [is_single_interval ?f o] is true if
-    (1) the offsetmap [o] contains a single binding
-    (2) either [f] is [None], or the bound value [v] verifies [f v]. *)
-val is_single_interval: ?f:(v -> bool) -> t -> bool
+val is_single_interval: t -> bool
+(** [is_single_interval o] is true if the offsetmap [o] contains a single
+    binding. *)
 
 val single_interval_value: t -> v option
 (** [single_interval_value o] returns [Some v] if [o] contains a single
     interval, to which [v] is bound, and [None] otherwise. *)
+
+val is_same_value: t -> v -> bool
+(** [is_same_value o v] is true if the offsetmap [o] contains a single
+    binding to [v], or is the empty offsetmap. *)
 
 
 (** {2 Misc} *)
@@ -262,6 +284,6 @@ val pretty_debug: t Pretty_utils.formatter
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

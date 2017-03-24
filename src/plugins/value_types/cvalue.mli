@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,15 @@
 open Abstract_interp
 open Locations
 
+(** Estimation of the cardinal of the concretization of an abstract state
+  or value. *)
+module CardinalEstimate: sig
+  type t
+  val one: t
+  val pretty: Format.formatter -> t -> unit
+  val pretty_long_log10: Format.formatter -> t -> unit
+end
+
 (** Values. *)
 module V : sig
 
@@ -36,13 +45,20 @@ module V : sig
     (* Too many aliases, and OCaml module system is not able to keep track
        of all of them. Use some shortcuts *)
     with type M.t = Location_Bytes.M.t
-    and type z = Location_Bytes.z
+    and type t = Location_Bytes.t
+    and type generic_widen_hint = Location_Bytes.generic_widen_hint
+    and type size_widen_hint = Location_Bytes.size_widen_hint
 
   include module type of Offsetmap_lattice_with_isotropy
       with type t := t
+      and type generic_widen_hint := generic_widen_hint
+      and type size_widen_hint := size_widen_hint
       and type widen_hint := widen_hint
 
   val pretty_typ: Cil_types.typ option -> t Pretty_utils.formatter
+
+  (** Returns true if the value may not be a pointer. *)
+  val is_arithmetic: t -> bool
 
   exception Not_based_on_null
   val project_ival : t -> Ival.t
@@ -50,8 +66,6 @@ module V : sig
 
   val project_ival_bottom: t -> Ival.t
   (* Temporary API, will be merged with project_ival later *)
-
-  val min_and_max_float : t -> Ival.F.t * Ival.F.t
     
   val is_imprecise : t -> bool
   val is_topint : t -> bool
@@ -63,21 +77,21 @@ module V : sig
 
   val of_char : char -> t
   val of_int64: int64 -> t
-  val subdiv_float_interval : size:int -> t -> t * t
 
   val compare_min_float : t -> t -> int
   val compare_max_float : t -> t -> int
   val compare_min_int : t -> t -> int
   val compare_max_int : t -> t -> int
 
-  val filter_le_ge_lt_gt_int: Cil_types.binop -> t -> cond_expr:t -> t
-  val filter_le_ge_lt_gt_float :
-    Cil_types.binop ->
-    bool -> Ival.Float_abstract.float_kind -> t -> cond_expr:t -> t
+  val backward_mult_int_left: right:t -> result:t -> t option Bottom.or_bottom
 
-  val eval_comp: signed:bool -> Cil_types.binop -> t -> t -> t
-  (** Can only be called on the 6 comparison operators *)
+  val backward_comp_int_left: Comp.t -> t -> t -> t
+  val backward_comp_float_left: Comp.t -> bool -> Fval.float_kind -> t -> t -> t
 
+  val forward_comp_int: signed:bool -> Comp.t -> t -> t -> Comp.result
+
+  val inject_comp_result: Comp.result -> t
+  
   val inject_int : Int.t -> t
   val interp_boolean : contains_zero:bool -> contains_non_zero:bool -> t
 
@@ -92,7 +106,7 @@ module V : sig
   val cast: size:Int.t -> signed:bool -> t -> t * bool
 
   val cast_float:
-    rounding_mode:Ival.Float_abstract.rounding_mode -> t -> bool * bool * t
+    rounding_mode:Fval.rounding_mode -> t -> bool * bool * t
   val cast_double: t -> bool * bool * t
   val cast_float_to_int :
     signed:bool -> size:int -> t ->
@@ -101,18 +115,28 @@ module V : sig
     (bool * bool) (** overflow, in both directions *) *
     t
   val cast_float_to_int_inverse :
-    single_precision:bool -> t -> t
+    single_precision:bool -> t -> t option
   val cast_int_to_float :
-    Ival.Float_abstract.rounding_mode -> t -> t * bool
+    Fval.rounding_mode -> t -> t * bool
+  val cast_int_to_float_inverse :
+    single_precision:bool -> t -> t option
 
-  val add_untyped : Int_Base.t -> t -> t -> t
-  val add_untyped_under : Int_Base.t -> t -> t -> t
+  val add_untyped : factor:Int_Base.t -> t -> t -> t
+  (** [add_untyped ~factor e1 e2] computes [e1+factor*e2] using C semantic
+      for +, i.e. [ptr+v] is [add_untyped ~factor:sizeof( *ptr ) ptr v]. (Thus,
+      [factor] is in bytes.) This function handles simultaneously PlusA, MinusA,
+      PlusPI, MinusPI and sometimes MinusPP, by setting [factor] accordingly.
+      This is more precise than having multiple functions, as computations such
+      as [(int)&t[1] - (int)&t[2]] would not be treated precisely otherwise. *)
 
-  val sub_untyped_pointwise: t -> t -> Ival.t * bool
-  (** Substracts two pointers (assumed to have type [char*]) and returns the
-      difference of their offsets. The two pointers are supposed to be pointing
-      to the same base; the returned boolean indicates that this assumption
-      might be incorrect. *)
+  val add_untyped_under : factor:Int_Base.t -> t -> t -> t
+  (** Under-approximating variant of {!add_untyped}. Takes two
+      under-approximation, and returns an under-approximation.*)
+ 
+  val sub_untyped_pointwise: ?factor:Int_Base.t -> t -> t -> Ival.t * bool
+  (** See {!Locations.sub_pointwise}. In this module, [factor] is expressed in
+      bytes. The two pointers are supposed to be pointing to the same base;
+      the returned boolean indicates that this assumption might be incorrect. *)
 
   val mul: t -> t -> t
   val div: t -> t -> t
@@ -122,34 +146,72 @@ module V : sig
   val bitwise_and: signed:bool -> size:int -> t -> t -> t
   val bitwise_xor: t -> t -> t
   val bitwise_or : t -> t -> t
+  val bitwise_not: t -> t
+  val bitwise_not_size: signed:bool -> size:int -> t -> t
 
+  (** [all_values ~size v] returns true iff v contains all integer values
+      representable in [size] bits. *)
   val all_values : size:Int.t -> t -> bool
-  val create_all_values :
-    modu:Int.t -> signed:bool -> size:int -> t
+  val create_all_values : signed:bool -> size:int -> t
 end
 
 (** Values with 'undefined' and 'escaping addresses' flags. *)
 module V_Or_Uninitialized : sig
-  type un_t =
+
+  (** Semantics of the constructors:
+      - [C_init_*]: definitely initialized
+      - [C_uninit_*]: possibly uninitialized
+      - [C_*_noesc]: never contains escaping addresses
+      - [C_*_esc]: may contain escaping addresses
+
+      - [C_uninit_noesc V.bottom]: guaranteed to be uninitialized
+      - [C_init_esc V.bottom]: guaranteed to be an escaping address
+      - [C_uninit_esc V.bottom]: either uninitialized or an escaping address
+
+      - [C_init_noesc V.bottom]: "real" bottom, with an empty concretization.
+         Corresponds to an unreachable state.  *)
+  type t =
     | C_uninit_esc of V.t
     | C_uninit_noesc of V.t
     | C_init_esc of V.t
     | C_init_noesc of V.t
 
   include module type of Offsetmap_lattice_with_isotropy
-    with type t = un_t
+    with type t := t
+    and  type size_widen_hint = Location_Bytes.size_widen_hint
+    and  type generic_widen_hint = Location_Bytes.generic_widen_hint
     and  type widen_hint = Locations.Location_Bytes.widen_hint
   include Lattice_type.With_Under_Approximation with type t:= t
   include Lattice_type.With_Narrow with type t := t
+  include Lattice_type.With_Top with type t := t
+  include Lattice_type.With_Top_Opt with type t := t
 
   val get_v : t -> V.t
+  val make : initialized: bool -> escaping: bool -> V.t -> t
 
   val is_bottom: t -> bool
+
+  (** [is_initialized v = true] implies [v] is definitely initialized.
+      [is_initialized v = false] implies [v] is possibly uninitialized.
+      [is_initialized v = false && is_bottom v] implies [v] is definitely
+      uninitialized. *)
   val is_initialized : t -> bool
+
+  (** [is_noesc v = true] implies [v] has no escaping addresses.
+      [is_noesc v = false] implies [v] may have escaping addresses. *)
   val is_noesc : t -> bool
+
+  (** [is_indeterminate v = false] implies [v] only has definitely initialized
+                                   values and non-escaping addresses.
+      [is_indeterminate v = true] implies [v] may have uninitialized values
+                                  and/or escaping addresses. *)
   val is_indeterminate: t -> bool
 
+  (** Returns the canonical representant of a definitely uninitialized value. *)
   val uninitialized: t
+
+  (** [initialized v] returns the definitely initialized, non-escaping
+      representant of [v]. *)
   val initialized : V.t -> t
 
   val reduce_by_initializedness : bool -> t -> t
@@ -169,21 +231,25 @@ module V_Or_Uninitialized : sig
     exact:bool -> (V.M.key -> bool) -> t -> Base.SetLattice.t * t
 
   val map: (V.t -> V.t) -> t -> t
+  val map2: (V.t -> V.t -> V.t) -> t -> t -> t
+  (** initialized/escaping information is the join of the information
+      on each argument. *)
  end
 
 (** Memory slices. They are maps from intervals to values with
     flags. All sizes and intervals are in bits. *)
-module V_Offsetmap:
-  module type of Offsetmap_sig
+module V_Offsetmap: sig
+  include module type of Offsetmap_sig
   with type v = V_Or_Uninitialized.t
-  and type widen_hint = V_Or_Uninitialized.widen_hint
+  and type widen_hint = V_Or_Uninitialized.generic_widen_hint
+
+  val narrow: t -> t -> t Bottom.Type.or_bottom
+end
 
 
 (** Values bound by default to a variable. *)
 module Default_offsetmap: sig
-  val create_initialized_var :
-    Cil_types.varinfo -> Base.validity -> V_Offsetmap.t -> Base.t
-  val default_offsetmap : Base.t -> [ `Bottom | `Map of V_Offsetmap.t ]
+  val default_offsetmap : Base.t -> V_Offsetmap.t Bottom.or_bottom
 end
 
 (** Memories. They are maps from bases to memory slices *)
@@ -193,7 +259,9 @@ module Model: sig
   include module type of Lmap_sig
     with type v = V_Or_Uninitialized.t
     and type offsetmap = V_Offsetmap.t
-    and type widen_hint_base = V_Or_Uninitialized.widen_hint
+    and type widen_hint_base = V_Or_Uninitialized.generic_widen_hint
+
+  include Lattice_type.With_Narrow with type t := t
 
   (** {2 Finding values *} *)
 
@@ -242,6 +310,9 @@ module Model: sig
   val add_binding :
     exact:bool -> t -> location -> V.t -> bool * t
 
+  val add_unsafe_binding :
+    exact:bool -> t -> location -> V_Or_Uninitialized.t -> bool * t
+
   val add_binding_unspecified :
     exact:bool -> t -> location -> V_Or_Uninitialized.t -> bool * t
 
@@ -256,9 +327,16 @@ module Model: sig
       old value is not checked.  *)
   val reduce_previous_binding : t -> location -> V.t -> t
 
+  (** Same behavior as [reduce_previous_binding], but takes a value
+      with 'undefined' and 'escaping addresses' flags. *)
+  val reduce_indeterminate_binding: t -> location -> V_Or_Uninitialized.t -> t
+
   (** [reduce_binding state loc v] refines the value associated to
       [loc] in [state] according to [v], by keeping the values common
-      to the existing value and [v]. *)
+      to the existing value and [v].
+
+    @deprecated since Magnesium-20151001. Use a combination of {!V.narrow}
+      and {!reduce_previous_binding} to obtain the same result. *)
   val reduce_binding : t -> location -> V.t -> t
 
 
@@ -280,10 +358,12 @@ module Model: sig
   (** For variables that are coming from the AST, this is equivalent to
       uninitializing them. *)
 
+  val cardinal_estimate: t -> CardinalEstimate.t
+
 end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

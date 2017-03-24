@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,5 +22,8 @@
 
 #ifndef __FC_DEFINE_SUSECONDS_T
 #define __FC_DEFINE_SUSECONDS_T
+#include "features.h"
+__BEGIN_DECLS
 typedef signed int suseconds_t;
+__END_DECLS
 #endif

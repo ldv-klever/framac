@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2015                                               #
+#  Copyright (C) 2007-2016                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -27,12 +27,6 @@
 #                                                                        #
 ##########################################################################
 
-#######################
-# Working directories #
-#######################
-
-FRAMAC_TOP_SRCDIR 	?= @abs_top_srcdir@
-
 ######################
 # Installation paths #
 ######################
@@ -56,7 +50,6 @@ EMACS_DATADIR	?=$(DATADIR)/emacs/site-lisp
 FRAMAC_DEFAULT_CPP ?=@FRAMAC_DEFAULT_CPP@
 FRAMAC_GNU_CPP ?=@FRAMAC_GNU_CPP@
 DEFAULT_CPP_KEEP_COMMENTS?=@DEFAULT_CPP_KEEP_COMMENTS@
-FC_MCPP ?=@FC_MCPP@
 CC =@CC@
 
 ###############
@@ -88,14 +81,11 @@ NATIVE_THREADS	?=@HAS_NATIVE_THREADS@
 OCAMLWIN32	?=@OCAMLWIN32@
 PTESTSBEST      ?=@PTESTSBEST@
 
+DEVELOPMENT	?=@DEVELOPMENT@
+
 #############
 # Libraries #
 #############
-
-# ocamlgraph
-OCAMLGRAPH_INCLUDE?=@OCAMLGRAPH_INCLUDE@ # ocamlgraph compilation directive
-OCAMLGRAPH_LOCAL  ?=@OCAMLGRAPH_LOCAL@
-OCAMLGRAPH_HOME   ?=@OCAMLGRAPH_HOME@
 
 # lablgtk
 HAS_LABLGTK	?=@HAS_LABLGTK@
@@ -111,6 +101,10 @@ HAS_GNOMECANVAS	?=@HAS_GNOMECANVAS@
 # zarith
 HAS_ZARITH	?=@HAS_ZARITH@
 ZARITH_PATH	?=@ZARITH_PATH@
+
+# apron
+HAS_APRON	?=@HAS_APRON@
+APRON_PATH	?=@APRON_PATH@
 
 ##########################
 # Miscellaneous commands #
@@ -142,7 +136,9 @@ THREAD_IS_KEYWORD ?=@THREAD_IS_KEYWORD@
 EXTERNAL_PLUGINS ?=@EXTERNAL_PLUGINS@
 
 # Integrated plugins
-ENABLE_FROM                       ?=@ENABLE_FROM_ANALYSIS@
+ENABLE_CALLGRAPH                  ?=@ENABLE_CALLGRAPH@
+ENABLE_CONSTANT_PROPAGATION       ?=@ENABLE_SEMANTIC_CONSTANT_FOLDING@
+ENABLE_FROM_ANALYSIS              ?=@ENABLE_FROM_ANALYSIS@
 ENABLE_GUI	                  ?=@ENABLE_GUI@
 ENABLE_IMPACT	                  ?=@ENABLE_IMPACT@
 ENABLE_INOUT	                  ?=@ENABLE_INOUT@
@@ -152,14 +148,58 @@ ENABLE_PDG	                  ?=@ENABLE_PDG@
 ENABLE_POSTDOMINATORS             ?=@ENABLE_POSTDOMINATORS@
 ENABLE_RTEGEN                     ?=@ENABLE_RTEGEN@
 ENABLE_SCOPE	                  ?=@ENABLE_SCOPE@
-ENABLE_SEMANTIC_CALLGRAPH         ?=@ENABLE_SEMANTIC_CALLGRAPH@
-ENABLE_CONSTANT_PROPAGATION       ?=@ENABLE_SEMANTIC_CONSTANT_FOLDING@
 ENABLE_SLICING	                  ?=@ENABLE_SLICING@
 ENABLE_SPARECODE                  ?=@ENABLE_SPARECODE@
-ENABLE_SYNTACTIC_CALLGRAPH        ?=@ENABLE_SYNTACTIC_CALLGRAPH@
 ENABLE_USERS	                  ?=@ENABLE_USERS@
-ENABLE_VALUE                      ?=@ENABLE_VALUE_ANALYSIS@
+ENABLE_VALUE_ANALYSIS             ?=@ENABLE_VALUE_ANALYSIS@
 
+DYNAMIC_CALLGRAPH                 ?=@DYNAMIC_CALLGRAPH@
+DYNAMIC_CONSTANT_PROPAGATION      ?=@DYNAMIC_SEMANTIC_CONSTANT_FOLDING@
+DYNAMIC_FROM_ANALYSIS             ?=@DYNAMIC_FROM_ANALYSIS@
+#DYNAMIC_GUI: never dynamic
+DYNAMIC_IMPACT	                  ?=@DYNAMIC_IMPACT@
+DYNAMIC_INOUT                     ?=@DYNAMIC_INOUT@
+DYNAMIC_METRICS                   ?=@DYNAMIC_METRICS@
+DYNAMIC_OCCURRENCE                ?=@DYNAMIC_OCCURRENCE@
+DYNAMIC_PDG                       ?=@DYNAMIC_PDG@
+DYNAMIC_POSTDOMINATORS            ?=@DYNAMIC_POSTDOMINATORS@
+DYNAMIC_RTEGEN                    ?=@DYNAMIC_RTEGEN@
+DYNAMIC_SCOPE                     ?=@DYNAMIC_SCOPE@
+DYNAMIC_SLICING                   ?=@DYNAMIC_SLICING@
+DYNAMIC_SPARECODE                 ?=@DYNAMIC_SPARECODE@
+DYNAMIC_USERS                     ?=@DYNAMIC_USERS@
+DYNAMIC_VALUE_ANALYSIS            ?=@DYNAMIC_VALUE_ANALYSIS@
+
+#bytes is part of the stdlib, but is used as a transitional package.
+LIBRARY_NAMES := findlib ocamlgraph num unix str dynlink bytes
+
+ifeq ($(HAS_ZARITH),yes)
+LIBRARY_NAMES += zarith
+endif
+
+ifneq ($(ENABLE_GUI),no)
+LIBRARY_NAMES_GUI = lablgtk2 lablgtk2.gnomecanvas lablgtk2.sourceview2
+else
+LIBRARY_NAMES_GUI =
+endif
+
+#######################
+# Working directories #
+#######################
+
+ifeq ($(OCAMLWIN32),yes)
+ifneq ($(CYGPATH),no)
+# Note: using quotes in the line below leads to weird garbled characters
+# in some versions of Cygwin.
+winpath=$(shell $(CYGPATH) -m $(1))
+else
+winpath=$(1)
+endif #CYGPATH
+else
+winpath=$(1)
+endif #OCAMLWIN32
+
+FRAMAC_ROOT_SRCDIR 	?= $(call winpath,@abs_top_srcdir@)
 
 ##########################################################################
 # Local Variables:

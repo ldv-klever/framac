@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -336,7 +336,7 @@ module Memory = struct
   (** Auxiliary function that collects the dependencies on some intervals of
       an offsetmap. *)
   let find_precise_offsetmap : Int_Intervals.t -> LOffset.t -> find_offsm =
-    let cache = Hptmap.PersistentCache "Function_Froms.find_precise" in
+    let cache = Hptmap_sig.PersistentCache "Function_Froms.find_precise" in
     let aux_find_offsm ib ie v =
       (* If the interval can be unassigned, we collect its bound. We also
          return the dependencies stored at this interval. *)
@@ -388,6 +388,9 @@ module Memory = struct
     let z = Locations.zone_of_varinfo vi in
     add_binding ~reducing:true ~exact:true m z (DepsOrUnassigned.AssignedFrom v)
 
+  let unbind_var vi m =
+    remove_base (Base.of_varinfo vi) m
+
   let add_binding ~exact m z v =
     add_binding ~reducing:false ~exact m z (DepsOrUnassigned.AssignedFrom v)
 
@@ -396,8 +399,7 @@ module Memory = struct
       ~reducing:false ~exact m loc (DepsOrUnassigned.AssignedFrom v)
 
   let is_unassigned m =
-    let unassigned v = DepsOrUnassigned.(equal v Unassigned) in
-    LOffset.is_single_interval ~f:unassigned m
+    LOffset.is_same_value m DepsOrUnassigned.Unassigned
 
   (* Unassigned is a neutral value for compose, on both sides *)
   let decide_compose m1 m2 =
@@ -406,10 +408,10 @@ module Memory = struct
     else LOffset.Recurse
 
   let compose_map =
-    let cache = Hptmap.PersistentCache "Function_Froms.Memory.compose" in
+    let cache = Hptmap_sig.PersistentCache "Function_Froms.Memory.compose" in
     (* Partial application is important because of the cache. Idempotent,
        because [compose x x] is always equal to [x]. *)
-    map2 cache ~idempotent:true ~empty_neutral:true
+    map2 ~cache ~symmetric:false ~idempotent:true ~empty_neutral:true
       decide_compose DepsOrUnassigned.compose
 
   let compose m1 m2 = match m1, m2 with
@@ -436,7 +438,7 @@ module Memory = struct
     in
     let join = Deps.join in
     let empty = Deps.bottom in
-    let cache = Hptmap.PersistentCache "From_compute.subst_data" in
+    let cache = Hptmap_sig.PersistentCache "From_compute.subst_data" in
     let f_map =
       Zone.fold2_join_heterogeneous
         ~cache ~empty_left ~empty_right ~both ~join ~empty
@@ -465,7 +467,7 @@ module Memory = struct
     in
     let join = Zone.join in
     let empty = Zone.bottom in
-    let cache = Hptmap.PersistentCache "From_compute.subst_indirect" in
+    let cache = Hptmap_sig.PersistentCache "From_compute.subst_indirect" in
     let f_map =
       Zone.fold2_join_heterogeneous
         ~cache ~empty_left ~empty_right ~both ~join ~empty
@@ -594,7 +596,8 @@ let pretty_with_type ~indirect typ fmt { deps_return = r; deps_table = t } =
           Format.fprintf fmt "@ "
       in
       Format.fprintf fmt "@[<v>%a%t@[\\result FROM @[%a@]@]@]"
-        map_pretty t pp_space Deps.pretty r
+        map_pretty t pp_space
+        (if indirect then Deps.pretty_precise else Deps.pretty) r
 
 let pretty_with_type_indirect = pretty_with_type ~indirect:true
 let pretty_with_type = pretty_with_type ~indirect:false
@@ -637,6 +640,6 @@ include Datatype.Make
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

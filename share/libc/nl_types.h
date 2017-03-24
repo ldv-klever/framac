@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,6 +22,9 @@
 
 #ifndef __FC_NL_TYPES
 #define __FC_NL_TYPES
+#include "features.h"
+__BEGIN_DECLS
+
 typedef unsigned long nl_catd;
 typedef unsigned long nl_item;
 #define NL_SETD 0
@@ -29,5 +32,7 @@ typedef unsigned long nl_item;
 int       catclose(nl_catd);
 char     *catgets(nl_catd, int, int, const char *);
 nl_catd   catopen(const char *, int);
+
+__END_DECLS
 
 #endif

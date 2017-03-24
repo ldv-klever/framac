@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -46,14 +46,17 @@ open Cil_types
 
 val find_kf_by_name: (string -> kernel_function) ref
 val find_kf_def_by_name: (string -> kernel_function) ref
+val find_kf_decl_by_name: (string -> kernel_function) ref
 val kf_category: (unit -> kernel_function Parameter_category.t) ref
 val kf_def_category: (unit -> kernel_function Parameter_category.t) ref
+val kf_decl_category: (unit -> kernel_function Parameter_category.t) ref
 val kf_string_category: (unit -> string Parameter_category.t) ref
 val fundec_category: (unit -> fundec Parameter_category.t) ref
 val force_ast_compute: (unit -> unit) ref
+val ast_dependencies: State.t list ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

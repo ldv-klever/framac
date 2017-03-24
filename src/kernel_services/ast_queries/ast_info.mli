@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** AST manipulation utilities.
-    @plugin development guide *)
+(** AST manipulation utilities. *)
 
 open Cil_types
 
@@ -66,27 +65,27 @@ val term_lvals_of_term: term -> term_lval list
   (** @return the list of all the term lvals of a given term.
       Purely syntactic function. *)
 
-val precondition : funspec -> predicate named
+val precondition : funspec -> predicate
   (** Builds the precondition from [b_assumes] and [b_requires] clauses. 
       @since Carbon-20101201 *)
 
-val behavior_assumes : funbehavior -> predicate named
+val behavior_assumes : funbehavior -> predicate
   (** Builds the conjonction of the [b_assumes].
       @since Nitrogen-20111001 *)
                                         
-val behavior_precondition : funbehavior -> predicate named
+val behavior_precondition : funbehavior -> predicate
   (** Builds the precondition from [b_assumes] and [b_requires] clauses. 
       @since Carbon-20101201 *)
 
-val behavior_postcondition : funbehavior -> termination_kind -> predicate named
+val behavior_postcondition : funbehavior -> termination_kind -> predicate
   (** Builds the postcondition from [b_assumes] and [b_post_cond] clauses. 
       @modify Boron-20100401 added termination kind as filtering argument. *)
 
-val disjoint_behaviors : funspec -> string list -> predicate named
+val disjoint_behaviors : funspec -> string list -> predicate
   (** Builds the [disjoint_behaviors] property for the behavior names.
       @since Nitrogen-20111001 *)
 
-val complete_behaviors : funspec -> string list -> predicate named
+val complete_behaviors : funspec -> string list -> predicate
   (** Builds the [disjoint_behaviors] property for the behavior names.
       @since Nitrogen-20111001 *)
 
@@ -131,6 +130,10 @@ val mkassign_statement: lval -> exp -> location -> stmt
 
 (** determines if a var is local to a block. *)
 val is_block_local: varinfo -> block -> bool
+
+val block_of_local: fundec -> varinfo -> block
+(** [local_block f vi] returns the block of [f] in which [vi] is declared.
+    [vi] must be a variable of [f]. *)
 
 (* ************************************************************************** *)
 (** {2 Types} *)
@@ -184,6 +187,6 @@ val is_frama_c_builtin : string -> bool
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

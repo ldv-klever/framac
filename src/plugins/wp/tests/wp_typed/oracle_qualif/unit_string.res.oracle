@@ -3,7 +3,6 @@
 [kernel] Parsing tests/wp_typed/unit_string.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
 [wp] 5 goals scheduled
 [wp] [Alt-Ergo] Goal typed_f_assert_AB : Valid
@@ -16,5 +15,5 @@
      Alt-Ergo:        5
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
-f                   -       5 (54)     5       100%
+f                   -       5 (49)     5       100%
 ----------------------------------------------------------

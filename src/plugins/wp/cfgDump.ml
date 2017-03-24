@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,7 @@ struct
   let knode = ref 0
   let node () = incr knode ; !knode
 
-  let init kf bhv = 
+  let init kf bhv =
     begin
       let name =
         match bhv with
@@ -57,9 +57,9 @@ struct
       out := Format.std_formatter ;
       match !fc with
       | None -> ()
-      | Some (fout,file) -> 
+      | Some (fout,file) ->
           close_out fout ;
-          ignore (Sys.command 
+          ignore (Sys.command
                     (Printf.sprintf "dot -Tpdf %s.dot > %s.pdf" file file))
     end
 
@@ -72,12 +72,12 @@ struct
   let pretty fmt k = Format.fprintf fmt "N%03d" k
 
   let link a b =
-    if b =0 
+    if b =0
     then Format.fprintf !out " %a -> %a [ style=dotted ];@." pretty a pretty b
     else Format.fprintf !out " %a -> %a ;@." pretty a pretty b
 
-  let merge _env k1 k2 = 
-    if k1=0 then k2 else 
+  let merge _env k1 k2 =
+    if k1=0 then k2 else
     if k2=0 then k1 else
       let u = node () in
       Format.fprintf !out "  %a [ label=\"\" , shape=circle ] ;@." pretty u ;
@@ -137,7 +137,7 @@ struct
       match r with
       | None ->
           Format.fprintf !out "  %a [ color=orange , label=\"Return\" ] ;@." pretty u
-      | Some e -> 
+      | Some e ->
           Format.fprintf !out "  %a [ color=orange , label=\"Return %a\" ] ;@." pretty u
             Printer.pp_exp e
     end ;
@@ -155,7 +155,7 @@ struct
     link u def ; u
 
   let init_value _ _ _ _ k = k
-  let init_range _ _ _ _ _ k = k
+  let init_range _ _ _ _ _ _ k = k
   let init_const _ _ k = k
 
   let tag s k =
@@ -168,13 +168,13 @@ struct
 
   let call_dynamic _env _stmt _pid fct calls =
     let u = node () in
-    Format.fprintf !out "  %a [ color=red , label \"CallPtr %a\" ];@." pretty u 
+    Format.fprintf !out "  %a [ color=red , label \"CallPtr %a\" ];@." pretty u
       Printer.pp_exp fct ;
     List.iter (fun (_,k) -> link u k) calls ; u
 
   let call_goal_precond env _stmt kf _es ~pre k =
     let u = node () in
-    Format.fprintf !out "  %a [ color=red , label=\"Prove PreCond %a\" ] ;@." pretty u 
+    Format.fprintf !out "  %a [ color=red , label=\"Prove PreCond %a\" ] ;@." pretty u
       Kernel_function.pretty kf ;
     ignore pre ; merge env u k
 
@@ -205,10 +205,10 @@ struct
       (pp_scope scope) xs ;
     link u k ; u
 
-  let close kfenv k = 
+  let close kfenv k =
     let u = node () in
     Format.fprintf !out "  %a [ color=cyan , label=\"Function %a\" ] ;@." pretty u
-      Kernel_function.pretty kfenv ; 
+      Kernel_function.pretty kfenv ;
     link u k ; u
 
   let build_prop_of_from _env _ps _k = 0
@@ -221,11 +221,13 @@ module WP = Calculus.Cfg(VC)
 (* --- Proof Obilgation Generation                                      --- *)
 (* ------------------------------------------------------------------------ *)
 
-class computer =
+class computer () =
+  let driver = Driver.load_driver () in
+  let model = Factory.(instance default driver) in
   object
-
     val mutable wptasks = []
 
+    method model = model
     method lemma = true
     method add_lemma (_ : LogicUsage.logic_lemma) = ()
 
@@ -252,5 +254,4 @@ class computer =
 
   end (* class computer *)
 
-let create () = (new computer :> Generator.computer)
-
+let create () = (new computer () :> Generator.computer)

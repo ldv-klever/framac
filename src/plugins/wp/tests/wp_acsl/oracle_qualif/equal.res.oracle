@@ -3,7 +3,6 @@
 [kernel] Parsing tests/wp_acsl/equal.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
 [wp] 6 goals scheduled
 [wp] [Alt-Ergo] Goal typed_simple_array_post : Valid
@@ -18,7 +17,7 @@
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 simple_struct       -       1 (6)      1       100%
-simple_array        -       1 (13)     1       100%
+simple_array        -       1 (11)     1       100%
 with_array_struct   -       1 (12)     1       100%
 with_ptr_struct     -       1 (6)      1       100%
 with_ptr_array      -       1 (8)      1       100%

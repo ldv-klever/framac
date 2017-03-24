@@ -3,7 +3,6 @@
 [kernel] Parsing tests/wp_acsl/unit_bit_test.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] warning: Missing RTE guards
 [wp] 4 goals scheduled
 [wp] [Qed] Goal typed_rotate_left_post_bit_zero : Valid
@@ -16,5 +15,5 @@
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 sum                  1     -           2      50.0%
-rotate_left          1      1 (3052)   2       100%
+rotate_left          1      1 (69)     2       100%
 ----------------------------------------------------------

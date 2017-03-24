@@ -49,6 +49,6 @@ unsigned char uchar_range (unsigned char i) {
 //@ lemma L16: land:            qed_ok: (3 & x & -2) == (2 & x) ;
 
 
-/*@ lemma ASSOC: land: qed_ok: 
+/*@ lemma ASSOC: land: qed_ok:
   \forall integer x,y,z,t; x == (y & z) ==> (x & t) == (y & t & z) ;
 */

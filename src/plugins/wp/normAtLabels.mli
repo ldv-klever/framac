@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,7 +41,7 @@ val labels_stmt_assigns : stmt -> logic_label option -> label_mapping
 val labels_predicate : (logic_label * logic_label) list -> label_mapping
 val labels_axiom : label_mapping
 
-val preproc_annot : label_mapping -> predicate named -> predicate named
+val preproc_annot : label_mapping -> predicate -> predicate
 
 val preproc_assigns :
   label_mapping -> identified_term from list -> identified_term from list

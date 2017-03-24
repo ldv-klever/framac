@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -71,6 +71,16 @@ module AstType =
      end
     )
 
+module Libc =
+  False
+    (struct
+      let option_name = "-metrics-libc"
+      let help = "show functions from Frama-C standard C library in the \
+                  results; deactivated by default."
+     end
+    )
+
+
 let () = AstType.set_possible_values ["cil"; "cabs"; "acsl"]
 
 module SyntacticallyReachable =
@@ -83,8 +93,18 @@ module SyntacticallyReachable =
      end
     )
 
+module LocalsSize =
+  Kernel_function_set
+    (struct
+      let option_name = "-metrics-locals-size"
+      let arg_name = "f1,...,fn"
+      let help = "prints the size of local variables for functions f1,...,fn, \
+                  and for the functions called within them \
+                  (does not support recursive calls)"
+    end)
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

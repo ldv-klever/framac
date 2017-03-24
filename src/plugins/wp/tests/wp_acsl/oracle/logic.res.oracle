@@ -3,14 +3,12 @@
 [kernel] Parsing tests/wp_acsl/logic.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
-tests/wp_acsl/logic.i:11:[kernel] warning: No code nor implicit assigns clause for function main, generating default assigns from the prototype
+tests/wp_acsl/logic.i:10:[kernel] warning: No code nor implicit assigns clause for function main, generating default assigns from the prototype
 ------------------------------------------------------------
   Function main
 ------------------------------------------------------------
 
 Goal Pre-condition (file tests/wp_acsl/logic.i, line 10) in 'main':
-Assume { }
 Prove: true.
 
 ------------------------------------------------------------

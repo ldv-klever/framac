@@ -1,0 +1,77 @@
+# frama-c -wp [...]
+[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
+[kernel] Parsing tests/wp_typed/unit_string.i (no preprocessing)
+[wp] Running WP plugin...
+[wp] Loading driver 'share/wp.driver'
+[wp] warning: Missing RTE guards
+------------------------------------------------------------
+  Function f
+------------------------------------------------------------
+
+Goal Assertion 'AB' (file tests/wp_typed/unit_string.i, line 11):
+Assume { (* Heap *) Have: linked(Malloc_0) /\ sconst(Mchar_0). }
+Prove: Str_3 != Str_4.
+
+------------------------------------------------------------
+
+Goal Assertion 'B_valid' (file tests/wp_typed/unit_string.i, line 12):
+Assume {
+  (* Heap *)
+  Have: linked(Malloc_0) /\ sconst(Mchar_0).
+  (* Assertion 'AB' *)
+  Have: Str_3 != Str_4.
+}
+Prove: valid_rd(Malloc_0, shift_sint8(global(Str_3), 0), 3).
+
+------------------------------------------------------------
+
+Goal Assertion 'B_out' (file tests/wp_typed/unit_string.i, line 13):
+Let a = global(Str_3).
+Assume {
+  (* Heap *)
+  Have: linked(Malloc_0) /\ sconst(Mchar_0).
+  (* Assertion 'AB' *)
+  Have: Str_3 != Str_4.
+  (* Assertion 'B_valid' *)
+  Have: valid_rd(Malloc_0, shift_sint8(a, 0), 3).
+}
+Prove: !valid_rd(Malloc_0, shift_sint8(a, 3), 1).
+
+------------------------------------------------------------
+
+Goal Assertion 'B_rw' (file tests/wp_typed/unit_string.i, line 14):
+Let a = global(Str_3).
+Assume {
+  (* Heap *)
+  Have: linked(Malloc_0) /\ sconst(Mchar_0).
+  (* Assertion 'AB' *)
+  Have: Str_3 != Str_4.
+  (* Assertion 'B_valid' *)
+  Have: valid_rd(Malloc_0, shift_sint8(a, 0), 3).
+  (* Assertion 'B_out' *)
+  Have: !valid_rd(Malloc_0, shift_sint8(a, 3), 1).
+}
+Prove: !valid_rw(Malloc_0, shift_sint8(a, 1), 1).
+
+------------------------------------------------------------
+
+Goal Assertion 'VAL' (file tests/wp_typed/unit_string.i, line 15):
+Let a = global(Str_3).
+Assume {
+  (* Goal *)
+  When: (0 <= i) /\ (i <= 2).
+  (* Heap *)
+  Have: linked(Malloc_0) /\ sconst(Mchar_0).
+  (* Assertion 'AB' *)
+  Have: Str_3 != Str_4.
+  (* Assertion 'B_valid' *)
+  Have: valid_rd(Malloc_0, shift_sint8(a, 0), 3).
+  (* Assertion 'B_out' *)
+  Have: !valid_rd(Malloc_0, shift_sint8(a, 3), 1).
+  (* Assertion 'B_rw' *)
+  Have: !valid_rw(Malloc_0, shift_sint8(a, 1), 1).
+}
+Prove: Mchar_0[shift_sint8(a, i)]
+         = Mchar_0[shift_sint8(global(Str_1), 3 + i)].
+
+------------------------------------------------------------

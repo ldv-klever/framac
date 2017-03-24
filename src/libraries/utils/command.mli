@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Useful high-level system operations. 
-    @plugin development guide *)
+(** Useful high-level system operations. *)
 
 (* ************************************************************************* *)
 (** {2 File Utilities} *)
@@ -38,11 +37,13 @@ val pp_from_file : Format.formatter -> string -> unit
   (** [pp_from_file fmt file] dumps the content of [file] into the [fmt].
       Exceptions in [pp] are re-raised after closing. *)
 
-val bincopy : string -> in_channel -> out_channel -> unit
+val bincopy : bytes -> in_channel -> out_channel -> unit
   (** [copy buffer cin cout] reads [cin] until end-of-file
       and copy it in [cout].
       [buffer] is a temporary string used during the copy.
-      Recommanded size is [2048]. *)
+      Recommanded size is [2048].
+      @modify Silicon-20161101 [buffer] has now type [bytes] instead of [string]
+ *)
 
 val copy : string -> string -> unit
   (** [copy source target] copies source file to target file using [bincopy]. *)
@@ -130,6 +131,6 @@ val command :
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

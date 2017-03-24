@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA   (Commissariat à l'énergie atomique et aux énergies            */
 /*           alternatives)                                                */
 /*    INRIA (Institut National de Recherche en Informatique et en         */
@@ -26,7 +26,6 @@
 
 %{
 
-  open Cil
   open Cil_types
   open Logic_ptree
   open Logic_utils
@@ -63,7 +62,7 @@
     raise
       (Not_well_formed
          ((rhs_start_pos i, rhs_end_pos i),
-          Pretty_utils.sfprintf "expecting '%s' before %s" token next_token))
+          Format.asprintf "expecting '%s' before %s" token next_token))
 
   type sense_of_relation = Unknown | Disequal | Less | Greater
 
@@ -74,8 +73,8 @@
 
   let relation_sense rel sense =
     match rel, sense with
-        Eq, _ -> sense, true
-      | Neq, Unknown -> Disequal, true (* No chain of disequality for now*)
+      | Eq, (Unknown|Greater|Less) -> sense, true
+      | Neq, Unknown -> Disequal, false (* No chain of disequality for now*)
       | (Gt|Ge), (Unknown|Greater) -> Greater, true
       | (Lt|Le), (Unknown|Less) -> Less, true
       | _ -> sense, false
@@ -99,8 +98,6 @@
   let is_rt_type () = !rt_type
 
   let loc_decl d = { decl_node = d; decl_loc = loc () }
-
-  let wrap_extended = List.map (fun (n,p) -> n,0, p)
 
   let concat_froms a1 a2 =
     let compare_pair (b1,_) (b2,_) = is_same_lexpr b1 b2 in
@@ -220,6 +217,9 @@
       let str = Str.global_replace regex1 "\\1\\\\3" str in
       Str.global_replace regex2 "\\1\\\\" str
 
+  let cv_const = Attr ("const", [])
+  let cv_volatile = Attr ("volatile", [])
+
 %}
 
 /*****************************************************************************/
@@ -238,7 +238,7 @@
 %token INT INTEGER REAL BOOLEAN BOOL FLOAT LT GT LE GE EQ NE COMMA ARROW EQUAL
 %token FORALL EXISTS IFF IMPLIES AND OR NOT SEPARATED
 %token TRUE FALSE OLD AT RESULT
-%token BLOCK_LENGTH BASE_ADDR OFFSET OFFSET_MAX OFFSET_MIN VALID VALID_READ VALID_INDEX VALID_RANGE
+%token BLOCK_LENGTH BASE_ADDR OFFSET OFFSET_MAX OFFSET_MIN VALID VALID_READ VALID_INDEX VALID_RANGE VALID_FUNCTION
 %token ALLOCATION STATIC REGISTER AUTOMATIC DYNAMIC UNALLOCATED
 %token ALLOCABLE FREEABLE FRESH
 %token DOLLAR QUESTION MINUS PLUS STAR AMP SLASH PERCENT LSQUARE RSQUARE EOF
@@ -253,17 +253,17 @@
 %token BSUNION INTER
 %token LTCOLON COLONGT TYPE BEHAVIOR BEHAVIORS ASSUMES COMPLETE DISJOINT
 %token TERMINATES
-%token BIFF BIMPLIES HAT HATHAT PIPE TILDE GTGT LTLT LTLT_MOD
+%token BIFF BIMPLIES STARHAT HAT HATHAT PIPE TILDE GTGT LTLT LTLT_MOD
 %token SIZEOF OFFSETOF LAMBDA LET
 %token TYPEOF BSTYPE
 %token WITH CONST
 %token INITIALIZED DANGLING
 %token CUSTOM
 %token IMPORT
+%token LSQUAREPIPE RSQUAREPIPE
 
-%nonassoc lowest
 %right prec_named
-%nonassoc IDENTIFIER TYPENAME SEPARATED
+%nonassoc TYPENAME
 %nonassoc prec_forall prec_exists prec_lambda LET
 %right QUESTION prec_question
 %left IFF
@@ -271,13 +271,12 @@
 %left OR
 %left HATHAT
 %left AND
-%left PIPE
 %left BIFF
 %right BIMPLIES
+%left PIPE
 %left HAT
+%left STARHAT
 %left AMP
-%nonassoc prec_no_rel
-%left prec_rel_list /* for list of relations (LT GT LE GE EQ NE) */
 %left LT
 %left LTLT LTLT_MOD GTGT
 %left PLUS MINUS PLUS_MOD MINUS_MOD
@@ -285,8 +284,6 @@
 %right prec_cast TILDE NOT prec_unary_op
 %nonassoc LTCOLON COLONGT
 %left DOT ARROW LSQUARE
-%right prec_par
-%nonassoc highest
 
 %type <Logic_ptree.lexpr> lexpr_eof
 %start lexpr_eof
@@ -294,7 +291,7 @@
 %type <Logic_ptree.annot> annot
 %start annot
 
-%type <Logic_ptree.spec * Cabs.cabsloc> spec
+%type <Logic_ptree.spec> spec
 %start spec
 
 %type <Logic_ptree.ext_spec> ext_spec
@@ -367,12 +364,12 @@ lexpr:
         let str = escape str in
          info (PLnamed (str, $3))
        }
-| lexpr_rel %prec prec_rel_list { $1 }
+| lexpr_rel { $1 }
 ;
 
 lexpr_rel:
-| lexpr_end_rel %prec prec_no_rel { $1 }
-| lexpr_inner rel_list %prec prec_rel_list
+| lexpr_end_rel  { $1 }
+| lexpr_inner rel_list
       { let rel, rhs, _, oth_rel = $2 in
         let loc = loc_start $1, loc_end rhs in
         let relation = loc_info loc (PLrel($1,rel,rhs)) in
@@ -393,15 +390,15 @@ lexpr_binder:
 ;
 
 lexpr_end_rel:
-  lexpr_inner %prec prec_no_rel { $1 }
+  lexpr_inner  { $1 }
 | lexpr_binder { $1 }
 | NOT lexpr_binder { info (PLnot $2) }
 ;
 
 rel_list:
-| relation lexpr_end_rel %prec prec_rel_list
+| relation lexpr_end_rel
   { $1, $2, fst(relation_sense $1 Unknown), None }
-| relation lexpr_inner rel_list %prec prec_rel_list
+| relation lexpr_inner rel_list
   {
     let next_rel, rhs, sense, oth_rel = $3 in
     let (sense, correct) = relation_sense $1 sense
@@ -456,7 +453,8 @@ lexpr_inner:
 | OFFSET_MAX opt_label_1 LPAR lexpr RPAR { info (PLoffset_max($2, $4)) }
 | OFFSET_MIN opt_label_1 LPAR lexpr RPAR { info (PLoffset_min($2, $4)) }
 | VALID_READ opt_label_1 LPAR lexpr RPAR { info (PLvalid_read ($2,$4)) }
-| VALID_INDEX opt_label_1 LPAR lexpr COMMA lexpr RPAR {
+| VALID_FUNCTION LPAR lexpr RPAR { info (PLvalid_function $3) }
+| VALID_INDEX opt_label_1 LPAR lexpr COMMA lexpr RPAR { 
   let source = fst (loc ()) in
   obsolete ~source "\\valid_index(addr,idx)" ~now:"\\valid(addr+idx)";
   info (PLvalid ($2,info (PLbinop ($4, Badd, $6)))) }
@@ -475,9 +473,9 @@ lexpr_inner:
 | OFFSET opt_label_1 LPAR lexpr RPAR { info (PLoffset ($2,$4)) }
 | ALLOCABLE opt_label_1 LPAR lexpr RPAR { info (PLallocable ($2,$4)) }
 | FREEABLE opt_label_1 LPAR lexpr RPAR { info (PLfreeable ($2,$4)) }
-| ALLOCATION opt_label_1 LPAR lexpr RPAR  { Format.eprintf "Warning: \\static not yet implemented." ;
+| ALLOCATION opt_label_1 LPAR lexpr RPAR  { Format.eprintf "Warning: \\allocation not yet implemented." ;
 	   (* TODO: *) raise Parse_error }
-| AUTOMATIC { Format.eprintf "Warning: \\static not yet implemented." ;
+| AUTOMATIC { Format.eprintf "Warning: \\automatic not yet implemented." ;
 	   (* TODO: *) raise Parse_error }
 | DYNAMIC { Format.eprintf "Warning: \\dynamic not yet implemented." ;
 	   (* TODO: *) raise Parse_error }
@@ -498,10 +496,12 @@ lexpr_inner:
 | lexpr_inner SLASH lexpr_inner { info (PLbinop ($1, Bdiv, $3)) }
 | lexpr_inner SLASH_MOD lexpr_inner { info (PLbinop ($1, Bdiv_mod, $3)) }
 | lexpr_inner PERCENT lexpr_inner { info (PLbinop ($1, Bmod, $3)) }
+| lexpr_inner STARHAT lexpr_inner  { info (PLrepeat ($1, $3)) }
 | lexpr_inner ARROW identifier_or_typename { info (PLarrow ($1, $3)) }
 | lexpr_inner DOT identifier_or_typename { info (PLdot ($1, $3)) }
 | lexpr_inner LSQUARE range RSQUARE { info (PLarrget ($1, $3)) }
 | lexpr_inner LSQUARE lexpr RSQUARE { info (PLarrget ($1, $3)) }
+| LSQUAREPIPE lexpr_list RSQUAREPIPE {info (PLlist $2) }
 | MINUS lexpr_inner %prec prec_unary_op { info (PLunop (Uminus, $2)) }
 | MINUS_MOD lexpr_inner %prec prec_unary_op { info (PLunop (Uminus_mod, $2)) }
 | PLUS  lexpr_inner %prec prec_unary_op { $2 }
@@ -522,11 +522,11 @@ lexpr_inner:
       { info (PLapp ($1, $3, $6)) }
 | identifier LBRACE ne_label_args RBRACE
       { info (PLapp ($1, $3, [])) }
-| identifier %prec IDENTIFIER { info (PLvar $1) }
+| identifier  { info (PLvar $1) }
 | lexpr_inner GTGT lexpr_inner { info (PLbinop ($1, Brshift, $3))}
 | lexpr_inner LTLT lexpr_inner { info (PLbinop ($1, Blshift, $3))}
 | lexpr_inner LTLT_MOD lexpr_inner { info (PLbinop ($1, Blshift_mod, $3))}
-| LPAR lexpr RPAR %prec prec_par { info $2.lexpr_node }
+| LPAR lexpr RPAR { info $2.lexpr_node }
 | LPAR range RPAR { info $2.lexpr_node }
 | LPAR cast_logic_type RPAR lexpr_inner %prec prec_cast
     { info (PLcast ($2, $4)) }
@@ -534,7 +534,7 @@ lexpr_inner:
     { info (PLcast_mod ($2, $5)) }
 | lexpr_inner LTCOLON lexpr_inner %prec prec_cast
       { info (PLsubtype ($1, $3)) }
-| lexpr_inner COLONGT logic_type %prec prec_cast
+| lexpr_inner COLONGT logic_type 
       { info (PLcoercion ($1, $3)) }
 | lexpr_inner COLONGT lexpr_inner %prec prec_cast
       { info (PLcoercionE ($1, $3)) }
@@ -545,8 +545,8 @@ lexpr_inner:
 | EMPTY { info PLempty }
 | BSUNION LPAR lexpr_list RPAR { info (PLunion $3) }
 | INTER LPAR lexpr_list RPAR { info (PLinter $3) }
-| LBRACE lexpr RBRACE
-      { info (PLsingleton ($2)) }
+| LBRACE lexpr_list RBRACE
+      { info (PLset ($2)) }
 | LBRACE lexpr PIPE binders RBRACE
       {info (PLcomprehension ($2,$4,None)) }
 | LBRACE lexpr PIPE binders SEMICOLON lexpr RBRACE
@@ -729,14 +729,14 @@ logic_type:
 ;
 
 cv:
-  CONST { }
-| VOLATILE { }
+  CONST { cv_const }
+| VOLATILE { cv_volatile }
 ;
 
 type_spec_cv:
      type_spec { $1 }
-|    cv type_spec { $2 }
-|    type_spec cv { $1 }
+|    cv type_spec { LTattribute ($2, $1) }
+|    type_spec cv { LTattribute ($1, $2) }
 
 cast_logic_type:
  | type_spec_cv abs_spec_cv_option { $2 $1 }
@@ -753,7 +753,7 @@ abs_spec_option:
 ;
 
 abs_spec_cv_option:
-| /* empty */ %prec TYPENAME  { fun t -> t }
+| /* empty */   { fun t -> t }
 | abs_spec_cv { $1 }
 ;
 
@@ -769,12 +769,12 @@ abs_spec:
 
 abs_spec_cv:
 |                         tabs { $1 }
-| stars_cv                      %prec TYPENAME { $1 }
+| stars_cv                       { $1 }
 | stars_cv                 tabs                { fun t -> $2 ($1 t) }
-| stars_cv abs_spec_bis_cv      %prec TYPENAME { fun t -> $2 ($1 t) }
+| stars_cv abs_spec_bis_cv       { fun t -> $2 ($1 t) }
 | stars_cv abs_spec_bis_cv tabs                { fun t -> $2 ($3 ($1 t)) }
 |          abs_spec_bis_cv tabs                { fun t -> $1 ($2 t) }
-|          abs_spec_bis_cv      %prec TYPENAME { $1 }
+|          abs_spec_bis_cv       { $1 }
 ;
 
 abs_spec_bis:
@@ -789,14 +789,14 @@ abs_spec_bis_cv:
 
 stars:
 | STAR          { fun t -> LTpointer t }
-| stars STAR    { fun t -> $1 (LTpointer t) }
+| stars STAR    { fun t -> (LTpointer ($1 t)) }
 ;
 
 stars_cv:
 | STAR          { fun t -> LTpointer t }
-| STAR cv       { fun t -> LTpointer t }
-| stars_cv STAR    { fun t -> $1 (LTpointer t) }
-| stars_cv STAR cv { fun t -> $1 (LTpointer t) }
+| STAR cv       { fun t -> LTattribute ((LTpointer t), $2) }
+| stars_cv STAR    { fun t -> (LTpointer ($1 t)) }
+| stars_cv STAR cv { fun t -> (LTattribute ((LTpointer ($1 t)), $3)) }
 ;
 
 tabs:
@@ -904,7 +904,7 @@ full_assigns:
 /*** ACSL extension for external spec file ***/
 
 ext_spec:
- | ext_global_clauses_opt ext_module_specs_opt ext_global_specs_opt EOF { ("",$1,$2)::$3 }
+ | ext_global_clauses_opt ext_module_specs_opt ext_global_specs_opt EOF { (None,$1,$2)::$3 }
 ;
 
 ext_global_clauses_opt:
@@ -935,14 +935,16 @@ ext_global_specs:
 
 ext_global_spec:
 | ext_module_markup ext_global_clauses_opt ext_module_specs
-    { ($1,$2,$3) }
+    { (Some $1),$2,$3 }
 | ext_module_markup
-    { ($1,[],[]) }
+    { (Some $1),[],[] }
 ;
 
 ext_module_specs_opt:
  | /* empty */      { [] }
  | ext_module_specs { $1 }
+ | ext_fun_specs { [None, $1] }
+ | ext_fun_specs ext_module_specs { (None, $1)::$2 }
 ;
 
 ext_module_specs:
@@ -951,7 +953,7 @@ ext_module_specs:
 ;
 
 ext_module_spec:
-| ext_function_markup ext_function_specs_opt { ($1,$2) }
+| ext_function_markup ext_function_specs_opt { (Some $1),$2 }
 ;
 
 ext_function_specs_opt:
@@ -960,19 +962,24 @@ ext_function_specs_opt:
 ;
 
 ext_function_specs:
-| ext_at_loop_markup  { []}
-| ext_at_stmt_markup  { []}
+| ext_at_stmt_markup  { []} 
 | ext_function_spec   { [$1] }
 | ext_function_spec ext_function_specs { $1::$2 }
 ;
 
 ext_function_spec:
-| ext_global_clause
-    { Ext_glob $1 }
-| ext_at_loop_markup ext_stmt_loop_spec
-    { Ext_loop_spec($1,$2,loc()) }
-| ext_at_stmt_markup ext_stmt_loop_spec
-    { Ext_stmt_spec($1,$2,loc()) }
+| ext_global_clause { Ext_glob $1 }
+| ext_fun_spec      { $1 }
+;
+
+ext_fun_specs:
+| ext_fun_spec               { [$1] }
+| ext_fun_spec ext_fun_specs { $1::$2 }
+;
+
+ext_fun_spec:
+| ext_at_stmt_markup ext_stmt_loop_spec 
+    { Ext_stmt($1,$2,loc()) }
 | ext_contract_markup contract
     { let s,pos = $2 in Ext_spec (s,pos) }
 ;
@@ -1003,19 +1010,24 @@ ext_contract_markup:
 | CONTRACT ext_identifier_opt COLON { $2 }
 ;
 
-ext_at_loop_markup:
-| EXT_AT LOOP CONSTANT10 COLON { $3 }
+stmt_markup:
+| any_identifier { $1 }
+| CONSTANT10 { $1 }
+;
+
+stmt_markup_attr:
+| stmt_markup                      { [$1] }
+| stmt_markup stmt_markup_attr { $1 :: $2 }
 ;
 
 ext_at_stmt_markup:
-| EXT_AT CONSTANT10 COLON     { $2 }
-| EXT_AT any_identifier COLON { $2 }
+| EXT_AT stmt_markup_attr COLON { $2 }
 ;
 
 /*** function and statement contracts ***/
 
 spec:
-| contract EOF { $1 }
+| contract EOF { fst $1 }
 ;
 
 contract:
@@ -1025,17 +1037,17 @@ contract:
       let behaviors = $5 in
       let (completes,disjoints) = $6 in
       let behaviors =
-        if
-          requires <> [] || post_cond <> [] ||
-	    allocation <> FreeAllocAny ||
-            assigns <> WritesAny || extended <> []
+        if requires <> [] || post_cond <> [] ||
+	   allocation <> FreeAllocAny ||
+           assigns <> WritesAny || extended <> [] 
         then
-	  let allocation =
-	    if allocation <> FreeAllocAny then Some allocation else None
-	  in
-            (mk_behavior ~requires ~post_cond ~assigns ~allocation
-	       ~extended:(wrap_extended extended) ()) :: behaviors
-        else behaviors
+          (Cabshelper.mk_behavior
+             ~requires ~post_cond ~assigns ~allocation ~extended ())
+          :: behaviors
+        else if $2<>None || $3<>None || 
+                behaviors<>[] || completes<>[] ||disjoints<>[]
+        then behaviors
+        else raise (Not_well_formed (loc(),"Empty annotation is not allowed"))
       in
         { spec_terminates = $2;
           spec_variant = $3;
@@ -1185,13 +1197,12 @@ behaviors:
 ne_behaviors:
 | BEHAVIOR behavior_name COLON behavior_body behaviors
       { let (assumes,requires,(allocation,assigns,post_cond,extended)) = $4 in
-	let behaviors = $5 in
-	let allocation = Some allocation in
-	let b =
-	  Cil.mk_behavior
-            ~name:$2 ~assumes ~requires ~post_cond ~assigns ~allocation
-            ~extended:(wrap_extended extended) ()
-	in b::behaviors
+        let behaviors = $5 in
+        let b =
+          Cabshelper.mk_behavior
+            ~name:$2
+            ~assumes ~requires ~post_cond ~assigns ~allocation ~extended ()
+        in b::behaviors
       }
 
 behavior_body:
@@ -1260,9 +1271,9 @@ annot:
 
 custom_tree:
 | TYPE type_spec  { CustomType $2 }
-| LOGIC lexpr %prec prec_named    { CustomLexpr $2 }
-| any_identifier_non_logic %prec lowest { CustomOther($1,[]) }
-| any_identifier_non_logic LPAR custom_tree_list RPAR %prec lowest { CustomOther($1,$3) }
+| LOGIC lexpr     { CustomLexpr $2 }
+| any_identifier_non_logic  { CustomOther($1,[]) }
+| any_identifier_non_logic LPAR custom_tree_list RPAR  { CustomOther($1,$3) }
 ;
 
 custom_tree_list:
@@ -1292,8 +1303,9 @@ annotation:
 
 loop_annotations:
 | loop_annot_stack
-    { let (i,fa,a,b,v,p) = $1 in
+    { let (i,fa,a,b,v,p, e) = $1 in
       let invs = List.map (fun i -> AInvariant([],true,i)) i in
+      let ext = List.map (fun x -> AExtended([],x)) e in
       let oth = match a with
         | WritesAny -> b
         | Writes _ ->
@@ -1305,30 +1317,33 @@ loop_annotations:
         | FreeAllocAny -> oth
         | _ -> AAllocation ([],fa)::oth
       in
-	(invs@oth,v,p)
+	(invs@oth@ext,v,p)
     }
 ;
 
 /* TODO: gather loop assigns that are related to the same behavior */
 loop_annot_stack:
 | loop_invariant loop_annot_opt
-    { let (i,fa,a,b,v,p) = $2 in ($1::i,fa,a,b,v,p) }
+    { let (i,fa,a,b,v,p,e) = $2 in ($1::i,fa,a,b,v,p,e) }
 | loop_effects loop_annot_opt
-    { let (i,fa,a,b,v,p) = $2 in (i,fa,concat_assigns a $1,b,v,p) }
+    { let (i,fa,a,b,v,p,e) = $2 in (i,fa,concat_assigns a $1,b,v,p,e) }
 | loop_allocation loop_annot_opt
-    { let (i,fa,a,b,v,p) = $2 in (i,concat_allocation fa $1,a,b,v,p) }
+    { let (i,fa,a,b,v,p,e) = $2 in (i,concat_allocation fa $1,a,b,v,p,e) }
 | FOR ne_behavior_name_list COLON loop_annot_stack
-    { let (i,fa,a,b,v,p) = $4 in
+    { let (i,fa,a,b,v,p,e) = $4 in
       let behav = $2 in
       let invs = List.map (fun i -> AInvariant(behav,true,i)) i in
+      let ext = List.map (fun x -> AExtended(behav,x)) e in
       let oth = concat_loop_assigns_allocation b behav a fa in
-      ([],FreeAllocAny,WritesAny,invs@oth,v,p)
+      ([],FreeAllocAny,WritesAny,invs@ext@oth,v,p,[])
     }
 | loop_variant loop_annot_opt
     { let pos,loop_variant = $1 in
-      let (i,fa,a,b,v,p) = $2 in
+      let (i,fa,a,b,v,p,e) = $2 in
       check_empty
         (pos,"loop invariant is not allowed after loop variant.") i ;
+      check_empty
+        (pos, "loop extension is not allowed after loop variant.") e;
       (match fa with
         | FreeAlloc(f,a) ->
 	    check_empty
@@ -1346,19 +1361,18 @@ loop_annot_stack:
         (pos,"loop behavior is not allowed after loop variant.") b ;
       check_empty
         (pos,"loop annotations can have at most one variant.") v ;
-      (i,fa,a,b,AVariant loop_variant::v,p) }
+      (i,fa,a,b,AVariant loop_variant::v,p,e) }
 | loop_pragma loop_annot_opt
-    { let (i,fa,a,b,v,p) = $2 in (i,fa,a,b,v,APragma (Loop_pragma $1)::p) }
+    { let (i,fa,a,b,v,p,e) = $2 in (i,fa,a,b,v,APragma (Loop_pragma $1)::p,e) }
 | loop_grammar_extension loop_annot_opt {
-    raise
-    (Not_well_formed
-       (loc(),"Grammar extension for loop annotations is not yet implemented"))
+    let (i,fa,a,b,v,p,e) = $2 in
+    (i,fa,a,b,v,p, $1::e)
   }
 ;
 
 loop_annot_opt:
 | /* epsilon */
-    { ([], FreeAllocAny, WritesAny, [], [], []) }
+    { ([], FreeAllocAny, WritesAny, [], [], [], []) }
 | loop_annot_stack
     { $1 }
 ;
@@ -1381,9 +1395,7 @@ loop_variant:
 
 /* Grammar Extensibility for plugins */
 loop_grammar_extension:
-| LOOP grammar_extension SEMICOLON {
-    raise (Not_well_formed (loc(),"Grammar extension for loop annotations is not yet implemented"))
-  }
+| LOOP grammar_extension SEMICOLON { $2 }
 ;
 
 loop_pragma:
@@ -1915,6 +1927,7 @@ bs_keyword:
 | VALID_INDEX { () }
 | VALID_RANGE { () }
 | VALID_READ { () }
+| VALID_FUNCTION { () }
 | INITIALIZED { () }
 | DANGLING { () }
 | WITH { () }
@@ -1954,6 +1967,7 @@ wildcard:
 | LE { () }
 | LPAR { () }
 | LSQUARE { () }
+| LSQUAREPIPE { () }
 | LT { () }
 | LTCOLON { () }
 | LTLT { () }
@@ -1971,11 +1985,13 @@ wildcard:
 | RBRACE { () }
 | RPAR { () }
 | RSQUARE { () }
+| RSQUAREPIPE { () }
 | SEMICOLON { () }
 | SLASH { () }
 | SLASH_MOD { () }
 | STAR { () }
 | STAR_MOD { () }
+| STARHAT { () }
 | STRING_LITERAL { () }
 | TILDE { () }
 ;

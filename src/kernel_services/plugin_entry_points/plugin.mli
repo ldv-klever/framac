@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -124,6 +124,10 @@ val plugin_subpath: string -> unit
     directories [Share], [Session] and [Config] above.
     @since Neon-20140301 *)
 
+val default_msg_keys: string list -> unit
+(** Debug message keys set by default for the plugin.
+    @since Silicon-20161101 *)
+
 (* ************************************************************************* *)
 (** {2 Handling plugins} *)
 (* ************************************************************************* *)
@@ -135,6 +139,11 @@ val get_from_shortname: string -> plugin
 val get_from_name: string -> plugin
 (** Get a plug-in from its name.
     @since Oxygen-20120901 *)
+
+val is_present: string -> bool
+(** Whether a plug-in already exists.
+    Plugins are identified by their short name.
+    @since Magnesium-20151001 *)
 
 val get: string -> plugin
 (** Get a plug-in from its name.
@@ -162,6 +171,6 @@ val config_ref: (unit -> string) ref
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,26 +42,26 @@ sig
 
   val empty : t
 
-  (* good sharing *) 
+  (* good sharing *)
   val add : elt -> t -> t
 
-  (* good sharing *) 
+  (* good sharing *)
   val remove : elt -> t -> t
   val mem : elt -> t -> bool
   val iter : (elt -> unit) -> t -> unit
   val fold : (elt -> 'a -> 'a) -> t -> 'a -> 'a
 
-  (* good sharing *) 
+  (* good sharing *)
   val filter : (elt -> bool) -> t -> t
   val partition : (elt -> bool) -> t -> t * t
 
-  (* good sharing *) 
+  (* good sharing *)
   val union : t -> t -> t
 
-  (* good sharing *) 
+  (* good sharing *)
   val inter : t -> t -> t
 
-  (* good sharing *) 
+  (* good sharing *)
   val diff : t -> t -> t
 
   val subset : t -> t -> bool

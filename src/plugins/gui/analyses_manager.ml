@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,7 +27,7 @@ let filter name extension =
 
 let run title filter_name extension loader
     (host_window: Design.main_window_extension_points)
-    =
+  =
   let dialog =
     GWindow.file_chooser_dialog
       ~action:`OPEN
@@ -51,14 +51,8 @@ let run title filter_name extension loader
            ());
   dialog#destroy ()
 
-let run_script =
-  run "Execute an OCaml script" "OCaml sources" ".ml" Dynamic.load_script
-
 let run_module =
-  run
-    "Load an OCaml object file"
-    "OCaml objects"
-    Dynamic.object_file_extension_regexp
+  run "Load an OCaml object file" "OCaml objects" ".ml,.cmo,.cma,.cmxs"
     Dynamic.load_module
 
 let insert (main_ui: Design.main_window_extension_points) =
@@ -71,9 +65,7 @@ let insert (main_ui: Design.main_window_extension_points) =
         Menu_manager.toolmenubar ~icon:`PROPERTIES
           ~label:"Analyses" ~tooltip:"Configure and run analyses"
           (Menu_manager.Unit_callback main_ui#launcher);
-        Menu_manager.menubar ~icon:`EXECUTE "Compile and run an OCaml Script"
-          (Menu_manager.Unit_callback (fun () -> run_script main_ui));
-        Menu_manager.menubar "Load and run an OCaml Module"
+        Menu_manager.menubar ~icon:`EXECUTE "Load and run an OCaml Module"
           (Menu_manager.Unit_callback (fun () -> run_module main_ui));
         Menu_manager.toolbar ~sensitive:(fun () -> !stop_sensitive) ~icon:`STOP
           ~label:"Stop" ~tooltip:"Stop currently running analyses"
@@ -81,7 +73,7 @@ let insert (main_ui: Design.main_window_extension_points) =
       ]
   in
   default_analyses_items.(0)#add_accelerator `CONTROL 'r';
-  let stop_button = Extlib.the default_analyses_items.(3)#tool_button in
+  let stop_button = Extlib.the default_analyses_items.(2)#tool_button in
   let old_progress = ref !Db.progress in
   stop :=
     (fun () ->
@@ -93,25 +85,25 @@ let insert (main_ui: Design.main_window_extension_points) =
   Gtk_helper.register_locking_machinery
     ~lock_last:true
     ~lock:(fun cancelable ->
-             if !stop_sensitive then Gui_parameters.warning
-               "Inconsistent state for stop button. Ignoring.";
-             old_progress := !Db.progress;
-             menu_manager#set_sensitive false;
-             if cancelable then (stop_button#misc#set_sensitive true;
-                                 stop_sensitive := true);
-          )
+        if !stop_sensitive then Gui_parameters.warning
+            "Inconsistent state for stop button. Ignoring.";
+        old_progress := !Db.progress;
+        menu_manager#set_sensitive false;
+        if cancelable then (stop_button#misc#set_sensitive true;
+                            stop_sensitive := true);
+      )
     ~unlock:(fun () ->
-               Db.progress := !old_progress;
-               menu_manager#set_sensitive true;
-               stop_button#misc#set_sensitive false;
-               stop_sensitive := false;
-            )
+        Db.progress := !old_progress;
+        menu_manager#set_sensitive true;
+        stop_button#misc#set_sensitive false;
+        stop_sensitive := false;
+      )
     ()
 
 let () = Design.register_extension insert
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

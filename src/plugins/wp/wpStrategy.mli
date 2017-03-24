@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -60,18 +60,20 @@ type annot_kind =
 
 (** {3 Adding properties (predicates)} *)
 
+val normalize : WpPropId.prop_id ->
+  ?assumes:predicate ->
+  NormAtLabels.label_mapping ->
+  predicate -> predicate option
+
 (** generic function to add a predicate property after normalisation.
  * All the [add_prop_xxx] functions below use this one. *)
-val add_prop : t_annots -> annot_kind -> 
-  NormAtLabels.label_mapping -> WpPropId.prop_id ->
-  predicate named -> 
-  t_annots
+val add_prop : t_annots -> annot_kind -> WpPropId.prop_id -> predicate option -> t_annots
 
-(** Add the predicate as a function precondition. 
+(** Add the predicate as a function precondition.
  * Add [assumes => pre] if [assumes] is given. *)
 val add_prop_fct_pre : t_annots -> annot_kind ->
-  kernel_function -> funbehavior -> 
-  assumes: predicate named option -> identified_predicate -> t_annots
+  kernel_function -> funbehavior ->
+  assumes: predicate option -> identified_predicate -> t_annots
 
 (** Add the preconditions of the behavior :
  * if [impl_assumes], add [b_assumes => b_requires]
@@ -83,21 +85,21 @@ val add_prop_fct_post : t_annots -> annot_kind ->
   kernel_function -> funbehavior -> termination_kind -> identified_predicate
   -> t_annots
 
-(** Add the predicate as a stmt precondition. 
+(** Add the predicate as a stmt precondition.
  * Add [assumes => pre] if [assumes] is given. *)
-val add_prop_stmt_pre : t_annots -> annot_kind -> 
+val add_prop_stmt_pre : t_annots -> annot_kind ->
   kernel_function -> stmt -> funbehavior ->
-  assumes: predicate named option -> identified_predicate -> t_annots
+  assumes: predicate option -> identified_predicate -> t_annots
 
 (** Add the predicate as a stmt precondition.
  * Add [\old (assumes) => post] if [assumes] is given. *)
 val add_prop_stmt_post :t_annots -> annot_kind ->
   kernel_function -> stmt -> funbehavior -> termination_kind ->
-  logic_label option -> assumes:predicate named option -> identified_predicate 
+  logic_label option -> assumes:predicate option -> identified_predicate
   -> t_annots
 
 (** Add all the [b_requires]. Add [b_assumes => b_requires] if [with_assumes] *)
-val add_prop_stmt_bhv_requires : t_annots -> annot_kind -> 
+val add_prop_stmt_bhv_requires : t_annots -> annot_kind ->
   kernel_function -> stmt -> funbehavior -> with_assumes:bool -> t_annots
 
 (** Process the stmt spec precondition as an hypothesis for external properties.
@@ -106,19 +108,19 @@ val add_prop_stmt_spec_pre : t_annots -> annot_kind ->
   kernel_function -> stmt -> funspec -> t_annots
 
 val add_prop_call_pre : t_annots -> annot_kind -> WpPropId.prop_id ->
-  assumes:predicate named -> identified_predicate -> t_annots
+  assumes:predicate -> identified_predicate -> t_annots
 
 (** Add a postcondition of a called function. Beware that [kf] and [bhv]
  * are the called one. *)
 val add_prop_call_post : t_annots -> annot_kind ->
   kernel_function -> funbehavior -> termination_kind ->
-  assumes:predicate named -> identified_predicate -> t_annots
+  assumes:predicate -> identified_predicate -> t_annots
 
 val add_prop_assert : t_annots -> annot_kind ->
-  kernel_function -> stmt -> code_annotation -> predicate named -> t_annots
+  kernel_function -> stmt -> code_annotation -> predicate -> t_annots
 
-val add_prop_loop_inv : t_annots -> annot_kind -> 
-  stmt -> WpPropId.prop_id -> predicate named -> t_annots
+val add_prop_loop_inv : t_annots -> annot_kind ->
+  stmt -> WpPropId.prop_id -> predicate -> t_annots
 
 (** {3 Adding assigns properties} *)
 
@@ -149,14 +151,14 @@ val add_loop_assigns_hyp : t_annots -> kernel_function -> stmt ->
 val add_fct_bhv_assigns_hyp : t_annots -> kernel_function -> termination_kind ->
   funbehavior -> t_annots
 
-val assigns_upper_bound : 
+val assigns_upper_bound :
   funspec -> (funbehavior * identified_term from list) option
 
 (** {3 Getting information from annotations} *)
 
 val get_hyp_only : t_annots -> WpPropId.pred_info list
 val get_goal_only : t_annots -> WpPropId.pred_info list
-val get_both_hyp_goals : t_annots -> 
+val get_both_hyp_goals : t_annots ->
   WpPropId.pred_info list * WpPropId.pred_info list
 
 (** the [bool] in [get_cut] results says if the property has to be
@@ -200,7 +202,7 @@ val add_on_edges : annots_tbl -> t_annots -> Cil2cfg.edge list -> unit
 val add_node_annots : annots_tbl -> Cil2cfg.t -> Cil2cfg.node ->
   (t_annots * (t_annots * t_annots)) -> unit
 
-val add_loop_annots : annots_tbl -> Cil2cfg.t -> Cil2cfg.node -> 
+val add_loop_annots : annots_tbl -> Cil2cfg.t -> Cil2cfg.node ->
   entry:t_annots -> back:t_annots -> core:t_annots -> unit
 
 val add_axiom : annots_tbl -> LogicUsage.logic_lemma -> unit
@@ -249,16 +251,16 @@ val pp_info_of_strategy : Format.formatter -> strategy -> unit
 val is_main_init : Cil_types.kernel_function -> bool
 
 
-(** True if both options [-const-readonly] and [-wp-init] are positionned, 
-    and the variable is global, not extern, with a ["const"] type 
+(** True if both options [-const-readonly] and [-wp-init] are positionned,
+    and the variable is global, not extern, with a ["const"] type
     (see [hasConstAttribute]).
-    @since Sodium-20150201 
+    @since Sodium-20150201
 *)
 val isInitConst : unit -> bool
 
 (** True if the variable is global, not extern, with a ["const"] qualifier type.
     {b Should} only apply when [isInitConst] is true.
-    @since Sodium-20150201 
+    @since Sodium-20150201
 *)
 val isGlobalInitConst : varinfo -> bool
 
@@ -269,8 +271,8 @@ val fold_bhv_post_cond : warn:bool ->
   ('e_acc -> Cil_types.identified_predicate -> 'e_acc) ->
   'n_acc * 'e_acc -> funbehavior -> 'n_acc * 'e_acc
 
-val mk_variant_properties : 
+val mk_variant_properties :
   kernel_function -> stmt -> code_annotation -> term ->
-  (WpPropId.prop_id * predicate named)
-  * (WpPropId.prop_id * predicate named)
+  (WpPropId.prop_id * predicate)
+  * (WpPropId.prop_id * predicate)
 (* -------------------------------------------------------------------------- *)

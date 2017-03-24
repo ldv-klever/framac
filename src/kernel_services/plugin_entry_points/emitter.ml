@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,6 @@
 
 (* Modules [Hashtbl] and [Kernel] are not usable here. Thus use above modules
    instead. *)
-module Output = Project_skeleton.Output
 
 (**************************************************************************)
 (** {2 Datatype} *)
@@ -120,7 +119,7 @@ module Usable_emitter = struct
       tuning_parameters = get_params e.tuning_values }
 
   let get_name e = e.u_name
-  let get_unique_name e = Pretty_utils.sfprintf "%a" pretty e
+  let get_unique_name e = Format.asprintf "%a" pretty e
 
   let correctness_parameters e = 
     Datatype.String.Map.fold (fun p _ acc -> p :: acc) e.correctness_values []
@@ -152,6 +151,8 @@ let create name kinds ~correctness ~tuning =
   in
   Datatype.String.Hashtbl.add names name ();
   e
+
+let dummy = create "dummy" [] ~correctness:[] ~tuning:[]
 
 let get_name e = e.name
 
@@ -213,7 +214,7 @@ let distinct_parameters get_them tuning e =
   let name = e.u_name in
   let values = get_them e in
   let get e s =
-    Pretty_utils.sfprintf
+    Format.asprintf
       "%t"
       (fun fmt -> Usable_emitter.pretty_parameter fmt ~tuning e s)
   in
@@ -317,10 +318,20 @@ let iter_on_kinds f l =
 
 let correctness_states: unit State.Hashtbl.t = State.Hashtbl.create 7
 
-let register_correctness_parameter name kinds =
-  let state = State.get name in
-  State.Hashtbl.replace correctness_states state ();
-  iter_on_kinds (State_dependency_graph.add_dependencies ~from:state) kinds
+let register_correctness_parameter name emitter_name kinds =
+  try
+    let state = State.get name in
+    State.Hashtbl.replace correctness_states state ();
+    iter_on_kinds (State_dependency_graph.add_dependencies ~from:state) kinds
+  with State.Unknown ->
+    (* in multi-sessions mode (e.g. save/load), the state for this parameter may
+       not exist if the plug-in which defines it is not here anymore (fix bug
+       #2181) *)
+    Kernel.warning
+      ~once:true
+      "emitter %s: correctness parameter %s does not exist anymore. Ignored."
+      emitter_name
+      name
 
 let parameter_hooks 
     : (unit -> unit) Datatype.String.Hashtbl.t Typed_parameter.Hashtbl.t
@@ -386,26 +397,35 @@ let update_table tbl =
   Usable_emitters_of_emitter.iter
     (fun _ (_, all_usable_e) ->
       Usable_emitter.Set.iter
-	(fun e ->
-	  (* remove dependencies corresponding to old correctness parameters *)
-	  Datatype.String.Map.iter 
-	    (fun p _ ->
-	      iter_on_kinds
-		(State_dependency_graph.remove_dependencies ~from:(State.get p))
-		e.u_kinds)
-	    e.correctness_values;
-	  (* remove hooks corresponding to old tuning parameters *)
-	  Typed_parameter.Hashtbl.iter 
-	    (fun _ tbl -> Datatype.String.Hashtbl.clear tbl)
-	    parameter_hooks)
-	!all_usable_e);
+        (fun e ->
+          (* remove dependencies corresponding to old correctness parameters *)
+          Datatype.String.Map.iter
+            (fun p _ ->
+              try
+                iter_on_kinds
+                  (State_dependency_graph.remove_dependencies
+                     ~from:(State.get p))
+                  e.u_kinds
+              with State.Unknown ->
+                (* In multi-sessions mode (e.g. save/load), the state for this
+                   parameter may not exist if the plug-in which defines it is
+                   not here anymore. Nothing special to do since the
+                   dependencies have already been removed by the load mechanism
+                   when states are missing (fix bug #2181). *)
+                ())
+            e.correctness_values;
+          (* remove hooks corresponding to old tuning parameters *)
+          Typed_parameter.Hashtbl.iter
+            (fun _ tbl -> Datatype.String.Hashtbl.clear tbl)
+            parameter_hooks)
+        !all_usable_e);
   (* register new stuff *)
   Datatype.String.Hashtbl.iter
     (fun e_name (_, all_usable_e) -> 
       Usable_emitter.Set.iter
 	(fun e -> 
 	  Datatype.String.Map.iter
-	    (fun p _ -> register_correctness_parameter p e.u_kinds)
+	    (fun p _ -> register_correctness_parameter p e.u_name e.u_kinds)
 	    e.correctness_values;
 	  Datatype.String.Map.iter
 	    (fun p _ -> 
@@ -419,7 +439,11 @@ let () = Usable_emitters_of_emitter.add_hook_on_update update_table
 let register_parameter tuning usable_e p =
   let usable_e = update_parameter tuning usable_e p in
   if tuning then register_tuning_parameter usable_e.u_name p
-  else register_correctness_parameter p.Typed_parameter.name usable_e.u_kinds;
+  else
+    register_correctness_parameter
+      p.Typed_parameter.name
+      usable_e.u_name
+      usable_e.u_kinds;
   usable_e
 
 let create_usable_emitter e =
@@ -617,6 +641,6 @@ include D
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

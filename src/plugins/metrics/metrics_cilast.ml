@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,6 +40,8 @@ class type sloc_visitor = object
   *)
   method fundecl_calls: int Metrics_base.VInfoMap.t
   method fundef_calls: int Metrics_base.VInfoMap.t
+  (* Global variables with 'Extern' storage *)
+  method extern_global_vars: Metrics_base.VInfoSet.t
 
   (* Get the computed metris *)
   method get_metrics: BasicMetrics.t
@@ -80,10 +82,12 @@ class slocVisitor : sloc_visitor = object(self)
 
   val fundecl_calls: int VInfoMap.t ref = ref VInfoMap.empty;
   val fundef_calls: int VInfoMap.t ref = ref VInfoMap.empty;
+  val extern_global_vars = ref VInfoSet.empty
 
   (* Getters/setters *)
   method fundecl_calls = !fundecl_calls
   method fundef_calls = !fundef_calls
+  method extern_global_vars = !extern_global_vars
   method get_metrics = !global_metrics
 
   method private update_metrics_map filename strmap =
@@ -163,6 +167,10 @@ class slocVisitor : sloc_visitor = object(self)
   method private record_and_clear_function_metrics metrics =
     let filename = metrics.cfile_name in
     let funcname = metrics.cfunc_name in
+    local_metrics := BasicMetrics.set_cyclo !local_metrics
+           (BasicMetrics.compute_cyclo !local_metrics);
+    global_metrics := BasicMetrics.set_cyclo !global_metrics
+           (!global_metrics.ccyclo + !local_metrics.ccyclo);
     (try
        let fun_tbl = Datatype.String.Map.find filename metrics_map in
        self#update_metrics_map filename
@@ -179,12 +187,17 @@ class slocVisitor : sloc_visitor = object(self)
   method! vvdec vi =
     if not (Varinfo.Set.mem vi seen_vars) then (
       if Cil.isFunctionType vi.vtype then (
-        if consider_function vi then
+        if consider_function vi then begin
           global_metrics := incr_funcs !global_metrics;
+          (* Mark the function as seen, adding 0 to the number of calls *)
+          self#update_call_maps vi 0;
+        end
       ) else (
-        if vi.vglob && not vi.vtemp
+        if vi.vglob && not vi.vtemp && Metrics_base.consider_variable vi
         then (
-	  global_metrics:= incr_glob_vars !global_metrics;
+          global_metrics:= incr_glob_vars !global_metrics;
+          if vi.vstorage = Extern then
+            extern_global_vars := VInfoSet.add vi !extern_global_vars
         )
       );
       seen_vars <- Varinfo.Set.add vi seen_vars;
@@ -276,7 +289,8 @@ class slocVisitor : sloc_visitor = object(self)
     (* extract just the name of the global , for printing purposes *)
     match glob with
       | GVar (v, _, _) -> v.vname ^ " (GVar) "
-      | GVarDecl (_, v, _) -> v.vname ^ " (GVarDecl) "
+      | GVarDecl (v, _) -> v.vname ^ " (GVarDecl) "
+      | GFunDecl (_, v, _) -> v.vname ^ " (GFunDecl) "
       | GFun (fdec, _) -> fdec.svar.vname ^ " (GFun) "
       | GType (ty, _) -> ty.tname
       | GCompTag (ci, _) | GCompTagDecl (ci, _) -> ci.cname
@@ -301,22 +315,23 @@ class slocVisitor : sloc_visitor = object(self)
     let les_images = List.map self#image globs in
     String.concat "," les_images
 
+  method private update_call_maps vinfo increment =
+    if consider_function vinfo then
+      let update_call_map funcmap =
+        self#add_map funcmap vinfo
+          (increment + try VInfoMap.find vinfo !funcmap with Not_found-> 0)
+      in
+      if vinfo.vdefined
+      then update_call_map fundef_calls
+      else update_call_map fundecl_calls
+
+
   method! vinst i =
     begin match i with
       | Call(_, e, _, _) ->
         self#incr_both_metrics incr_calls;
         (match e.enode with
-          | Lval(Var vinfo, NoOffset) ->
-            if consider_function vinfo then
-              begin
-                let update_call_map funcmap =
-                  self#add_map funcmap vinfo
-                    (1 + try VInfoMap.find vinfo !funcmap with Not_found-> 0)
-                in
-                if vinfo.vdefined
-                then update_call_map fundef_calls
-                else update_call_map fundecl_calls
-              end
+          | Lval(Var vinfo, NoOffset) -> self#update_call_maps vinfo 1
           | _ -> ());
       | Set _ -> self#incr_both_metrics incr_assigns;
       | _ -> ()
@@ -358,17 +373,19 @@ let dump_html fmt cil_visitor =
         @[&nbsp; %a@]@ <br/>@ <br/>@ \
         @{<span>Undefined function(s)@} (%d):@ <br/>@ \
         @[&nbsp; %a@]@ <br>@ <br/>@ \
+        @{<span>'Extern' global variable(s)@} (%d):@ <br/>@ \
+        @[&nbsp; %a@]@ <br>@ <br/>@ \
         @{<span>Potential entry point(s)@} (%d):@ <br/>@ \
         @[&nbsp; %a@]@ <br/>@ <br/>@ \
         @}@]"
       (VInfoMap.cardinal cil_visitor#fundef_calls)
-      (Metrics_base.pretty_set VInfoMap.iter) cil_visitor#fundef_calls
+      Metrics_base.pretty_set cil_visitor#fundef_calls
       (VInfoMap.cardinal cil_visitor#fundecl_calls)
-      (Metrics_base.pretty_set VInfoMap.iter) cil_visitor#fundecl_calls
-      (Metrics_base.number_entry_points VInfoMap.fold
-         cil_visitor#fundef_calls)
-      (Metrics_base.pretty_entry_points VInfoMap.iter)
-      cil_visitor#fundef_calls
+      Metrics_base.pretty_set cil_visitor#fundecl_calls
+      (VInfoSet.cardinal cil_visitor#extern_global_vars)
+      Metrics_base.pretty_extern_vars cil_visitor#extern_global_vars
+      (Metrics_base.number_entry_points cil_visitor#fundef_calls)
+      Metrics_base.pretty_entry_points cil_visitor#fundef_calls
   in
   let pr_detailed_results fmt cil_visitor =
     Format.fprintf fmt "@[<v 0>\
@@ -402,27 +419,29 @@ let dump_html fmt cil_visitor =
     pr_detailed_results cil_visitor
 ;;
 
-let pp_funinfo fmt cil_visitor =
-  let function_definitions = VInfoMap.to_varinfo_map cil_visitor#fundef_calls in
-  let function_declarations = VInfoMap.to_varinfo_map cil_visitor#fundecl_calls
-  in
-  let nfundef = Metrics_base.map_cardinal_varinfomap function_definitions in
-  let nfundecl = Metrics_base.map_cardinal_varinfomap function_declarations in
+let pp_funinfo fmt vis =
+  let nfundef = VInfoMap.cardinal vis#fundef_calls in
+  let nfundecl = VInfoMap.cardinal vis#fundecl_calls in
+  let nextern = VInfoSet.cardinal vis#extern_global_vars in
   let fundef_hdr = Format.sprintf "Defined functions (%d)" nfundef
   and fundecl_hdr = Format.sprintf "Undefined functions (%d)" nfundecl
+  and extern_hdr = Format.sprintf "'Extern' global variables (%d)" nextern
   and entry_pts_hdr = Format.sprintf "Potential entry points (%d)"
-    (Metrics_base.number_entry_points Varinfo.Map.fold function_definitions) in
+    (Metrics_base.number_entry_points vis#fundef_calls) in
   Format.fprintf fmt
     "@[<v 0>@[<v 1>%a@ @[%a@]@]@ @ \
+            @[<v 1>%a@ @[%a@]@]@ @ \
             @[<v 1>%a@ @[%a@]@]@ @ \
             @[<v 1>%a@ @[%a@]@]@ \
      @]"
     (Metrics_base.mk_hdr 1) fundef_hdr
-    (Metrics_base.pretty_set Varinfo.Map.iter) function_definitions
+    Metrics_base.pretty_set vis#fundef_calls
     (Metrics_base.mk_hdr 1) fundecl_hdr
-    (Metrics_base.pretty_set Varinfo.Map.iter) function_declarations
+    Metrics_base.pretty_set vis#fundecl_calls
+    (Metrics_base.mk_hdr 1) extern_hdr
+    Metrics_base.pretty_extern_vars vis#extern_global_vars
     (Metrics_base.mk_hdr 1) entry_pts_hdr
-    (Metrics_base.pretty_entry_points Varinfo.Map.iter) function_definitions
+    Metrics_base.pretty_entry_points vis#fundef_calls
 ;;
 
 let pp_with_funinfo fmt cil_visitor =
@@ -467,8 +486,114 @@ let compute_on_cilast () =
     else Metrics_parameters.result "%a" pp_with_funinfo cil_visitor
   end
 
+(* Visitor for the recursive estimation of a stack size.
+   Its arguments are the function currently being visited and the current
+   callstack, as a list of kernel functions.
+   The callstack is used to detect recursive calls.
+   TODO: this computation is far from optimal; for instance, locals_size could
+   be cached for each function. Also, it does not consider calls via function
+   pointers. *)
+class locals_size_visitor kf callstack = object
+
+  val mutable locals_size_no_temps = Integer.zero
+  method get_locals_size_no_temps = locals_size_no_temps
+
+  val mutable locals_size_temps = Integer.zero
+  method get_locals_size_temps = locals_size_temps
+
+  val mutable max_size_calls_no_temps = Integer.zero
+  method get_max_size_calls_no_temps = max_size_calls_no_temps
+
+  val mutable max_size_calls_temps = Integer.zero
+  method get_max_size_calls_temps = max_size_calls_temps
+
+  inherit Visitor.frama_c_inplace
+
+  method! vinst i = match i with
+    | Call (_, e, _, _) ->
+      begin
+        match e.enode with
+        | Lval ((Var vi), _) ->
+          begin
+            try
+              let kf' = Globals.Functions.find_by_name vi.vname in
+              Metrics_parameters.debug
+                "@[function %a:@;computing call to function %a@]"
+                Kernel_function.pretty kf Kernel_function.pretty kf';
+              let new_cs = kf' :: callstack in
+              if List.mem kf' callstack then
+                Metrics_parameters.abort
+                  "@[unsupported recursive call detected:@;%a@]"
+                  (Pretty_utils.pp_list ~sep:"@ <-@ " Kernel_function.pretty)
+                  (List.rev new_cs);
+              let new_vis = new locals_size_visitor kf' new_cs in
+              ignore (Visitor.visitFramacKf
+                        (new_vis :> Visitor.frama_c_visitor) kf');
+              let call_size_no_temps =
+                Integer.add new_vis#get_max_size_calls_no_temps
+                  new_vis#get_locals_size_no_temps
+              in
+              let call_size_temps =
+                Integer.add new_vis#get_max_size_calls_temps
+                  new_vis#get_locals_size_temps
+              in
+              max_size_calls_no_temps <-
+                Integer.max max_size_calls_no_temps call_size_no_temps;
+              max_size_calls_temps <-
+                Integer.max max_size_calls_temps call_size_temps
+            with Not_found ->
+              (* should not happen *)
+              Metrics_parameters.fatal ~current:true
+                "@[function not found:@;%s@]" vi.vname;
+          end;
+          ()
+        | _ ->
+          Metrics_parameters.warning ~current:true
+            "@[ignoring unsupported function call in expression:@;%a@]"
+            Printer.pp_exp e
+      end;
+      Cil.DoChildren
+    | _ -> Cil.DoChildren
+
+  method! vvdec vi =
+    if not vi.vglob && not vi.vghost && vi.vstorage = NoStorage then
+      begin
+        let size_exp = Cil.sizeOf ~loc:vi.vdecl vi.vtype in
+        match Cil.constFoldToInt size_exp with
+        | None -> Metrics_parameters.error
+                    "@[in function %a,@;cannot compute sizeof %a (type %a)@]"
+                    Kernel_function.pretty kf Printer.pp_varinfo vi
+                    Printer.pp_typ vi.vtype
+        | Some size ->
+          Metrics_parameters.debug "@[function %a:@;sizeof(%a) = %a (%s)@]"
+            Kernel_function.pretty kf
+            Printer.pp_varinfo vi (Integer.pretty ~hexa:false) size
+            (if vi.vtemp then "temp" else "non-temp");
+          if vi.vtemp then
+            locals_size_temps <- Integer.add locals_size_temps size
+          else
+            locals_size_no_temps <- Integer.add locals_size_no_temps size
+      end;
+    Cil.DoChildren
+
+end
+
+(* Requires a computed Cil AST *)
+let compute_locals_size kf =
+  let vis = new locals_size_visitor kf [kf] in
+  ignore (Visitor.visitFramacKf (vis :> Visitor.frama_c_visitor) kf);
+  Metrics_parameters.result "@[%a\t%a\t%a\t%a\t%a@]"
+    Kernel_function.pretty kf
+    (Integer.pretty ~hexa:false) vis#get_locals_size_no_temps
+    (Integer.pretty ~hexa:false)
+    (Integer.add vis#get_locals_size_no_temps vis#get_locals_size_temps)
+    (Integer.pretty ~hexa:false) vis#get_max_size_calls_no_temps
+    (Integer.pretty ~hexa:false)
+    (Integer.add vis#get_max_size_calls_no_temps vis#get_max_size_calls_temps)
+;;
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

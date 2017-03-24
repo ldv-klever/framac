@@ -41,7 +41,9 @@
 (*                          et Automatique).                                *)
 (****************************************************************************)
 
-(** A framework for implementing data flow analysis.
+(** Deprecated: use {!Dataflows} instead. A framework for implementing data
+    flow analysis.
+
     @plugin development guide *)
 
 type 't action =
@@ -258,6 +260,6 @@ val find_stmts: Cil_types.fundec -> (Cil_types.stmt list * Cil_types.stmt list)
 
 (*
   Local Variables:
-  compile-command: "LC_ALL=C make -C ../../.."
+  compile-command: "make -C ../../.."
   End:
  *)

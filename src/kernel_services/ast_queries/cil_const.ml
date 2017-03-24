@@ -110,6 +110,6 @@ let make_logic_info = make_logic_info LVGlobal
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

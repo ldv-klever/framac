@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,15 +21,10 @@
 (**************************************************************************)
 
 (** Information about version of Frama-C.
-
-    The body of this module is generated from Makefile.
-    @plugin development guide *)
+    The body of this module is generated from Makefile. *)
 
 val version: string
   (** Frama-C Version identifier. *)
-
-val date: string
-  (** Compilation date. *)
 
 val is_gui: bool ref
   (** Is the Frama-C GUI running?
@@ -50,9 +45,13 @@ val libdir: string
   (** Directory where the Frama-C kernel library is.
       @since Beryllium-20090601-beta1 *)
 
-val plugin_dir: string
+val plugin_dir: string list
   (** Directory where the Frama-C dynamic plug-ins are.
-      @since Beryllium-20090601-beta1 *)
+      @modify Magnesium-20151001 *)
+
+val plugin_path: string
+  (** The coma-separated concatenation of [plugin_dir].
+      @since Magnesium-20151001 *)
 
 val static_plugins: string list
   (** Plug-ins statically linked within Frama-C. *)
@@ -63,6 +62,10 @@ val static_gui_plugins: string list
 val compilation_unit_names: string list
   (** List of names of all kernel compilation units.
       @since Boron-20100401 *)
+
+val library_names: string list
+  (** List of linked libraries.
+      @since Magnesium-20151001 *)
 
 val preprocessor: string
   (** Name of the default command to call the preprocessor.
@@ -91,6 +94,6 @@ val dot: string option
 
 (*
   Local Variables:
-  compile-command: "make -C ../.."
+  compile-command: "make -C ../../.."
   End:
 *)

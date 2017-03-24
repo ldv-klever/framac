@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,6 +32,7 @@ class type sloc_visitor = object
   *)
   method fundecl_calls: int Metrics_base.VInfoMap.t
   method fundef_calls: int Metrics_base.VInfoMap.t
+  method extern_global_vars: Metrics_base.VInfoSet.t
 
   (* Get the computed metris *)
   method get_metrics: Metrics_base.BasicMetrics.t
@@ -54,3 +55,10 @@ val get_metrics : unit -> Metrics_base.BasicMetrics.t ;;
 
 (** Compute metrics on whole CIL AST *)
 val compute_on_cilast: unit -> unit ;;
+
+(** Compute and print the size (in bytes) of local variables on the CIL AST.
+    This is a rough approximation, neither guaranteed to be smaller or
+    larger than the actual value. Only automatic, non-ghost and
+    non-temporary variables present in the source are included.
+    This is useful to estimate the stack size of a function. *)
+val compute_locals_size: Kernel_function.t -> unit;;

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,18 +63,18 @@ module After_building = Hook.Build(struct type t = Cil_types.file end)
 let apply_after_computed = After_building.extend
 
 let mark_as_changed () =
+  Kernel.debug "AST has changed";
   let depends = State_selection.only_dependencies self in
-  let no_remove = State_selection.list_state_union !linked_states in
+  let no_remove = State_selection.of_list !linked_states in
   let selection = State_selection.diff depends no_remove in
   Project.clear ~selection ();
   After_building.apply (get())
 
 let mark_as_grown () =
+  Kernel.debug "AST has grown";
   let depends = State_selection.only_dependencies self in
-  let no_remove = State_selection.list_state_union !linked_states in
   let no_remove =
-    State_selection.union no_remove
-      (State_selection.list_state_union !monotonic_states)
+    State_selection.of_list (!linked_states @ !monotonic_states)
   in
   let selection = State_selection.diff depends no_remove in
   Project.clear ~selection ()
@@ -96,9 +96,6 @@ let default_initialization =
 
 let set_default_initialization f = default_initialization := f
 
-let syntactic_constant_folding ast =
-  Cil.visitCilFileSameGlobals (Cil.constFoldVisitor true) ast
-
 module Computing =
   State_builder.False_ref(
     struct let name = "Ast.computing" let dependencies = [] end)
@@ -110,11 +107,7 @@ let force_compute () =
   Kernel.feedback ~level:2 "computing the AST";
   !default_initialization ();
   Computing.set false;
-  let s = get () in
-  (* Syntactic constant folding before analysing files if required *)
-  if Kernel.Constfold.get () then syntactic_constant_folding s;
-  After_building.apply s;
-  s
+  let s = get () in After_building.apply s; s
 
 let get () = memo (fun () -> force_compute ())
 
@@ -128,9 +121,17 @@ let set_file file =
     if old_file == file then old_file
     else raise (Bad_Initialization "Too many AST initializations")
   in
-  ignore 
+  ignore
     (memo ~change
-       (fun () -> mark_as_computed (); After_building.apply file; file))
+       (fun () ->
+          mark_as_computed ();
+          if not (Computing.get ()) then
+            (* if we are computing the Ast through force_compute, the hooks
+               will be applied by force_compute itself, and trying to do that
+               here might trigger a Bad_Initialization (see gitlab issue #209)
+            *)
+            After_building.apply file;
+          file))
 
 module UntypedFiles = struct
 
@@ -161,32 +162,47 @@ module LastDecl =
       let size = 47
      end)
 
-let compute_last_decl () =
+let compute_last_def_decl () =
   (* Only meaningful when we have definitely computed the AST. *)
   if is_computed () && not (LastDecl.is_computed ()) then begin
     let globs = (get ()).globals in
     let update_one_global g =
       match g with
-        | GVarDecl(_,v,_) when Cil.isFunctionType v.vtype ->
+        | GVarDecl(v,_) | GFunDecl(_,v,_) | GVar (v,_,_) | GFun ({svar=v},_) ->
           LastDecl.replace v g
-        | GFun (f,_) -> LastDecl.replace f.svar g
         | _ -> ()
     in
     List.iter update_one_global globs;
     LastDecl.mark_as_computed ()
   end
 
-let is_last_decl g =
-  (* Not_found mainly means that the information is irrelevant at this stage,
-     not that there is a dangling varinfo.
-   *)
+let def_or_last_decl v =
+  compute_last_def_decl();
+  try
+    LastDecl.find v
+  with Not_found ->
+    Kernel.fatal
+      "%a does not have a global declaration in the AST"
+      Cil_printer.pp_varinfo v
+
+let is_def_or_last_decl g =
   let is_eq v =
-    compute_last_decl ();
-    try (LastDecl.find v == g) with Not_found -> false
+    compute_last_def_decl ();
+    try
+      (** using [(==)] is the only way to fulfill the spec (do not use
+          [Cil_datatype.Global.equal] here): if a variable is declared several
+          times in the program, each declaration are equal wrt
+          [Cil_datatype.Global.equal] but only one is [(==)] (and exactly one if
+          [g] comes from the AST). *)
+      LastDecl.find v == g
+    with Not_found ->
+      (* [Not_found] mainly means that the information is irrelevant at this
+         stage, not that there is a dangling varinfo. *)
+      false
   in
   match g with
-    | GVarDecl(_,v,_) -> is_eq v
-    | GFun(f,_) -> is_eq f.svar
+    | GVarDecl(v,_) | GFunDecl (_,v,_) -> is_eq v
+    | GVar _ | GFun _ -> true
     | _ -> false
 
 let clear_last_decl () =
@@ -199,6 +215,6 @@ let () = add_hook_on_update Cil_datatype.clear_caches
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

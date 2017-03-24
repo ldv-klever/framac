@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,7 +22,10 @@
 
 #ifndef __FC_DEFINE_UID_AND_GID
 #define __FC_DEFINE_UID_AND_GID
+#include "features.h"
+__BEGIN_DECLS
 typedef unsigned int gid_t;
 typedef unsigned int uid_t;
+__END_DECLS
 #endif
 

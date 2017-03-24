@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,10 +22,13 @@
 
 #ifndef __FC_DEFINE_SOCKADDR
 #define __FC_DEFINE_SOCKADDR
+#include "features.h"
 #include "__fc_define_sa_family_t.h"
+__BEGIN_DECLS
 struct sockaddr {
   sa_family_t		sa_family;	/* address family, AF_xxx	*/
   char			sa_data[14];	/* 14 bytes of protocol address	*/
 };
+__END_DECLS
 #endif
 

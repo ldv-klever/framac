@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -27,8 +27,25 @@
   type end_of_buffer = NEWLINE | SPACE | CHAR
   let preprocess_buffer = Buffer.create 1024
   let output_buffer = Buffer.create 1024
-  let beg_of_line = Buffer.create 8
-  let blacklisted_macros = [ "__STDC__"; "__STDC_HOSTED__"; "assert"; "offsetof"]
+  (* Standard prohibits the predefined macros to be subject of a #define
+     (or #undef) directive. We thus have to filter the definition of these
+     macros from gcc's output (gcc emits a warning otherwise).
+     The list of predefined macros is taken from C11 standard, in the order
+     in which they are defined in Section 6.10.8
+   *)
+  let blacklisted_macros = [
+    (* 6.10.8.1 mandatory macros. *)
+    "__DATE__"; "__FILE"; "__LINE__"; "__STDC__"; "__STDC_HOSTED__";
+    "__STDC_VERSION__"; "__TIME__";
+    (* 6.10.8.2 environment macros *)
+    "__STDC_ISO_10646__"; "__STDC_MB_MIGHT_NEQ_WC__";
+    "__STDC_UTF_16__"; "__STDC_UTF_32__";
+    (* 6.10.8.3 conditional feature macros *)
+    "__STDC_ANALYZABLE__"; "__STDC_IEC_559__"; "__STDC_IEC_559_COMPLEX__";
+    "__STDC_LIB_EXT1__"; "__STD_NO_ATOMICS__"; "__STD_NO_COMPLEX__";
+    "__STDC_NO_THREADS__"; "__STDC_NO_VLA__";
+    (* expanding assert, an ACSL keyword, is not a good idea. *)
+    "assert"; "offsetof"]
   let is_newline = ref CHAR
   let curr_file = ref ""
   let curr_line = ref 1
@@ -37,7 +54,6 @@
   let reset () =
     Buffer.clear preprocess_buffer;
     Buffer.clear output_buffer;
-    Buffer.clear beg_of_line;
     is_newline := CHAR;
     curr_file := "";
     curr_line := 1;
@@ -145,6 +161,7 @@
         Str.split_delim re_annot_content (Buffer.contents output_buffer)
       in
       output_result outfile result content;
+      close_in result
     end else begin
       Buffer.output_buffer outfile output_buffer
     end;
@@ -152,13 +169,9 @@
 
   let add_preprocess_line_info () =
     Printf.bprintf
-      preprocess_buffer "# %d %s \n"
-      !curr_line !curr_file;
-    Buffer.clear beg_of_line
+      preprocess_buffer "# %d %s \n" !curr_line !curr_file
 
-  let make_newline () =
-    incr curr_line;
-    Buffer.clear beg_of_line
+  let make_newline () = incr curr_line
 }
 
 rule main = parse
@@ -173,7 +186,7 @@ rule main = parse
     [' ''\t']* (('"' [^'"']+ '"') as file)  [^'\n']* "\n"
     { (try
         curr_line := (int_of_string line) -1
-       with Failure "int_of_string" -> curr_line:= -1);
+       with Failure _ -> curr_line:= -1);
       if file <> "" then curr_file := file;
       Buffer.add_string output_buffer (lexeme lexbuf);
       make_newline();
@@ -181,7 +194,6 @@ rule main = parse
     }
   | "/*@" ('{' | '}' as c) { (* Skip special doxygen comments. Use of '@'
                                 instead of !Clexer.annot_char is intentional *)
-        Buffer.add_string beg_of_line "   ";
         Buffer.add_string output_buffer (lexeme lexbuf);
         comment c lexbuf;}
   | "/*"  (_ as c) {
@@ -194,8 +206,7 @@ rule main = parse
         add_preprocess_line_info();
         annot lexbuf
       end else begin
-        if c = '\n' then make_newline()
-        else Buffer.add_string beg_of_line "   ";
+        if c = '\n' then make_newline();
         Buffer.add_string output_buffer (lexeme lexbuf);
         comment c lexbuf;
       end}
@@ -226,21 +237,16 @@ rule main = parse
       make_newline (); Buffer.add_char output_buffer '\n'; main lexbuf }
   | eof  { }
   | '"' {
-      Buffer.add_char beg_of_line ' ';
       Buffer.add_char output_buffer '"'; 
       c_string lexbuf }
-  | "'" { 
-      Buffer.add_char beg_of_line ' ';
+  | "'" {
       Buffer.add_char output_buffer '\'';
       c_char lexbuf }
   | _ as c {
-      Buffer.add_char beg_of_line ' ';
       Buffer.add_char output_buffer c;
       main lexbuf }
 and macro blacklisted = parse
 | "\\\n" {
-      if not blacklisted then
-        Buffer.add_string preprocess_buffer (lexeme lexbuf);
       make_newline ();
       Buffer.add_char output_buffer '\n';
       macro blacklisted lexbuf
@@ -248,6 +254,16 @@ and macro blacklisted = parse
 (* we ignore comments in macro definition, as their expansion 
    in ACSL annotations would lead to ill-formed ACSL. *)
 | "/*" { macro_comment blacklisted lexbuf }
+| '"' { 
+  if not blacklisted then
+    Buffer.add_char preprocess_buffer '"';
+  macro_string blacklisted lexbuf
+}
+| "'" {
+  if not blacklisted then
+    Buffer.add_char preprocess_buffer '\'';
+  macro_char blacklisted lexbuf
+}
 | "\n" {
       if not blacklisted then
         Buffer.add_char preprocess_buffer '\n';
@@ -268,41 +284,67 @@ and macro_comment blacklisted = parse
     }
 | "*/" { macro blacklisted lexbuf }
 | _  { macro_comment blacklisted lexbuf }
+
+and macro_string blacklisted = parse
+|  "\\\"" as s {
+  if not blacklisted then Buffer.add_string preprocess_buffer s;
+  macro_string blacklisted lexbuf
+  }
+| "\\\n" {
+  make_newline();
+  Buffer.add_char output_buffer '\n';
+  macro_string blacklisted lexbuf
+}
+| "\\\\" as s {
+    if not blacklisted then Buffer.add_string preprocess_buffer s;
+    macro_string blacklisted lexbuf
+  }
+| "\n" { abort_preprocess "unterminated string in macro definition" }
+| eof { abort_preprocess "unterminated string in macro definition" }
+| '"' { if not blacklisted then Buffer.add_char preprocess_buffer '"';
+        macro blacklisted lexbuf }
+| _ as c { if not blacklisted then Buffer.add_char preprocess_buffer c;
+           macro_string blacklisted lexbuf }
+and macro_char blacklisted = parse
+|  "\\'" as s {
+  if not blacklisted then Buffer.add_string preprocess_buffer s;
+  macro_char blacklisted lexbuf
+  }
+| "\\\n" {
+  make_newline();
+  Buffer.add_char output_buffer '\n';
+  macro_char blacklisted lexbuf
+}
+| "\\\\" as s {
+    if not blacklisted then Buffer.add_string preprocess_buffer s;
+    macro_char blacklisted lexbuf
+  }
+| "\n" { abort_preprocess "unterminated char in macro definition" }
+| eof { abort_preprocess "unterminated char in macro definition" }
+| "'" { if not blacklisted then Buffer.add_char preprocess_buffer '\'';
+        macro blacklisted lexbuf }
+| _ as c { if not blacklisted then Buffer.add_char preprocess_buffer c;
+           macro_char blacklisted lexbuf }
 and c_string = parse
-| "\\\"" { Buffer.add_string beg_of_line "  ";
-           Buffer.add_string output_buffer (lexeme lexbuf);
-           c_string lexbuf }
-| "\"" { Buffer.add_char beg_of_line ' '; 
-         Buffer.add_char output_buffer '"';
-         main lexbuf }
+| "\\\"" { Buffer.add_string output_buffer (lexeme lexbuf); c_string lexbuf }
+| "\"" { Buffer.add_char output_buffer '"'; main lexbuf }
 | '\n' { make_newline ();
          Buffer.add_char output_buffer '\n';
          c_string lexbuf
        }
-| "\\\\" { Buffer.add_string beg_of_line "  ";
-           Buffer.add_string output_buffer (lexeme lexbuf);
-           c_string lexbuf }
-| _ as c { Buffer.add_char beg_of_line ' ';
-           Buffer.add_char output_buffer c;
-           c_string lexbuf }
+| "\\\\" { Buffer.add_string output_buffer (lexeme lexbuf); c_string lexbuf }
+| _ as c { Buffer.add_char output_buffer c; c_string lexbuf }
 (* C syntax allows for multiple char character constants *)
 and c_char = parse
-| "\\\'" { Buffer.add_string beg_of_line "  ";
-           Buffer.add_string output_buffer (lexeme lexbuf);
+| "\\\'" { Buffer.add_string output_buffer (lexeme lexbuf);
            c_char lexbuf }
-| "'" { Buffer.add_char beg_of_line ' '; 
-         Buffer.add_char output_buffer '\'';
-         main lexbuf }
+| "'" { Buffer.add_char output_buffer '\''; main lexbuf }
 | '\n' { make_newline ();
          Buffer.add_char output_buffer '\n';
          c_char lexbuf
        }
-| "\\\\" { Buffer.add_string beg_of_line "  ";
-           Buffer.add_string output_buffer (lexeme lexbuf);
-           c_char lexbuf }
-| _ as c { Buffer.add_char beg_of_line ' ';
-           Buffer.add_char output_buffer c;
-           c_char lexbuf }
+| "\\\\" { Buffer.add_string output_buffer (lexeme lexbuf); c_char lexbuf }
+| _ as c { Buffer.add_char output_buffer c; c_char lexbuf }
 
 and annot = parse
     "*/"  {
@@ -399,7 +441,6 @@ and string annot = parse
 and comment c =
 parse
     "/" {
-      Buffer.add_char beg_of_line ' ';
       Buffer.add_char output_buffer  '/';
       if c = '*' then
         main lexbuf
@@ -409,10 +450,7 @@ parse
   | '\n' { make_newline (); Buffer.add_char output_buffer '\n';
            comment '\n' lexbuf }
   | eof { abort_preprocess "eof while parsing C comment" }
-  | _ as c {
-      Buffer.add_char beg_of_line ' ';
-      Buffer.add_char output_buffer c;
-      comment c lexbuf}
+  | _ as c { Buffer.add_char output_buffer c; comment c lexbuf }
 
 and oneline_annot = parse
     "\n"|eof {

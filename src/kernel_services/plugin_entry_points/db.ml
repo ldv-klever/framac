@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -316,13 +316,6 @@ module Value = struct
         let size = size
         let dependencies = dependencies
        end)
-  module AfterTable =
-    Cil_state_builder.Stmt_hashtbl(Cvalue.Model)
-    (struct
-       let name = "Value analysis after states"
-       let dependencies = [AfterTable_By_Callstack.self]
-       let size = size
-     end)
 
 
   let self = Table_By_Callstack.self
@@ -378,8 +371,8 @@ module Value = struct
     RecursiveCallsFound.add kf
 
   module Called_Functions_By_Callstack =
-    State_builder.Hashtbl(Value_types.Callstack.Hashtbl)
-      (Cvalue.Model)
+    State_builder.Hashtbl(Kernel_function.Hashtbl)
+      (States_by_callstack)
       (struct
          let name = "called_functions_by_callstack"
          let size = 11
@@ -446,6 +439,13 @@ module Value = struct
     Hook.Build
       (struct type t = state * (kernel_function * kinstr) list end)
 
+  module Call_Type_Value_Callbacks =
+    Hook.Build(struct
+      type t = [`Builtin of Value_types.call_result | `Spec | `Def | `Memexec]
+        * state * (kernel_function * kinstr) list end)
+  ;;
+
+
   module Compute_Statement_Callbacks =
     Hook.Build
       (struct type t = stmt * callstack * state list end)
@@ -473,27 +473,41 @@ module Value = struct
       add stmt r
 
   let merge_initial_state cs state =
+    let open Value_types in
+    let kf = match cs with (kf, _) :: _ -> kf | _ -> assert false in
+    let by_callstack =
+      try Called_Functions_By_Callstack.find kf
+      with Not_found ->
+        let h = Callstack.Hashtbl.create 7 in
+        Called_Functions_By_Callstack.add kf h;
+        h
+    in
     try
-      let old = Called_Functions_By_Callstack.find cs in
-      Called_Functions_By_Callstack.replace cs (Cvalue.Model.join old state)
-    with
-      Not_found -> Called_Functions_By_Callstack.add cs state
-
+      let old = Callstack.Hashtbl.find by_callstack cs in
+      Callstack.Hashtbl.replace by_callstack cs (Cvalue.Model.join old state)
+    with Not_found ->
+      Callstack.Hashtbl.add by_callstack cs state
 
   let get_initial_state kf =
     assert (is_computed ()); (* this assertion fails during value analysis *)
     try Called_Functions_Memo.find kf
     with Not_found ->
       let state =
-        Called_Functions_By_Callstack.fold (fun cs state acc ->
-          match cs with
-          | (kf', _) :: _ when Kernel_function.equal kf kf' ->
-            Cvalue.Model.join acc state
-          | _ -> acc
-        ) Cvalue.Model.bottom
+        try
+          let open Value_types in
+          let by_callstack = Called_Functions_By_Callstack.find kf in
+          Callstack.Hashtbl.fold
+            (fun _cs state acc -> Cvalue.Model.join acc state)
+            by_callstack Cvalue.Model.bottom
+        with Not_found -> Cvalue.Model.bottom
       in
       Called_Functions_Memo.add kf state;
       state
+
+  let get_initial_state_callstack kf =
+    assert (is_computed ()); (* this assertion fails during value analysis *)
+    try Some (Called_Functions_By_Callstack.find kf)
+    with Not_found -> None
 
   let valid_behaviors = mk_fun "Value.get_valid_behaviors"
 
@@ -537,8 +551,21 @@ module Value = struct
 	  Table_By_Callstack.find stmt)
     with Not_found -> None
 
+  let fold_stmt_state_callstack f acc ~after stmt =
+    assert (is_computed ()); (* this assertion fails during value analysis *)
+    match get_stmt_state_callstack ~after stmt with
+    | None -> acc
+    | Some h -> Value_types.Callstack.Hashtbl.fold (fun _ -> f) h acc
+
+  let fold_state_callstack f acc ~after ki =
+    assert (is_computed ()); (* this assertion fails during value analysis *)
+    match ki with
+    | Kglobal -> f (globals_state ()) acc
+    | Kstmt stmt -> fold_stmt_state_callstack f acc ~after stmt
+
   let is_reachable = Cvalue.Model.is_reachable
 
+  exception Is_reachable
   let is_reachable_stmt stmt =
     if !no_results (Kernel_function.(get_definition (find_englobing_kf stmt)))
     then true
@@ -547,8 +574,13 @@ module Value = struct
       match ho with
       | None -> false
       | Some h ->
-        Value_types.Callstack.Hashtbl.fold (fun _cs state acc ->
-          acc || Cvalue.Model.is_reachable state) h false
+        try
+          Value_types.Callstack.Hashtbl.iter
+            (fun _cs state ->
+              if Cvalue.Model.is_reachable state
+              then raise Is_reachable) h;
+          false
+        with Is_reachable -> true
 
   let is_accessible ki =
     match ki with
@@ -573,7 +605,8 @@ module Value = struct
       Value_types.call_result
 
   exception Outside_builtin_possibilities
-  let register_builtin = mk_fun "Value.record_builtin"
+  let register_builtin = mk_fun "Value.register_builtin"
+  let registered_builtins = mk_fun "Value.registered_builtins"
   let mem_builtin = mk_fun "Value.mem_builtin"
 
   let use_spec_instead_of_definition =
@@ -661,9 +694,14 @@ module Value = struct
 
   let display = mk_fun "Value.display"
 
+  let emitter = ref Emitter.dummy
+
 end
 
 module From = struct
+
+  exception Not_lval
+
   let access = mk_fun "From.access"
   let find_deps_no_transitivity = mk_fun "From.find_deps_no_transitivity"
   let find_deps_no_transitivity_state =
@@ -1001,10 +1039,13 @@ module Properties = struct
 
   module Interp = struct
 
+   exception No_conversion
+
   (** Interpretation and conversions of of formulas *)
     let code_annot = mk_fun "Properties.Interp.code_annot"
-    let lval = mk_fun "Properties.Interp.lval"
-    let expr = mk_fun "Properties.Interp.expr"
+    let term_lval = mk_fun "Properties.Interp.term_lval"
+    let term = mk_fun "Properties.Interp.term"
+    let predicate = mk_fun "Properties.Interp.predicate"
     let term_lval_to_lval = mk_resultfun "Properties.Interp.term_lval_to_lval"
     let term_to_exp = mk_resultfun "Properties.Interp.term_to_exp"
     let term_to_lval = mk_resultfun "Properties.Interp.term_to_lval"
@@ -1018,7 +1059,88 @@ module Properties = struct
     let term_offset_to_offset =
       mk_resultfun "Properties.Interp.term_offset_to_offset"
 
-    module To_zone = struct
+    module To_zone : sig
+      (** The signature of the mli is copy pasted here because of
+          http://caml.inria.fr/mantis/view.php?id=7313 *)
+      type t_ctx =
+          {state_opt:bool option;
+           ki_opt:(stmt * bool) option;
+           kf:Kernel_function.t}
+
+      val mk_ctx_func_contrat:
+        (kernel_function -> state_opt:bool option -> t_ctx) ref
+      (** To build an interpretation context relative to function
+          contracts. *)
+
+      val mk_ctx_stmt_contrat:
+        (kernel_function -> stmt -> state_opt:bool option -> t_ctx) ref
+      (** To build an interpretation context relative to statement
+          contracts. *)
+
+      val mk_ctx_stmt_annot:
+        (kernel_function -> stmt -> t_ctx) ref
+      (** To build an interpretation context relative to statement
+          annotations. *)
+
+      type t = {before:bool ; ki:stmt ; zone:Locations.Zone.t}
+      type t_zone_info = (t list) option
+      (** list of zones at some program points.
+       *   None means that the computation has failed. *)
+
+      type t_decl = {var: Varinfo.Set.t ; (* related to vars of the annot *)
+                     lbl: Logic_label.Set.t} (* related to labels of the annot *)
+      type t_pragmas =
+        {ctrl: Stmt.Set.t ; (* related to //@ slice pragma ctrl/expr *)
+         stmt: Stmt.Set.t}  (* related to statement assign and
+                               //@ slice pragma stmt *)
+
+      val from_term: (term -> t_ctx -> t_zone_info * t_decl) ref
+      (** Entry point to get zones needed to evaluate the [term] relative to
+          the [ctx] of interpretation. *)
+
+      val from_terms: (term list -> t_ctx -> t_zone_info * t_decl) ref
+      (** Entry point to get zones needed to evaluate the list of [terms]
+          relative to the [ctx] of interpretation. *)
+
+      val from_pred: (predicate -> t_ctx -> t_zone_info * t_decl) ref
+      (** Entry point to get zones needed to evaluate the [predicate]
+          relative to the [ctx] of interpretation. *)
+
+      val from_preds: (predicate list -> t_ctx -> t_zone_info * t_decl) ref
+      (** Entry point to get zones needed to evaluate the list of
+          [predicates] relative to the [ctx] of interpretation. *)
+
+      val from_zone: (identified_term -> t_ctx -> t_zone_info * t_decl) ref
+      (** Entry point to get zones needed to evaluate the [zone] relative to
+          the [ctx] of interpretation. *)
+
+      val from_stmt_annot:
+        (code_annotation -> stmt * kernel_function
+         -> (t_zone_info * t_decl) * t_pragmas) ref
+      (** Entry point to get zones needed to evaluate an annotation on the
+          given stmt. *)
+
+      val from_stmt_annots:
+        ((code_annotation -> bool) option ->
+         stmt * kernel_function -> (t_zone_info * t_decl) * t_pragmas) ref
+      (** Entry point to get zones needed to evaluate annotations of this
+          [stmt]. *)
+
+      val from_func_annots:
+        (((stmt -> unit) -> kernel_function -> unit) ->
+         (code_annotation -> bool) option ->
+         kernel_function -> (t_zone_info * t_decl) * t_pragmas) ref
+      (** Entry point to get zones
+          needed to evaluate annotations of this [kf]. *)
+
+      val code_annot_filter:
+        (code_annotation ->
+         threat:bool -> user_assert:bool -> slicing_pragma:bool ->
+         loop_inv:bool -> loop_var:bool -> others:bool -> bool) ref
+        (** To quickly build an annotation filter *)
+
+    end
+    = struct
       type t_ctx =
           { state_opt: bool option;
             ki_opt: (stmt * bool) option;
@@ -1069,7 +1191,6 @@ module Impact = struct
   let compute_pragmas = mk_fun "Impact.compute_pragmas"
   let from_stmt = mk_fun "Impact.from_stmt"
   let from_nodes = mk_fun "Impact.from_nodes"
-  let slice = mk_fun "Impact.slice"
 end
 
 module Security = struct
@@ -1100,8 +1221,9 @@ module RteGen = struct
   let get_precond_status = mk_fun "RteGen.get_precond_status"
   let get_signedOv_status = mk_fun "RteGen.get_signedOv_status"
   let get_divMod_status = mk_fun "RteGen.get_divMod_status"
-  let get_downCast_status = mk_fun "RteGen.get_downCast_status"
+  let get_signed_downCast_status = mk_fun "RteGen.get_signed_downCast_status"
   let get_memAccess_status = mk_fun "RteGen.get_memAccess_status"
+  let get_pointerCall_status = mk_fun "RteGen.get_pointerCall_status"
   let get_unsignedOv_status = mk_fun "RteGen.get_unsignedOv_status"
   let get_unsignedDownCast_status = mk_fun "RteGen.get_unsignedDownCast_status"
 end
@@ -1114,11 +1236,6 @@ module Constant_Propagation = struct
   let get = mk_fun "Constant_Propagation.get"
   let compute = mk_fun "Constant_Propagation.compute"
 end
-
-module Syntactic_Callgraph = struct
-  let dump = mk_fun "Syntactic_callgraph.dump"
-end
-
 
 module PostdominatorsTypes = struct
   exception Top
@@ -1156,22 +1273,6 @@ module PostdominatorsValue = struct
 end
 
 (* ************************************************************************* *)
-(** {2 Graphs} *)
-(* ************************************************************************* *)
-
-module Semantic_Callgraph = struct
-  let dump = mk_fun "Semantic_Callgraph.dump"
-  let topologically_iter_on_functions =
-    mk_fun "Semantic_Callgraph.topologically_iter_on_functions"
-  let iter_on_callers =
-    mk_fun "Semantic_Callgraph.iter_on_callers"
-  let accept_base =
-    ref (fun ~with_formals:_ ~with_locals:_ _ _ ->
-           raise (Extlib.Unregistered_function "Semantic_Callgraph.accept_base"))
-end
-
-
-(* ************************************************************************* *)
 (** {2 GUI} *)
 (* ************************************************************************* *)
 
@@ -1181,6 +1282,6 @@ exception Cancel
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

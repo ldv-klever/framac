@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -38,8 +38,8 @@ struct timezone {
 };
 
 /* Abstract representation of the current time. */
-extern volatile int __fc_time;
-extern int __fc_tz;
+//@ ghost volatile unsigned int __fc_time __attribute__((FRAMA_C_MODEL));
+//@ ghost extern int __fc_tz __attribute__((FRAMA_C_MODEL));
 
 /*@ assigns \result \from path[0..],times[0..1]; */
 int utimes(const char *path, const struct timeval times[2]);

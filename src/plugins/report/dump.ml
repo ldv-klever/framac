@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,10 +33,10 @@ let tab = String.make (dim+3) ' '
 let pp_status fmt s =
   let n = String.length s in
   if n < dim then
-    let m = String.make dim ' ' in
+    let m = Bytes.make dim ' ' in
     let p = (dim - n) / 2 in
-    String.blit s 0 m p n ;
-    Format.fprintf fmt "[%s]" m
+    Bytes.blit_string s 0 m p n ;
+    Format.fprintf fmt "[%s]" (Bytes.to_string m)
   else Format.fprintf fmt "[%s]" s
 
 open Consolidation
@@ -207,6 +207,6 @@ let create out = (new dumper out :> Scan.inspector)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -84,7 +84,7 @@ exception CabsOnly
 let rec parse_to_cabs fname =
   (* now parse the file we came here to parse *)
   let cabs = parse_to_cabs_inner fname in
-  if Cilmsg.had_errors () then begin
+  if Errorloc.had_errors () then begin
     Kernel.debug "There were parsing errors in %s" fname ;
     raise Parsing.Parse_error
   end;
@@ -97,7 +97,7 @@ let rec parse_to_cabs fname =
     close_output ();
     raise CabsOnly
   end);
-  if Cilmsg.had_errors () then raise Parsing.Parse_error;
+  if Errorloc.had_errors () then raise Parsing.Parse_error;
   (* and return the patched source *)
   cabs
 
@@ -105,7 +105,7 @@ let rec parse_to_cabs fname =
 and parse_to_cabs_inner (fname : string) =
   try
     Kernel.feedback ~level:2 "Parsing %s" fname ;
-    Cilmsg.clear_errors () ;
+    Errorloc.clear_errors () ;
     let lexbuf = Clexer.init fname in
     let cabs = Cparser.file Clexer.initial lexbuf in
     (* Cprint.print_defs cabs;*)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -52,11 +52,10 @@ let cluster_file c =
 
 let theory_name_of_cluster c =
   let base = cluster_id c in
-  String.capitalize base
+  Transitioning.String.capitalize_ascii base
 
 let theory_name_of_pid fmt pid =
   Format.fprintf fmt "VC%s" (WpPropId.get_propid pid)
-
 
 (* -------------------------------------------------------------------------- *)
 (* --- Exporting Formulae to Why3                                         --- *)
@@ -77,8 +76,8 @@ module TYPES = Model.Index
 
 let engine =
   let module E = Qed.Export_why3.Make(Lang.F) in
-  object
-    inherit E.engine
+  object(self)
+    inherit E.engine as super
     inherit Lang.idprinting
     method infoprover p = p.why3
 
@@ -87,6 +86,34 @@ let engine =
     method typeof_call = Lang.tau_of_lfun
     method typeof_getfield = Lang.tau_of_field
     method typeof_setfield = Lang.tau_of_record
+
+    val mutable goal = false
+    method set_goal g = goal <- g
+
+    method private is_vlist polarity a b =
+      goal && self#mode = polarity &&
+      (Vlist.check_term a || Vlist.check_term b)
+
+    method! pp_equal fmt a b =
+      if self#is_vlist Qed.Engine.Mpositive a b
+      then Qed.Plib.pp_call_apply "vlist_eq" self#pp_term fmt [a;b]
+      else super#pp_equal fmt a b
+
+    method! pp_noteq fmt a b =
+      if self#is_vlist Qed.Engine.Mnegative a b
+      then
+        begin
+          Format.fprintf fmt "@[<hov 2>not@,(" ;
+          Qed.Plib.pp_call_apply "vlist_eq" self#pp_term fmt [a;b] ;
+          Format.fprintf fmt ")@]" ;
+        end
+      else super#pp_noteq fmt a b
+
+    method! pp_fun cmode fct ts =
+      if fct == Vlist.f_concat
+      then Vlist.pp_concat self ts
+      else super#pp_fun cmode fct ts
+
   end
 
 let filenoext file =
@@ -137,13 +164,13 @@ class visitor fmt c =
       self#lines ;
       let name = (cluster_id c) in
       Format.fprintf fmt "use import %s.%s@\n"
-        name (String.capitalize name) ;
+        name (Transitioning.String.capitalize_ascii name) ;
       deps <- (D_cluster c) :: deps
 
     method add_extlib file =
       let thy = filenoext file in
       let path = LogicBuiltins.find_lib file in
-      self#add_import2 thy (String.capitalize thy) ;
+      self#add_import2 thy (Transitioning.String.capitalize_ascii thy) ;
       self#add_dfile path
 
     method on_library thy =
@@ -151,7 +178,8 @@ class visitor fmt c =
         match Str.split_delim regexp_col opt with
         | [file] ->
             let filenoext = filenoext file in
-            self#add_import2 filenoext (String.capitalize filenoext) ;
+            self#add_import2 filenoext
+              (Transitioning.String.capitalize_ascii filenoext) ;
             self#add_dfile file
         | [file;lib] ->
             self#add_import2 (filenoext file) lib ;
@@ -234,6 +262,7 @@ let write_cluster c =
     begin fun fmt ->
       let v = new visitor fmt c in
       let name = theory_name_of_cluster c in
+      engine#set_goal false ;
       v#printf "@[<hv 2>theory %s@\n" name;
       v#lines ;
       (** TODO add them only when needed *)
@@ -287,8 +316,28 @@ let assemble_cluster e =
   assemble e
 
 (* -------------------------------------------------------------------------- *)
+(* --- Goal Module                                                        --- *)
+(* -------------------------------------------------------------------------- *)
+
+type goal =
+  {
+    file : string;
+    theory : string;
+    goal : string;
+  }
+
+module Goal =
+struct
+  type t = goal
+  let compare = Pervasives.compare
+  let pretty fmt g =
+    Format.fprintf fmt "[%s]%s.%s" g.file g.theory g.goal
+end
+
+(* -------------------------------------------------------------------------- *)
 (* --- Assembling Goal                                                    --- *)
 (* -------------------------------------------------------------------------- *)
+
 open Cil_datatype
 
 let assemble_goal ~title ~id ~pid ~axioms prop fmt =
@@ -296,6 +345,7 @@ let assemble_goal ~title ~id ~pid ~axioms prop fmt =
   let goal = cluster ~id ~title () in
   let deps =
     let v = new visitor fmt goal in
+    engine#set_goal false ;
     v#printf "@[<hv 2>theory %a@\n" theory_name_of_pid pid;
     v#add_import "bool.Bool" ;
     v#add_import "int.Int" ;
@@ -312,6 +362,7 @@ let assemble_goal ~title ~id ~pid ~axioms prop fmt =
         v#hline ;
       end ;
     v#paragraph ;
+    engine#set_goal true ;
     engine#global
       begin fun () ->
         v#printf "@[<hv 2>goal %s \"expl:%s\":@ %a@]@\n@\n"
@@ -319,6 +370,7 @@ let assemble_goal ~title ~id ~pid ~axioms prop fmt =
           title
           engine#pp_prop (F.e_prop prop) ;
       end ;
+    engine#set_goal false ;
     v#printf "end@]@.";
     v#flush
   in
@@ -333,13 +385,6 @@ module FunFile = Model.Index
       let pretty = Kernel_function.pretty
     end)
 
-type goal_id =
-  {
-    gfile : string;
-    gtheory : string;
-    ggoal : string;
-  }
-
 let assemble_wpo wpo =
   let dir = Model.directory () in
   let index = Wpo.get_index wpo in
@@ -351,10 +396,9 @@ let assemble_wpo wpo =
               let lemma = vca.Wpo.VC_Lemma.lemma in
               assemble_cluster (D_cluster lemma.l_cluster);
               let file = cluster_file lemma.l_cluster in
-              {gfile = file;
-               gtheory = theory_name_of_cluster lemma.l_cluster;
-               ggoal = (Lang.lemma_id lemma.l_name);
-              }
+              let theory = theory_name_of_cluster lemma.l_cluster in
+              let goal = Lang.lemma_id lemma.l_name in
+              { file ; theory ; goal }
         end
     | Wpo.Function (kf,_behv) ->
         let model = Model.get_model () in
@@ -388,27 +432,25 @@ let assemble_wpo wpo =
         end;
         let pid = wpo.Wpo.po_pid in
         {
-          gfile = file;
-          gtheory = Pretty_utils.to_string theory_name_of_pid pid;
-          ggoal = why3_goal_name;
+          file ; 
+          theory = Pretty_utils.to_string theory_name_of_pid pid ;
+          goal = why3_goal_name ;
         }
   in
   [dir], file
 
 let assemble_check wpo vck =
-  let open Wpo.VC_Check in
+  let module Check = Wpo.VC_Check in
   let pid = wpo.Wpo.po_pid in
-  let id = Printf.sprintf "Qed-%d-%d" (Lang.F.id vck.qed) (Lang.F.id vck.raw) in
+  let id = Printf.sprintf "Qed-%d-%d"
+      (Lang.F.id vck.Check.qed) (Lang.F.id vck.Check.raw) in
   let goal = cluster ~id () in
   let file = cluster_file goal in
-  Command.print_file file 
-    (assemble_goal ~title:"Qed Check" ~id ~pid ~axioms:None vck.goal) ;
+  Command.print_file file
+    (assemble_goal ~title:"Qed Check" ~id ~pid ~axioms:None vck.Check.goal) ;
   let dir = Model.directory () in
-  [dir], { 
-    gfile = file ;
-    gtheory = Pretty_utils.to_string theory_name_of_pid pid ;
-    ggoal = why3_goal_name ;
-  }
+  let theory = Pretty_utils.to_string theory_name_of_pid pid in
+  [dir], { file ; theory ; goal = why3_goal_name }
 
 let assemble_wpo wpo =
   match wpo.Wpo.po_formula with
@@ -428,7 +470,7 @@ let assemble_wpo wpo =
 open ProverTask
 
 let p_goal = p_until_space ^ " " ^ p_until_space ^ " " ^ p_until_space ^ " : "
-let p_valid = p_goal ^ "Valid (" ^ p_float ^ "s)"
+let p_valid = p_goal ^ "Valid (" ^ p_float ^ "s\\(,[^)]*\\)?)"
 let p_unknown = p_goal ^ "Unknown (" ^ p_float ^ "s)"
 let p_limit = p_goal ^ "Timeout"
 let p_error = "File " ^ p_string ^ ", line " ^ p_int ^ ", characters "
@@ -465,7 +507,7 @@ class why3 ~prover ~pid ~file ~includes ~logout ~logerr =
 
     initializer ignore pid
 
-    inherit ProverTask.command "why3"
+    inherit ProverTask.command (Wp_parameters.Why3.get ())
 
     val mutable files = []
     val mutable error = Error_No
@@ -498,37 +540,44 @@ class why3 ~prover ~pid ~file ~includes ~logout ~logerr =
       end
 
     method result r =
-      match error with
-      | Error_Prover message ->
-          Wp_parameters.error "Why3:@\n%s" message;
-          VCS.failed message
-      | Error_Generated(pos,message) ->
-          Wp_parameters.error ~source:pos "Why3 error:@\n%s" message ;
-          VCS.failed ~pos message
-      | Error_No ->
-          if r = 0 then
-            let verdict =
-              if valid then VCS.Valid else
-              if limit then VCS.Timeout else
-                VCS.Unknown in
-            VCS.result ~time verdict
-          else
-            begin
-              ProverTask.pp_file ~message:"Why3 (stdout)" ~file:logout ;
-              ProverTask.pp_file ~message:"Why3 (stderr)" ~file:logerr ;
-              VCS.failed (Printf.sprintf "Why3 exits with status [%d]" r)
-            end
-
+      let why3_cmd = (Wp_parameters.Why3.get ()) in
+      if r = 127
+      then VCS.kfailed "Command '%s' not found" why3_cmd
+      else
+        match error with
+        | Error_Prover message ->
+            Wp_parameters.error "Why3:@\n%s" message;
+            VCS.failed message
+        | Error_Generated(pos,message) ->
+            Wp_parameters.error ~source:pos "Why3 error:@\n%s" message ;
+            VCS.failed ~pos message
+        | Error_No ->
+            if r = 0 then
+              let verdict =
+                if valid then VCS.Valid else
+                if limit then VCS.Timeout else
+                  VCS.Unknown in
+              VCS.result ~time verdict
+            else
+              begin
+                if Wp_parameters.verbose_atleast 1 then
+                  begin
+                    ProverTask.pp_file ~message:"Why3 (stdout)" ~file:logout ;
+                    ProverTask.pp_file ~message:"Why3 (stderr)" ~file:logerr ;
+                  end ;
+                VCS.kfailed "Why3 exits with status %d." r
+              end
+              
     method prove =
       why#add [ "prove" ] ;
       let time = Wp_parameters.Timeout.get () in
       if Wp_parameters.Check.get () then why#add ["--type-only"] ;
       why#add ["--extra-config"; Wp_parameters.Share.file "why3/why3.conf"];
       why#add (Wp_parameters.WhyFlags.get ()) ;
-      why#add [ file.gfile ] ;
+      why#add [ file.file ] ;
       why#add ["-P";chop_version prover];
-      why#add ["-T";file.gtheory];
-      why#add ["-G";file.ggoal];
+      why#add ["-T";file.theory];
+      why#add ["-G";file.goal];
       why#add_positive ~name:"-t" ~value:time ;
       if Wp_parameters.ProofTrace.get () then
         (* [VP] This also keeps temp files. To be changed with FB's new option
@@ -538,7 +587,7 @@ class why3 ~prover ~pid ~file ~includes ~logout ~logerr =
       why#add_list ~name:"-L" includes;
       why#add ["-L";Wp_parameters.Share.file "why3"];
       why#validate_time why#time ;
-      (* The order is important. Warning are detected as error 
+      (* The order is important. Warning are detected as error
          which they are not. *)
       why#validate_pattern ~logs:`OUT re_limit why#limit ;
       why#validate_pattern ~logs:`ERR re_error why#error ;
@@ -554,7 +603,7 @@ open Task
 let prove_file ~prover ~pid ~file ~includes ~logout ~logerr =
   let why = new why3 ~prover ~pid ~file ~includes ~logout ~logerr in
   why#prove () >>> function
-  | Task.Timeout -> Task.return VCS.timeout
+  | Task.Timeout t -> Task.return (VCS.timeout t)
   | Task.Result r -> Task.call why#result r
   | st -> Task.status (Task.map (fun _ -> assert false) st)
 
@@ -562,8 +611,8 @@ let prove_prop ~prover ~wpo =
   match assemble_wpo wpo with
   | None -> Task.return VCS.no_result
   | Some (includes,file) ->
-    Wp_parameters.print_generated file.gfile;
-      if Wp_parameters.Generate.get () 
+      Wp_parameters.print_generated file.file;
+      if Wp_parameters.Generate.get ()
       then Task.return VCS.no_result
       else
         let model = wpo.po_model in
@@ -574,35 +623,6 @@ let prove_prop ~prover ~wpo =
 
 let prove wpo ~prover =
   Task.todo (fun () -> prove_prop ~wpo ~prover)
-
-(* -------------------------------------------------------------------------- *)
-(* --- Why3-Ide                                                           --- *)
-(* -------------------------------------------------------------------------- *)
-
-class why3ide ~includes ~files ~session =
-  object(why)
-
-    inherit ProverTask.command "why3"
-
-    method start () =
-      why#add [ "ide" ] ;
-      why#add ["--extra-config"; Wp_parameters.Share.file "why3/why3.conf"];
-      why#add (Wp_parameters.WhyFlags.get ()) ;
-      why#add_list ~name:"-L" includes;
-      why#add ["-L";Wp_parameters.Share.file "why3"];
-      why#add [session];
-      why#add files;
-      why#run ~echo:true ()
-
-  end
-
-let call_ide ~includes ~files ~session =
-  List.iter Wp_parameters.print_generated files;
-  if Wp_parameters.Generate.get ()
-  then Task.return false
-  else
-    let why = new why3ide ~includes ~files ~session in
-    Task.todo why#start >>= fun s -> Task.return (s=0)
 
 (* -------------------------------------------------------------------------- *)
 (* --- Why3-Config                                                        --- *)
@@ -617,19 +637,19 @@ type dp = {
 let find name dps =
   try List.find (fun d -> d.dp_prover = name) dps
   with Not_found ->
-    let name = String.lowercase name in
-    try List.find (fun d -> String.lowercase d.dp_name = name) dps
-    with Not_found -> 
+    let name = Transitioning.String.lowercase_ascii name in
+    try
+      List.find
+        (fun d -> Transitioning.String.lowercase_ascii d.dp_name = name) dps
+    with Not_found ->
       { dp_prover = name ; dp_name = name ; dp_version = "default" }
 
 let parse spec =
   try
     let k = String.index spec ':' in
     let dp_name = String.sub spec 0 k in
-    let dp_version = String.sub spec (succ k) (String.length spec - k - 1) in
-    for i = 0 to String.length dp_version - 1 do
-      if dp_version.[i] = ':' then dp_version.[i] <- ' ' ;
-    done ;
+    let dp_version = String.sub spec (succ k) (String.length spec - k - 1)
+                   |> String.map (fun c -> if c =':' then ' ' else c) in
     { dp_prover = spec ; dp_name ; dp_version }
   with Not_found ->
     { dp_prover = spec ; dp_name = spec ; dp_version = "default" }
@@ -643,21 +663,18 @@ class why3detect job =
 
     val mutable dps = []
 
-    method result st = 
+    method result st =
       job (if st = 0 then Some (List.rev dps) else None)
 
     method prover p =
       begin
         let dp_name = p#get_string 1 in
         let dp_version = p#get_string 2 in
-        Wp_parameters.debug ~level:1 
+        Wp_parameters.debug ~level:1
           "Prover %S, version %s detected." dp_name dp_version ;
-        let dp_prover = Printf.sprintf "%s:%s" dp_name dp_version in
-        for i = String.length dp_name + 1 to String.length dp_prover - 1 do
-          match dp_prover.[i] with
-          | ' ' | ',' -> dp_prover.[i] <- ':'
-          | _ -> ()
-        done ;
+        let dp_prover = Printf.sprintf "%s:%s" dp_name dp_version
+                      |> String.map
+                           (fun c -> if c = ' ' || c = ',' then ':' else c) in
         dps <- { dp_name ; dp_version ; dp_prover } :: dps
       end
 
@@ -670,6 +687,9 @@ class why3detect job =
 
   end
 
-let detect_why3 job = Task.run ((new why3detect job)#detect)
-let detect_provers job = 
+let detect_why3 job =
+  let task = (new why3detect job)#detect in 
+  Task.run (Task.thread task)
+    
+let detect_provers job =
   detect_why3 (function None -> job [] | Some dps -> job dps)

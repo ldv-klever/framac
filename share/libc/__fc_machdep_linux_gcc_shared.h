@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -71,6 +71,9 @@
 #define __FC_ULLONG_MAX 18446744073709551615ULL
 #define __FC_PATH_MAX 256
 
+/* for stdarg.h */
+#define __FC_VA_LIST_T __builtin_va_list
+
 /* Unused at this time */
 #define __FC_umax(n) ((uint##n##_t)(-1))
 #define __FC_smin(n) (2*(-(1ll << (sizeof(int##n##_t)*__CHAR_BIT - 2))))
@@ -80,7 +83,6 @@
 /* NB: in signal.h, sig_atomic_t is hardwired to int. */
 #define __FC_SIG_ATOMIC_MIN __FC_INT_MIN
 #define __FC_SIG_ATOMIC_MAX __FC_INT_MAX
-#define __FC_SIZE_MAX __FC_UINT_MAX
 #define __FC_WCHAR_MIN __FC_INT_MIN
 #define __FC_WCHAR_MAX __FC_INT_MAX
 
@@ -226,6 +228,9 @@
 #define __FC_EWOULDBLOCK 118
 #define __FC_EXDEV 119
 #define __FC_EXFULL 120
+
+#define __FC_EOWNERDEAD 165
+#define __FC_ENOTRECOVERABLE 166
 
 /* sys/un.h */
 #define __FC_SOCKADDR_SUN_SUN_PATH 108

@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,6 +22,8 @@
 
 #ifndef __FC_DEFINE_FD_SET_T
 #define __FC_DEFINE_FD_SET_T
+#include "features.h"
+__BEGIN_DECLS
 typedef struct {char __fc_fd_set;} fd_set;
 //@ assigns *fdset \from *fdset, fd;
 void FD_CLR(int fd, fd_set *fdset);
@@ -31,5 +33,6 @@ int FD_ISSET(int fd, fd_set *fdset);
 void FD_SET(int fd, fd_set *fdset);
 //@ assigns *fdset \from \nothing;
 void FD_ZERO(fd_set *fdset);
+__END_DECLS
 #define FD_SETSIZE 255
 #endif

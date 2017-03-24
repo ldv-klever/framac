@@ -3,7 +3,6 @@
 [kernel] Parsing tests/wp_typed/unit_lemma.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] Collecting axiomatic usage
 [wp] 6 goals scheduled
 [wp] [Alt-Ergo] Goal typed_lemma_P23_KO : Unknown
 [wp] [Alt-Ergo] Goal typed_lemma_P52 : Valid
@@ -19,5 +18,5 @@ Axiomatics          WP   Alt-Ergo    Total   Success
 Lemma               -       1 (4)      2      50.0%
 Axiomatic G1        -       2 (7)      2       100%
 Axiomatic G2        -       1 (6)      1       100%
-Axiomatic Poluted   -       1 (5)      1       100%
+Axiomatic Poluted   -       1 (4)      1       100%
 ----------------------------------------------------------

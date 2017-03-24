@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,8 @@ open Metrics_parameters
 ;;
 
 let () = Enabled.set_output_dependencies
-  [ Ast.self; AstType.self; OutputFile.self; SyntacticallyReachable.self; ]
+  [ Ast.self; AstType.self; OutputFile.self; SyntacticallyReachable.self;
+    Libc.self ]
 ;;
 
 let syntactic () =
@@ -42,7 +43,7 @@ let syntactic () =
       Metrics_parameters.result "%a"
         Metrics_coverage.pp_reached_from_function kf)
 
-let () = ValueCoverage.set_output_dependencies [Db.Value.self]
+let () = ValueCoverage.set_output_dependencies [Db.Value.self; Libc.self]
 
 let value () =
   !Db.Value.compute ();
@@ -58,6 +59,14 @@ let value () =
 let main () =
   if Enabled.get () then Enabled.output syntactic;
   if ValueCoverage.get () then ValueCoverage.output value;
+  if LocalsSize.is_set () then begin
+    Ast.compute ();
+    Metrics_parameters.result "function\tlocals_size_no_temps\t\
+                               locals_size_with_temps\t\
+                               max_call_size_no_temps\t\
+                               max_call_size_with_temps";
+    LocalsSize.iter (fun kf -> Metrics_cilast.compute_locals_size kf)
+  end
 ;;
 
 (* Register main entry points *)
@@ -66,6 +75,6 @@ let () = Db.Main.extend main
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

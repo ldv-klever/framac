@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,7 +40,7 @@ class visitor = object
   | GType (ty,_) ->
     ty.tname <- Dictionary.fresh Obfuscator_kind.Type ty.tname; 
     Cil.DoChildren
-  | GVarDecl (_, v, _) | GVar (v, _, _) | GFun ({svar = v}, _)
+  | GVarDecl (v, _) | GVar (v, _, _) | GFun ({svar = v}, _) | GFunDecl (_, v, _)
       when Cil.is_unused_builtin v ->
     Cil.SkipChildren
   | _ ->
@@ -130,9 +130,12 @@ class visitor = object
       Cil.SkipChildren
     else begin
       Identified_predicate.Hashtbl.add id_pred_visited p ();
-      p.ip_name <- 
-	List.map (Dictionary.fresh Obfuscator_kind.Predicate) p.ip_name;
-      Cil.DoChildren
+      let names = p.ip_content.pred_name in
+      let names' =
+        List.map (Dictionary.fresh Obfuscator_kind.Predicate) names
+      in
+      let p' = { p with ip_content = { p.ip_content with pred_name = names'}} in
+      Cil.ChangeDoChildrenPost (p', Extlib.id)
     end
 
   method! vterm t = 
@@ -203,15 +206,17 @@ let obfuscate_behaviors () =
       in
       handle_bnames
 	Annotations.iter_complete
-	Annotations.remove_complete
-	Annotations.add_complete;
+	(fun e kf l -> Annotations.remove_complete e kf l)
+	(fun e kf l -> Annotations.add_complete e kf l);
       handle_bnames 
 	Annotations.iter_disjoint
-	Annotations.remove_disjoint
-	Annotations.add_disjoint)
+	(fun e kf l -> Annotations.remove_disjoint e kf l)
+	(fun e kf l -> Annotations.add_disjoint e kf l))
 
-class obfuscated_printer () = object
-  inherit Printer.extensible_printer () as super
+module UpdatePrinter (X: Printer.PrinterClass) = struct
+(* obfuscated printer *)
+class printer = object
+  inherit X.printer as super
   method! constant fmt = function
   | CStr str -> Format.fprintf fmt "%s" (Dictionary.id_of_literal_string str)
   | c -> super#constant fmt c
@@ -252,6 +257,7 @@ into file `%s':@ %s@]"
     end;
     super#file fmt ast
 
+  end
 end
 
 let obfuscate () =
@@ -260,10 +266,10 @@ let obfuscate () =
   Visitor.visitFramacFileSameGlobals 
     (new visitor :> Visitor.frama_c_visitor) 
     (Ast.get ());
-  Printer.change_printer (new obfuscated_printer)
+  Printer.update_printer (module UpdatePrinter: Printer.PrinterExtension)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

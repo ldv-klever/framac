@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,8 +44,12 @@ Require Import ZArith.
 Require Import FunctionalExtensionality.
 Require Import Qedlib.
 Require Import Bits.
+Require Import Psatz.
 
 Open Local Scope Z_scope.
+
+Ltac autozbits := autorewrite with zbits ; auto with zarith.
+Hint Rewrite Bits.Zbit_of_zero Bits.Zbit_of_mone : zbits.
 
 Local Ltac omegaContradiction := cut False; [contradiction|omega].
 
@@ -135,9 +139,9 @@ Remark zabs_plus: forall n m: Z,
 Proof.
   intros. 
   rewrite Zabs_nat_Zplus.
-  (** cont. *) repeat rewrite zabs_nat_zabs. auto.
-  (** hyp 1 *) generalize (Zabs_pos m). omega.
-  (** hyp 2 *) generalize (Zabs_pos n). omega.
+  (** cont. *) repeat rewrite zabs_nat_zabs; auto.
+  (** hyp 1 *) generalize (Zabs_pos m); omega.
+  (** hyp 2 *) generalize (Zabs_pos n); omega.
 Qed.
 
 (** Some remarks about Zle_bool and Zlt_bool *)
@@ -154,9 +158,9 @@ Proof.
   intro x.
   case_leq 0 (x/2); case_leq 0 x; try auto; intros; apply False_ind.
   (** 0>x *)
-    assert (x/2 < 0); [ apply Zdiv_lt_upper_bound | ]; omega.
+  + assert (x/2 < 0); [ apply Zdiv_lt_upper_bound | ]; omega.
   (** 0<=x *)
-    assert (0 <= (x/2)); [ apply Z_div_pos | ]; omega.
+  + assert (0 <= (x/2)); [ apply Z_div_pos | ]; omega.
 Qed.
 
 Remark Zlt_div2_neg: forall x:Z,
@@ -165,10 +169,10 @@ Proof.
   intro x.
   case_lt (x/2) 0; case_lt x 0; intros; try auto.
   (** x>=0 *)
-    assert (x/2 >= 0) by (apply Z_div_ge0 ; omega).
+  + assert (x/2 >= 0) by (apply Z_div_ge0 ; omega).
     omegaContradiction.
   (** x<0 *)
-    apply False_ind.
+  + apply False_ind.
     assert (x/2 < 0) by (apply Zdiv_lt_upper_bound; omega).
     omegaContradiction.
  Qed.
@@ -193,81 +197,123 @@ Proof.
   apply upper_positive_mult_positive; omega.
 Qed.
 
+Theorem Z2_induction(P: Z -> Prop) :
+  P 0 ->
+  (forall (c:bool) (z:Z), 0 <= z -> P z -> P (2*z + if c then 1 else 0))->
+  (forall z:Z, 0 <= z -> P z).
+Proof.
+  intros.
+  induction z.
+  + auto.
+  + induction p.
+    * assert ((Z.pos p~1) =(2*Z.pos p + 1)) by (auto with zarith).
+      rewrite H2 in *.
+      apply (H0 true ((Z.pos p))); auto with zarith.
+    * assert ((Z.pos p~0) =(2*Z.pos p)) by (auto with zarith).
+      rewrite H2 in *.
+      apply (H0 false ((Z.pos p))); auto with zarith.
+    * apply (H0 true 0); auto with zarith.
+  + generalize (Pos2Z.neg_is_neg p); intro; omegaContradiction.
+Qed.
+ 
+(** Some useful properties about modulus *)
+  
+Remark mod2_case : forall z:Z, z mod 2 = 0 \/ z mod 2 = 1.
+Proof.
+  intros. rewrite Zmod_odd.
+  case (Z.odd z); intuition.
+Qed.
+
+Ltac case_mod2 z := induction (mod2_case z) as [EVEN|ODD].
+
+Remark mod2_lt: forall z:Z, 0 <= z mod 2 < 2.
+Proof.
+  intro; apply Z_mod_lt; auto with zarith. 
+Qed.
+
+Remark div2_mod2_eq: forall z:Z, z = 2*(z/2) + z mod 2.
+Proof.
+   intro; apply Z_div_mod_eq; auto with zarith.
+Qed.
+
+Remark div2_odd_eq: forall z:Z, z = 2*(z/2) + (if (Z.odd z) then 1 else 0).
+Proof.
+  intro. rewrite <- Zmod_odd. apply div2_mod2_eq.
+Qed.
+				     
 Remark odd_mod2: forall (x:Z), 
   Z.odd (x mod 2) = Z.odd x.
 Proof.
   destruct x. 
   (** 0 *) 
-    compute; auto.
+  + compute; auto.
   (** positive *)
-    destruct p. 
+  + destruct p. 
     (** 2p+1 *)
-      rewrite <- (Z.mod_unique (Z.pos p~1) 2 (Z.pos p) 1) ;
+    * rewrite <- (Z.mod_unique (Z.pos p~1) 2 (Z.pos p) 1) ;
         [ | omega | (auto with zarith)].
-      (replace (Z.pos p~1) with ( 1 + 2 * Z.pos p) by forward).
+      (replace (Z.pos p~1) with ( 1 + 2*Z.pos p) by forward).
       rewrite Z.odd_add_mul_2; auto.
     (** 2p+0 *)
-      rewrite <- (Z.mod_unique (Z.pos p~0) 2 (Z.pos p) 0);
+    * rewrite <- (Z.mod_unique (Z.pos p~0) 2 (Z.pos p) 0);
         [ | omega | (auto with zarith)].
-      (replace (Z.pos p~0) with ( 0 + 2 * Z.pos p) by forward).
+      (replace (Z.pos p~0) with ( 0 + 2*Z.pos p) by forward).
       rewrite Z.odd_add_mul_2; auto.
     (** 1 *)
-      compute; auto.
+    * compute; auto.
   (** negative *) 
-    destruct p. 
+  + destruct p. 
     (** 2p+1 *)
-      rewrite <- (Z.mod_unique (Z.neg p~1) 2 ((Z.neg p)-1) 1);
+    * rewrite <- (Z.mod_unique (Z.neg p~1) 2 ((Z.neg p)-1) 1);
         [ | omega
           | rewrite Zmult_minus_distr_l; rewrite Pos2Z.neg_xI;
             ring].   
-      (replace (Z.neg p~1) with ( (-1) + 2 * (Z.neg p)) by (simpl; auto)).
+      (replace (Z.neg p~1) with ( (-1) + 2*(Z.neg p)) by (simpl; auto)).
       rewrite Z.odd_add_mul_2; auto.
     (** 2p+0 *)
-      rewrite <- (Z.mod_unique (Z.neg p~0) 2 (Z.neg p) 0);     
+    * rewrite <- (Z.mod_unique (Z.neg p~0) 2 (Z.neg p) 0);     
         [ | omega | simpl; auto].
-      (replace (Z.neg p~0) with ( 0 + 2 * Z.neg p) by (simpl; auto)).
+      (replace (Z.neg p~0) with ( 0 + 2*Z.neg p) by (simpl; auto)).
          rewrite Z.odd_add_mul_2; simpl; auto. 
     (** 1 *)
-      compute; auto.
+    * compute; auto.
 Qed.
  
 Remark uint_div2_mod_two_power_nat: forall (m:nat) (x:Z), 
-  (x mod two_power_nat (S m)) / 2 = (x / 2) mod two_power_nat m.
+  (x mod two_power_nat (S m)) / 2 = (x/2) mod two_power_nat m.
 Proof.
   intros.
   rewrite two_power_nat_S.
   rewrite Z.rem_mul_r ; [ | discriminate | apply two_power_nat_is_positive].
-  pose (z:=((x / 2) mod two_power_nat m)); fold z.
-  rewrite <- (Zdiv_unique (x mod 2 + 2 * z) 2 z (x mod 2)) ;
-    [auto | apply Z_mod_lt | ].
-  compute ; auto.
-  ring.
+  pose (z:=((x/2) mod two_power_nat m)); fold z.
+  rewrite <- (Zdiv_unique (x mod 2 + 2*z) 2 z (x mod 2));
+    [auto | apply mod2_lt | auto with zarith].
 Qed.
  
 Remark sint_div2_mod_two_power_nat_pos: forall (m:nat) (x:Z), 
-  ((x + two_power_nat (S m)) mod (2 * two_power_nat (S m))) / 2 = ((x / 2) + two_power_nat m) mod two_power_nat (S m).
+  ((x + two_power_nat (S m)) mod (2*two_power_nat (S m))) / 2 = ((x/2) + two_power_nat m) mod two_power_nat (S m).
 Proof.
   intros.
   rewrite <- two_power_nat_S.
   rewrite (uint_div2_mod_two_power_nat (S m) (x + two_power_nat (S m))).
   rewrite two_power_nat_S.
-  (replace (2 * two_power_nat m) with ((two_power_nat m) *2) by ring).
+  (replace (2*two_power_nat m) with ((two_power_nat m) *2) by ring).
   rewrite Z_div_plus.
   auto.
   compute; auto.
 Qed.
   
 Remark sint_div2_mod_two_power_nat: forall (m:nat) (x:Z), 
-  (((x + two_power_nat (S m)) mod (2 * two_power_nat (S m))) - two_power_nat (S m)) / 2 =
-  (((x / 2) + two_power_nat m) mod two_power_nat (S m)) - two_power_nat m.
+  (((x + two_power_nat (S m)) mod (2*two_power_nat (S m))) - two_power_nat (S m)) / 2 =
+  (((x/2) + two_power_nat m) mod two_power_nat (S m)) - two_power_nat m.
 Proof.
   intros.
   rewrite <- two_power_nat_S.
   rewrite <- sint_div2_mod_two_power_nat_pos.
   rewrite two_power_nat_S. rewrite two_power_nat_S. rewrite two_power_nat_S.
   pose (z:= (two_power_nat m)); fold z.
-  pose (a:= ((x + 2 * z) mod (2 * (2 * z)))); fold a.
-  (replace (a - 2 * z) with (a + ((- z) * 2)) by ring).
+  pose (a:= ((x + 2*z) mod (2*(2*z)))); fold a.
+  (replace (a - 2*z) with (a + ((- z) * 2)) by ring).
   rewrite Z.div_add.
   ring.
   discriminate.
@@ -285,10 +331,10 @@ Proof.
   unfold Zbit. unfold bits_of_Z. intro.
   case_leq 0 (2*x); intro; unfold btest. 
   (** case 0 <= 2*x *)
-    unfold Nabs. unfold N_decomp. unfold P_decomp. 
+  + unfold Nabs. unfold N_decomp. unfold P_decomp. 
     destruct x; auto.
   (** case 0 > 2*x *) 
-    unfold zlnot. 
+  + unfold zlnot. 
     destruct x; auto.
     destruct p; simpl; auto.
 Qed.					      
@@ -300,12 +346,12 @@ Proof.
   unfold Zbit; unfold bits_of_Z; rewrite Zle_2x.
   case_leq 0 x; intro; unfold btest. 
   (** case 0<=x *)
-     unfold Nabs; unfold N_decomp; unfold P_decomp; destruct x; auto.
+  + unfold Nabs; unfold N_decomp; unfold P_decomp; destruct x; auto.
   (** case 0>x *)
-     unfold zlnot; destruct x; 
-       [ compute in H; discriminate H
-       | discriminate H
-       | destruct p; simpl; auto].
+  + unfold zlnot; destruct x; 
+      [ compute in H; discriminate H
+      | discriminate H
+      | destruct p; simpl; auto].
 Qed.
 
 Remark Zbit_s2x_0: forall x: Z,
@@ -314,10 +360,10 @@ Proof.
   unfold Zbit. unfold bits_of_Z. intro.
   case_leq 0 (2*x); intro; unfold btest. 
   (** case 0 <= 2*x *)
-    unfold Nabs. unfold N_decomp. unfold P_decomp. 
+  + unfold Nabs. unfold N_decomp. unfold P_decomp. 
     destruct x; auto.
   (** case 0 > 2*x *) 
-    unfold zlnot. 
+  + unfold zlnot. 
     destruct x; auto.
     destruct p; simpl; auto.
 Qed.
@@ -329,16 +375,26 @@ Proof.
   unfold Zbit; unfold bits_of_Z.
   case_leq 0 x; intro; unfold btest. 
   (** case 0<=x *)
-    case_leq 0 (2 * x + 1) ; intro.
+  + case_leq 0 (2*x + 1) ; intro.
        unfold Nabs. unfold N_decomp. unfold P_decomp. destruct x; auto.
        assert (Z.neg p < 0) by apply (Zlt_neg_0 p); omegaContradiction.
- (** case 0<=x *)
-    case_leq 0 (2 * x + 1) ; intro.
+  (** case 0<=x *)
+  + case_leq 0 (2*x + 1) ; intro.
     unfold zlnot; destruct x; 
       [ discriminate H 
       | assert (Z.pos p > 0) by apply (Zgt_pos_0 p); omegaContradiction
       |].
     destruct p; simpl; auto.
+Qed.
+
+Lemma Zbit_succ: forall (c:bool) (n:nat) (x:Z),
+  Zbit ((2*x) + if c then 1 else 0) (S n) = Zbit x n.
+Proof.
+  intros.
+  destruct c.
+  + rewrite Zbit_s2x_p; auto.
+  + replace (2*x + 0) with (2*x) by (auto with zarith).
+    rewrite Zbit_2x_p; auto.
 Qed.
 
 Remark Zbit_pos0: forall x: Z,
@@ -347,23 +403,23 @@ Proof.
   intros x POS.
   destruct x.
   (** 0 *)
-    compute; auto.
+  + compute; auto.
   (** Positive *)
-     unfold Zbit; unfold bits_of_Z.
-     rewrite Zodd_mod.
-     destruct p; unfold P_decomp; simpl.
-     (** 2p+1 *)
-       rewrite <- (Z.mod_unique (Z.pos p~1) 2 (Z.pos p) 1);
+  + unfold Zbit; unfold bits_of_Z.
+    rewrite Zodd_mod.
+    destruct p; unfold P_decomp; simpl.
+    (** 2p+1 *)
+    * rewrite <- (Z.mod_unique (Z.pos p~1) 2 (Z.pos p) 1);
+        [ auto | | auto].
+      clear POS ; omega.
+    (** 2p *)
+    * rewrite <- (Z.mod_unique (Z.pos p~0) 2 (Z.pos p) 0);
         [ auto | | auto].
        clear POS ; omega.
-     (** 2p *)
-       rewrite <- (Z.mod_unique (Z.pos p~0) 2 (Z.pos p) 0);
-        [ auto | | auto].
-       clear POS ; omega.
-     (** 1 *)
-       compute ; auto.
+    (** 1 *)
+    * compute ; auto.
   (** Negative *)
-    assert ( Z.neg p < 0) by apply Zlt_neg_0.
+  + assert ( Z.neg p < 0) by apply Zlt_neg_0.
     omegaContradiction.
 Qed.
 
@@ -373,21 +429,21 @@ Proof.
   intro.
   destruct x.
   (** 0 *)
-    compute; auto.
+  + compute; auto.
   (** Positive *)
-    apply Zbit_pos0.
+  + apply Zbit_pos0.
     apply Zle_0_pos.
   (** Negative *)
-    destruct p.
+  + destruct p.
     (** 2p+1 *)
-      unfold Zbit; unfold bits_of_Z. simpl.
+    * unfold Zbit; unfold bits_of_Z. simpl.
       unfold fnot. compute; auto.
     (** 2p *)
-      (replace (Z.neg p~0) with (2 * Z.neg p) by (auto with zarith)).
+    * (replace (Z.neg p~0) with (2*Z.neg p) by (auto with zarith)).
       rewrite Zbit_2x_0.
       simpl; auto.
     (** 1 *)
-      compute; auto.
+    * compute; auto.
 Qed.
 
 Remark Zbit_div2: forall (n:nat) (x:Z),
@@ -398,30 +454,30 @@ Proof.
   case_leq 0 x; intro; unfold btest; 
      unfold Nabs; unfold N_decomp; unfold P_decomp. 
   (** case 0<=x *)
-     destruct x; [by compute | | (apply False_ind; compute in H; auto) ].
-     destruct p.
-     (** 2p+1 *)
-       rewrite <- (Zdiv_unique (Zpos (xI (p)) ) 2 (Zpos p) 1);
-         by compute.
-     (** 2p *)
-       rewrite <- (Zdiv_unique (Zpos (xO (p)) ) 2 (Zpos p) 0);
-         by compute.
-     (** one *)
-       by compute.
+  + destruct x; [by compute | | (apply False_ind; compute in H; auto) ].
+    destruct p.
+    (** 2p+1 *)
+    * rewrite <- (Zdiv_unique (Zpos (xI (p)) ) 2 (Zpos p) 1);
+        by compute.
+    (** 2p *)
+    * rewrite <- (Zdiv_unique (Zpos (xO (p)) ) 2 (Zpos p) 0);
+        by compute.
+    (** one *)
+    * by compute.
   (** case 0>x *)
-     unfold zlnot.
-     destruct x; [ by compute | (compute in H; discriminate H) | ]. 
-     destruct p.
-     (** -(2p+1) *)
-       rewrite <- (Zdiv_unique (Zneg (xI (p)) ) 2 (Zneg p - 1) 1);
+  + unfold zlnot.
+    destruct x; [ by compute | (compute in H; discriminate H) | ]. 
+    destruct p.
+    (** -(2p+1) *)
+    * rewrite <- (Zdiv_unique (Zneg (xI (p)) ) 2 (Zneg p - 1) 1);
          [ (replace (Zneg p - 1 + 1) with (Zneg p) by omega);
            (replace (-Zneg p) with (Zpos p) by (compute;forward));     
            (replace (-(Zneg (xI (p)) + 1)) with (Zpos (xO(p))) by (compute;forward))
          | 
          | (replace (2*(Zneg p - 1) + 1) with (2*Zneg p - 1) by omega)
          ]; by compute.
-     (** -2p *)
-       rewrite <- (Zdiv_unique (Zneg (xO (p)) ) 2 (Zneg p) 0); 
+    (** -2p *)
+    * rewrite <- (Zdiv_unique (Zneg (xO (p)) ) 2 (Zneg p) 0); 
          [ | by compute | by compute].
        (repeat (rewrite Z.opp_add_distr)).
        (repeat (rewrite Z.add_opp_r)).
@@ -433,10 +489,57 @@ Proof.
          | (** -2(2p) *)
          | (** -2 *)
          ]; by compute.      
-      (** minus one *)
-       by compute.
+    (** minus one *)
+    * by compute.
 Qed.
-		  
+
+Theorem Zbit_le : 
+  forall x y: Z, 0 <= y -> (forall k: nat,  Zbit x k = true -> Zbit y k = true) -> x <= y.
+Proof.
+  intros x y POS. revert x.
+  apply Z2_induction with (z:=y); auto; intros.
+  + replace x with 0.
+    * auto with zarith.
+    * apply Zbit_ext.
+      extensionality k.
+      generalize (H k); clear H.
+      destruct (Zbit x k); intuition.
+  + generalize (div2_mod2_eq x); intro Euc.
+    rewrite Euc.
+    case_mod2 x; destruct c as [] eqn:Carry.
+    * rewrite EVEN in *.
+      cut ((x/2)<=z). { intro; omega. }
+      generalize (H0 (x/2)); clear H0; intro h0.
+      apply h0; clear h0; intro.
+      generalize (H1 (S k)); clear H1; intro h1.
+      rewrite Zbit_s2x_p in h1.
+      intro. apply h1. rewrite <- Zbit_div2; auto.
+    * rewrite EVEN in *.
+      cut ((x/2)<=z). { intro; omega. }
+      generalize (H0 (x/2)); clear H0; intro h0.
+      apply h0; clear h0; intro.
+      generalize (H1 (S k)); clear H1; intro h1.
+      replace (2*z + 0) with (2*z) in h1 by (auto with zarith).
+      rewrite Zbit_2x_p in h1.
+      intro. apply h1. rewrite <- Zbit_div2; auto.
+    * rewrite ODD.
+      cut ((x/2)<=z). { intro; omega. }
+      generalize (H0 (x/2)); clear H0; intro h0.
+      apply h0; clear h0; intro.
+      generalize (H1 (S k)); clear H1; intro h1.
+      rewrite Zbit_s2x_p in h1.
+      intro. apply h1. rewrite <- Zbit_div2; auto.
+   * rewrite ODD.
+      replace (2*z + 0) with (2*z) in * by (auto with zarith).
+      assert ((Zbit x O) = true).
+      { rewrite Zbit_0. rewrite Zmod_odd in ODD.
+        destruct (Z.odd x); intuition. }
+      assert (Zbit (2*z) O=true).
+      { apply (H1 O); auto. }
+      rewrite (Zbit_2x_0) in H3.
+      discriminate H3.
+Qed. 		  
+  
 (** Recursive definition of Zbit *)     
 Theorem Zbit_rec: forall (x:Z) (n:nat),
   Zbit x n = if leb n 0 %nat then Z.odd x else Zbit (x/2) (pred n).
@@ -444,10 +547,10 @@ Proof.
   intro x.
   destruct n.
   (** Base *)
-    simpl.
+  + simpl.
     apply Zbit_0.
   (** Ind. *)
-    simpl.
+  + simpl.
     rewrite Zbit_div2.
     auto.
 Qed.
@@ -457,42 +560,65 @@ Lemma Zbit_shift_l: forall (n m:nat) (x:Z),
 Proof.
   induction n; intros.
   (** base *)
-    rewrite (leb_correct O m) by omega.			
+  + rewrite (leb_correct O m) by omega.			
     unfold two_power_nat. unfold shift_nat. rewrite <- (minus_n_O m).
     f_equal. simpl. omega.
   (** ind. *) 
-    rewrite two_power_nat_S.
-    (replace (x * (2 * two_power_nat n)) with ((2 * x) * two_power_nat n) by ring).
+  + rewrite two_power_nat_S.
+    (replace (x * (2*two_power_nat n)) with ((2*x) * two_power_nat n) by ring).
     rewrite (IHn m (2*x)).
     nat_compare Inf EQ Sup n m.
     (** n<m *) 
-      rewrite (leb_correct n m) by omega.
+    * rewrite (leb_correct n m) by omega.
       rewrite (leb_correct (S n) m) by omega.
       rewrite <-(Zbit_2x_p (m - S n) x).
       f_equal. 
       rewrite (minus_Sn_m) by omega. 
       by simpl.
    (** n=m *) 
-      rewrite (leb_correct n n) by omega.
+    * rewrite (leb_correct n n) by omega.
       rewrite (leb_correct_conv n (S n)) by omega.
       rewrite <- minus_n_n.
       apply Zbit_2x_0.  
    (** n>m *) 
-      rewrite (leb_correct_conv m n) by omega.
+    * rewrite (leb_correct_conv m n) by omega.
       rewrite (leb_correct_conv m (S n)) by omega.
       auto. 
 Qed.
 
+Lemma Znat_ind: forall (P: Z -> Prop), 
+  P 0 -> (forall (x:Z), 0 <= x -> P x -> P (2*x))
+      -> (forall (x:Z), 0 <= x -> P x -> P (2*x+1)) 
+      -> (forall (x:Z), 0 <= x -> P x).
+Proof.
+  intros.
+  destruct x.
+  (* 0 *)
+    auto.
+  (* Pos *)
+    induction p.
+    (* 2p+1 *)
+      (replace (Z.pos p~1) with (2 * Z.pos p + 1) by (auto with zarith)); auto. 
+    (* 2p *)
+      (replace (Z.pos p~0) with (2 * Z.pos p) by (auto with zarith)); auto. 
+    (* 1 *)
+      (replace (1) with (2 * 0 + 1) by (auto with zarith)).
+	apply H1. omega. auto.
+  (* Neg *)
+    compute in H2.
+    intuition congruence.
+Qed.
+		 
 Lemma Zbit_shift_r: forall (n m:nat) (x:Z),
   Zbit (x / (two_power_nat n)) m = Zbit x (n + m)%nat.
 Proof.
   induction n; intros.
   (** base *)
-    unfold two_power_nat. unfold shift_nat. 
+  + unfold two_power_nat. unfold shift_nat. 
     f_equal. simpl. apply Zdiv_1_r.
   (** ind. *) 
-    rewrite two_power_nat_S.
-    (replace (2 * two_power_nat n) with ((two_power_nat n)*2) by ring).
+  + rewrite two_power_nat_S.
+    (replace (2*two_power_nat n) with ((two_power_nat n)*2) by ring).
     rewrite <- Zdiv_Zdiv;
       [ | generalize (two_power_nat_is_positive n); omega | omega].
     rewrite (plus_Snm_nSm n m).  
@@ -501,24 +627,16 @@ Proof.
 Qed.
 
 Theorem Zbit_uint_mod_two_power_nat: forall (n m:nat) (x:Z), 
-  Zbit (x mod (two_power_nat (n+m))) m = if leb n 0 then false else Zbit x m.
+  Zbit (x mod (two_power_nat n)) m = if leb n m then false else Zbit x m.
 Proof.
   induction n.
   (** base *) simpl.
-    induction m; intros.
+  + intros. (replace (two_power_nat 0) with 1 by forward).
+    rewrite Z.mod_1_r.
+    autozbits.
+  + induction m.
     (** base *)
-      (replace (two_power_nat 0) with 1 by forward).
-      rewrite Z.mod_1_r.
-      compute; auto.
-    (** ind. *)
-      rewrite  <- Zbit_div2.
-      rewrite <- (IHm (x/2)).
-      rewrite uint_div2_mod_two_power_nat; auto.
-  (** ind. *)
-    simpl.
-    induction m.
-    (** base *)
-      intros.
+    * intros.
       (replace (n + 0)%nat with n by (simpl; auto)).
       rewrite two_power_nat_S.
       rewrite Zbit_0; rewrite Zbit_0. 
@@ -526,23 +644,23 @@ Proof.
       rewrite Z.odd_add_mul_2.
       rewrite odd_mod2; auto.
     (** ind. *)
-      intros.
-      (replace (S (n + S m))%nat with (S ( S(n + m)))%nat by (simpl; auto)).  
+    * intros.
       rewrite <- Zbit_div2; rewrite <- Zbit_div2.
-      rewrite <- (IHm (x/2)).
-      rewrite uint_div2_mod_two_power_nat; auto.
+      rewrite uint_div2_mod_two_power_nat.    
+      rewrite (IHn m (x/2)).
+      nat_compare Inf EQ Sup n m.
 Qed.
-
+    
 Theorem Zbit_sint_mod_two_power_nat: forall (n m:nat) (x:Z), 
-  Zbit (((x + two_power_nat (n+m)) mod (2 * two_power_nat (n+m))) - two_power_nat (n+m)) m = Zbit x m.
+  Zbit (((x + two_power_nat (n+m)) mod (2*two_power_nat (n+m))) - two_power_nat (n+m)) m = Zbit x m.
 Proof.
   induction n.
   (** base *)
-    induction m; intros.
+  + induction m; intros.
     (** base *)
-      rewrite plus_O_n.
+    * rewrite plus_O_n.
       (replace (two_power_nat O) with 1 by forward).
-      (replace (2 * 1) with 2 by forward).
+      (replace (2*1) with 2 by forward).
       rewrite Zbit_0; rewrite Zbit_0.
       rewrite Z.odd_sub.
       rewrite odd_mod2.
@@ -552,7 +670,7 @@ Proof.
       rewrite (Bool.negb_involutive).
       auto.
     (** ind. *)
-      rewrite plus_O_n.
+    * rewrite plus_O_n.
       rewrite  <- Zbit_div2; rewrite  <- Zbit_div2.
       rewrite  <- (IHm (x/2)).
       rewrite sint_div2_mod_two_power_nat.
@@ -560,9 +678,9 @@ Proof.
       rewrite <- two_power_nat_S.
       auto.
   (** ind. *)
-    induction m.
+  + induction m.
     (** base *)
-      intros.
+    * intros.
       (replace (S n + 0)%nat with (S n) by (simpl; auto)).
       rewrite two_power_nat_S.
       rewrite Zbit_0; rewrite Zbit_0. 
@@ -575,8 +693,8 @@ Proof.
       rewrite odd_mod2.
       rewrite Z.odd_add_mul_2.
       auto.
-   (** ind. *)
-      intros.
+    (** ind. *)
+    * intros.
       (replace (S n + S m)%nat with (S ((S n) + m))%nat by (simpl; auto)).  
       rewrite <- Zbit_div2; rewrite <- Zbit_div2.
       rewrite <- (IHm (x/2)).
@@ -591,17 +709,17 @@ Lemma Zbit_sign: forall (n: nat) (z: Z),
 Proof.
   intro n.
   induction n; intro z; intro b; unfold b.
-  (* base *)
-    (replace (two_power_nat 0) with 1 by forward).
+  (** base *)
+  + (replace (two_power_nat 0) with 1 by forward).
     case_lt z 0; intros.
-    (* z<0 *) (replace z with (-1) by (omega);forward).
-    (* z>=0*) (replace z with 0 by omega); by forward.
-  (* ind. *)
-    rewrite two_power_nat_S; intro.
+    (** z<0 *) (replace z with (-1) by (omega);forward).
+    (** z>=0*) (replace z with 0 by omega); by forward.
+  (** ind. *)
+  + rewrite two_power_nat_S; intro.
     rewrite <-Zbit_div2.
     assert ((- two_power_nat n) <= z/2 < two_power_nat n) by
       (split ; [apply Zdiv_le_lower_bound | apply Zdiv_lt_upper_bound] ; omega).
-    assert (Zbit (z / 2) n = ((z/2) <? 0)) by (by apply (IHn (z/2))).
+    assert (Zbit (z/2) n = ((z/2) <? 0)) by (by apply (IHn (z/2))).
     rewrite H1; apply Zlt_div2_neg.
 Qed.
 		
@@ -610,19 +728,19 @@ Lemma Zbit_trail_plus: forall (n i: nat) (z: Z),
    in -b <= z < b -> (Zbit z (n+i)%nat = Zlt_bool z 0).
 Proof.
   intro n. induction i; intros z b; unfold b.
-  (* base *)
-    rewrite plus_0_r.
+  (** base *)
+  + rewrite plus_0_r.
     apply Zbit_sign.
-  (* ind. *)
-    intro.
+  (** ind. *)
+  + intro.
     rewrite <- plus_n_Sm.
     rewrite <-Zbit_div2.
     assert ((- two_power_nat n) <= z/2 < two_power_nat n) by
       (split ; [apply Zdiv_le_lower_bound | apply Zdiv_lt_upper_bound] ; omega).
-    assert (Zbit (z / 2) (n + i)%nat = (z/2 <? 0)) by (by apply (IHi (z/2))).	
+    assert (Zbit (z/2) (n + i)%nat = (z/2 <? 0)) by (by apply (IHi (z/2))).	
     rewrite H1; apply Zlt_div2_neg.
 Qed.
-		 
+
 Lemma Zbit_trail: forall (n i: nat) (z: Z),
   let b := two_power_nat n
   in (n <= i)%nat -> -b <= z < b -> (Zbit z i = Zlt_bool z 0).
@@ -646,6 +764,110 @@ Proof.
   omega.
 Qed.
 
+Lemma Zbit_trail_plus_inv: forall (n: nat) (z: Z),
+   let b := two_power_nat n
+   in (forall (i: nat), (Zbit z (n+i)%nat = Zlt_bool z 0)) -> -b <= z < b.
+Proof.
+  intro n. induction n; intro z; intro b; unfold b.
+  (** base *)
+  + (replace (two_power_nat 0) with 1 by (auto with zarith)).
+    case_lt z 0; intros h h0.
+    (** z<0 *) 
+    * replace z with (-1);
+        [| symmetry; apply Zbit_ext; extensionality k; unfold TRUE; apply h0]. 
+      omega.
+    (** z>=0*) 
+    * replace z with 0;
+        [| symmetry; apply Zbit_ext; extensionality k; unfold FALSE; apply h0].
+      omega.
+  (** ind. *)
+  + intro.
+    generalize (div2_mod2_eq z); intro Euc.
+    generalize (mod2_lt z); intro Mod.
+    pose (x := z / 2); fold x in Euc.  
+    pose (r := z mod 2); fold r in Euc,Mod.
+    
+    assert (Ind: -(two_power_nat n) <= x < (two_power_nat n)).
+    { apply IHn; intro; unfold x; rewrite Zlt_div2_neg. 
+      case_mod2 z.
+      + fold r in EVEN. 
+        rewrite <-Zbit_2x_p.
+        replace (S (n+i)) with (S n + i)%nat ; [ | auto with arith ].
+        replace (2*(z/2)) with z.
+        * apply H. 
+        * fold x; auto with zarith.
+      + fold r in ODD. 
+        rewrite <-Zbit_s2x_p.
+        replace (S (n+i)) with (S n + i)%nat ; [ | auto with arith ].
+        replace (2*(z/2) + 1) with z.
+        * apply H.
+        * fold x; auto with zarith.
+    }
+    rewrite two_power_nat_S.
+    auto with zarith.
+Qed.
+	     
+Lemma Zbit_unsigned_trail_plus_inv: forall (n: nat) (z: Z),
+   let b := two_power_nat n
+   in (forall (i: nat), (Zbit z (n+i)%nat = false)) -> 0 <= z < b.
+Proof.
+  intro n. induction n; intro z; intro b; unfold b.
+  (** base *)
+  + (replace (two_power_nat 0) with 1 by (auto with zarith)).
+     intro h0.
+     replace z with 0;
+       [| symmetry; apply Zbit_ext; extensionality k; unfold FALSE; apply h0].
+     omega.
+  (** ind. *)
+  + intro.
+    generalize (div2_mod2_eq z); intro Euc.
+    generalize (mod2_lt z); intro Mod.
+    pose (x := z / 2); fold x in Euc.  
+    pose (r := z mod 2); fold r in Euc,Mod.
+    
+    assert (Ind: 0 <= x < (two_power_nat n)).
+    { apply IHn; intro; unfold x. 
+      case_mod2 z.
+      + fold r in EVEN. 
+        rewrite <-Zbit_2x_p.
+        replace (S (n+i)) with (S n + i)%nat ; [ | auto with arith ].
+        replace (2*(z/2)) with z.
+        * apply H. 
+        * fold x; auto with zarith.
+      + fold r in ODD. 
+        rewrite <-Zbit_s2x_p.
+        replace (S (n+i)) with (S n + i)%nat ; [ | auto with arith ].
+        replace (2*(z/2) + 1) with z.
+        * apply H.
+        * fold x; auto with zarith.
+    }
+    rewrite two_power_nat_S.
+    auto with zarith.
+Qed.
+
+Lemma Zbit_trail_inv: forall (n: nat) (z: Z),
+  let b := two_power_nat n
+  in (forall (i: nat), (n <= i)%nat -> (Zbit z i = Zlt_bool z 0)) -> -b <= z < b.
+Proof.
+  intros n z b h1. 
+  generalize (Zbit_trail_plus_inv n z); intro h2. 
+  apply h2; intro.
+  generalize (h1 (n + i)%nat); intro h3.
+  apply h3.
+  auto with zarith.
+Qed.
+	    
+Lemma Zbit_unsigned_trail_inv: forall (n: nat) (z: Z),
+  (forall (i: nat), (n <= i)%nat -> (Zbit z i = false)) -> 0 <= z < (two_power_nat n).
+Proof. 
+  intros n z h1. 
+  generalize (Zbit_unsigned_trail_plus_inv n z); intro h2. 
+  apply h2; intro.
+  generalize (h1 (n + i)%nat); intro h3.
+  apply h3.
+  auto with zarith.
+Qed.
+
 (** {@bitwise:} *)
 (** * Bitwise Shifting Operators *)
 
@@ -662,15 +884,15 @@ Next Obligation.
   intro Tx. intro k.
   nat_compare Inf EQ Sup n k.
   (** n < k *) 
-    rewrite (leb_correct n k) by omega.
+  + rewrite (leb_correct n k) by omega.
     intros. rewrite (Tx (k - n)%nat) by omega.  
     auto.
   (** n = k *)
-    rewrite (leb_correct n n) by omega.
+  + rewrite (leb_correct n n) by omega.
     intros. rewrite (Tx (n - n)%nat) by omega.
     auto.
   (** n > k *) 
-    intro.
+  + intro.
     omegaContradiction.
 Qed.
 
@@ -775,7 +997,7 @@ Proof.
     apply Max.max_case_strong;
     rewrite <- (bsize_exact x); rewrite <- (bsize_exact y); intro CASE.
   (** (ZxHpos y <= ZxHpos x) *)
-    rewrite Max.max_l by auto.
+  + rewrite Max.max_l by auto.
     generalize (last_leq (fun i: nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i))
       (ZxHpos x) (f (bsign (bits_of_Z x)) (bsign (bits_of_Z y)))); intro.
     generalize (last_leq (fun i : nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i))
@@ -784,7 +1006,7 @@ Proof.
       (f (bsign (bits_of_Z x)) (bsign (bits_of_Z y)))); intro.
     omega.
   (** cont. (ZxHpos x <= ZxHpos y) *)
-    rewrite Max.max_r by auto.
+  + rewrite Max.max_r by auto.
     generalize (last_leq (fun i: nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i))
       (ZxHpos y) (f (bsign (bits_of_Z x)) (bsign (bits_of_Z y)))); intro.
     generalize (last_leq (fun i: nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i))
@@ -801,10 +1023,10 @@ Proof.
   generalize (Z_bitwise_ZxHpos f x y).
   apply Z.max_case_strong; intro.
   (** ZxHbound y <= ZxHbound x *)
-    assert (ZxHpos y <= ZxHpos x)%nat by by (apply ZxHpos_le).
+  + assert (ZxHpos y <= ZxHpos x)%nat by by (apply ZxHpos_le).
     rewrite max_l; by try (intro; apply ZxHbound_le).
- (** ZxHbound x <= ZxHbound y *)
-    assert (ZxHpos x <= ZxHpos y)%nat by by (apply ZxHpos_le).
+  (** ZxHbound x <= ZxHbound y *)
+  + assert (ZxHpos x <= ZxHpos y)%nat by by (apply ZxHpos_le).
     rewrite max_r; by try (intro; apply ZxHbound_le).
 Qed.
   
@@ -814,72 +1036,112 @@ Theorem Z_bitwise_in_sint_range: forall (f: bool -> bool -> bool) (n: nat) (x y:
 Proof.
   intros f n x y b Rx Ry.
   assert (ZxHbound x <= b) as Bx.
-    unfold b. unfold b in Rx.
+  { unfold b. unfold b in Rx.
     apply (ZxHpower n x).
-    omega.
+    omega. }
   assert (ZxHbound y <= b) as By.
-    unfold b. unfold b in Ry.
+  { unfold b. unfold b in Ry.
     apply (ZxHpower n y).
-    omega.
+    omega. }
   generalize (Z_bitwise_ZxHbound f x y).
   pose (zxy := Z_bitwise f x y); fold zxy.
   generalize (ZxHrange zxy).
   apply Zmax_case_strong.
   (** ZxHbound y <= ZxHbound x *)
-    intros Ryx Rzxy.
-    destruct Rzxy.
-    omega.
+  + intros Ryx Rzxy.
+    destruct Rzxy as [ bound_neg bound_pos ].
+    lia.
   (** ZxHbound x <= ZxHbound y *)
-    intros Ryx Rzxy.
-    destruct Rzxy.
-    omega.
+  + intros Ryx Rzxy.
+    destruct Rzxy as [ bound_neg bound_pos ].
+    lia.
 Qed.
   
+Theorem Z_bitwise_sign: forall (f: bool -> bool -> bool) (x y: Z),  
+  Zle_bool 0 (Z_bitwise f x y) = negb (f (negb (Zle_bool 0 x)) (negb (Zle_bool 0 y))).
+Proof.
+  intros f x y. 
+  case_leq 0 (Z_bitwise f x y);
+  unfold Z_bitwise; unfold Z_of_bits; unfold bitwise; simpl;
+  repeat (rewrite Zsign_encoding); 
+  destruct (f (negb (Zle_bool 0 x)) (negb (Zle_bool 0 y))); intuition.
+  + unfold zlnot in H;
+    generalize (N_recomp_pos (last (fun i : nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i))
+      (max (bsize (bits_of_Z x)) (bsize (bits_of_Z y))) true)
+      (fnot (fun i : nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i)))); intro; 
+    omegaContradiction.
+  + generalize (N_recomp_pos (last (fun i : nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i))
+      (max (bsize (bits_of_Z x)) (bsize (bits_of_Z y))) false)
+      (fun i : nat => f (btest (bits_of_Z x) i) (btest (bits_of_Z y) i))); intro; 
+    omegaContradiction.
+Qed.
+
+Theorem Z_bitwise_is_uint: forall (f: bool -> bool -> bool) (x y: Z),  
+  0 <= x -> 0 <= y -> (f false false = false) -> 0 <= (Z_bitwise f x y).
+Proof.
+  intros f x y Rx Ry Fsign.
+  generalize (Z_bitwise_sign f x y).
+  case_leq 0 x; case_leq 0 y; replace (negb true) with false by intuition; intros.
+  rewrite Fsign in H1.
+  replace (negb false) with true in H1 by intuition.
+  case_leq 0 (Z_bitwise f x y).
+  discriminate H1.
+Qed.
+		       
+Theorem Z_bitwise_is_uint1: forall (f: bool -> bool -> bool) (x y: Z),  
+  0 <= x -> (forall b:bool, f false b = false) -> 0 <= (Z_bitwise f x y).
+Proof.
+  intros f x y Rx Fsign.
+  generalize (Z_bitwise_sign f x y).
+  case_leq 0 x; replace (negb true) with false by intuition; intros.
+  rewrite (Fsign (negb (0 <=? y))) in H0.
+  replace (negb false) with true in H0 by intuition.
+  case_leq 0 (Z_bitwise f x y).
+  discriminate H0.
+Qed.
+		       
+Theorem Z_bitwise_is_uint2: forall (f: bool -> bool -> bool) (x y: Z),  
+  0 <= y -> (forall b: bool, f b false = false) -> 0 <= (Z_bitwise f x y).
+Proof.
+  intros f x y Rx Fsign.
+  generalize (Z_bitwise_sign f x y).
+  case_leq 0 y; replace (negb true) with false by intuition; intros.
+  rewrite (Fsign (negb (0 <=? x))) in H0.
+  replace (negb false) with true in H0 by intuition.
+  case_leq 0 (Z_bitwise f x y).
+  discriminate H0.
+Qed.
+		    
 Theorem Z_bitwise_in_uint_range: forall (f: bool -> bool -> bool) (n: nat) (x y: Z),  
   let b := two_power_nat n
   in 0 <= x < b -> 0 <= y < b -> f false false = false -> 0 <= (Z_bitwise f x y) < b.
 Proof.
   intros f n x y b Rx Ry.
   assert (ZxHbound x <= b) as Bx.
-    unfold b. unfold b in Rx.
+  { unfold b. unfold b in Rx.
     apply (ZxHpower n x).
-    omega.
+    omega. }
   assert (ZxHbound y <= b) as By.
-    unfold b. unfold b in Ry.
+  { unfold b. unfold b in Ry.
     apply (ZxHpower n y).
-    omega.
-   intro Fsign.
-   assert (0 <= (Z_bitwise f x y)) as Bz.
-     unfold Z_bitwise.
-     pose (bz := (bitwise f (bits_of_Z x) (bits_of_Z y))). fold bz.
-     unfold Z_of_bits.
-     destruct (bsign bz) eqn:BSIGN.
-     (** negative sign *)
-       assert (bsign bz = false) as OPP.
-         unfold bz. unfold bitwise. unfold bsign.
-         unfold bits_of_Z. unfold bsign.
-         case_leq 0 x; intro; try omegaContradiction.
-         case_leq 0 y; intros; try omegaContradiction.
-         auto.
-       rewrite BSIGN in OPP. 
-       discriminate.
-     (** positive sign *)
-       apply (N_recomp_pos).
+    omega. }
+  intro Fsign.
+  assert (0 <= (Z_bitwise f x y)) as Bz.
+  { apply (Z_bitwise_is_uint f x y); auto; omega. }
   generalize (Z_bitwise_ZxHbound f x y).
   pose (zxy := Z_bitwise f x y); fold zxy; fold zxy in Bz.
   generalize (ZxHrange zxy).
   apply Zmax_case_strong.
   (** ZxHbound y <= ZxHbound x *)
-    intros Ryx Rzxy.
-    destruct Rzxy.
-    auto with zarith.
+  + intros Ryx Rzxy.
+    destruct Rzxy as [ Bneg Bpos ].
+    lia.
   (** ZxHbound x <= ZxHbound y *)
-    intros Ryx Rzxy.
-    destruct Rzxy.
-    (* auto with zarith. *)
-    omega.
+  + intros Ryx Rzxy.
+    destruct Rzxy as [ Bneg Bpos ].
+    lia.
 Qed.
-  
+
 (** Commutative bitwise operators *)
 
 Definition commutative {A B: Type} (f: A -> A -> B) :=
@@ -946,11 +1208,7 @@ Lemma Z_bitwise_neutral (e:bool): forall (f: bool -> bool -> bool),
   neutral e f -> neutral (if e then (-1) else 0) (Z_bitwise f).
 Proof.
   unfold neutral. intros. Zbit_bitwise k.
-  destruct e; simpl.
-  (** TRUE *)  
-    rewrite Zbit_of_mone. rewrite H. auto.
-  (** FALSE *)  
-    rewrite Zbit_of_zero. rewrite H. auto.
+  destruct e; simpl; rewrite H; auto.
 Qed.									  
 									  
 (** Absorbant element of bitwise operators *)
@@ -962,11 +1220,7 @@ Lemma Z_bitwise_absorbant (a:bool) :
   forall f, absorbant a f -> absorbant (if a then (-1) else 0) (Z_bitwise f).
 Proof.
   unfold absorbant. intros. Zbit_bitwise k.
-  destruct a; simpl.
-  (** TRUE *)  
-    rewrite Zbit_of_mone. rewrite H. auto.
-  (** FALSE *)  
-    rewrite Zbit_of_zero. rewrite H. auto.
+  destruct a; simpl; rewrite H; auto.
 Qed.									  
 
 (** {@ACSL:} *)	
@@ -1021,18 +1275,19 @@ Proof.
   rewrite lsl_arithmetic_shift. unfold lsl_arithmetic_def.
   rewrite Zbit_shift_l.
   case_leq (Zabs n) (Z_of_nat k).
-  (** case |n| <= k *) intro LEQ.
+  (** case |n| <= k *) 
+  + intro LEQ.
     cut (leb (Zabs_nat n) k= true).
-      intro LEB. rewrite LEB. f_equal.
+    { intro LEB. rewrite LEB. f_equal.
       rewrite Zabs_nat_Zminus; try split; try apply Zabs_pos; auto.
       rewrite Zabs_nat_Z_of_nat.
-      rewrite zabs_nat_zabs; auto.
-      auto.
+      rewrite zabs_nat_zabs; auto. }
     apply leb_correct. rewrite <- Zabs_nat_Z_of_nat.
     apply zabs_le. 
     rewrite <- (inj_Zabs_nat (Z_of_nat k)). rewrite Zabs_nat_Z_of_nat.
     auto.
-  (** case |n| > k *) intro GT.
+  (** case |n| > k *) 
+  + intro GT.
     cut (leb (Zabs_nat n) k = false).
     intro GTB. rewrite GTB. auto. 
     apply leb_correct_conv.
@@ -1101,15 +1356,15 @@ Proof.
   rewrite (leb_correct (Zabs_nat n) (k + Zabs_nat m)).
   f_equal.
   (** arg 1 *) 
-     rewrite (inj_eq_rev (k + Zabs_nat m - Zabs_nat n) (k + (Zabs_nat m - Zabs_nat n))). 
-     auto.
-     rewrite inj_minus1 by (apply zabs_le_plus; omega). 
-     repeat rewrite inj_plus. 
-     rewrite inj_minus1 at 1 by (apply zabs_le; auto). 
-     omega.
+  + rewrite (inj_eq_rev (k + Zabs_nat m - Zabs_nat n) (k + (Zabs_nat m - Zabs_nat n))). 
+    auto.
+    rewrite inj_minus1 by (apply zabs_le_plus; omega). 
+    repeat rewrite inj_plus. 
+    rewrite inj_minus1 at 1 by (apply zabs_le; auto). 
+    omega.
   (** arg 2 *) 
-     apply zabs_le_plus.
-     omega.
+  + apply zabs_le_plus.
+    omega.
 Qed.
 
 (** * ACSL bitwise operators *)
@@ -1125,8 +1380,87 @@ Definition lxor (x y: Z): Z :=
 Definition lnot (x: Z): Z :=
   lxor (-1) x.
 
-Definition nat_eq_decide : forall m n : nat, {m = n} + {m <> n} := eq_nat_dec.
+(** ** Bounds of land and lor terms *)
 
+Theorem uint_land_range: forall (x y: Z), 0 <= x -> 0 <= land x y <= x.
+Proof.
+  intros.
+  split.
+  + apply (Z_bitwise_is_uint1 andb).
+    * auto.
+    * intro. destruct b; intuition.
+  + apply Zbit_le.
+    * auto.
+    * intro.
+      unfold land; rewrite Zbit_bitwise. 
+      destruct (Zbit x k); intuition.
+Qed. 
+		    
+Theorem land_sign: forall (x y: Z), (0 <= x \/ 0 <= y) <-> 0 <= land x y.
+Proof.
+  intros x y.
+  unfold land; unfold Z_bitwise.
+  pose (bz := (bitwise andb (bits_of_Z x) (bits_of_Z y))). fold bz.
+  assert ((0 <= Z_of_bits bz) <-> (bsign bz = false)).
+  { rewrite Bits.bsign_encoding.
+    case_leq 0 (Z_of_bits bz); intros; split; intros; auto.
+    * omegaContradiction.
+    * discriminate H0. }
+  rewrite H.
+  unfold bz. unfold bitwise. simpl.
+  rewrite (bsign_encoding (bits_of_Z x)).
+  rewrite bsign_encoding.
+  rewrite (Z_recomp_decomp x). rewrite Z_recomp_decomp.
+  split; case_leq 0 x; intro; try omegaContradiction;
+    case_leq 0 y; intros; try omegaContradiction; auto.
+  discriminate H2.
+Qed. 
+
+Theorem lor_sign: forall (x y: Z), (0 <= x /\ 0 <= y) <-> 0 <= lor x y.
+Proof.
+  intros x y.
+  unfold lor; unfold Z_bitwise.
+  pose (bz := (bitwise orb (bits_of_Z x) (bits_of_Z y))). fold bz.
+  assert ((0 <= Z_of_bits bz) <-> (bsign bz = false)).
+  { rewrite Bits.bsign_encoding.
+    case_leq 0 (Z_of_bits bz); intros; split; intros; auto.
+    * omegaContradiction.
+    * discriminate H0. }
+  rewrite H.
+  unfold bz. unfold bitwise. simpl.
+  rewrite (bsign_encoding (bits_of_Z x)).
+  rewrite bsign_encoding.
+  rewrite (Z_recomp_decomp x). rewrite Z_recomp_decomp.
+  split; case_leq 0 x; intro; try omegaContradiction;
+    case_leq 0 y; split; intros; try omegaContradiction;
+    discriminate H2.
+Qed.
+
+Theorem uint_lor_inf: forall (x y: Z), 0 <= x -> 0 <= y -> x <= lor x y.
+Proof.
+  intros.
+  apply Zbit_le.
+  + unfold lor.
+    unfold Z_bitwise.
+    pose (bz := (bitwise orb (bits_of_Z x) (bits_of_Z y))). fold bz.
+    unfold Z_of_bits.
+    destruct (bsign bz) eqn:BSIGN.
+    (** negative sign *)
+    * assert (bsign bz = false) as OPP.
+      unfold bz. unfold bitwise. unfold bsign.
+      unfold bits_of_Z. unfold bsign.
+      case_leq 0 x; intro; try omegaContradiction.
+      case_leq 0 y; intros; try omegaContradiction.
+      auto.
+      rewrite BSIGN in OPP. 
+      discriminate.
+    (** positive sign *)
+    * apply (N_recomp_pos).
+ + intro.
+    unfold lor; rewrite Zbit_bitwise. 
+    destruct (Zbit x k); intuition.
+Qed. 
+		    
 (** Zbit extraction *)
 Theorem Zbit_extraction : 
 forall (x:Z) (i:nat), 
@@ -1138,32 +1472,30 @@ Proof.
   unfold land.
   split.
   (** 1st impl *)
-    intro H.
+  + intro H.
     assert (Zbit (Z_bitwise andb x (two_power_nat i)) i = Zbit 0 i).
-      rewrite H; reflexivity.
-    (* assert done *)
+    { rewrite H; reflexivity. }
     rewrite Zbit_bitwise in H0.
     rewrite Zbit_power in H0.
-    rewrite Zbit_of_zero in H0.
     unfold FALSE in H0.
     rewrite <- beq_nat_refl in H0.
     rewrite Bool.andb_true_r in H0.
     assumption.
   (** 2sd impl *)
-    intro.
+  + intro.
     Zbit_ext k.
     rewrite Zbit_bitwise; rewrite Zbit_power.
-    rewrite Zbit_of_zero; unfold FALSE.
+    unfold FALSE.
     (** proof by case *)
     case (lt_eq_lt_dec i k); intro cas. destruct cas.
     (** i<k *)
-      rewrite Bool.andb_false_intro2; auto.
+    * rewrite Bool.andb_false_intro2; auto.
       apply beq_nat_false_iff; omega.
     (** k=i *)
-      rewrite <- e.
+    * rewrite <- e.
       rewrite Bool.andb_false_intro1; auto.
     (** k<i *)
-      rewrite Bool.andb_false_intro2; auto.
+    * rewrite Bool.andb_false_intro2; auto.
       apply beq_nat_false_iff; omega.
 Qed.
 
@@ -1177,32 +1509,31 @@ Proof.
   unfold land.
   split.
   (** 1st impl *)
-    intro H.
+  + intro H.
     assert (Zbit (Z_bitwise andb x (two_power_nat i)) i = Zbit (two_power_nat i) i).
-      rewrite H; reflexivity.
-    (* assert done *)
+    { rewrite H; reflexivity. }
     rewrite Zbit_bitwise in H0.
     rewrite Zbit_power in H0.
     rewrite <- beq_nat_refl in H0.
     rewrite Bool.andb_true_r in H0.
     assumption.
   (** 2sd impl *)
-    intro.
+  + intro.
     Zbit_ext k.
     rewrite Zbit_bitwise; rewrite Zbit_power.
     (** proof by case *)
     case (lt_eq_lt_dec i k); intro cas. destruct cas.
     (** i<k *)
-      rewrite Bool.andb_false_intro2; auto;
+    * rewrite Bool.andb_false_intro2; auto;
       [symmetry| ];
       apply beq_nat_false_iff; omega.
     (** k=i *)
-      rewrite <- e.
+    * rewrite <- e.
       rewrite H.
       rewrite Bool.andb_true_l.
       reflexivity.
     (** k<i *)
-      rewrite Bool.andb_false_intro2; auto;
+    * rewrite Bool.andb_false_intro2; auto;
       [symmetry| ];
       apply beq_nat_false_iff; omega.
 Qed.
@@ -1214,7 +1545,7 @@ Theorem lnot_zlnot_equiv: forall x: Z,
   lnot x = zlnot x.
 Proof.
   intro x. unfold lnot. unfold lxor. Zbit_bitwise k.
-  rewrite Zbit_of_mone. rewrite Bool.xorb_true_l.
+  rewrite Bool.xorb_true_l.
   (** Now to prove that zlnot negates bits *)
   unfold Zbit. unfold bits_of_Z.
   pose (y := zlnot x). fold y.
@@ -1222,9 +1553,9 @@ Proof.
     try ( unfold y in Y; unfold zlnot in Y; apply False_ind; omega); 
     simpl.
   (** Negative *)
-    unfold y. rewrite zlnot_inv. unfold fnot. trivial.
+  + unfold y. rewrite zlnot_inv. unfold fnot. trivial.
   (** Positive *)
-    unfold fnot. rewrite Bool.negb_involutive. trivial.
+  + unfold fnot. rewrite Bool.negb_involutive. trivial.
 Qed.
 						   
 (** Tactical *)
@@ -1355,7 +1686,7 @@ Theorem lnot_land_de_morgan: forall x y: Z,
   lnot (land x y) = lor (lnot x) (lnot y).
 Proof.
   intros. unfold lnot. unfold lxor. 
-  Zbit_bitwise k. rewrite Zbit_of_mone. rewrite Bool.xorb_true_l.
+  Zbit_bitwise k. rewrite Bool.xorb_true_l.
   unfold land. rewrite Zbit_bitwise. 
   unfold lor. rewrite Zbit_bitwise. unfold Zbit. unfold Z_bitwise. 
   rewrite Z_decomp_recomp. rewrite Z_decomp_recomp. unfold bitwise. simpl. 
@@ -1368,7 +1699,7 @@ Theorem lnot_lor_de_morgan: forall x y: Z,
   lnot (lor x y) = land (lnot x) (lnot y).
 Proof.
   intros. unfold lnot. unfold lxor. Zbit_bitwise k.
-  rewrite Zbit_of_mone. rewrite Bool.xorb_true_l.
+  rewrite Bool.xorb_true_l.
   unfold land. rewrite Zbit_bitwise. 
   unfold lor. rewrite Zbit_bitwise. unfold Zbit. unfold Z_bitwise. 
   rewrite Z_decomp_recomp. rewrite Z_decomp_recomp. unfold bitwise. simpl. 
@@ -1427,7 +1758,7 @@ Theorem lxor_nilpotent: forall x: Z,
   lxor x x = 0.
 Proof.
   intro. unfold lxor. Zbit_bitwise k. 
-  rewrite Bool.xorb_nilpotent. rewrite Zbit_of_zero. auto.
+  rewrite Bool.xorb_nilpotent. auto.
 Qed.
 					    
 Theorem lxor_1: forall x: Z,
@@ -1716,7 +2047,7 @@ Proof.
    destruct (Zbit y1 k); destruct (Zbit y2 k); destruct (Zbit z k); simpl; auto.
 Qed.
 
-(** * Other properties of bitwise operators *)
+(** * Properties about bounds of bitwise operators *)
 
 Theorem lnot_in_range: forall a b z: Z,
   a <= z < b -> -b <= lnot z < -a.
@@ -1726,39 +2057,6 @@ Proof.
   omega.
 Qed.		
 
-Theorem Zbit_land_edge_inf: forall (x:Z) (n k:nat),
-  Zbit x k = Zbit (land ((two_power_nat (S (n + k))) - 1) x) k.
-Proof.
-  intros. unfold land; rewrite Zbit_bitwise.
-  cut (Zbit (two_power_nat (S (n + k)) - 1) k = true).
-    intro C; rewrite C; simpl; auto.
-  induction k.
-  (** base *)
-    (replace (n + 0)%nat with n by (auto with zarith)).
-    rewrite two_power_nat_S.
-    (replace (2 * two_power_nat n - 1)
-        with (2 *(two_power_nat n - 1) +1) by ring).
-    apply Zbit_s2x_0.
-  (** ind. *)
-    rewrite two_power_nat_S.
-    (replace (2 * two_power_nat (n + S k) - 1)
-        with (2 *(two_power_nat (n + S k) - 1) +1) by ring).
-    rewrite Zbit_s2x_p.
-    (replace (n + S k)%nat with (S (n + k)%nat) by (auto with zarith)).
-    auto.
-Qed.
-
-(*
-Lemma pos_mod_two_power_nat_land_edge: forall  (x:Z) (n:nat),
-  x>=0 -> x mod (two_power_nat n) = land ((two_power_nat n) - 1) x.
-Proof.
-  intros.
-  rewrite (Zmod_unique x (two_power_nat n)
-             (x / (two_power_nat n)) (land (two_power_nat n - 1) x)).
-   admit.
-Qed.
-*)
-			    
 Theorem lsr_upper_bound: forall b x y: Z,
   0 <= y -> x < b -> 0 <= b -> lsr x y < b.
 Proof.
@@ -1784,7 +2082,70 @@ Proof.
   assert (b * d <= b) by apply (lower_negative_mult_positive d b Rb PWR2).
   omega.
 Qed.						       				
-								     
+	
+(** * Other properties of bitwise operators *)
+
+Theorem Zbit_land_edge_inf: forall (x:Z) (n k:nat),
+  Zbit x k = Zbit (land ((two_power_nat (S (n + k))) - 1) x) k.
+Proof.
+  intros. unfold land; rewrite Zbit_bitwise.
+  cut (Zbit (two_power_nat (S (n + k)) - 1) k = true).
+  { intro C; rewrite C; simpl; auto. }
+  induction k.
+  (** base *)
+  + (replace (n + 0)%nat with n by (auto with zarith)).
+    rewrite two_power_nat_S.
+    (replace (2*two_power_nat n - 1)
+        with (2*(two_power_nat n - 1) +1) by ring).
+    apply Zbit_s2x_0.
+  (** ind. *)
+  + rewrite two_power_nat_S.
+    (replace (2*two_power_nat (n + S k) - 1)
+        with (2*(two_power_nat (n + S k) - 1) +1) by ring).
+    rewrite Zbit_s2x_p.
+    (replace (n + S k)%nat with (S (n + k)%nat) by (auto with zarith)).
+    auto.
+Qed.
+
+Theorem Zbit_power_minus_one: forall n k:nat,
+  Zbit (two_power_nat n - 1) k = leb (S k) n.
+Proof.
+  induction n.
+  (** base *)
+  + unfold two_power_nat; unfold Zbit; unfold bits_of_Z.
+    simpl; auto.
+  (** ind *)
+  + replace (two_power_nat (S n) - 1) 
+    with (2 * (two_power_nat n - 1) + 1)
+    by (rewrite two_power_nat_S; (auto with zarith)).
+    destruct k.
+    * rewrite Zbit_s2x_0. 
+      auto.
+    * rewrite Zbit_s2x_p.
+      rewrite (IHn k).
+      auto.
+Qed.
+ 
+Lemma pos_mod_two_power_nat_land_edge: forall  (x:Z) (n:nat),
+  x mod (two_power_nat n) = land ((two_power_nat n) - 1) x.
+Proof.
+  intros.
+  Zbit_ext k.
+  rewrite Zbit_uint_mod_two_power_nat.
+  unfold land; rewrite Zbit_bitwise.
+  rewrite Zbit_power_minus_one.
+  nat_compare Inf EQ Sup n k.
+  + rewrite (leb_correct n k) by omega.
+    rewrite (leb_correct_conv n (S k)) by omega. 
+    simpl; auto.
+  + rewrite (leb_correct n n) by omega.
+    rewrite (leb_correct_conv n (S n)) by omega. 
+    simpl; auto.
+  + rewrite (leb_correct_conv k n) by omega.
+    rewrite (leb_correct (S k) n) by omega.
+    simpl; auto.  
+Qed.
+			    
 (** * Bit extraction *)
 
 Parameter zbit_test_undef: Z -> Z -> bool.
@@ -1793,6 +2154,16 @@ Parameter zbit_test_undef: Z -> Z -> bool.
 Definition zbit_test_def (x:Z) (n:Z): bool :=
   Zbit x (Zabs_nat n).	
 					
+Theorem zbit_test_ext: forall x y: Z,
+  (forall n, zbit_test_def x n = zbit_test_def y n) -> x=y.
+Proof.
+  intros x y.
+  unfold zbit_test_def.
+  intro.
+  Zbit_ext k. 
+  rewrite <- (Zabs2Nat.id k). apply H.
+Qed.					       				
+       				     
 Definition bit_testb (x:Z) (n:Z): bool :=
   if Zle_bool 0 n then zbit_test_def x n
   else zbit_test_undef x n.
@@ -1826,8 +2197,18 @@ Qed.
 Local Ltac bit_extraction bin_op :=
   intros; unfold zbit_test_def; unfold bin_op; rewrite Zbit_bitwise; auto. 
     
-(** ** Link between Bit extraction and bitwise shifting operators *)
+(** ** Link between Bit extraction and modulo operator *)
 
+Theorem uint_mod_two_power_extraction: forall (n:nat) (m x:Z),
+  zbit_test_def (x mod (two_power_nat n)) m = if leb n (Zabs_nat m) then false else zbit_test_def x m.
+Proof.
+  intros.
+  unfold zbit_test_def.
+  apply Zbit_uint_mod_two_power_nat.
+Qed.						       				
+
+								       
+(** ** Link between Bit extraction and bitwise shifting operators *)
 Theorem lsl_extraction: forall x n m: Z, 
   zbit_test_def (lsl_def x n) m =
     if Zle_bool (Zabs n) (Zabs m) 
@@ -1876,10 +2257,93 @@ Proof.
   unfold lnot.
   bit_extraction lxor.
 Qed.
-			  					       		(*
+
+(** ** Link between bitwise operators and the addition *)
+
+Remark land_no_carry : forall (x y:Z) (i:nat),
+  land x y = 0 -> (Zbit x i = false \/ Zbit y i = false).
+Proof.
+  intros.  
+  assert (Zbit (land x y) i = false).
+  { rewrite H. rewrite Zbit_of_zero. unfold FALSE. trivial. }
+  clear H.
+  unfold land in H0. rewrite Zbit_bitwise in H0. 
+  destruct (Zbit x i); destruct (Zbit y i); intuition. 
+Qed.
+
+Theorem lor_addition : forall (x y:Z),
+  land x y = 0 -> x + y = lor x y.
+Proof.
+  intros.  
+  Zbit_ext i.
+  generalize H; clear H.
+  generalize x; clear x.
+  generalize y; clear y.
+  induction i; intros. 
+  + generalize (land_no_carry x y O).
+    unfold lor; rewrite Zbit_bitwise.
+    repeat (rewrite Zbit_0).
+    rewrite Z.odd_add.
+    destruct (Z.odd x); destruct (Z.odd y); intuition.
+  + generalize (IHi (y/2) (x/2)); clear IHi.
+    unfold lor; rewrite Zbit_bitwise. rewrite Zbit_bitwise.
+    intros.
+    repeat (rewrite <- Zbit_div2).
+    assert (Zbit (x / 2 + y / 2) i = (Zbit (x / 2) i || Zbit (y / 2) i)%bool).
+    { apply H0; clear H0; clear i.
+      Zbit_ext k.
+      unfold land; rewrite Zbit_bitwise.
+      rewrite Zbit_div2; rewrite Zbit_div2.
+      generalize (land_no_carry x y (S k)). 
+      destruct (Zbit x (S k)); destruct (Zbit y (S k)); intuition. 
+    }
+    rewrite <- H1; clear H1.
+    f_equal.
+    generalize (land_no_carry x y 0%nat).
+    repeat (rewrite Zbit_0).
+    rewrite (div2_odd_eq x) at 3. rewrite (div2_odd_eq y) at 3.
+    clear H0.
+    destruct (Z.odd x); destruct (Z.odd y); intuition; try discriminate H0; 
+      repeat (rewrite Z.add_0_r); symmetry.
+    * apply (Zdiv_unique (2 * (x / 2) + 1 + 2 * (y / 2)) 2 (x / 2 + y / 2) 1); auto with zarith.
+    * apply (Zdiv_unique (2 * (x / 2) + (2 * (y / 2) + 1)) 2 (x / 2 + y / 2) 1); auto with zarith.
+    * apply (Zdiv_unique (2 * (x / 2) + 2 * (y / 2)) 2 (x / 2 + y / 2) 0); auto with zarith.
+    * apply (Zdiv_unique (2 * (x / 2) + 2 * (y / 2)) 2 (x / 2 + y / 2) 0); auto with zarith.
+Qed. 
+
+Theorem lxor_addition : 
+forall (x y:Z),
+  land x y = 0 ->
+  x + y = lxor x y.
+Proof.
+  intros. rewrite lor_addition.
+  + Zbit_ext i.
+    unfold lor; rewrite Zbit_bitwise.
+    unfold lxor; rewrite Zbit_bitwise.
+    generalize (land_no_carry x y i).
+    destruct (Zbit x i); destruct (Zbit y i); intuition. 
+  + trivial.
+Qed. 
+
+Theorem land_addition : 
+forall (x y z:Z),
+  land x y = 0 ->
+  (land x z) + (land y z) = land (x + y) z.
+Proof.
+  intros. rewrite lor_addition.
+  + rewrite lor_addition; trivial.
+    symmetry. apply land_lor_distrib_r.
+  + rewrite land_assoc.
+    rewrite <- (land_commut (land y z)).
+    rewrite land_assoc.
+    rewrite <- land_assoc.
+    rewrite H. apply land_0.
+Qed. 
+
 (** * Tacticals. *)
 
 (** ** Main tactics.*)
+(*			
 Ltac rewrite_cst :=
   first [ Bits.rewrite_cst
         | COMPUTE1 bitwise_lsl Cst_Z Cst_nat	
@@ -1896,8 +2360,10 @@ Ltac rewrite_cst :=
         | COMPUTE1 lnot Cst_Z
         | COMPUTE1 zbit_test_def Cst_Z Cst_Z
         ].
+*)
 	
 (** Example of use. *)
+(*			
 Remark rewrite_cst_example: forall x, x + (land 0 (zlnot (land 0 5))) = x + Z_of_nat (ZxHpos 0).
 Proof.
   repeat rewrite_cst.

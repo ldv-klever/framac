@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -19,6 +19,8 @@
 (*  for more details (enclosed in the file licenses/LGPLv2.1).            *)
 (*                                                                        *)
 (**************************************************************************)
+
+(* Modified by TrustInSoft *)
 
 open Cil_types
 
@@ -75,11 +77,14 @@ let compare_annotations la1 la2 =
   | AAllocation _, AAllocation _ -> total_order
   | AAllocation _, _ -> -1
 
-  | AVariant _, APragma _ -> -1
+  | AVariant _, (APragma _ | AExtended _) -> -1
   | AVariant _, AVariant _ -> total_order
   | AVariant _, _ -> 1
+  | APragma _, AExtended _ -> -1
   | APragma _, APragma _ -> total_order
   | APragma _, _ -> 1
+  | AExtended _, AExtended _ -> total_order
+  | AExtended _, _ -> 1
 
 (* All annotations are extracted from module [Annotations].
    Generated global annotations are inserted before
@@ -173,7 +178,7 @@ class printer_with_annot () = object (self)
     Format.close_box ()
 
   method! global fmt glob =
-    if Kernel.PrintComments.get () then begin
+    if Kernel.PrintComments.get () && Cil_printer.print_global glob then begin
       let comments = Globals.get_comments_global glob in
       Pretty_utils.pp_list 
         ~sep:"@\n" ~suf:"@\n" 
@@ -182,16 +187,17 @@ class printer_with_annot () = object (self)
     (* Out of tree global annotations are pretty printed before the first
        variable declaration of the first function definition. *)
     (match glob with
-     | GVarDecl _ | GFun _ -> print_spec <- Ast.is_last_decl glob;
+     | GFunDecl _ | GFun _ -> print_spec <- Ast.is_def_or_last_decl glob;
      | _ -> ());
     super#global fmt glob
 
   method private begin_annotation fmt =
-    if is_ghost then Format.fprintf fmt "/@@" else Format.fprintf fmt "/*@@"
+    let pre = if is_ghost then Some ("@@/": Pretty_utils.sformat) else None in
+    self#pp_open_annotation ~block:false ?pre fmt
 
   method private end_annotation fmt =
-    if is_ghost then Format.fprintf fmt "@@/" 
-    else Format.fprintf fmt "*/"
+    let suf = if is_ghost then Some ("@@/": Pretty_utils.sformat) else None in
+    self#pp_close_annotation ~block:false ?suf fmt
 
   method private loop_annotations fmt annots =
     if annots <> [] then
@@ -238,20 +244,24 @@ class printer_with_annot () = object (self)
       let pGhost fmt s =
 	let was_ghost = is_ghost in
 	if not was_ghost && s.ghost then begin
-          Pretty_utils.pp_open_block fmt "@[/*@@ ghost " ;
+          Format.fprintf fmt "%t %a "
+            (fun fmt -> self#pp_open_annotation ~pre:"@[/*@@" fmt)
+            self#pp_acsl_keyword "ghost";
           is_ghost <- true
 	end;
 	self#stmtkind next fmt s.skind;
 	if not was_ghost && s.ghost then begin
-          Pretty_utils.pp_close_block fmt "@,*/@]";
+          self#pp_close_annotation ~suf:"@,*/@]" fmt;
           is_ghost <- false;
 	end
       in
       (match all_annot with
       | [] -> pGhost fmt s
       | [ a ] when Cil.is_skip s.skind && not s.ghost ->
-	Format.fprintf fmt "@[<hv>@[/*@@@ %a@;<1 1>*/@]@ %a@]"
+        Format.fprintf fmt "@[<hv>@[%t@ %a@;<1 1>%t@]@ %a@]"
+          (fun fmt -> self#pp_open_annotation ~block:false fmt)
           self#code_annotation a
+          (fun fmt -> self#pp_close_annotation ~block:false fmt)
           (self#stmtkind next) s.skind;
       | _ ->
 	let loop_annot, stmt_annot =
@@ -270,26 +280,30 @@ end (* class printer_with_annot *)
 include Printer_builder.Make(struct class printer = printer_with_annot end)
 
 (* initializing Cil_datatype's pretty printers *)
+let () = Cil_datatype.Location.pretty_ref := pp_location
 let () = Cil_datatype.Constant.pretty_ref := pp_constant
 let () = Cil_datatype.Exp.pretty_ref := pp_exp
 let () = Cil_datatype.Varinfo.pretty_ref := pp_varinfo
 let () = Cil_datatype.Lval.pretty_ref := pp_lval
 let () = Cil_datatype.Offset.pretty_ref := pp_offset
-let () = Cil_datatype.pretty_typ_ref := pp_typ
+let () = Cil_datatype.Typ.pretty_ref := pp_typ
 let () = Cil_datatype.Attribute.pretty_ref := pp_attribute
 let () = Cil_datatype.Stmt.pretty_ref := pp_stmt
 let () = Cil_datatype.Block.pretty_ref := pp_block
 let () = Cil_datatype.Instr.pretty_ref := pp_instr
 let () = Cil_datatype.Logic_var.pretty_ref := pp_logic_var
 let () = Cil_datatype.Model_info.pretty_ref := pp_model_info
-let () = Cil_datatype.pretty_logic_type_ref := pp_logic_type
+let () = Cil_datatype.Logic_label.pretty_ref := pp_logic_label
+let () = Cil_datatype.Logic_type.pretty_ref := pp_logic_type
 let () = Cil_datatype.Term.pretty_ref := pp_term
 let () = Cil_datatype.Term_lval.pretty_ref := pp_term_lval
 let () = Cil_datatype.Term_offset.pretty_ref := pp_term_offset
 let () = Cil_datatype.Code_annotation.pretty_ref := pp_code_annotation
+let () =
+  Cil_datatype.Fieldinfo.pretty_ref := (fun fmt f -> pp_varname fmt f.fname)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

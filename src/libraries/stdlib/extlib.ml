@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,11 +29,10 @@ let adapt_filename f =
     try Filename.chop_extension f ^ ext
     with Invalid_argument _ -> f ^ ext
   in
-  change_suffix
-    (if Dynlink_common_interface.is_native then ".cmxs" else ".cmo")
+  change_suffix (if FCDynlink.is_native then ".cmxs" else ".cmo")
 
 (* [max_cpt t1 t2] returns the maximum of [t1] and [t2] wrt the total ordering
-   induced by tags creation. This ordering is defined as follow:
+   induced by tags creation. This ordering is defined as follows:
    forall tags t1 t2,
    t1 <= t2 iff
    t1 is before t2 in the finite sequence
@@ -56,10 +55,10 @@ let number_to_color n =
 (** {2 Function builders} *)
 (* ************************************************************************* *)
 
-exception Unregistered_function of string 
+exception Unregistered_function of string
 
 let mk_labeled_fun s =
-  raise 
+  raise
     (Unregistered_function
        (Printf.sprintf "Function '%s' not registered yet" s))
 
@@ -159,6 +158,53 @@ let mapi f l =
     snd (List.fold_left (fun (i,acc) x -> (i+1,f i x :: acc)) (0,[]) l)
   in List.rev res
 
+(* Remove duplicates from a sorted list *)
+let list_unique cmp l =
+  let rec aux acc = function
+   | [] -> acc
+   | [e] -> e :: acc
+   | e1 :: (e2 :: _ as q) ->
+     if cmp e1 e2 = 0 then aux acc q else aux (e1 :: acc) q
+  in
+  List.rev (aux [] l)
+
+(* Remove once OCaml 4.02 is mandatory *)
+let sort_unique cmp l = list_unique cmp (List.sort cmp l)
+
+let subsets k l =
+  let rec aux k l len =
+    if k = 0 then [[]]
+    else if len < k then []
+    else if len = k then [l]
+    else
+      match l with
+      | h :: t ->
+        let l1 = List.map (fun sl -> h :: sl) (aux (k-1) t (len-1)) in
+        let l2 = aux k t (len-1)
+        in l1 @ l2
+      | [] -> assert false
+  in aux k l (List.length l)
+
+(* ************************************************************************* *)
+(** {2 Arrays} *)
+(* ************************************************************************* *)
+
+let array_exists f a =
+  try
+    for i = 0 to Array.length a - 1 do
+      if f a.(i) then raise Exit
+    done;
+    false
+  with Exit -> true
+
+let array_existsi f a =
+  try
+    for i = 0 to Array.length a - 1 do
+      if f i a.(i) then raise Exit
+    done;
+    false
+  with Exit -> true
+
 (* ************************************************************************* *)
 (** {2 Options} *)
 (* ************************************************************************* *)
@@ -205,7 +251,13 @@ let opt_filter f = function
   | None -> None
   | (Some x) as o -> if f x then o else None
 
-let the = function None -> invalid_arg "Extlib.the" | Some x -> x
+let the ?exn = function
+  | None ->
+    begin match exn with
+      | None -> invalid_arg "Extlib.the"
+      | Some exn -> raise exn
+    end
+  | Some x -> x
 
 let find_or_none f v = try Some(f v) with Not_found -> None
 
@@ -234,8 +286,12 @@ let xor x y = if x then not y else y
 (** {2 Performance} *)
 (* ************************************************************************* *)
 
+(* replace "noalloc" with [@@noalloc] for OCaml version >= 4.03.0 *)
+[@@@ warning "-3"]
 external getperfcount: unit -> int = "getperfcount" "noalloc"
 external getperfcount1024: unit -> int = "getperfcount1024" "noalloc"
+external address_of_value: 'a -> int = "address_of_value" "noalloc"
+[@@@ warning "+3"]
 
 let gentime counter ?msg f x =
   let c1 = counter () in
@@ -272,24 +328,32 @@ let _time2 name f =
     Format.eprintf "timing of %s: %d (%d)@." name !cpt diff;
     res
 
-external address_of_value: 'a -> int = "address_of_value" "noalloc"
-
 (* ************************************************************************* *)
 (** {2 Exception catcher} *)
 (* ************************************************************************* *)
 
 let try_finally ~finally f x =
-  try
-    let r = f x in
-    finally ();
-    r
-  with e ->
-    finally ();
-    raise e
+  let r = try f x with e -> finally () ; raise e in
+  finally () ; r
 
 (* ************************************************************************* *)
 (** System commands *)
 (* ************************************************************************* *)
+
+(*[LC] due to Unix.exec calls, at_exit might be cloned into child process
+  and executed when they are canceled early.
+
+  The alternative, such as registering an dameon that raises an exception,
+  hence interrupting the process, might not work: child processes still need to
+  run some daemons, such as [Pervasives.flush_all] which is registered by default. *)
+
+let pid = Unix.getpid ()
+let safe_at_exit f =
+  Pervasives.at_exit
+    begin fun () ->
+      let child = Unix.getpid () in
+      if child = pid then f ()
+    end
 
 let safe_remove f = try Unix.unlink f with Unix.Unix_error _ -> ()
 
@@ -303,7 +367,7 @@ let rec safe_remove_dir d =
     Unix.rmdir d
   with Unix.Unix_error _ | Sys_error _ -> ()
 
-let cleanup_at_exit f = at_exit (fun () -> safe_remove f)
+let cleanup_at_exit f = safe_at_exit (fun () -> safe_remove f)
 
 exception Temp_file_error of string
 
@@ -313,16 +377,17 @@ let temp_file_cleanup_at_exit ?(debug=false) s1 s2 =
     with Sys_error s -> raise (Temp_file_error s)
   in
   (try close_out out with Unix.Unix_error _ -> ());
-  at_exit 
-    (fun () -> 
-      if debug then begin
-        (* If the caller decided to erase this file after all, don't
-           print anything *)
-        if Sys.file_exists file then
-          Format.printf
-            "@[[extlib] Debug flag was set: not removing file %s@]@." file;
-      end else
-        safe_remove file) ;
+  safe_at_exit
+    begin fun () ->
+      if debug then
+        begin
+          if Sys.file_exists file then
+            Format.printf
+              "[extlib] Debug: not removing file %s@." file;
+        end
+      else
+        safe_remove file
+    end ;
   file
 
 let temp_dir_cleanup_at_exit ?(debug=false) base =
@@ -332,46 +397,65 @@ let temp_dir_cleanup_at_exit ?(debug=false) base =
     safe_remove file;
     try
       Unix.mkdir dir 0o700 ;
-      at_exit
-        (fun () ->
-          if debug then begin
-            if Sys.file_exists dir then
-              Format.printf
-                "@[[extlib] Debug flag was set: not removing dir %s@]@." dir;
-          end else
-            safe_remove_dir dir);
+      safe_at_exit
+        begin fun () ->
+          if debug then
+            begin
+              if Sys.file_exists dir then
+                Format.printf
+                  "[extlib] Debug: not removing dir %s@." dir;
+            end
+          else
+            safe_remove_dir dir
+        end ;
       dir
-    with Unix.Unix_error _ ->
+    with Unix.Unix_error(err,_,_) ->
       if limit < 0 then
-        let msg =
-          Printf.sprintf "Impossible to create temporary directory ('%s')" dir
-        in
-        raise (Temp_file_error msg)
+        raise (Temp_file_error (Unix.error_message err))
       else
         try_dir_cleanup_at_exit (pred limit) base
   in
   try_dir_cleanup_at_exit 10 base
 
+(* replace "noalloc" with [@@noalloc] for OCaml version >= 4.03.0 *)
+[@@@ warning "-3"]
 external terminate_process: int -> unit = "terminate_process" "noalloc"
-  (* In src/buckx/buckx_c.c *)
+    [@@deprecated "Use Unix.kill instead"]
+  (* In ../utils/c_binding.c ; can be replaced by Unix.kill in OCaml >= 4.02 *)
 
 external usleep: int -> unit = "ml_usleep" "noalloc"
-  (* In src/buckx/buckx_c.c ; man usleep for details. *)
+  (* In ../utils/c_bindings.c ; man usleep for details. *)
 
 (* ************************************************************************* *)
 (** Strings *)
 (* ************************************************************************* *)
 
+external compare_strings: string -> string -> int -> bool = "compare_strings" "noalloc"
+[@@@ warning "+3"]
+
 let string_prefix ?(strict=false) prefix s =
   let add = if strict then 1 else 0 in
   String.length s >= String.length prefix + add
-  && String.sub s 0 (String.length prefix) = prefix
+  && compare_strings prefix s (String.length prefix)
 
 let string_del_prefix ?(strict=false) prefix s =
   if string_prefix ~strict prefix s then
-    Some 
+    Some
       (String.sub s
          (String.length prefix) (String.length s - String.length prefix))
+  else None
+
+let string_suffix ?(strict=false) suffix s =
+  let len = String.length s in
+  let suf_len = String.length suffix in
+  let strict_len = if strict then suf_len + 1 else suf_len in
+  len >= strict_len &&
+  compare_strings suffix (String.sub s (len - suf_len) suf_len) suf_len
+
+let string_del_suffix ?(strict=false) suffix s =
+  if string_suffix ~strict suffix s then
+    Some
+      (String.sub s 0 (String.length s - String.length suffix))
   else None
 
 let string_split s i =
@@ -392,13 +476,13 @@ let make_unique_name mem ?(sep=" ") ?(start=2) from =
 
 external compare_basic: 'a -> 'a -> int = "%compare"
 
-
-let pretty_position fmt p =
-  Format.fprintf fmt "<f:%s l:%d bol:%d c:%d>"
-    p.Lexing.pos_fname p.Lexing.pos_lnum p.Lexing.pos_bol p.Lexing.pos_cnum
+let compare_ignore_case s1 s2 =
+  String.compare
+    (Transitioning.String.lowercase_ascii s1)
+    (Transitioning.String.lowercase_ascii s2)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

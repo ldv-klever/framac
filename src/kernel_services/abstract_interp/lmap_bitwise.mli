@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -56,9 +56,12 @@ module type Location_map_bitwise = sig
     unit ->
     t Pretty_utils.formatter
 
+  val pretty_debug: t Pretty_utils.formatter
+
   val add_binding : reducing:bool -> exact:bool -> t -> Zone.t -> v -> t
   val add_binding_loc: reducing:bool -> exact:bool -> t -> location -> v -> t
   val add_base: Base.t -> LOffset.t -> t -> t
+  val remove_base: Base.t -> t -> t
 
   val find : t -> Zone.t -> v
 
@@ -108,23 +111,24 @@ module type Location_map_bitwise = sig
       in particular the fact that [both] and [conv] are not fused.) *)
 
   val map2:
-    Hptmap.cache_type -> idempotent:bool -> empty_neutral: bool ->
-    (LOffset.t -> LOffset.t -> LOffset.map2_decide) ->
+    cache:Hptmap_sig.cache_type -> symmetric:bool -> idempotent:bool ->
+    empty_neutral: bool -> (LOffset.t -> LOffset.t -> LOffset.map2_decide) ->
     (v -> v -> v) -> map -> map -> map
   (** 'map'-like function between two interval maps, implemented as a
       simultaneous descent in both maps.
-      [map2 cache ~idempotent ~empty_neutral decide_fast f m1 m2] computes the
-      map containing [k |-> f v_1 v_2] for all the keys [k] present in either
-      [m1] or [m2]. When a key is present, [v_i] is the corresponding value in
-      the map. When it is missing in one of the maps, a default value is
+      [map2 ~cache ~symmetric ~idempotent ~empty_neutral decide_fast f m1 m2]
+      computes the map containing [k |-> f v_1 v_2] for all the keys [k] present
+      in either [m1] or [m2]. When a key is present, [v_i] is the corresponding
+      value in the map. When it is missing in one of the maps, a default value is
       generated. (See argument [default] to functor {!Make_bitwise} below.)
 
-      [idempotent], [empty_neutral] and [decide_fast] are present for
-      optimisation purposes, to avoid visiting some trees. If [idempotent]
-      holds, [f v v = v] must also holds. Similarly, if [empty_neutral] holds,
+      [symmetric], [idempotent], [empty_neutral] and [decide_fast] are present
+      for optimisation purposes, to avoid visiting some trees. If [symmetric]
+      holds, [f v1 v2 = f v2 v1] must also holds. If [idempotent] holds,
+      [f v v = v] must also holds. Similarly, if [empty_neutral] holds,
       [f v default = f default v = v] must hold. [decide_fast] is called before
       visiting two subtrees, and can be used to stop the recursion early. See
-      the documentation of {!Offsetmap_sig.map2_decide}. 
+      the documentation of {!Offsetmap_sig.map2_decide}.
 
       Depending on the value of [cache], the results of this function will be
       cached. *)
@@ -152,6 +156,6 @@ module Make_bitwise(V : With_default) : Location_map_bitwise with type v = V.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

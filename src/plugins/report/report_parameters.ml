@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,4 +55,22 @@ module Specialized =
       let option_name = "-report-specialized"
       let help = "display properties that are auxiliary instances of other \
           properties."
+     end)
+
+module Proven =
+  True
+    (struct
+      let option_name = "-report-proven"
+      let help = "if set, output proven properties. Otherwise, only unproven \
+                   ones are shown."
+     end)
+
+
+module CSVFile =
+  String
+    (struct
+      let option_name = "-report-csv"
+      let arg_name = "name"
+      let default = ""
+      let help = "if set, output properties as a csv file of the given name"
      end)

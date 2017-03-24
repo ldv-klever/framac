@@ -3,10 +3,10 @@
    logic integer c2fc4_lbtest (integer x, integer n) ;
    predicate c2fc4_btest (integer x, integer n) = c2fc4_lbtest (x, n) != 0;
 
-   lemma btest_bnot: \forall integer x,n ; n>0 ==> ((TRIGGER:c2fc4_btest(~x,n)) <==> !c2fc4_btest(x,n));
-   lemma btest_bxor: \forall integer x,y,n ; n>0 ==> ((TRIGGER:c2fc4_btest(x^y,n)) <==> ((c2fc4_btest(x,n) ^^ c2fc4_btest(y,n))));
-   lemma btest_bor:  \forall integer x,y,n ; n>0 ==> ((TRIGGER:c2fc4_btest(x|y,n)) <==> ((c2fc4_btest(x,n) || c2fc4_btest(y,n))));
-   lemma btest_band: \forall integer x,y,n ; n>0 ==> ((TRIGGER:c2fc4_btest(x&y,n)) <==> ((c2fc4_btest(x,n) && c2fc4_btest(y,n))));
+   axiom btest_bnot: \forall integer x,n ;   n>0 ==> ((TRIGGER:c2fc4_btest(~x,n)) <==> !c2fc4_btest(x,n));
+   axiom btest_bxor: \forall integer x,y,n ; n>0 ==> ((TRIGGER:c2fc4_btest(x^y,n)) <==> ((c2fc4_btest(x,n) ^^ c2fc4_btest(y,n))));
+   axiom btest_bor:  \forall integer x,y,n ; n>0 ==> ((TRIGGER:c2fc4_btest(x|y,n)) <==> ((c2fc4_btest(x,n) || c2fc4_btest(y,n))));
+   axiom btest_band: \forall integer x,y,n ; n>0 ==> ((TRIGGER:c2fc4_btest(x&y,n)) <==> ((c2fc4_btest(x,n) && c2fc4_btest(y,n))));
 }
 
 

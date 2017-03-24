@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -136,7 +136,7 @@ class propagate project fnames ~cast_intro = object(self)
         | Some s -> Kstmt s
       in
       let evaled = !Db.Value.access_expr ki expr in
-      let k,m = Cvalue.V.find_lonely_binding evaled in
+      let b, m = Cvalue.V.find_lonely_binding evaled in
       let can_replace vi =
         (* can replace the current expr by [vi] iff (1) it is a source var, or
            expansion of non-source var is allowed. *)
@@ -148,14 +148,14 @@ class propagate project fnames ~cast_intro = object(self)
              (Kernel_function.is_formal_or_local vi) ~dft:false
              self#current_kf)
       in
-      let change_to = match k with
-        | Base.Var(vi,_)
-        | Base.Initialized_Var (vi,_) when can_replace vi ->
+      let change_to = match b with
+        | Base.Var(vi, _) | Base.Allocated (vi, _)
+          when not (Base.is_weak b) &&  can_replace vi ->
           if vi.vglob && not (Varinfo.Set.mem vi known_globals) then
             self#add_decl_non_source_var vi;
           PropagationParameters.debug
             "Trying replacing %a from a pointer value {&%a + %a}"
-            Printer.pp_exp expr Base.pretty k Ival.pretty m;
+            Printer.pp_exp expr Base.pretty b Ival.pretty m;
           let offset = Ival.project_int m in (* these are bytes *)
           let expr' =
             try
@@ -216,7 +216,7 @@ class propagate project fnames ~cast_intro = object(self)
             expr'
 
         | Base.Null ->
-	  let const_integer m ikind =
+          let const_integer m ikind =
             try
               let v = Ival.project_int m in
               if not (Cil.fitsInInt ikind v) then
@@ -226,27 +226,25 @@ class propagate project fnames ~cast_intro = object(self)
                   Printer.pp_typ typ;
               Cil.kinteger64 ~loc ~kind:ikind v
             with Ival.Not_Singleton_Int -> raise Cannot_expand
-	  and const_float m fkind =
+          and const_float m fkind =
             try
-	      let v = Ival.project_float m in
-	      let f1,f2 =  Ival.Float_abstract.min_and_max_float v in
-	      if not (Ival.F.equal f1 f2) then raise Cannot_expand ;
-	      let f = Ival.F.to_float f1 in
-	      Cil.kfloat ~loc:expr.eloc fkind f
-	    with Ival.F.Nan_or_infinite -> raise Cannot_expand
-	  in
+              let f = Ival.project_float m in
+              let f =  Fval.(F.to_float (project_float f)) in
+              Cil.kfloat ~loc:expr.eloc fkind f
+            with Fval.Not_Singleton_Float | Ival.Nan_or_infinite ->
+              raise Cannot_expand
+          in
           (match typ_e with
           | TFloat (fkind, _) -> const_float m fkind
           | TInt (ikind, _) | TEnum ({ ekind = ikind}, _) ->
             const_integer m ikind
           | _ -> raise Cannot_expand)
 
-        | Base.String _ | Base.Var _ | Base.Initialized_Var _
+        | Base.String _ | Base.Var _ | Base.Allocated _
         | Base.CLogic_Var _ -> raise Cannot_change
       in  
       PropagationParameters.debug "Replacing %a with %a"
-	Printer.pp_exp expr
-        Printer.pp_exp change_to;
+        Printer.pp_exp expr Printer.pp_exp change_to;
       Some change_to
     with 
     | Cannot_change -> None
@@ -257,6 +255,10 @@ class propagate project fnames ~cast_intro = object(self)
       None
 
   method! vexpr expr =
+    (* nothing is done for [expr] already being a constant *)
+    match expr.enode with
+    | Const (_) -> Cil.DoChildren
+    | _ -> begin
     (* Start by trying to constant-propagate all of [expr]. Casts are allowed
        only if -scf-allow-cast is set *)
     match self#propagated expr ~ignore_const_cast:false with
@@ -279,6 +281,7 @@ class propagate project fnames ~cast_intro = object(self)
       end
       | _ -> Cil.DoChildren
     end
+    end
 
   method! vvdec v =
     if v.vglob then begin
@@ -292,7 +295,7 @@ class propagate project fnames ~cast_intro = object(self)
        some earlier values. If so, we will skip [g]. We do this check now and
        not in [add_decls], because [self#vvdec] will mark g as known. *)
     let g_is_known = match g with
-      | GVarDecl (_, vi, _) -> Varinfo.Set.mem vi known_globals
+      | GVarDecl (vi, _) | GFunDecl (_, vi, _) -> Varinfo.Set.mem vi known_globals
       | _ -> false
     in
     let add_decls l =
@@ -301,10 +304,15 @@ class propagate project fnames ~cast_intro = object(self)
       (* Add declarations for the globals that are referenced in g's propagated
          value. *)
       Varinfo.Set.fold
-        (fun x l ->
+        (fun vi l ->
           PropagationParameters.feedback ~level:2
-            "Adding declaration of global %a" Printer.pp_varinfo x;
-          GVarDecl(Cil.empty_funspec(),x,x.vdecl)::l)
+            "Adding declaration of global %a" Printer.pp_varinfo vi;
+          let g' =
+            if Cil.isFunctionType vi.vtype
+            then GFunDecl(Cil.empty_funspec(), vi, vi.vdecl)
+            else GVarDecl(vi, vi.vdecl)
+          in
+          g' ::l)
         must_add_decl l
     in
     Cil.DoChildrenPost add_decls
@@ -407,6 +415,6 @@ let () =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

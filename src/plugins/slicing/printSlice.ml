@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -253,7 +253,7 @@ module PrintProject = struct
           | Other -> (`Fillcolor color_soft_green)
         in color ::[`Shape `Ellipse]
     |  Action (_, crit) ->
-        let label = Pretty_utils.sfprintf "%a" SlicingActions.print_crit crit in
+        let label = Format.asprintf "%a" SlicingActions.print_crit crit in
         let attrib = [] in
         let attrib = (`Label label)::attrib in
         let attrib = (`Fillcolor color_soft_pink)::attrib in
@@ -338,6 +338,6 @@ let print_fct_stmts fmt (_proj, kf) =
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

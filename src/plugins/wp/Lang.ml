@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,16 +34,16 @@ open Qed.Logic
 
 let basename def name =
   let rec lookup def s k n =
-    if k < n then 
+    if k < n then
       let c = s.[k] in
-      if ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z') 
+      if ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
       then String.sub s k 1
       else lookup def s (succ k) n
     else def
   in lookup def name 0 (String.length name)
 
 (* -------------------------------------------------------------------------- *)
-(* Naming Prefixes                                                           
+(* Naming Prefixes
    Names starting with a lower-case character belong to logic language
    or external model(s).
 
@@ -53,7 +53,7 @@ let basename def name =
    'S_<s>' Structure <s>
    'U_<u>' Union <u>
    'F_<c>_<f>' Field <f> in compound <c>
-   'A_<t>' ACSL Logic type <t> 
+   'A_<t>' ACSL Logic type <t>
    'C_<c>' ACSL Constructor <c>
    'P_<p>' ACSL Predicate <p> (see LogicUsage.get_name)
    'L_<f>' ACSL Logic function <f> (see LogicUsage.get_name)
@@ -64,27 +64,29 @@ let basename def name =
    'Is<phi>' Typing predicate for type <phi>
    'Null<phi>' Null value for type <phi>
 *)
-let avoid_leading_backlash s = 
-  if s.[0]='\\' then 
-    let s = String.copy s in
-    s.[0]<-'_';
-    s
-  else s
+let avoid_leading_backlash s =
+  String.mapi (fun i c -> if i = 0 && c = '\\' then '_' else c) s
 
-let comp_id c = 
-  if c.cstruct 
-  then Printf.sprintf "S_%s" c.cname
-  else Printf.sprintf "U_%s" c.cname
+let comp_id c =
+  let prefix = if c.cstruct then 'S' else 'U' in
+  if c.corig_name = "" then
+    Printf.sprintf "%c%d" prefix c.ckey
+  else
+    Printf.sprintf "%c%d_%s" prefix c.ckey c.corig_name
 
 let field_id f =
-  Printf.sprintf "F_%s_%s" f.fcomp.cname f.fname
+  let c = f.fcomp in
+  if c.corig_name = "" then
+    Printf.sprintf "F%d_%s" c.ckey f.fname
+  else
+    Printf.sprintf "F%d_%s_%s" c.ckey c.corig_name f.fname
 
 let type_id l =
   Printf.sprintf "A_%s" l.lt_name
 
 let logic_id f =
   let name = avoid_leading_backlash (LogicUsage.get_name f) in
-  if f.l_type = None 
+  if f.l_type = None
   then Printf.sprintf "P_%s" name
   else Printf.sprintf "L_%s" name
 
@@ -116,7 +118,7 @@ let map_infoprover f i = {
 
 type library = string
 
-type adt = 
+type adt =
   | Mtype of mdt (* Model type *)
   | Mrecord of mdt * fields (* Model record-type *)
   | Atype of logic_type_info (* Logic Type *)
@@ -190,16 +192,15 @@ let rec tau_of_ltype t = match Logic_utils.unroll_type t with
   | Ctype typ -> tau_of_ctype typ
   | Lvar x -> Logic.Tvar (varpoly 1 x (Context.get poly))
   | Larrow _ ->
-      Warning.error "array type non-supported(%a)" 
+      Warning.error "array type non-supported(%a)"
         Printer.pp_logic_type t
   | Ltype _ as b when Logic_const.is_boolean_type b -> Logic.Bool
-  | Ltype(lt,ps) -> 
-      try
-        let mdt = Hashtbl.find builtins lt.lt_name in
-        assert (ps = []) ;
-        Logic.Data(Mtype mdt,[])
-      with Not_found ->
-        Logic.Data(Atype lt,List.map tau_of_ltype ps)
+  | Ltype(lt,ps) ->
+      let tau =
+        (*TODO: check arity *)
+        try Mtype(Hashtbl.find builtins lt.lt_name)
+        with Not_found -> Atype lt
+      in Logic.Data(tau,List.map tau_of_ltype ps)
 
 let tau_of_return l = match l.l_type with
   | None -> Logic.Prop
@@ -255,13 +256,21 @@ end
 (* --- Datatypes                                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
-let atype t = 
+let atype t =
   try Mtype(Hashtbl.find builtins t.lt_name)
   with Not_found -> Atype t
 
 let builtin_type ~name ~link ~library =
   let m = new_extern ~link ~library ~debug:name in
   Hashtbl.add builtins name m
+
+let is_builtin_type ~name = function
+  | Data(Mtype m,_) ->
+      begin
+        try m == Hashtbl.find builtins name
+        with Not_found -> false
+      end
+  | _ -> false
 
 let datatype ~library name =
   let m = new_extern ~link:(infoprover name) ~library ~debug:name in
@@ -315,7 +324,7 @@ struct
     | Mfield(_,_,f,_) -> FCHashtbl.hash f
     | Cfield f -> Fieldinfo.hash f
 
-  let compare f g = 
+  let compare f g =
     if f==g then 0 else
       match f , g with
       | Mfield(_,_,f,_) , Mfield(_,_,g,_) -> String.compare f g
@@ -358,7 +367,7 @@ and source =
 
 let tau_of_lfun = function
   | ACSL f -> tau_of_return f
-  | CTOR c -> 
+  | CTOR c ->
       if c.ctor_type.lt_params = [] then Logic.Data(Atype c.ctor_type,[])
       else raise Not_found
   | Model { m_result = Some t } -> t
@@ -426,11 +435,11 @@ let extern_f ~library ?link ?balance ?category ?params ?sort ?result name =
   symbolf ~library ?category ?params ?link ?balance ?sort ?result name
 
 let extern_p ~library ?bool ?prop ?link ?(params=[]) () =
-  let link = 
+  let link =
     match bool,prop,link with
     | Some b , Some p , None -> infoprover (Engine.F_bool_prop(b,p))
-    | _ , _ , Some info -> info 
-    | _ , _ , _ -> assert false 
+    | _ , _ , Some info -> info
+    | _ , _ , _ -> assert false
   in
   let debug = Export.debug link.altergo in
   Model {
@@ -456,10 +465,10 @@ let extern_fp ~library ?(params=[]) ?link phi =
                          ~debug:phi)
   }
 
-let generated_f ?category ?params ?sort ?result name = 
+let generated_f ?category ?params ?sort ?result name =
   symbolf ?category ?params ?sort ?result name
 
-let generated_p name = 
+let generated_p name =
   Model {
     m_category = Logic.Function ;
     m_params = [] ;
@@ -558,13 +567,20 @@ class virtual idprinting =
 (* --- Terms                                                              --- *)
 (* -------------------------------------------------------------------------- *)
 
-module F = 
+module F =
 struct
 
-  module ZInteger = 
+  module ZInteger =
   struct
     include Integer
     let leq = Integer.le
+    let div = Integer.c_div (* acsl division *)
+    let rem = Integer.c_rem (* acsl remainder *)
+    let div_rem a b = (* acsl division, remainder *)
+      let sa, a = if leq zero a then true, a else false, neg a in
+      let sb, b = if leq zero b then true, b else false, neg b in
+      let d,r = div_rem a b in
+      (if sa == sb then d else neg d), (if sa then r else neg r)
   end
 
   module T = Qed.Term.Make(ZInteger)(ADT)(Field)(Fun)
@@ -575,7 +591,7 @@ struct
   (* --- Qed Projectified State                                             --- *)
   (* -------------------------------------------------------------------------- *)
 
-  module DATA = 
+  module DATA =
     Datatype.Make
       (struct
         type t = T.state
@@ -589,25 +605,26 @@ struct
         let copy _old = T.create ()
         let varname = Datatype.undefined
         let pretty = Datatype.undefined
-        let internal_pretty_code = Datatype.undefined 
+        let internal_pretty_code = Datatype.undefined
         let mem_project _ _ = false
       end)
 
-  module STATE =
-    State_builder.Register(DATA)
-      (struct
-        type t = T.state
-        let create = T.create
-        let clear = T.clr_state
-        let get = T.get_state 
-        let set = T.set_state
-        let clear_some_projects _ _ = false
-      end)
-      (struct
-        let name = "Wp.Qed"
-        let dependencies = []
-        let unique_name = name
-      end)
+  include
+    (State_builder.Register(DATA)
+       (struct
+         type t = T.state
+         let create = T.create
+         let clear = T.clr_state
+         let get = T.get_state
+         let set = T.set_state
+         let clear_some_projects _ _ = false
+       end)
+       (struct
+         let name = "Wp.Qed"
+         let dependencies = [Ast.self]
+         let unique_name = name
+       end)
+     : sig end)
 
   (* -------------------------------------------------------------------------- *)
   (* --- Term API                                                           --- *)
@@ -620,37 +637,34 @@ struct
   (* --- Term Checking                                                      --- *)
   (* -------------------------------------------------------------------------- *)
 
-  let do_checks = ref false
-  let iter_checks f = T.iter_checks 
-      (fun ~qed ~raw -> f ~qed ~raw ~goal:(T.check_unit ~qed ~raw))
+  module Check =
+  struct
+    let refs = Hashtbl.create 8
+    let empty = ref true
+    let register c =
+      let r = ref false in
+      Hashtbl.add refs c r ; r
 
-  let e_add a b = 
-    let r = T.e_add a b in
-    if !do_checks then T.check (Add[a;b]) r else r
-  let e_sum xs = 
-    let r = T.e_sum xs in
-    if !do_checks then T.check (Add xs) r else r
-  let e_times k x = 
-    let r = T.e_times k x in
-    if !do_checks then T.check (Times(k,x)) r else r
-  let e_opp x =
-    let r = T.e_opp x in
-    if !do_checks then T.check (Times(Z.minus_one,x)) r else r
-  let e_leq a b =
-    let r = T.e_leq a b in
-    if !do_checks then T.check (Leq(a,b)) r else r
-  let e_lt a b =
-    let r = T.e_lt a b in
-    if !do_checks then T.check (Lt(a,b)) r else r
-  let e_eq a b =
-    let r = T.e_eq a b in
-    if !do_checks then T.check (Eq(a,b)) r else r
-  let e_neq a b =
-    let r = T.e_neq a b in
-    if !do_checks then T.check (Neq(a,b)) r else r
-  let e_fun f xs =
-    let r = T.e_fun f xs in
-    if !do_checks then T.check (Fun(f,xs)) r else r
+    let reset () =
+      Hashtbl.iter (fun _ r -> r := false) refs ; empty := true
+
+    let set c =
+      try (Hashtbl.find refs c) := true ; empty := false
+      with Not_found ->
+        Wp_parameters.warning "[Lang] unknown check '%s'" c
+
+    let iter f =
+      T.iter_checks
+        (fun ~qed ~raw -> f ~qed ~raw ~goal:(T.check_unit ~qed ~raw))
+
+    let is_set () = !empty
+  end
+
+  let e_imply =
+    let c = Check.register "e_imply" in
+    fun a b ->
+      let r = T.e_imply a b in
+      if !c then T.check (Imply(a,b)) r else r
 
   (* -------------------------------------------------------------------------- *)
   (* --- Term Extensions                                                    --- *)
@@ -665,7 +679,7 @@ struct
   let e_one_real  = T.constant (e_real (R.of_string "1.0"))
   let e_zero_real = T.constant (e_real (R.of_string "0.0"))
 
-  let hex_of_float f = 
+  let hex_of_float f =
     Pretty_utils.to_string (Floating_point.pretty_normal ~use_hex:true) f
 
   let e_int64 z = e_zint (Z.of_string (Int64.to_string z))
@@ -677,7 +691,7 @@ struct
 
   let e_setfield r f v =
     (*TODO:NUPW: check for UNIONS *)
-    let r = List.map 
+    let r = List.map
         (fun g -> g,if Field.equal f g then v else e_getfield r g)
         (fields_of_field f)
     in e_record r
@@ -715,7 +729,7 @@ struct
 
   let p_true = e_true
   let p_false = e_false
-
+  
   let p_not = e_not
   let p_bind = e_bind
   let p_forall = e_forall
@@ -735,8 +749,11 @@ struct
   let p_all f xs = e_and (List.map f xs)
   let p_any f xs = e_or (List.map f xs)
 
+  let e_vars e = List.sort Var.compare (Vars.elements (vars e))
+  let p_vars = e_vars
+  
   let p_call = e_fun
-  let p_close p = p_forall (Vars.elements (vars p)) p
+  let p_close p = p_forall (p_vars p) p
 
   let occurs x t = Vars.mem x (vars t)
   let intersect a b = Vars.intersect (vars a) (vars b)
@@ -744,13 +761,23 @@ struct
   let intersectp = intersect
   let varsp = vars
   let pred = repr
+  let epred = repr
+  let p_iter fp fe p =
+    match T.repr p with
+    | True | False | Kint _ | Kreal _ | Fvar _ | Bvar _ -> ()
+    | Eq(a,b) | Neq(a,b) when T.is_prop a && T.is_prop b -> fp a ; fp b
+    | Eq _ | Neq _ | Leq _ | Lt _ | Times _ | Add _ | Mul _ | Div _ | Mod _
+    | Aget _ | Aset _ | Rget _ | Rdef _ | Fun _ | Apply _ -> T.lc_iter fe p
+    | And _ | Or _ | Imply _ | If _ | Not _ | Bind _ -> T.lc_iter fp p
+                                                          
   let idp = id
 
-  let pp_term fmt e = 
+  let pp_tau = Pretty.pp_tau
+  let pp_term fmt e =
     if Wp_parameters.has_dkey "pretty"
     then T.debug fmt e
-    else Pretty.pp_term Pretty.empty fmt e 
-  let pp_pred fmt p = 
+    else Pretty.pp_term Pretty.empty fmt e
+  let pp_pred fmt p =
     if Wp_parameters.has_dkey "pretty"
     then T.debug fmt p
     else Pretty.pp_term Pretty.empty fmt p
@@ -784,10 +811,10 @@ struct
   module Pmap = Tmap
   module Pset = Tset
 
-  let set_builtin_1 f r = 
+  let set_builtin_1 f r =
     set_builtin f (function [e] -> r e | _ -> raise Not_found)
 
-  let set_builtin_2 f r = 
+  let set_builtin_2 f r =
     set_builtin f (function [a;b] -> r a b | _ -> raise Not_found)
 
   let set_builtin_eqp = set_builtin_eq
@@ -800,8 +827,8 @@ open F
 (* --- Fresh Variables & Local Assumptions                                --- *)
 (* -------------------------------------------------------------------------- *)
 
-type gamma = { 
-  mutable hyps : pred list ; 
+type gamma = {
+  mutable hyps : pred list ;
   mutable vars : var list ;
 }
 
@@ -835,7 +862,7 @@ let local ?pool ?gamma f =
 let masked = ref false
 
 let without_assume job x =
-  if !masked 
+  if !masked
   then job x
   else
     try masked := true ; let y = job x in masked := false ; y
@@ -849,9 +876,9 @@ let assume p =
 let epsilon ?basename t phi =
   let d = Context.get cgamma in
   let x = freshvar ?basename t in
-  let e = e_var x in 
-  d.hyps <- phi e :: d.hyps ; 
-  d.vars <- x :: d.vars ; 
+  let e = e_var x in
+  d.hyps <- phi e :: d.hyps ;
+  d.vars <- x :: d.vars ;
   e
 
 let hypotheses g = g.hyps
@@ -875,7 +902,7 @@ struct
 
   let get w x =
     try Vmap.find x !w
-    with Not_found -> 
+    with Not_found ->
       let y = freshen x in
       w := Vmap.add x y !w ; y
 

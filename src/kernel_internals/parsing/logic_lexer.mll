@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -202,11 +202,15 @@
         "\\valid_read", VALID_READ;
         "\\valid_index", VALID_INDEX;
         "\\valid_range", VALID_RANGE;
+        "\\valid_function", VALID_FUNCTION;
         "\\with", WITH;
       ];
     fun lexbuf ->
       let s = lexeme lexbuf in
-      try Hashtbl.find h s with Not_found -> IDENTIFIER s
+      try Hashtbl.find h s with Not_found ->         
+	if Logic_env.typename_status s then TYPENAME s
+        else
+	  IDENTIFIER s
 
 
   let int_of_digit chr =
@@ -217,33 +221,21 @@
       | _ -> assert false
 
   (* Update lexer buffer. *)
-  let update_newline_loc lexbuf =
+  let update_line_loc lexbuf line =
     let pos = lexbuf.Lexing.lex_curr_p in
     lexbuf.Lexing.lex_curr_p <-
       { pos with
-	Lexing.pos_lnum = pos.Lexing.pos_lnum + 1;
+	Lexing.pos_lnum = line;
 	Lexing.pos_bol = pos.Lexing.pos_cnum;
       }
 
-  (* Update lexer buffer. *)
-  let update_line_loc lexbuf line absolute chars =
-    let pos = lexbuf.Lexing.lex_curr_p in
-    lexbuf.Lexing.lex_curr_p <-
-      { pos with
-	Lexing.pos_lnum =
-          if absolute then line else pos.Lexing.pos_lnum + line;
-	Lexing.pos_bol = pos.Lexing.pos_cnum - chars;
-      }
+  let update_newline_loc lexbuf =
+    update_line_loc lexbuf (lexbuf.Lexing.lex_curr_p.Lexing.pos_lnum + 1)
 
-  (* Update lexer buffer. *)
   let update_file_loc lexbuf file =
    let pos = lexbuf.Lexing.lex_curr_p in
     lexbuf.Lexing.lex_curr_p <- { pos with Lexing.pos_fname = file }
 
-  (* Update lexer buffer. *)
-  let update_bol_loc lexbuf bol =
-    let pos = lexbuf.Lexing.lex_curr_p in
-    lexbuf.Lexing.lex_curr_p <- { pos with Lexing.pos_bol = bol}
 }
 
 let space = [' ' '\t' '\012' '\r' '@' ]
@@ -331,6 +323,7 @@ rule token = parse
   | "+%"                    { PLUS_MOD }
   | "*"                     { STAR }
   | "*%"                    { STAR_MOD }
+  | "*^"                    { STARHAT }
   | "&"                     { AMP }
   | "^^"                    { HATHAT }
   | "^"                     { HAT }
@@ -352,6 +345,8 @@ rule token = parse
   | "}"                     { pop_state(); RBRACE }
   | "["                     { Stack.push Normal state_stack; LSQUARE }
   | "]"                     { pop_state(); RSQUARE }
+  | "[|"                    { Stack.push Normal state_stack; LSQUAREPIPE }
+  | "|]"                    { pop_state(); RSQUAREPIPE }
   | "<:"                    { LTCOLON }
   | ":>"                    { COLONGT }
   | "<<"                    { LTLT }
@@ -413,15 +408,17 @@ and hash = parse
 | rD+	        { (* We are seeing a line number. This is the number for the
                    * next line *)
                  let s = Lexing.lexeme lexbuf in
-                 let lineno = try
-                   int_of_string s
-                 with Failure ("int_of_string") ->
-                   (* the int is too big. *)
-                   Kernel.warning ~source:lexbuf.lex_start_p
-                     "Bad line number in preprocessed file: %s"  s;
-                   (-1)
+                 let lineno =
+                   try
+                     int_of_string s
+                   with Failure _ ->
+                     (* the int is too big. *)
+                     Kernel.warning
+                       ~source:lexbuf.lex_start_p
+                       "Bad line number in preprocessed file: %s"  s;
+                     (-1)
                  in
-                 update_line_loc lexbuf (lineno - 1) true 0;
+                 update_line_loc lexbuf (lineno - 1);
                   (* A file name may follow *)
 		  file lexbuf }
 | "line"        { hash lexbuf } (* MSVC line number info *)
@@ -447,17 +444,13 @@ and endline = parse
 |	_			{ endline lexbuf}
 
 {
-  let copy_lexbuf dest_lexbuf src_loc =
-    update_file_loc dest_lexbuf src_loc.pos_fname;
-    update_line_loc dest_lexbuf src_loc.pos_lnum true (src_loc.Lexing.pos_cnum - src_loc.Lexing.pos_bol)
-
-  let start_pos lexbuf =
-    let pos = lexeme_start_p lexbuf in
-    pos.Lexing.pos_cnum - pos.Lexing.pos_bol
-
-  let end_pos lexbuf =
-    let pos = lexeme_end_p lexbuf in
-    pos.Lexing.pos_cnum - pos.Lexing.pos_bol
+  let set_initial_location dest_lexbuf src_loc =
+    Lexing.(
+      dest_lexbuf.lex_curr_p <- 
+        { src_loc with
+          pos_bol = src_loc.pos_bol - src_loc.pos_cnum;
+          pos_cnum = 0; };
+    )
 
   let parse_from_location f (loc, s : Lexing.position * string) =
     let output = 
@@ -465,12 +458,13 @@ and endline = parse
       else Kernel.error ~once:false
     in
     let lb = from_string s in
-    copy_lexbuf lb loc;
+    set_initial_location lb loc;
     try
       let res = f token lb in
       lb.Lexing.lex_curr_p, res
     with
-      | Parsing.Parse_error as _e ->
+      | Failure _ (* raised by the lexer itself, through [f] *)
+      | Parsing.Parse_error ->
         output
 	  ~source:lb.lex_curr_p
           "unexpected token '%s'" (Lexing.lexeme lb);
@@ -484,11 +478,9 @@ and endline = parse
         output ~source:(fst loc) "%s" m;
         Logic_utils.exit_kw_c_mode ();
         raise Parsing.Parse_error
-     | exn ->
-        output ~source:lb.lex_curr_p "Unknown error (%s)"
-          (Printexc.to_string exn);
-        Logic_utils.exit_kw_c_mode ();
-        raise exn
+      | exn ->
+        Kernel.fatal ~source:lb.lex_curr_p "Unknown error (%s)"
+          (Printexc.to_string exn)
 
   let lexpr = parse_from_location Logic_parser.lexpr_eof
 
@@ -499,6 +491,11 @@ and endline = parse
   (* ACSL extension for external spec file *)
   let ext_spec = parse_from_location Logic_parser.ext_spec
 
+  type 'a parse = Lexing.position * string -> Lexing.position * 'a
+
+  let chr lexbuf =
+    let buf = Buffer.create 16 in
+    chr buf lexbuf
 }
 
 (*

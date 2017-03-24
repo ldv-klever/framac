@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,9 +44,11 @@ val forward: unit -> unit
     in the history. *)
 
 val push: history_elt -> unit
-
 (** Add the element to the current history; clears the forward history,
     and push the old current element to the past history. *)
+
+val set_forward: history_elt list -> unit
+(** Replaces the forward history with the given elements. *)
 
 val get_current: unit -> history_elt option
 (** return the current history point, if available
@@ -62,14 +64,14 @@ val on_current_history: unit -> ((unit -> unit) -> unit)
     will execute [f] in a context in which the history will be the
     one relevant when [on_current_history] was executed. *)
 
-val apply_on_selected: (Pretty_source.localizable -> unit) -> unit
-  (** [apply_on_selected f] applies [f] to the currently selected
-      [Pretty_source.localizable]. Does nothing if nothing is selected. *)
+val selected_localizable: unit -> Pretty_source.localizable option
+(** [selected_localizable ()] returns the localizable currently
+    selected, or [None] if nothing or an entire global is selected. *)
 
 val translate_history_elt: history_elt -> history_elt option
 (** try to translate the history_elt of one project to the current one
     @since Sodium-20150201
- *)
+*)
 
 (**/**)
 val set_display_elt_callback: (history_elt -> unit) -> unit
@@ -77,6 +79,6 @@ val create_buttons: Menu_manager.menu_manager -> Menu_manager.item array
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -47,12 +47,12 @@ let add_msg (main_ui:Design.main_window_extension_points) txt =
 let pretty_zone fmt z =
   Format.fprintf fmt "@[<h 1>%a@]" Locations.Zone.pretty z
 
-let ask_for_lval (main_ui:Design.main_window_extension_points) kf stmt =
+let ask_for_lval (main_ui:Design.main_window_extension_points) kf =
   let txt = GToolbox.input_string ~title:"Input lvalue expression" "" in
     match txt with None | Some "" -> None
       | Some txt ->
           try
-            let term_lval = !Db.Properties.Interp.lval kf stmt txt in
+            let term_lval = !Db.Properties.Interp.term_lval kf txt in
             let lval =
               !Db.Properties.Interp.term_lval_to_lval ~result:None term_lval
             in
@@ -62,31 +62,36 @@ let ask_for_lval (main_ui:Design.main_window_extension_points) kf stmt =
               txt (Printexc.to_string e);
             None
 
-let get_kf_stmt_opt localizable =
-  match (Pretty_source.kf_of_localizable localizable,
-         Pretty_source.ki_of_localizable localizable)
-  with
-      Some kf, Kstmt st -> Some(kf,st)
-    | Some _, Kglobal | None, _ -> None
-
 let get_annot_opt localizable = match localizable with
   | Pretty_source.PIP(Property.IPCodeAnnot(_,_,annot)) -> Some annot
   | _ -> None
 
-
-(** [kf_stmt_opt] is used if we want to ask the lval to the user in a popup *)
-let get_lval_opt main_ui kf_stmt_opt localizable =
+(** [kf_opt] is used if we want to ask the lval to the user in a popup *)
+let get_lval_opt main_ui kf_opt localizable =
   match localizable with
     | Pretty_source.PLval (Some _kf, (Kstmt _stmt), lv) ->
-        let lv_txt = Pretty_utils.sfprintf "%a" Printer.pp_lval lv in
+        let lv_txt = Format.asprintf "%a" Printer.pp_lval lv in
         Some (lv_txt, lv)
+    | PTermLval (Some _kf, Kstmt _stmt, _, tlv) -> begin
+        try
+          let lv =
+            !Db.Properties.Interp.term_lval_to_lval ~result:None tlv
+          in
+          let lv_txt = Format.asprintf "%a" Printer.pp_term_lval tlv in
+          Some (lv_txt, lv)
+        with Invalid_argument _ -> None
+      end
     | _ ->
-       ( match kf_stmt_opt with
+       ( match kf_opt with
          None -> None
-       | Some (kf, stmt) ->
-              match (ask_for_lval main_ui kf stmt) with
+       | Some kf ->
+              match (ask_for_lval main_ui kf) with
                 None -> None
               | Some (lv_txt, lv) -> Some (lv_txt, lv))
+
+let eval_lval =
+  let typ_lval_to_zone_gui = Datatype.func2 Stmt.ty Lval.ty Locations.Zone.ty in
+  Dynamic.get ~plugin:"Value" "lval_to_zone_gui" typ_lval_to_zone_gui
 
 module Kf_containing_highlighted_stmt =
   Kernel_function.Make_Table
@@ -280,7 +285,8 @@ module ShowDef : (DpdCmdSig with type t_in = lval) = struct
     Stmt.Map.fold aux m Stmt.Map.empty
 
   let compute kf stmt lv =
-    let r = !Db.Scope.get_defs_with_type kf stmt lv in
+    let z = eval_lval stmt lv in
+    let r = Defs.compute_with_def_type_zone kf stmt z in
     Datascope.R.feedback "Defs computed";
     match r with
       | None -> clear ();
@@ -290,7 +296,7 @@ module ShowDef : (DpdCmdSig with type t_in = lval) = struct
           let msg = match undef with
             | None -> ""
             | Some undef ->
-                Pretty_utils.sfprintf "[Show Defs] notice that %a %s"
+                Format.asprintf "[Show Defs] notice that %a %s"
                   pretty_zone undef
                   "may not be defined by this function at this point"
           in
@@ -344,7 +350,7 @@ module Zones : (DpdCmdSig with type t_in = lval)  = struct
           | Some (_kf, stmt) ->
               let z = !Db.Scope.get_zones zones stmt in
               let txt =
-                Pretty_utils.sfprintf "[zones] needed before stmt %d = %a"
+                Format.asprintf "[zones] needed before stmt %d = %a"
                   stmt.sid pretty_zone z
               in txt
     with Not_found -> ""
@@ -378,7 +384,6 @@ let help (main_ui:Design.main_window_extension_points) =
     add (Zones.help);
     add (DataScope.help);
     add (Pscope.help);
-    add ("All : call the 3 commands on the same D and L.");
     add ("Reset : reset the internal state for all the previous commands.")
 
 module DpdsState =
@@ -398,8 +403,11 @@ let reset () =
   Kf_containing_highlighted_stmt.clear ();
   !update_column `Contents
 
-let callbacks ?(defs=false) ?(zones=false) ?(scope=false) ?(pscope=false)
-    main_ui (kf, stmt, localizable) =
+(* Functions available in the contextual menu. One function disables the
+   others *)
+type funct = Defs | Zones | Scope | Pscope
+
+let callbacks funct main_ui (kf, stmt, localizable) =
   (* The messages printed here are (1) not really informative; (2) too short
      lived: after the 'information' panel has been cleared, they are never
      printed again. (And if the filetree filter is active, they are cleared just
@@ -410,41 +418,38 @@ let callbacks ?(defs=false) ?(zones=false) ?(scope=false) ?(pscope=false)
     if msg <> "" then add_msg main_ui msg
   in
   let set_txt x =
-    let txt = Pretty_utils.sfprintf
+    let txt = Format.asprintf
       "[dependencies] for %s before stmt %d in %a"
       x stmt.sid Kernel_function.pretty kf
     in
     DpdsState.set stmt;
     add_msg main_ui txt
   in
-  begin
-    if pscope then begin
-      reset ();
-      match get_annot_opt localizable with
-      | Some ({annot_content = (AAssert _)} as annot) ->
-          begin
-            set_txt ("annotation "^(string_of_int annot.annot_id));
-            compute Pscope.compute annot
-          end
-      | _ -> ()
-    end
-    else begin
-      Pscope.clear ();
-      match get_lval_opt main_ui (Some(kf, stmt)) localizable with
-      | None -> reset ()
-      | Some (lval_txt, lval) ->
-          begin
-            set_txt lval_txt;
-            if defs then compute ShowDef.compute lval else ShowDef.clear ();
-            if zones then compute Zones.compute lval else Zones.clear ();
-            if scope then compute DataScope.compute lval else DataScope.clear ()
-          end
-    end
+  let aux_on_lval funct_compute =
+    match get_lval_opt main_ui (Some kf) localizable with
+    | None -> ()
+    | Some (lval_txt, lval) ->
+      set_txt lval_txt;
+      compute funct_compute lval
+  in
+  reset ();
+  begin match funct with
+    | Pscope -> begin
+        match get_annot_opt localizable with
+        | Some ({annot_content = (AAssert _)} as annot) ->
+          set_txt ("annotation "^(string_of_int annot.annot_id));
+          compute Pscope.compute annot
+        | _ -> ()
+      end
+    | Defs -> aux_on_lval ShowDef.compute
+    | Zones -> aux_on_lval Zones.compute
+    | Scope -> aux_on_lval DataScope.compute
   end;
   main_ui#rehighlight ()
 
-let highlighter (buffer:GSourceView2.source_buffer) localizable ~start ~stop =
+let highlighter (buffer:Design.reactive_buffer) localizable ~start ~stop =
   try
+    let buffer = buffer#buffer in
     let start_s = DpdsState.get () in
     let put_tag tag = match tag with ("",[]) -> ()
       | _ -> add_tag buffer tag start stop
@@ -505,34 +510,30 @@ let selector (popup_factory:GMenu.menu GMenu.factory)
     begin
       let submenu = popup_factory#add_submenu "Dependencies" in
       let submenu_factory = new GMenu.factory submenu in
-
-        add_item main_ui ~use_values:false submenu_factory
-          "Help" (Some()) (fun _ -> help main_ui) ;
-
-        ignore (submenu_factory#add_separator ());
-
-      let kf_stmt_opt = get_kf_stmt_opt localizable in
-      let arg = match kf_stmt_opt with None -> None
-        | Some (kf, stmt) -> Some (kf, stmt, localizable)
+      add_item main_ui ~use_values:false submenu_factory
+        "Help" (Some()) (fun _ -> help main_ui) ;
+      ignore (submenu_factory#add_separator ());
+      let arg = match (Pretty_source.kf_of_localizable localizable,
+                       Pretty_source.ki_of_localizable localizable)
+        with
+        | Some kf, Kstmt st -> Some(kf, st, localizable)
+        | Some _, Kglobal | None, _ -> None
       in
-      let add_zones_item name cb =
+      let add_zones_item name funct =
         add_item main_ui ~use_values:true
           submenu_factory name arg
           (fun arg ->
-             main_ui#protect ~cancelable:true (fun () -> cb main_ui arg))
+             main_ui#protect ~cancelable:true
+               (fun () -> callbacks funct main_ui arg))
       in
+      add_zones_item "Show defs" Defs;
+      add_zones_item "Zones"     Zones;
+      add_zones_item "DataScope" Scope;
+      add_zones_item "PropScope" Pscope;
 
-        add_zones_item "Show defs" (callbacks ~defs:true);
-        add_zones_item "Zones"     (callbacks ~zones:true);
-        add_zones_item "DataScope" (callbacks ~scope:true);
-        add_zones_item "PropScope" (callbacks ~pscope:true);
-
-        ignore (submenu_factory#add_separator ());
-        add_zones_item "Show All"
-                       (callbacks ~defs:true ~zones:true  ~scope:true);
-
-        add_item main_ui ~use_values:false submenu_factory "Reset All" (Some())
-                        (fun _ -> reset () ; main_ui#rehighlight ())
+      ignore (submenu_factory#add_separator ());
+      add_item main_ui ~use_values:false submenu_factory "Reset All" (Some())
+        (fun _ -> reset () ; main_ui#rehighlight ())
     end
 
 let filetree_decorate main_ui =

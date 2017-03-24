@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,7 +36,7 @@ class printer : Format.formatter -> string ->
 val pp_file : message:string -> file:string -> unit
 
 (** never fails *)
-class type pattern = 
+class type pattern =
   object
     method get_after : ?offset:int -> int -> string
     (** [get_after ~offset:p k] returns the end of the message
@@ -68,14 +68,16 @@ class virtual command : string ->
     method add_list : name:string -> string list -> unit
     method timeout : int -> unit
     method validate_time : (float -> unit) -> unit
-    method validate_pattern : ?logs:logs -> ?repeat:bool -> 
+    method validate_pattern : ?logs:logs -> ?repeat:bool ->
       Str.regexp -> (pattern -> unit) -> unit
-    method run : ?echo:bool -> ?logout:string -> ?logerr:string -> 
+    method run : ?echo:bool -> ?logout:string -> ?logerr:string ->
       unit -> int Task.task
 
   end
 
-val server : unit -> Task.server
+val server : ?procs:int -> unit -> Task.server
 
-val spawn : bool Task.task list -> unit
-(** Spawn all the tasks over the server and retain the first 'validated' one *)
+val spawn : ?monitor:('a option -> unit) -> ('a * bool Task.task) list -> unit
+(** Spawn all the tasks over the server and retain the first 'validated' one.
+    The callback [monitor] is called with [Some] at first success, and [None]
+    if none succeed. *)

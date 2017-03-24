@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,7 +38,7 @@ val pp_region : bool -> Format.formatter -> identified_term from list -> unit
 (** prints message "nothing" or the "'<names>'" or the "(<location>)" of the
     relation *) 
 
-val pp_named: Format.formatter -> 'a named -> unit
+val pp_named: Format.formatter -> predicate -> unit
 (** prints the name of a named logic structure (if any), separated by ','. *)
 
 val pp_for : Format.formatter -> string list -> unit
@@ -67,6 +67,6 @@ val full_compare : Property.t -> Property.t -> int
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

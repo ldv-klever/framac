@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -105,6 +105,7 @@ module Memory : sig
   val add_binding_precise_loc:
     exact:bool -> t -> Precise_locs.precise_location -> Deps.t -> t
   val bind_var: Cil_types.varinfo -> Deps.t -> t -> t
+  val unbind_var: Cil_types.varinfo -> t -> t
 
   val map: (DepsOrUnassigned.t -> DepsOrUnassigned.t) -> t -> t
 
@@ -175,6 +176,6 @@ val inputs: ?include_self:bool -> froms -> Locations.Zone.t
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

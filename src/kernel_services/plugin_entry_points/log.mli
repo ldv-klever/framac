@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,8 +21,7 @@
 (**************************************************************************)
 
 (** Logging Services for Frama-C Kernel and Plugins.
-    @since Beryllium-20090601-beta1
-    @plugin development guide *)
+    @since Beryllium-20090601-beta1 *)
 
 open Format
 
@@ -32,6 +31,7 @@ type kind = Result | Feedback | Debug | Warning | Error | Failure
 type event = {
   evt_kind : kind ;
   evt_plugin : string ;
+  evt_dkey : string option ;
   evt_source : Lexing.position option ;
   evt_message : string ;
 }
@@ -72,12 +72,14 @@ type ('a,'b) pretty_aborter =
     @since Beryllium-20090601-beta1 *)
 (* -------------------------------------------------------------------------- *)
 
-exception AbortError of string (** Plug-in name *)
-  (** User error that prevents a plugin to terminate.
+exception AbortError of string
+  (** User error that prevents a plugin to terminate. Argument is the name
+      of the plugin.
       @since Beryllium-20090601-beta1 *)
 
-exception AbortFatal of string (** Plug-in name *)
-  (** Internal error that prevents a plugin to terminate.
+exception AbortFatal of string
+  (** Internal error that prevents a plugin to terminate. Argument is the
+      name of the plugin.
       @since Beryllium-20090601-beta1 *)
 
 exception FeatureRequest of string * string
@@ -98,6 +100,13 @@ type category = private string
     Enabling a category (via -plugin-msg-category) will enable all its
     subcategories.
     @since Fluorine-20130401 *)
+
+type ontty = [
+  | `Message   (** Normal message (default) *)
+  | `Feedback  (** Temporary visible on console, normal message otherwise *)
+  | `Transient (** Temporary visible, only on console *)
+  | `Silent    (** Not visible on console *)
+]
 
 module Category_set: FCSet.S with type elt = category
 (** sets of category keywords *)
@@ -131,10 +140,11 @@ module type Messages = sig
         @since Beryllium-20090601-beta1
 	@plugin development guide *)
 
-  val feedback : ?level:int -> ?dkey:category -> 'a pretty_printer
+  val feedback : ?ontty:ontty -> ?level:int -> ?dkey:category -> 'a pretty_printer
     (** Progress and feedback. Level is tested against the verbosity level.
         @since Beryllium-20090601-beta1
-        @modify Fluorine-20130401 added dkey argument
+        @modify Fluorine-20130401 Optional parameter [?dkey]
+        @modify Magnesium-20151001 Optional parameter [?ontty]
 	@plugin development guide *)
 
   val debug   : ?level:int -> ?dkey:category -> 'a pretty_printer
@@ -144,28 +154,6 @@ module type Messages = sig
         @since Beryllium-20090601-beta1
 	@modify Nitrogen-20111001 Optional parameter [dkey]
 	@plugin development guide *)
-
-  val debug0   : ?level:int -> ?dkey:category ->
-    unit pretty_printer
-  val debug1   : ?level:int -> ?dkey:category ->
-    ('a -> unit) pretty_printer
-  val debug2   : ?level:int -> ?dkey:category ->
-    ('a -> 'b -> unit) pretty_printer
-  val debug3   : ?level:int -> ?dkey:category ->
-    ('a -> 'b -> 'c -> unit) pretty_printer
-  val debug4   : ?level:int -> ?dkey:category ->
-    ('a -> 'b -> 'c -> 'd -> unit) pretty_printer
-  val debug5   : ?level:int -> ?dkey:category ->
-    ('a -> 'b -> 'c -> 'd -> 'e -> unit) pretty_printer
-  val debug6   : ?level:int -> ?dkey:category ->
-    ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> unit) pretty_printer
-  val debug7   : ?level:int -> ?dkey:category ->
-    ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g -> unit) pretty_printer
-  val debug8   : ?level:int -> ?dkey:category ->
-    ('a -> 'b -> 'c -> 'd -> 'e -> 'f -> 'g -> 'h -> unit) pretty_printer
-  (** Specific versions of {!debug} with fixed arity that are a lot
-      faster than the generic version when debbuging is not
-      activated. *)
 
   val warning : 'a pretty_printer
   (** Hypothesis and restrictions.
@@ -252,6 +240,8 @@ module type Messages = sig
 
   val register_category: string -> category
   (** register a new debugging/verbose category.
+      Note: this should not be used directly by plug-in developers;
+      use instead [Plugin.S.Debug_category.add].
       @since Fluorine-20130401
    *)
 
@@ -268,6 +258,8 @@ module type Messages = sig
     (** adds categories corresponding to string (including potential
         subcategories) to the set of categories for which messages are
         to be displayed.
+        Note: this should not be used directly by plug-in developers;
+        use instead [Plugin.S.Debug_category.add].
 	@since Fluorine-20130401 use categories instead of plain string
      *)
 
@@ -379,6 +371,9 @@ val get_current_source : unit -> Lexing.position
     Not to be used by casual users. *)
 (* -------------------------------------------------------------------------- *)
 
+val clean : unit -> unit
+  (** Flushes the last transient message if necessary. *)
+
 val null : formatter
   (** Prints nothing.
       @since Beryllium-20090901 *)
@@ -391,7 +386,7 @@ val with_null : (unit -> 'b) -> ('a,formatter,unit,'b) format4 -> 'a
   (** Discards the message and call the continuation.
       @since Beryllium-20090901 *)
 
-val set_output : (string -> int -> int -> unit) -> (unit -> unit) -> unit
+val set_output : ?isatty:bool -> (string -> int -> int -> unit) -> (unit -> unit) -> unit
   (** This function has the same parameters as Format.make_formatter.
       @since Beryllium-20090901 
       @plugin development guide *)
@@ -428,10 +423,13 @@ val check_not_yet: (event -> bool) ref
   (* Checks whether a message been emitted already, in which case it is
      not reprinted. Currently set in {Messages}. Not for the casual user.
   *)
+
+val tty : (unit -> bool) ref
+  (* Callback for command-line option '-(no)-tty' *)
 (**/**)
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,22 +24,42 @@ module Make
   (P: sig class printer: unit -> Printer_api.extensible_printer_type end) = 
 struct
 
-  class extensible_printer = P.printer
-  let mk_printer = ref (new extensible_printer)
+  module type PrinterClass = sig
+    class printer : Printer_api.extensible_printer_type
+  end
+
+  let printer_class_ref =
+    ref (module struct class printer = P.printer () end: PrinterClass)
+
   let printer_ref = ref None
-  let printer () = match !printer_ref with
+
+  module type PrinterExtension = functor (X: PrinterClass) -> PrinterClass
+
+  let set_printer p =
+    printer_class_ref := p;
+    printer_ref := None
+
+  let update_printer x =
+    let module X = (val x: PrinterExtension) in
+    let module Cur = (val !printer_class_ref: PrinterClass) in
+    let module Updated = X(Cur) in
+    set_printer (module Updated: PrinterClass)
+
+  let printer () : Printer_api.extensible_printer_type =
+    match !printer_ref with
     | None ->
-      let p = !mk_printer () in
+      let module Printer = (val !printer_class_ref: PrinterClass) in
+      let p = new Printer.printer in
       printer_ref := Some p;
       p#reset ();
       p
     | Some p ->
       p#reset ();
       p
-    
-  let change_printer new_printer = 
-    mk_printer := new_printer;
-    printer_ref := None
+
+  let current_printer () = !printer_class_ref
+
+  class extensible_printer = P.printer
 
   let without_annot f fmt x = (printer ())#without_annot f fmt x
   let force_brace f fmt x = (printer ())#force_brace f fmt x
@@ -81,8 +101,8 @@ struct
   let pp_term fmt x = (printer ())#term fmt x
   let pp_model_field fmt x = (printer())#model_field fmt x
   let pp_term_offset fmt x = (printer ())#term_offset fmt x
+  let pp_predicate_node fmt x = (printer ())#predicate_node fmt x
   let pp_predicate fmt x = (printer ())#predicate fmt x
-  let pp_predicate_named fmt x = (printer ())#predicate_named fmt x
   let pp_identified_predicate fmt x = (printer ())#identified_predicate fmt x
   let pp_code_annotation fmt x = (printer ())#code_annotation fmt x
   let pp_funspec fmt x = (printer ())#funspec fmt x
@@ -103,6 +123,6 @@ end
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

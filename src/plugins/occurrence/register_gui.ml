@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -96,7 +96,7 @@ let find_occurrence (main_ui:Design.main_window_extension_points) vi () =
 let apply_on_vi f localizable = match localizable with
   | PVDecl(_,vi)
   | PLval(_, _, (Var vi, NoOffset))
-  | PTermLval(_, _, (TVar { lv_origin = Some vi }, TNoOffset)) ->
+  | PTermLval(_, _, _, (TVar { lv_origin = Some vi }, TNoOffset)) ->
       if not (Cil.isFunctionType vi.vtype) then
         f vi
   | _ -> ()
@@ -108,6 +108,7 @@ let occurrence_highlighter buffer loc ~start ~stop =
         ()
     | Some (result, vi) ->
         let result = filter_accesses result in
+        let buffer = buffer#buffer in
         let highlight () =
           let tag = make_tag buffer "occurrence" [`BACKGROUND "yellow" ] in
           apply_tag buffer tag start stop
@@ -118,7 +119,7 @@ let occurrence_highlighter buffer loc ~start ~stop =
               Kinstr.equal k ki && Lval.equal l lval
             in
             if List.exists same_lval result then highlight ()
-        | PTermLval (_,ki,term_lval) ->
+        | PTermLval (_,ki,_,term_lval) ->
             let same_tlval (_kf, k, l) =
               Logic_utils.is_same_tlval
                 (Logic_utils.lval_to_term_lval ~cast:true l)
@@ -251,6 +252,6 @@ let () = Design.register_extension main
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

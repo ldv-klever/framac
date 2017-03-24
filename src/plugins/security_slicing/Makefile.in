@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2015                                               #
+#  Copyright (C) 2007-2016                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -23,10 +23,10 @@
 # Do not use ?= to initialize both below variables
 # (fixed efficiency issue, see GNU Make manual, Section 8.11)
 ifndef FRAMAC_SHARE
-FRAMAC_SHARE  :=$(shell frama-c -journal-disable -print-path)
+FRAMAC_SHARE  :=$(shell frama-c-config -print-share-path)
 endif
 ifndef FRAMAC_LIBDIR
-FRAMAC_LIBDIR :=$(shell frama-c -journal-disable -print-libpath)
+FRAMAC_LIBDIR :=$(shell frama-c-config -print-libpath)
 endif
 
 PLUGIN_DIR ?=.
@@ -35,7 +35,6 @@ PLUGIN_DYNAMIC:=@DYNAMIC_SECURITY_SLICING@
 PLUGIN_NAME:=Security_slicing
 PLUGIN_CMO:= security_slicing_parameters components
 PLUGIN_GUI_CMO:= register_gui
-PLUGIN_HAS_MLI:=yes
 PLUGIN_UNDOC:= analysis
 PLUGIN_DISTRIBUTED:=$(PLUGIN_ENABLE)
 PLUGIN_DISTRIB_EXTERNAL:= Makefile.in configure.ac configure

@@ -51,7 +51,6 @@ open Extlib
 open Cil_types
 open Cil
 module H = Hashtbl
-module A = Alpha
 
 open Logic_utils
 
@@ -381,15 +380,15 @@ end
  * name space. Unfortunately, because of the way the C lexer works, type
  * names must be different from variable names!! We one alpha table both for
  * variables and types. *)
-let vtAlpha : (string, location A.alphaTableData ref) H.t
+let vtAlpha : (string, location Alpha.alphaTableData ref) H.t
     = H.create 57 (* Variables and
                    * types *)
-let sAlpha : (string, location A.alphaTableData ref) H.t
+let sAlpha : (string, location Alpha.alphaTableData ref) H.t
     = H.create 57 (* Structures and
                    * unions have
                    * the same name
                    * space *)
-let eAlpha : (string, location A.alphaTableData ref) H.t
+let eAlpha : (string, location Alpha.alphaTableData ref) H.t
     = H.create 57 (* Enumerations *)
 
 let aeAlpha = H.create 57 (* Anonymous enums. *)
@@ -506,7 +505,7 @@ module EnumMerging =
               (e1.ename = e2.ename &&
                   (e2.ename <- 
                     fst 
-                    (A.newAlphaName
+                    (Alpha.newAlphaName
                        aeAlpha e2.ename Cil_datatype.Location.unknown);
                    false))
            ))
@@ -834,7 +833,7 @@ let rec combineTypes (what: combineWhat)
             k
           else (
             let msg =
-              Pretty_utils.sfprintf
+              Format.asprintf
 		"different integer types %a and %a"
 		Cil_printer.pp_typ oldt Cil_printer.pp_typ t
             in
@@ -959,7 +958,7 @@ let rec combineTypes (what: combineWhat)
   | _ -> (
       (* raise (Failure "different type constructors") *)
     let msg:string =
-      Pretty_utils.sfprintf
+      Format.asprintf
         "different type constructors: %a vs. %a"
         Cil_printer.pp_typ oldt Cil_printer.pp_typ t
     in
@@ -1035,12 +1034,12 @@ and matchCompInfo (oldfidx: int) (oldci: compinfo)
         (* Our assumption was wrong. Forget the isomorphism *)
         undo ();
         let fields_old = 
-          Pretty_utils.sfprintf "%a"
+          Format.asprintf "%a"
 	    Cil_printer.pp_global
 	    (GCompTag(oldci, Cil_datatype.Location.unknown)) 
 	in
 	let fields =
-          Pretty_utils.sfprintf "%a"
+          Format.asprintf "%a"
             Cil_printer.pp_global (GCompTag(ci, Cil_datatype.Location.unknown))
 	in
 	let fullname_old = compFullName oldci in 
@@ -1050,21 +1049,21 @@ and matchCompInfo (oldfidx: int) (oldci: compinfo)
 	    fields_old = fields (* Could also use a special comparison *)
 	  with
 	    true, true ->
-	      Pretty_utils.sfprintf
+	      Format.asprintf
 		"Definitions of %s are not isomorphic. Reason follows:@\n@?%s"
 		fullname_old reason
 	  | false, true ->
-	      Pretty_utils.sfprintf
+	      Format.asprintf
 		"%s and %s are not isomorphic. Reason follows:@\n@?%s"
 		fullname_old fullname reason
 	  | true, false ->
-	      Pretty_utils.sfprintf
+	      Format.asprintf
 		"Definitions of %s are not isomorphic. \
                  Reason follows:@\n@?%s@\n@?%s@?%s"
 		fullname_old reason
 		fields_old fields
 	  | false, false ->
-	      Pretty_utils.sfprintf
+	      Format.asprintf
 		"%s and %s are not isomorphic. Reason follows:@\n@?%s@\n@?%s@?%s"
 		fullname_old fullname reason
 		fields_old fields
@@ -1421,7 +1420,7 @@ Now is %a and previous was %a at %a"
   in
   List.iter
     (function
-       | GVarDecl (_,vi, l) | GVar (vi, _, l) ->
+       | GVarDecl (vi, l) | GVar (vi, _, l) | GFunDecl (_, vi, l)->
            CurrentLoc.set l;
            incr currentDeclIdx;
            vi.vreferenced <- false;
@@ -1486,7 +1485,7 @@ Now is %a and previous was %a at %a"
        | GEnumTagDecl (ei,_) -> ei.ereferenced <- false
        | GEnumTag (ei, l) ->
            incr currentDeclIdx;
-           ignore (A.newAlphaName aeAlpha ei.ename l);
+           ignore (Alpha.newAlphaName aeAlpha ei.ename l);
            ei.ereferenced <- false;
            ignore 
              (EnumMerging.getNode eEq eSyn !currentFidx ei ei
@@ -1879,7 +1878,7 @@ class renameInlineVisitorClass = object
   (* And rename some declarations of inlines to remove. We cannot drop this
    * declaration (see small1/combineinline6) *)
   method! vglob = function
-      GVarDecl(spec,vi, l) when vi.vinline -> begin
+    | GFunDecl(spec,vi, l) when vi.vinline -> begin
         (* Get the original name *)
         let origname =
           try H.find originalVarNames vi.vname
@@ -1890,7 +1889,7 @@ class renameInlineVisitorClass = object
           None -> DoChildren
         | Some (vi', _) ->
             (*TODO: visit the spec to change references to formals *)
-            ChangeTo [GVarDecl (spec,vi', l)]
+            ChangeTo [GFunDecl (spec,vi', l)]
       end
     | _ -> DoChildren
 
@@ -2221,7 +2220,7 @@ let oneFilePass2 (f: file) =
         (* Maybe it is static. Rename it then *)
         if vi.vstorage = Static then begin
           let newName, _ =
-	    A.newAlphaName vtAlpha vi.vname (CurrentLoc.get ())
+            Alpha.newAlphaName vtAlpha vi.vname (CurrentLoc.get ())
 	  in
           let formals_decl =
             try Some (Cil.getFormalsDecl vi)
@@ -2261,7 +2260,17 @@ let oneFilePass2 (f: file) =
       end
     in
     match g with
-      | GVarDecl (spec,vi, l) as g ->
+      | GVarDecl (vi, l) as g ->
+          CurrentLoc.set l;
+          incr currentDeclIdx;
+          let vi' = processVarinfo vi l in
+          if vi == vi' && not (H.mem emittedVarDecls vi'.vname) then begin
+            H.add emittedVarDecls vi'.vname true; (* Remember that we emitted
+                                                   * it  *)
+            mergePushGlobals (visitCilGlobal renameVisitor g)
+          end
+
+      | GFunDecl (spec,vi, l) as g ->
           CurrentLoc.set l;
           incr currentDeclIdx;
           let vi' = processVarinfo vi l in
@@ -2387,8 +2396,9 @@ let oneFilePass2 (f: file) =
 	    in
             let printout =
               (* Temporarily turn of printing of lines *)
-              let oldprintln = miscState.lineDirectiveStyle in
-              miscState.lineDirectiveStyle <- None;
+              let oldprintln =
+                Cil_printer.state.Printer_api.line_directive_style in
+              Cil_printer.state.Printer_api.line_directive_style <- None;
               (* Temporarily set the name to all functions in the same way *)
               let newname = fdec'.svar.vname in
               (* If we must do alpha conversion then temporarily set the
@@ -2421,8 +2431,8 @@ let oneFilePass2 (f: file) =
                 List.iter renameOne fdec'.slocals
               end;
               (* Now print it *)
-              let res = Pretty_utils.sfprintf "%a" Cil_printer.pp_global g' in
-              miscState.lineDirectiveStyle <- oldprintln;
+              let res = Format.asprintf "%a" Cil_printer.pp_global g' in
+              Cil_printer.state.Printer_api.line_directive_style <- oldprintln;
               fdec'.svar.vname <- newname;
               if mergeInlinesWithAlphaConvert then begin
                 (* Do the locals in reverse order *)
@@ -2559,7 +2569,8 @@ let oneFilePass2 (f: file) =
                      ci.cname;
                  end);
                 let newname, _ =
-                  A.newAlphaName sAlpha ci.cname (CurrentLoc.get ()) in
+                  Alpha.newAlphaName sAlpha ci.cname (CurrentLoc.get ())
+                in
                 ci.cname <- newname;
                 ci.creferenced <- true;
                 (* Now we should visit the fields as well *)
@@ -2584,7 +2595,7 @@ let oneFilePass2 (f: file) =
             with
               None -> (* We must rename it *)
                 let newname, _ =
-                  A.newAlphaName eAlpha ei.ename (CurrentLoc.get ())
+                  Alpha.newAlphaName eAlpha ei.ename (CurrentLoc.get ())
                 in
                 ei.ename <- newname;
                 ei.ereferenced <- true;
@@ -2593,7 +2604,7 @@ let oneFilePass2 (f: file) =
                 List.iter
                   (fun item ->
                      let newname,_ =
-                       A.newAlphaName vtAlpha item.einame item.eiloc
+                       Alpha.newAlphaName vtAlpha item.einame item.eiloc
                      in
                      item.einame <- newname)
                   ei.eitems;
@@ -2637,7 +2648,7 @@ let oneFilePass2 (f: file) =
             with
               None -> (* We must rename it and keep it *)
                 let newname, _ =
-                  A.newAlphaName vtAlpha ti.tname (CurrentLoc.get ())
+                  Alpha.newAlphaName vtAlpha ti.tname (CurrentLoc.get ())
                 in
                 ti.tname <- newname;
                 ti.treferenced <- true;
@@ -2663,11 +2674,11 @@ let oneFilePass2 (f: file) =
       List.rev
         (List.rev_map
            (function
-                GVar(vi,{init=None},loc) as g ->
+              | GVar(vi,{init=None},loc) as g ->
                   (try let (_,real_init,_) = H.find emittedVarDefn vi.vname
-                   in (match real_init with
-                           None -> g
-                         | Some _ -> GVarDecl(empty_funspec(),vi,loc))
+                   in match real_init with
+                   | None -> g
+                   | Some _ -> GVarDecl(vi,loc)
                    with Not_found -> g)
               | g -> g)
            !theFile)
@@ -2742,7 +2753,7 @@ let global_merge_spec g =
      with Not_found ->
        Kernel.debug ~dkey "No spec_to_merge";
        rename fdec.svar fdec.sspec)
-  | GVarDecl(spec,v,loc) ->
+  | GFunDecl(spec,v,loc) ->
     Kernel.debug ~dkey "Merging global declaration %a" Cil_printer.pp_global g;
     (try
        let specs = Cil_datatype.Varinfo.Hashtbl.find spec_to_merge v in
@@ -2750,7 +2761,7 @@ let global_merge_spec g =
 	 (fun s -> 
 	   Kernel.debug ~dkey "Found spec to merge %a" Cil_printer.pp_funspec s)
          specs;
-       Kernel.debug "Renaming %a" Cil_printer.pp_funspec spec ;
+       Kernel.debug ~dkey "Renaming %a" Cil_printer.pp_funspec spec ;
        rename v spec;
        (* The registered specs might also need renaming up to 
           definition's formals instead of declaration's ones. *)
@@ -2837,13 +2848,13 @@ let move_spec globals =
     in
     let res, to_declare =
       match g with
-          GVarDecl (_,v,l) ->
+        | GFunDecl (_,v,l) ->
             let needs = used_vars g in
             let missing = Cil_datatype.Logic_var.Set.diff needs known in
             if Cil_datatype.Logic_var.Set.is_empty missing then
               g::res, to_declare
             else 
-              (GVarDecl(Cil.empty_funspec (),v,l)::res,
+              (GFunDecl(Cil.empty_funspec (),v,l)::res,
                Cil_datatype.Varinfo.Map.add v (g,missing) to_declare)
         | GFun (f,l) ->
           let needs = used_vars g in
@@ -2854,7 +2865,7 @@ let move_spec globals =
 	      if Cil_datatype.Varinfo.Set.mem f.svar c_known then
 		res 
 	      else
-		GVarDecl(Cil.empty_funspec (),f.svar,l)::res
+		GFunDecl(Cil.empty_funspec (),f.svar,l)::res
 	    in
 	    res, Cil_datatype.Varinfo.Map.add f.svar (g,missing) to_declare
         | _ -> (g::res,to_declare)
@@ -2879,8 +2890,7 @@ let move_spec globals =
 
 let merge (files: file list) (newname: string) : file =
   init ();
-
-  Cilmsg.push_errors ();
+  Errorloc.clear_errors ();
 
   (* Make the first pass over the files *)
   currentFidx := 0;
@@ -2939,23 +2949,12 @@ let merge (files: file list) (newname: string) : file =
   (* We have made many renaming changes and sometimes we have just guessed a
    * name wrong. Make sure now that the local names are unique. *)
   uniqueVarNames res;
-  let res =
-    if Cilmsg.had_errors () then
-      begin
-        Kernel.error "Error during linking@." ;
-        { fileName = newname;
-	  globals = [];
-	  globinit = None;
-	  globinitcalled = false }
-      end
-    else
-      res
-  in
-  Cilmsg.pop_errors ();
+  if Errorloc.had_errors () then
+    Kernel.abort "error encountered during linking@." ;
   res
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

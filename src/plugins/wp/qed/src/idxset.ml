@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,10 +63,10 @@ struct
   let empty = Intmap.empty
   let singleton x = Intmap.singleton (E.id x) x
 
-  (* good sharing *) 
+  (* good sharing *)
   let add x = Intmap.add (E.id x) x
 
-  (* good sharing *) 
+  (* good sharing *)
   let remove x = Intmap.remove (E.id x)
   let is_empty = Intmap.is_empty
   let mem x = Intmap.mem (E.id x)
@@ -79,13 +79,13 @@ struct
   let _keepq _ x _ = Some x
   let _same _ _ _ = true
 
-  (* good sharing *) 
+  (* good sharing *)
   let union = Intmap.union _keep
 
-  (* good sharing *) 
+  (* good sharing *)
   let inter = Intmap.interq _keepq
 
-  (* good sharing *) 
+  (* good sharing *)
   let diff = Intmap.diffq _keepq
   let subset = Intmap.subset _same
   let intersect = Intmap.intersectf _same
@@ -96,10 +96,10 @@ struct
   (* increasing order on id *)
   let fold f = Intmap.foldi (fun _i x e -> f x e)
 
-  (* good sharing *) 
+  (* good sharing *)
   let filter f = Intmap.filter (fun _i x -> f x)
 
-  (* good sharing *) 
+  (* good sharing *)
   let partition f = Intmap.partition (fun _i x -> f x)
 
   let for_all f = Intmap.for_all (fun _i x -> f x)
@@ -108,9 +108,9 @@ struct
   (* increasing order on id *)
   let elements = Intmap.mapl (fun _i x -> x)
 
-  (* good sharing *) 
+  (* good sharing *)
   let mapf f= Intmap.mapq (fun _i x -> f x)
 
-  (* good sharing *) 
+  (* good sharing *)
   let map f = Intmap.mapq (fun _i x -> Some (f x))
 end

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,7 +29,6 @@ open Cil_datatype
 
 let dummy () =
   { fundec = Definition (Cil.emptyFunction "@dummy@", Location.unknown);
-    return_stmt = None;
     spec = List.hd Funspec.reprs }
 
 let get_vi kf = Ast_info.Function.get_vi kf.fundec
@@ -43,10 +42,6 @@ let get_location kf = match kf.fundec with
 let get_type kf = (get_vi kf).vtype
 
 let get_return_type kf = Cil.getReturnType (get_type kf)
-
-let get_global f = match f.fundec with
-  | Definition (d, loc) -> GFun(d,loc)
-  | Declaration (spec, vi, _, loc) -> GVarDecl(spec, vi,loc)
 
 let get_formals f = match f.fundec with
   | Definition(d, _) -> d.sformals
@@ -83,9 +78,6 @@ module Kf =
 let self = Kf.self
 
 let auxiliary_kf_stmt_state = Kf.self
-
-let clear_sid_info () = Kf.clear ()
-let () = Cfg.clear_sid_info_ref := clear_sid_info
 
 let compute () =
   Kf.memo
@@ -129,9 +121,7 @@ let find_from_sid sid =
 
 let find_englobing_kf stmt = snd (find_from_sid stmt.sid)
 
-let blocks_closed_by_edge s1 s2 =
-  if not (List.exists (Stmt.equal s2) s1.succs) then
-    raise (Invalid_argument "Kernel_function.edge_exits_block");
+let blocks_closed_by_edge_aux s1 s2 =
   let table = compute () in
   try
   let _,_,b1 = Datatype.Int.Hashtbl.find table s1.sid in
@@ -149,9 +139,19 @@ let blocks_closed_by_edge s1 s2 =
         else aux (inner_block::acc) others
   in aux [] b1
   with Not_found ->
-    Format.eprintf "Unknown statements:@\n%d: %a@\n%d: %a@."
-      s1.sid Cil_printer.pp_stmt s1 s2.sid Cil_printer.pp_stmt s2;
-    raise Not_found
+    (* Invalid statement, or incorrectly filled table 'Kf' *)
+    Kernel.fatal "Unknown statement sid:%d or sid:%d" s1.sid s2.sid
+
+let blocks_closed_by_edge s1 s2 =
+  if not (List.exists (Stmt.equal s2) s1.succs) then
+    raise (Invalid_argument "Kernel_function.blocks_closed_by_edge");
+  blocks_closed_by_edge_aux s1 s2
+
+let blocks_opened_by_edge s1 s2 =
+  if not (List.exists (Stmt.equal s2) s1.succs) then
+    raise (Invalid_argument "Kernel_function.blocks_opened_by_edge");
+  blocks_closed_by_edge_aux s2 s1
+
 
 let find_enclosing_block s =
   let table = compute () in
@@ -219,31 +219,42 @@ let find_enclosing_loop kf stmt =
 exception Got_return of stmt
 exception No_Statement
 
+module ReturnCache =
+  Cil_state_builder.Kernel_function_hashtbl
+    (Cil_datatype.Stmt)
+    (struct
+      let name = "Kernel_function.ReturnCache"
+      let dependencies = [Ast.self]
+      let size = 43
+    end)
+
+let () = Ast.add_monotonic_state ReturnCache.self
+
+let clear_sid_info () = Kf.clear (); ReturnCache.clear ()
+let () = Cfg.clear_sid_info_ref := clear_sid_info
+
 let find_return kf =
-  match kf.return_stmt with
-  | None ->
-      let find_return fd =
-        let visitor = object
-          inherit Cil.nopCilVisitor
-          method! vstmt s =
-            match s.skind with
-              | Return _ -> raise (Got_return s)
-              | _ -> Cil.DoChildren
-        end
-        in
-        try
-          ignore (Cil.visitCilFunction (visitor :> Cil.cilVisitor) fd);
-          assert false
-        with Got_return s -> s
+  try
+    ReturnCache.find kf
+  with Not_found ->
+    let find_return fd =
+      let visitor = object
+        inherit Cil.nopCilVisitor
+        method! vstmt s =
+          match s.skind with
+          | Return _ -> raise (Got_return s)
+          | _ -> Cil.DoChildren
+      end
       in
-      (try
-         let ki = find_return (get_definition kf) in
-         kf.return_stmt <- Some ki;
-         ki
-       with No_Definition ->
-         raise No_Statement)
-  | Some ki ->
-      ki
+      try
+        ignore (Cil.visitCilFunction (visitor :> Cil.cilVisitor) fd);
+        Kernel.fatal "Function %a does not have a return statement" pretty kf
+      with Got_return s ->
+        ReturnCache.add kf s; s
+    in
+    try
+      find_return (get_definition kf)
+    with No_Definition -> raise No_Statement
 
 let get_stmts kf =
   try (get_definition kf).sbody.bstmts with No_Definition | Not_found -> []
@@ -339,6 +350,9 @@ class callsite_visitor hmap = object (self)
   (* Skip many other things ... *)
   method! vexpr _ = Cil.SkipChildren
   method! vtype _ = Cil.SkipChildren
+  method !vannotation _ = Cil.SkipChildren
+  method !vcode_annot _ = Cil.SkipChildren
+  method !vbehavior _ = Cil.SkipChildren
 
 end
 
@@ -362,6 +376,10 @@ let is_definition kf =
   match kf.fundec with
   | Definition _ -> true
   | Declaration _ -> false
+
+let is_entry_point kf =
+  let main, _ = Globals.entry_point () in
+  equal kf main
 
 let returns_void kf =
   let result_type,_,_,_ = Cil.splitFunctionType (get_type kf) in
@@ -408,8 +426,47 @@ let register_stmt kf s b =
   let tbl = try Kf.get () with Not_found -> assert false in
   Datatype.Int.Hashtbl.add tbl s.sid (kf,s,b)
 
+(* ************************************************************************* *)
+(** {2 Memoized get_global} *)
+(* ************************************************************************* *)
+
+module Get_global =
+  Make_Table
+    (Cil_datatype.Global)
+    (struct
+      let name = "Kernel_function.get_global"
+      let size = 8
+      let dependencies = [ Globals.Functions.self ]
+     end)
+
+let compute_get_global () =
+  Cil.iterGlobals
+    (Ast.get ())
+    (function
+    | GFun({ svar = vi }, _) | GFunDecl(_, vi, _) as g
+         when Ast.is_def_or_last_decl g ->
+      let kf =
+        try Globals.Functions.get vi
+        with Not_found ->
+          Kernel.fatal
+            "[Kernel_function.compute_get_global] unknown function %a"
+            Cil_datatype.Varinfo.pretty vi
+      in
+      Get_global.replace kf g
+    | _ -> ())
+
+let get_global =
+  Get_global.memo
+    (fun kf ->
+      compute_get_global ();
+      try Get_global.find kf
+      with Not_found ->
+        Kernel.fatal
+          "[Kernel_function.get_global] unknown function %a"
+          pretty kf)
+
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

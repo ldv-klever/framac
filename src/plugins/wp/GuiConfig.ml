@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,7 +28,7 @@ open ProverWhy3
 
 class provers config =
   object(self)
-    inherit [dp list] Toolbox.selector []
+    inherit [dp list] Wutil.selector []
 
     method private load () =
       let open Gtk_helper.Configuration in
@@ -46,7 +46,7 @@ class provers config =
       Gtk_helper.Configuration.set config
         (ConfList (List.map (fun dp -> ConfString dp.dp_prover) self#get))
 
-    initializer 
+    initializer
       begin
         self#load () ;
         self#on_event self#save ;
@@ -59,15 +59,15 @@ class provers config =
 (* ------------------------------------------------------------------------ *)
 
 class dp_chooser
-    ~(main:Design.main_window_extension_points) 
+    ~(main:Design.main_window_extension_points)
     ~(available:provers)
     ~(enabled:provers)
   =
-  let dialog = new Toolbox.dialog 
-    ~title:"Why3 Provers" 
+  let dialog = new Wpane.dialog
+    ~title:"Why3 Provers"
     ~window:main#main_window
     ~resize:false () in
-  let array = new Toolbox.warray () in
+  let array = new Wpane.warray () in
   object(self)
 
     val mutable provers = []
@@ -80,14 +80,14 @@ class dp_chooser
             else head :: hook dp e tail
       in provers <- hook dp e provers
 
-    method private lookup dp = 
+    method private lookup dp =
       try List.assoc dp provers
       with Not_found -> false
 
     method private entry dp =
       let text = Printf.sprintf "%s (%s)" dp.dp_name dp.dp_version in
-      let sw = new Toolbox.switchbox () in
-      let lb = new Toolbox.label ~align:`Left ~text () in
+      let sw = new Widget.switch () in
+      let lb = new Widget.label ~align:`Left ~text () in
       sw#set (self#lookup dp) ;
       sw#connect (self#enable dp) ;
       let hbox = GPack.hbox ~spacing:10 ~homogeneous:false () in
@@ -126,7 +126,7 @@ class dp_chooser
         dialog#button ~action:(`ACTION self#detect) ~label:"Detect Provers" () ;
         dialog#button ~action:(`CANCEL) ~label:"Cancel" () ;
         dialog#button ~action:(`APPLY) ~label:"Apply" () ;
-        array#create self#entry ;
+        array#set_entry self#entry ;
         dialog#add_block array#coerce ;
         dialog#on_value `APPLY self#select ;
       end
@@ -153,10 +153,12 @@ class dp_button ~(available:provers) ~(enabled:provers) =
     | Why3 dp -> Printf.sprintf "Why3: %s (%s)" dp.dp_name dp.dp_version
   in
   let items = [ NoProver ; AltErgo ; Coq ; Why3ide ] in
-  let button = new Toolbox.menulist ~default:AltErgo ~render ~items () in
+  let button = new Widget.menu ~default:AltErgo ~render ~items () in
   object(self)
     method coerce = button#coerce
+    method widget = (self :> Widget.t)
     method set_enabled = button#set_enabled
+    method set_visible = button#set_visible
 
     method private import =
       match Wp_parameters.Provers.get () with
@@ -168,11 +170,11 @@ class dp_button ~(available:provers) ~(enabled:provers) =
               let dp = ProverWhy3.find p dps in
               if not (List.mem dp dps) then available#set (dps @ [dp]) ;
               let en = dp :: enabled#get in
-              enabled#set 
+              enabled#set
                 (List.filter (fun q -> List.mem q en) available#get)
           | _ -> ()
 
-    method private set_provers dps = 
+    method private set_provers dps =
       button#set_items (items @ List.map (fun dp -> Why3 dp) dps)
 
     method private get_selection = function

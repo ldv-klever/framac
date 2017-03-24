@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2015                                               */
+/*  Copyright (C) 2007-2016                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,8 +22,11 @@
 
 #ifndef __FC_DEFINE_TIMESPEC
 #define __FC_DEFINE_TIMESPEC
+#include "features.h"
+__BEGIN_DECLS
 struct timespec {
   long    tv_sec;
   long    tv_nsec;
 };
+__END_DECLS
 #endif

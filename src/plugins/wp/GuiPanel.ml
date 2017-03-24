@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -37,12 +37,12 @@ let reload_callback = ref (fun () -> ())
 let on_reload f = reload_callback := f
 let reload () = !reload_callback ()
 
-module Rte_generated =
+module Wp_rte_generated =
   Kernel_function.Make_Table
     (Datatype.Unit)
     (struct
       let name = "GuiSource.Rte_generated"
-      let size = 7
+      let size = 8
       let dependencies = [ Ast.self ]
     end)
 
@@ -52,19 +52,19 @@ let kf_of_selection = function
   | S_prop ip -> Property.get_kf ip
   | S_call s -> Some s.s_caller
 
-let rte_generated s =
+let wp_rte_generated s =
   match kf_of_selection s with
   | None -> false
-  | Some kf -> 
+  | Some kf ->
       if Wp_parameters.RTE.get () then
-        let mem = Rte_generated.mem kf in
+        let mem = Wp_rte_generated.mem kf in
         if not mem then
-          Rte_generated.add kf () ;
+          Wp_rte_generated.add kf () ;
         not mem
       else false
 
-let run_and_prove 
-    (main:Design.main_window_extension_points) 
+let run_and_prove
+    (main:Design.main_window_extension_points)
     (selection:GuiSource.selection)
   =
   begin
@@ -72,11 +72,11 @@ let run_and_prove
       begin
         match selection with
         | S_none -> raise Stop
-        | S_fun kf -> Register.wp_compute_kf (Some kf) [] []
-        | S_prop ip -> Register.wp_compute_ip ip
-        | S_call s -> Register.wp_compute_call s.s_stmt
+        | S_fun kf -> VC.(command (generate_kf kf))
+        | S_prop ip -> VC.(command (generate_ip ip))
+        | S_call s -> VC.(command (generate_call s.s_stmt))
       end ;
-      if rte_generated selection then
+      if wp_rte_generated selection then
         main#redisplay ()
       else
         reload ()
@@ -87,19 +87,19 @@ let run_and_prove
 (* ---  Model Panel                                                     --- *)
 (* ------------------------------------------------------------------------ *)
 
-type memory = HOARE | TYPED
+type memory = TREE | HOARE | TYPED
 
 class model_selector (main : Design.main_window_extension_points) =
-  let dialog = new Toolbox.dialog 
+  let dialog = new Wpane.dialog
     ~title:"WP Memory Model" ~window:main#main_window () in
-  let memory = new Toolbox.switch HOARE in
+  let memory = new Widget.group HOARE in
   let r_hoare  = memory#add_radio ~label:"Hoare Memory Model" ~value:HOARE () in
   let r_typed  = memory#add_radio ~label:"Typed Memory Model" ~value:TYPED () in
-  let c_casts  = new Toolbox.checkbox ~label:"Unsafe casts" () in
-  let c_byref  = new Toolbox.checkbox ~label:"Reference Arguments" () in
-  let c_cint   = new Toolbox.checkbox ~label:"Machine Integers" () in
-  let c_cfloat = new Toolbox.checkbox ~label:"Floating Points" () in
-  let m_label  = new Toolbox.label ~style:`Title () in
+  let c_casts  = new Widget.checkbox ~label:"Unsafe casts" () in
+  let c_byref  = new Widget.checkbox ~label:"Reference Arguments" () in
+  let c_cint   = new Widget.checkbox ~label:"Machine Integers" () in
+  let c_cfloat = new Widget.checkbox ~label:"Floating Points" () in
+  let m_label  = new Widget.label ~style:`Title () in
   object(self)
 
     initializer
@@ -126,7 +126,8 @@ class model_selector (main : Design.main_window_extension_points) =
 
     method set (s:setup) =
       begin
-        (match s.mheap with 
+        (match s.mheap with
+         | ZeroAlias -> memory#set TREE
          | Hoare -> memory#set HOARE
          | Typed m -> memory#set TYPED ; c_casts#set (m = MemTyped.Unsafe)) ;
         c_byref#set (s.mvar = Ref) ;
@@ -135,10 +136,11 @@ class model_selector (main : Design.main_window_extension_points) =
       end
 
     method get : setup =
-      let m = match memory#get with 
-        | HOARE -> Hoare 
+      let m = match memory#get with
+        | TREE -> ZeroAlias
+        | HOARE -> Hoare
         | TYPED -> Typed
-                     (if c_casts#get then MemTyped.Unsafe else MemTyped.Fits) 
+                     (if c_casts#get then MemTyped.Unsafe else MemTyped.Fits)
       in {
         mheap = m ;
         mvar = if c_byref#get then Ref else Var ;
@@ -188,19 +190,19 @@ let wp_update_script label () =
   let text = if file = "" then "(None)" else Filename.basename file in
   label#set_text text
 
-let wp_panel 
-    ~(main:Design.main_window_extension_points) 
+let wp_panel
+    ~(main:Design.main_window_extension_points)
     ~(available_provers:GuiConfig.provers)
     ~(enabled_provers:GuiConfig.provers)
-    ~(configure_provers:unit -> unit) 
+    ~(configure_provers:unit -> unit)
   =
   let vbox = GPack.vbox () in
   let demon = Gtk_form.demon () in
   let packing = vbox#pack in
 
-  let form = new Toolbox.form () in
+  let form = new Wpane.form () in
   (* Model Row *)
-  let model_cfg = new Toolbox.button 
+  let model_cfg = new Widget.button
     ~label:"Model..." ~tooltip:"Configure WP Model" () in
   let model_lbl = GMisc.label ~xalign:0.0 () in
   Gtk_form.register demon (wp_update_model model_lbl) ;
@@ -208,7 +210,7 @@ let wp_panel
   form#add_label_widget model_cfg#coerce ;
   form#add_field model_lbl#coerce ;
   (* Script Row *)
-  let script_cfg = new Toolbox.button
+  let script_cfg = new Widget.button
     ~label:"Script..." ~tooltip:"Load/Save User Scripts file" () in
   let script_lbl = GMisc.label ~xalign:0.0 () in
   Gtk_form.register demon (wp_update_script script_lbl) ;
@@ -216,7 +218,7 @@ let wp_panel
   form#add_label_widget script_cfg#coerce ;
   form#add_field script_lbl#coerce ;
   (* Prover Row *)
-  let prover_cfg = new Toolbox.button 
+  let prover_cfg = new Widget.button
     ~label:"Provers..." ~tooltip:"Detect WP Provers" () in
   prover_cfg#connect configure_provers ;
   form#add_label_widget prover_cfg#coerce ;
@@ -280,7 +282,7 @@ let wp_panel
     Wp_parameters.Procs.get
     (fun n ->
        Wp_parameters.Procs.set n ;
-       ignore (ProverTask.server ()) 
+       ignore (ProverTask.server ())
        (* to make server procs updated is server exists *)
     ) demon ;
 
@@ -322,8 +324,8 @@ let wp_panel
     "WP" , vbox#coerce , Some (Gtk_form.refresh demon) ;
   end
 
-let register ~main ~available_provers ~enabled_provers ~configure_provers = 
-  main#register_panel 
+let register ~main ~available_provers ~enabled_provers ~configure_provers =
+  main#register_panel
     (fun main -> wp_panel ~main ~available_provers ~enabled_provers ~configure_provers)
 
 (* -------------------------------------------------------------------------- *)

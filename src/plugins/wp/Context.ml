@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2015                                               *)
+(*  Copyright (C) 2007-2016                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,7 +26,7 @@
 
 let with_current_loc loc phi x =
   let tmp = Cil_const.CurrentLoc.get () in
-  try 
+  try
     Cil_const.CurrentLoc.set loc ;
     let y = phi x in
     Cil_const.CurrentLoc.set tmp ; y
