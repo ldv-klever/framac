@@ -85,14 +85,7 @@ src/plugins/aorai/yaparser.mli
 src/kernel/config.ml
 src/kernel/frama_c_config.ml
 src/lib/dynlink_common_interface.ml
-src/lib/integer.ml
-src/obfuscator/Makefile
-src/obfuscator/autom4te.cache/
-src/obfuscator/configure
-src/report/Makefile
-src/report/autom4te.cache/
-src/report/configure
-src/report/tests/ptests_config
+src/plugins/report/tests/ptests_config
 src/security_slicing/Makefile
 src/security_slicing/autom4te.cache/
 src/security_slicing/configure
@@ -106,7 +99,7 @@ src/wp/share/why3/why3.conf
 src/wp/driver.ml
 src/wp/rformat.ml
 src/wp/script.ml
-src/wp/tests/ptests_config
+src/plugins/wp/tests/ptests_config
 src/wp/why3_xml.ml
 src/kernel_internals/runtime/config.ml
 src/kernel_internals/runtime/frama_c_config.ml
