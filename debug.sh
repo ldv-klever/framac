@@ -7,7 +7,7 @@ WHERE=$(ocamlopt -where)
 SCRIPT="
 load_printer ${WHERE}/nums.cma
 load_printer ${WHERE/ocaml/zarith}/zarith.cma
-load_printer src/lib/integer.cmo
+load_printer src/libraries/stdlib/integer.cmo
 "
 # load_printer cil/src/cil_datatype.cmo
 # load_printer src/printer/printer.cmo
