@@ -231,6 +231,7 @@
 %token MODULE FUNCTION CONTRACT INCLUDE EXT_AT EXT_LET
 /* ACSL extension for external spec  file */
 %token <string> IDENTIFIER TYPENAME
+%token FORWARD_TYPENAME
 %token <bool*string> STRING_LITERAL
 %token <Logic_ptree.constant> CONSTANT
 %token <string> CONSTANT10
@@ -263,7 +264,7 @@
 %token LSQUAREPIPE RSQUAREPIPE
 
 %right prec_named
-%nonassoc TYPENAME
+%nonassoc prec_typename
 %nonassoc prec_forall prec_exists prec_lambda LET
 %right QUESTION prec_question
 %left IFF
@@ -748,7 +749,7 @@ logic_rt_type:
 ;
 
 abs_spec_option:
-| /* empty */ %prec TYPENAME  { fun t -> t }
+| /* empty */ %prec prec_typename  { fun t -> t }
 | abs_spec { $1 }
 ;
 
@@ -759,12 +760,12 @@ abs_spec_cv_option:
 
 abs_spec:
 |                    tabs { $1 }
-| stars                   %prec TYPENAME { $1 }
+| stars              %prec prec_typename { $1 }
 | stars              tabs                { fun t -> $2 ($1 t) }
-| stars abs_spec_bis      %prec TYPENAME { fun t -> $2 ($1 t) }
+| stars abs_spec_bis %prec prec_typename { fun t -> $2 ($1 t) }
 | stars abs_spec_bis tabs                { fun t -> $2 ($3 ($1 t)) }
 |       abs_spec_bis tabs                { fun t -> $1 ($2 t) }
-|       abs_spec_bis      %prec TYPENAME { $1 }
+|       abs_spec_bis %prec prec_typename { $1 }
 ;
 
 abs_spec_cv:
@@ -800,7 +801,7 @@ stars_cv:
 ;
 
 tabs:
-| LSQUARE constant_option RSQUARE %prec TYPENAME
+| LSQUARE constant_option RSQUARE %prec prec_typename
     {
       fun t -> LTarray (t,$2)
     }
@@ -850,7 +851,7 @@ type_spec:
 | STRUCT exit_rt_type identifier_or_typename { LTstruct $3 }
 | ENUM   exit_rt_type identifier_or_typename { LTenum $3 }
 | UNION  exit_rt_type identifier_or_typename  { LTunion $3 }
-| typename          { LTnamed ($1,[]) }
+| typename %prec prec_typename { LTnamed ($1,[]) }
 | typename LT enter_rt_type  ne_logic_type_list GT exit_rt_type
       { LTnamed($1,$4) }
 ;
@@ -1762,13 +1763,13 @@ identifier:
 ;
 
 typename:
-| TYPENAME { $1 }
-| TYPE IDENTIFIER { $2 }
+| TYPENAME                         { $1 }
+| FORWARD_TYPENAME full_identifier { Logic_env.add_typename $2; $2 }
 ;
 
 bounded_var:
 | identifier { $1 }
-| TYPENAME  /* Since TYPENAME cannot be accepted by lexpr rule */
+| typename  /* Since typename cannot be accepted by lexpr rule */
     { raise
 	(Not_well_formed(loc (),
 			 "Type names are not allowed as binding variable"))

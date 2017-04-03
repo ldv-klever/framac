@@ -138,6 +138,7 @@
         "struct", STRUCT, true;
         "terminates", TERMINATES, false;
         "type", TYPE, false;
+        "typename", FORWARD_TYPENAME, false;
         "union", UNION, true;
         "unsigned", UNSIGNED, true;
         "variant", VARIANT, false;
