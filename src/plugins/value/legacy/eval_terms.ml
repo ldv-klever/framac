@@ -324,7 +324,7 @@ let infer_binop_res_type op targ =
     | PlusPI | MinusPI | IndexPI ->
         assert (Cil.isPointerType targ); targ
     | MinusPP -> Cil.intType
-    | Mod | Shiftlt _ | Shiftrt | BAnd | BXor | BOr ->
+    | Mod _ | Shiftlt _ | Shiftrt | BAnd | BXor | BOr ->
         (* can only be applied on integral arguments *)
         assert (Cil.isIntegralType targ); Cil.intType
     | Lt | Gt | Le | Ge | Eq | Ne | LAnd | LOr ->
@@ -422,7 +422,7 @@ let ereal v =
    four below are defined unambiguously in ACSL. *)
 let check_logic_alarms ~with_alarms (_v1: V.t eval_result) op v2 =
   match op with
-  | Div _ | Mod -> (* This captures floating-point division by 0, which is ok
+  | Div _ | Mod _ -> (* This captures floating-point division by 0, which is ok
                     because it is also a logic alarm for Value. *)
     if V.contains_zero v2.eover then
       Valarms.warn_div with_alarms ~addresses:false

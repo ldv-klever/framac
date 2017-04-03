@@ -279,13 +279,14 @@ and overflow_treatment =
 ** Expressions
 *)
 and binary_operator =
-    ADD of overflow_treatment | SUB of overflow_treatment | MUL of overflow_treatment | DIV of overflow_treatment | MOD
+    ADD of overflow_treatment | SUB of overflow_treatment
+  | MUL of overflow_treatment | DIV of overflow_treatment | MOD of overflow_treatment
   | AND | OR
   | BAND | BOR | XOR | SHL of overflow_treatment | SHR
   | EQ | NE | LT | GT | LE | GE
   | ASSIGN
   | ADD_ASSIGN of overflow_treatment | SUB_ASSIGN of overflow_treatment
-  | MUL_ASSIGN of overflow_treatment | DIV_ASSIGN of overflow_treatment | MOD_ASSIGN
+  | MUL_ASSIGN of overflow_treatment | DIV_ASSIGN of overflow_treatment | MOD_ASSIGN of overflow_treatment
   | BAND_ASSIGN | BOR_ASSIGN | XOR_ASSIGN | SHL_ASSIGN of overflow_treatment | SHR_ASSIGN
 
 and unary_operator =

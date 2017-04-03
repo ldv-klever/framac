@@ -543,7 +543,7 @@ let scopes :  undoScope list ref list ref = ref []
 
 (* tries to estimate if the name 's' was declared in the current scope;
    note that this may not work in all cases *)
-let declared_in_current_scope s =
+let _declared_in_current_scope s =
   match !scopes with
   | [] -> (* global scope: check if present in genv *) H.mem genv s
   | cur_scope :: _ ->
@@ -1085,7 +1085,7 @@ let rec is_boolean_result e =
     | CastE (_, _, e) -> is_boolean_result e
     | BinOp((Lt | Gt | Le | Ge | Eq | Ne | LAnd | LOr),_,_,_) -> true
     | BinOp((PlusA _ | PlusPI | IndexPI | MinusA _ | MinusPI | MinusPP | Mult _
-            | Div _ | Mod | Shiftlt _ | Shiftrt | BAnd | BXor | BOr),_,_,_) -> false
+            | Div _ | Mod _ | Shiftlt _ | Shiftrt | BAnd | BXor | BOr),_,_,_) -> false
     | UnOp(LNot,_,_) -> true
     | UnOp ((Neg _ | BNot),_,_) -> false
     | Lval _ | SizeOf _ | SizeOfE _ | SizeOfStr _ | AlignOf _
@@ -3087,7 +3087,8 @@ let convBinOp (bop: A.binary_operator) : binop =
   | A.MUL MODULO -> Mult Modulo
   | A.DIV CHECK -> Div Check
   | A.DIV MODULO -> Div Modulo
-  | A.MOD -> Mod
+  | A.MOD CHECK -> Mod Check
+  | A.MOD MODULO -> Mod Modulo
   | A.BAND -> BAnd
   | A.BOR -> BOr
   | A.XOR -> BXor
@@ -5891,7 +5892,7 @@ and doExp local_env
         end
         | _ -> Kernel.fatal ~current:true "Invalid left operand for ASSIGN"
       end
-    | A.BINARY((A.ADD _|A.SUB _|A.MUL _|A.DIV _|A.MOD|A.BAND|A.BOR|A.XOR|
+    | A.BINARY((A.ADD _|A.SUB _|A.MUL _|A.DIV _|A.MOD _|A.BAND|A.BOR|A.XOR|
                     A.SHL _|A.SHR|A.EQ|A.NE|A.LT|A.GT|A.GE|A.LE) as bop,
                e1, e2) ->
       let se0 = unspecified_chunk empty in
@@ -5906,7 +5907,7 @@ and doExp local_env
 
     (* assignment operators *)
     | A.BINARY((A.ADD_ASSIGN _ |A.SUB_ASSIGN _ |A.MUL_ASSIGN _ |A.DIV_ASSIGN _ |
-                A.MOD_ASSIGN|A.BAND_ASSIGN|A.BOR_ASSIGN|A.SHL_ASSIGN _|
+                A.MOD_ASSIGN _|A.BAND_ASSIGN|A.BOR_ASSIGN|A.SHL_ASSIGN _|
                 A.SHR_ASSIGN|A.XOR_ASSIGN) as bop, e1, e2) -> begin
         let se0 = unspecified_chunk empty in
         match e1.expr_node with
@@ -5941,7 +5942,8 @@ and doExp local_env
               | A.MUL_ASSIGN MODULO -> Mult Modulo
               | A.DIV_ASSIGN CHECK -> Div Check
               | A.DIV_ASSIGN MODULO -> Div Modulo
-              | A.MOD_ASSIGN -> Mod
+              | A.MOD_ASSIGN CHECK-> Mod Check
+              | A.MOD_ASSIGN MODULO-> Mod Modulo
               | A.BAND_ASSIGN -> BAnd
               | A.BOR_ASSIGN -> BOr
               | A.XOR_ASSIGN -> BXor
@@ -6909,7 +6911,7 @@ and doBinOp loc (bop: binop) (e1: exp) (t1: typ) (e2: exp) (t2: typ) =
   in
   match bop with
     (Mult _|Div _) -> doArithmetic ()
-  | (Mod|BAnd|BOr|BXor) -> doIntegralArithmetic ()
+  | (Mod _|BAnd|BOr|BXor) -> doIntegralArithmetic ()
   | (Shiftlt _|Shiftrt) -> (* ISO 6.5.7. Only integral promotions. The result
                           * has the same type as the left hand side *)
       if Cil.msvcMode () then
@@ -9416,15 +9418,6 @@ and doStatement local_env (s : A.statement) : chunk =
     in
     !stmts @@ (i2c (stmt, [], [], []), ghost)
 
-  | THROW (e,loc) ->
-    let loc' = convLoc loc in
-    CurrentLoc.set loc';
-    (match e with
-     | None -> s2c (mkStmt ~ghost (Throw (None,loc')))
-     | Some e ->
-       let se,e,t = doFullExp local_env false e (AExp None) in
-       se @@
-       (s2c (mkStmt ~ghost (Throw (Some (e,t),loc'))),ghost))
   | A.COMPGOTO (e, loc) -> begin
       let loc' = convLoc loc in
       CurrentLoc.set loc';

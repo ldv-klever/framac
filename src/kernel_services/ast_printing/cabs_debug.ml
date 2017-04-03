@@ -289,7 +289,7 @@ and pp_bin_op fmt =
   |	SUB oft -> fprintf fmt "SUB %a" pp_oft oft
   |	MUL oft -> fprintf fmt "MUL %a" pp_oft oft
   |	DIV oft -> fprintf fmt "DIV %a" pp_oft oft
-  |	MOD -> fprintf fmt "MOD"
+  |	MOD oft -> fprintf fmt "MOD %a" pp_oft oft
   |	AND -> fprintf fmt "AND"
   |	OR -> fprintf fmt "OR"
   |	BAND -> fprintf fmt "BAND"
@@ -308,7 +308,7 @@ and pp_bin_op fmt =
   |	SUB_ASSIGN oft -> fprintf fmt "SUB_ASSIGN %a" pp_oft oft
   |	MUL_ASSIGN oft -> fprintf fmt "MUL_ASSIGN %a" pp_oft oft
   |	DIV_ASSIGN oft -> fprintf fmt "DIV_ASSIGN %a" pp_oft oft
-  |	MOD_ASSIGN -> fprintf fmt "MOD_ASSIGN"
+  |	MOD_ASSIGN oft -> fprintf fmt "MOD_ASSIGN %a" pp_oft oft
   |	BAND_ASSIGN -> fprintf fmt "BAND_ASSIGN"
   |	BOR_ASSIGN -> fprintf fmt "BOR_ASSIGN"
   |	XOR_ASSIGN -> fprintf fmt "XOR_ASSIGN"

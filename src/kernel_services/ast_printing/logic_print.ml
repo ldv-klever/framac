@@ -101,6 +101,7 @@ let get_binop_string = function
   | Bdiv -> "/"
   | Bdiv_mod -> "/%"
   | Bmod -> "%"
+  | Bmod_mod -> "%%"
   | Bbw_and -> "&"
   | Bbw_or -> "|"
   | Bbw_xor -> "^"
@@ -123,7 +124,7 @@ let getParenthLevel e =
     | PLrepeat _ -> 72
     | PLrel _ -> 70
     | PLbinop (_,(Badd|Badd_mod|Bsub|Bsub_mod|Blshift|Blshift_mod|Brshift),_) -> 60
-    | PLbinop (_,(Bmul|Bmul_mod|Bdiv|Bdiv_mod|Bmod),_) -> 40
+    | PLbinop (_,(Bmul|Bmul_mod|Bdiv|Bdiv_mod|Bmod|Bmod_mod),_) -> 40
     | PLunop ((Uamp|Uminus|Uminus_mod|Ubw_not),_) | PLcast _ | PLcast_mod _ | PLnot _ -> 30
     | PLcoercion _ | PLcoercionE _ -> 25
     | PLunop (Ustar,_) | PLdot _ | PLarrow _ | PLarrget _

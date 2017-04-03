@@ -302,7 +302,7 @@ let forward_binop_unbounded_integer ~context ~typ ev1 op ev2 =
   | PlusA _   -> return (V.add_untyped (Int_Base.one) ev1 ev2)
   | MinusA _  -> return (V.add_untyped Int_Base.minus_one ev1 ev2)
   | MinusPP   -> forward_minus_pp ~context ~typ ev1 ev2
-  | Mod       -> V.c_rem ev1 ev2, division_alarms e2 ev2
+  | Mod _     -> V.c_rem ev1 ev2, division_alarms e2 ev2
   | Div _     -> V.div ev1 ev2, division_alarms e2 ev2
   | Mult _    -> return (V.mul ev1 ev2)
   | Shiftrt   ->
@@ -348,7 +348,7 @@ let forward_binop_int ~context ~typ ev1 op ev2 =
   let res, alarms = forward_binop_unbounded_integer ~context ~typ ev1 op ev2 in
   match op with
   | Shiftlt _ | Mult _ | MinusPP | MinusPI | IndexPI | PlusPI
-  | PlusA _ | Div _ | Mod | MinusA _ ->
+  | PlusA _ | Div _ | Mod _ | MinusA _ ->
     let warn_unsigned = op <> Shiftlt Check && op <> Shiftlt Modulo in
     let _, _, exp_res, typ_res = context in
     let res, alarms' = handle_overflow ~warn_unsigned exp_res typ_res res in

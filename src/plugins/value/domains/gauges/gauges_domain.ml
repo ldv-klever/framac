@@ -971,7 +971,7 @@ module G = struct
           Gauge.add (aux e1) (Gauge.mul_ct (ptr_size e1) (aux e2))
         | MinusPI ->
           Gauge.add (aux e1) (Gauge.neg (Gauge.mul_ct (ptr_size e1) (aux e2)))
-        | Mod | Lt | Gt | Le | Ge | Eq | Ne | BAnd | BXor | BOr | LAnd | LOr
+        | Mod _ | Lt | Gt | Le | Ge | Eq | Ne | BAnd | BXor | BOr | LAnd | LOr
         | MinusPP | Shiftlt _ | Shiftrt | Div _ ->
           raise Untranslatable
       in

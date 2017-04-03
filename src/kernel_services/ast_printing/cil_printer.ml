@@ -127,7 +127,7 @@ module Precedence = struct
   let indexLevel = 20
   let arrowLevel = 20
   let addrOfLevel = 30
-  let multiplicativeLevel = 40
+  let _multiplicativeLevel = 40
   let additiveLevel = 60
   let comparativeLevel = 70
   let bitwiseLevel = 75
@@ -199,7 +199,7 @@ module Precedence = struct
              PlusPI|IndexPI|Shiftlt _|Shiftrt),_,_,_)
       -> additiveLevel (* 60 *)
     (* Multiplicative *)
-    | BinOp((Div _|Mod|Mult _),_,_,_) -> 40
+    | BinOp((Div _|Mod _|Mult _),_,_,_) -> 40
     (* Unary *)
     | CastE(_, _, _) -> 30
     | AddrOf(_) -> 30
@@ -227,7 +227,7 @@ module Precedence = struct
               PlusPI|IndexPI|Shiftlt _|Shiftrt),_,_)
       -> additiveLevel (* 60 *)
     (* Multiplicative *)
-    | TBinOp((Div _|Mod|Mult _),_,_) -> 40
+    | TBinOp((Div _|Mod _|Mult _),_,_) -> 40
     (* Unary *)
     | TCastE(_, _, _) -> 30
     | TAddrOf(_) -> addrOfLevel
@@ -628,16 +628,17 @@ class cil_printer () = object (self)
     fprintf fmt "%s"
       (match b with
        | PlusA Check | PlusPI | IndexPI -> "+"
-       | PlusA Modulo -> "+/*%*/"
+       | PlusA Modulo -> "+ /*@%*/"
        | MinusA Check | MinusPP | MinusPI -> "-"
-       | MinusA Modulo -> "-/*@%*/"
+       | MinusA Modulo -> "- /*@%*/"
        | Mult Check -> "*"
-       | Mult Modulo -> "*/*@%*/"
+       | Mult Modulo -> "* /*@%*/"
        | Div Check -> "/"
-       | Div Modulo -> "//@*%*/"
-       | Mod -> "%"
+       | Div Modulo -> "/ /*@%*/"
+       | Mod Check -> "%"
+       | Mod Modulo -> "% /*@%*/"
        | Shiftlt Check -> "<<"
-       | Shiftlt Modulo -> "<</*@%*/"
+       | Shiftlt Modulo -> "<< /*@%*/"
        | Shiftrt -> ">>"
        | Lt -> "<"
        | Gt -> ">"
@@ -817,7 +818,7 @@ class cil_printer () = object (self)
 	  instr_terminator
 
       | BinOp((PlusA _|PlusPI|IndexPI|MinusA _|MinusPP|MinusPI|BAnd|BOr|BXor|
-	  Mult _|Div _|Mod|Shiftlt _|Shiftrt) as bop,
+	  Mult _|Div _|Mod _|Shiftlt _|Shiftrt) as bop,
 	      {enode = Lval(lv')},e,_) when LvalStructEq.equal lv lv' ->
 	fprintf fmt "%a %a= %a%s"
 	  self#lval  lv
@@ -2112,7 +2113,8 @@ class cil_printer () = object (self)
        | Mult Modulo -> "*%"
        | Div Check -> "/"
        | Div Modulo -> "/%"
-       | Mod -> "%"
+       | Mod Check -> "%"
+       | Mod Modulo -> "%%"
        | Shiftlt Check -> "<<"
        | Shiftlt Modulo -> "<<%"
        | Shiftrt -> ">>"

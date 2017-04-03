@@ -352,7 +352,7 @@ and expr (e:Cil_types.exp) : model = match e.enode with
   | Info(e,_) -> expr e
 
   (* Binary *)
-  | BinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod
+  | BinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod _
            |Shiftlt _|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
            |Lt|Gt|Le|Ge|Eq|Ne), a,b,_ )
     -> m_vcup (expr a) (vexpr b)
@@ -402,7 +402,7 @@ and term (env:ctx) (t:term) : model = match t.term_node with
   | TUnOp((Neg _|BNot|LNot),t) -> mterm env t
 
   (* Binary *)
-  | TBinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod
+  | TBinOp( (MinusPP|PlusA _|MinusA _|Mult _|Div _|Mod _
             |Shiftlt _|Shiftrt|BAnd|BXor|BOr|LAnd|LOr
             |Lt|Gt|Le|Ge|Eq|Ne), a,b ) 
     -> m_vcup (term env a) (vterm env b)

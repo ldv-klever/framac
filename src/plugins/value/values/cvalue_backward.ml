@@ -289,7 +289,7 @@ let backward_binop ~typ_res ~res_value ~typ_e1 v1 binop v2 =
   | Shiftrt, _ -> backward_shift_rhs typ_e1 v1 v2
   | Shiftlt _, _ -> backward_shift_left typ_e1 v1 v2
 
-  | Mod, TInt _ ->
+  | Mod _, TInt _ ->
     (* the following equality only holds when v1 does not change sign, which
        is why we split its range: v1 == (v1 / v2) * v2 + res *)
     let v1' v1 res =

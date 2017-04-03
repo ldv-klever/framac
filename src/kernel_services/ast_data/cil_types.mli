@@ -765,7 +765,7 @@ and binop =
   | Mult of overflow_treatment     (** * *)
   | Div of overflow_treatment      (** /
 		 @plugin development guide *)
-  | Mod      (** %
+  | Mod of overflow_treatment      (** %
 		 @plugin development guide *)
   | Shiftlt  of overflow_treatment (** shift left *)
   | Shiftrt  (** shift right *)

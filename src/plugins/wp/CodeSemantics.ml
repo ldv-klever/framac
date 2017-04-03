@@ -183,7 +183,7 @@ struct
     | MinusA _  -> arith env tr Cint.isub Cfloat.fsub e1 e2
     | Mult _    -> arith env tr Cint.imul Cfloat.fmul e1 e2
     | Div _     -> arith env tr Cint.idiv Cfloat.fdiv e1 e2
-    | Mod     -> arith_int env tr Cint.imod e1 e2
+    | Mod _     -> arith_int env tr Cint.imod e1 e2
     | Shiftlt _ -> arith_int env tr Cint.blsl e1 e2
     | Shiftrt -> arith_int env tr Cint.blsr e1 e2
     | BAnd    -> arith_int env tr Cint.band e1 e2

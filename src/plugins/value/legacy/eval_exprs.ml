@@ -318,7 +318,7 @@ and eval_binop ~with_alarms e deps state =
 	      Valarms.set_syntactic_context (Valarms.SyBinOp(e, op, e1, e2));
               (* Implicit preconditions of [op] *)
               let state, ev1, ev2 = match op with
-                | Mod | Div _ ->
+                | Mod _ | Div _ ->
                   Warn.maybe_warn_div ~with_alarms ev2;
                   state, ev1, ev2 (* TODO: we could reduce ev2 *)
                 | Shiftlt _ ->
@@ -336,7 +336,7 @@ and eval_binop ~with_alarms e deps state =
 	      (* Warn if overflow during a non-bitwise operation *)
 	      let v = match op with
                 | Shiftlt _ | Mult _ | MinusPP | MinusPI | IndexPI | PlusPI
-                | PlusA _ | Div _ | Mod | MinusA _ ->
+                | PlusA _ | Div _ | Mod _ | MinusA _ ->
                   let warn_unsigned = op <> Shiftlt Check && op <> Shiftlt Modulo in
                   Eval_op.handle_overflow ~with_alarms ~warn_unsigned typ v
                 | _ -> v
@@ -1010,9 +1010,9 @@ let reduce_by_cond state cond =
         Printer.pp_exp cond.exp;*)
       match cond.positive, cond.exp.enode with
       | _, (BinOp ((Eq | Ne as eqop),
-                   ({enode = BinOp (Mod,exp1lv,exp1mod,_)} as exp1), exp2, _))
+                   ({enode = BinOp (Mod _,exp1lv,exp1mod,_)} as exp1), exp2, _))
       | _, (BinOp ((Eq | Ne as eqop),
-                   exp2,({enode = BinOp (Mod,exp1lv,exp1mod, _)} as exp1), _))
+                   exp2,({enode = BinOp (Mod _,exp1lv,exp1mod, _)} as exp1), _))
         -> (* This case overlaps with the BinOp case just after. For the moment,
               we call the second case ourselves. *)
         let state = reduce_by_modulo state cond exp1lv exp1mod eqop exp2 in

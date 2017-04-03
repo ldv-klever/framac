@@ -617,8 +617,8 @@ multiplicative_expression:  /*(* 6.5.5 *)*/
       { make_expr (BINARY(MUL $3, $1, $4)) }
 | multiplicative_expression SLASH modulo_op_opt cast_expression
       { make_expr (BINARY(DIV $3, $1, $4)) }
-| multiplicative_expression PERCENT cast_expression
-      { make_expr (BINARY(MOD, $1, $3)) }
+| multiplicative_expression PERCENT modulo_op_opt cast_expression
+      { make_expr (BINARY(MOD $3, $1, $4)) }
 ;
 
 additive_expression:  /*(* 6.5.6 *)*/
@@ -709,8 +709,8 @@ assignment_expression:     /*(* 6.5.16 *)*/
 			{ make_expr (BINARY(MUL_ASSIGN $3, $1, $4)) }
 |		cast_expression SLASH_EQ modulo_op_opt assignment_expression
 			{ make_expr (BINARY(DIV_ASSIGN $3, $1, $4)) }
-|		cast_expression PERCENT_EQ assignment_expression
-			{ make_expr (BINARY(MOD_ASSIGN, $1, $3)) }
+|		cast_expression PERCENT_EQ modulo_op_opt assignment_expression
+			{ make_expr (BINARY(MOD_ASSIGN $3, $1, $4)) }
 |		cast_expression AND_EQ assignment_expression
 			{ make_expr (BINARY(BAND_ASSIGN, $1, $3)) }
 |		cast_expression PIPE_EQ assignment_expression
@@ -1607,7 +1607,7 @@ multiplicative_attr:
     cast_attr                           { $1 }
 |   multiplicative_attr STAR cast_attr  {make_expr (BINARY(MUL CHECK, $1 , $3))}
 |   multiplicative_attr SLASH cast_attr	{make_expr (BINARY(DIV CHECK, $1 , $3))}
-|   multiplicative_attr PERCENT cast_attr {make_expr (BINARY(MOD, $1 , $3))}
+|   multiplicative_attr PERCENT cast_attr {make_expr (BINARY(MOD CHECK, $1 , $3))}
 ;
 
 

@@ -5209,7 +5209,7 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
           end
       | Div _, _, Const(CInt64(one,_,_)) 
          when Integer.equal one Integer.one -> e1''
-      | Mod, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
+      | Mod _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           begin
             try kinteger64 ~loc ~kind:tk (Integer.rem i1 i2)
             with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
@@ -6711,7 +6711,7 @@ let mkCastTLoc ?(force=false) ?(overflow=Check) ~(e: exp) ?(loc=e.eloc) ~(oldt: 
    in
    match op with
        (Mult _|Div _) -> doArithmetic ()
-     | (Mod|BAnd|BOr|BXor|LAnd|LOr) -> doIntegralArithmetic ()
+     | (Mod _|BAnd|BOr|BXor|LAnd|LOr) -> doIntegralArithmetic ()
      | (Shiftlt _|Shiftrt) -> (* ISO 6.5.7. Only integral promotions. The result
                              * has the same type as the left hand side *)
        if msvcMode () then

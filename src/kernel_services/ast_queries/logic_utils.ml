@@ -633,7 +633,8 @@ let is_same_binop o1 o2 =
     | Mult Modulo, Mult Modulo
     | Div Check, Div Check
     | Div Modulo, Div Modulo
-    | Mod, Mod
+    | Mod Check, Mod Check
+    | Mod Modulo, Mod Modulo
     | Shiftlt Check, Shiftlt Check
     | Shiftlt Modulo, Shiftlt Modulo
     | Shiftrt, Shiftrt
@@ -650,7 +651,7 @@ let is_same_binop o1 o2 =
     | LOr, LOr ->
         true
     | (PlusA _ | PlusPI | IndexPI | MinusA _ | MinusPI | MinusPP | Mult _ | Div _
-      | Mod | Shiftlt _ | Shiftrt | Cil_types.Lt | Cil_types.Gt | Cil_types.Le 
+      | Mod _ | Shiftlt _ | Shiftrt | Cil_types.Lt | Cil_types.Gt | Cil_types.Le
       | Cil_types.Ge | Cil_types.Eq | Cil_types.Ne 
       | BAnd | BXor | BOr | LAnd | LOr), _ ->
         false
@@ -1075,10 +1076,10 @@ let is_same_binop op1 op2 =
     | Badd, Badd | Bsub, Bsub | Bmul, Bmul | Bdiv, Bdiv | Bmod, Bmod
     | Bbw_and, Bbw_and | Bbw_or, Bbw_or | Bbw_xor, Bbw_xor
     | Blshift, Blshift | Brshift, Brshift
-    | Badd_mod, Badd_mod | Bsub_mod, Bsub_mod | Bmul_mod, Bmul_mod | Bdiv_mod, Bdiv_mod
+    | Badd_mod, Badd_mod | Bsub_mod, Bsub_mod | Bmul_mod, Bmul_mod | Bdiv_mod, Bdiv_mod | Bmod_mod, Bmod_mod
     | Blshift_mod, Blshift_mod -> true
     | (Badd | Bsub | Bmul | Bdiv | Bmod | Bbw_and | Bbw_or
-    |  Badd_mod | Bsub_mod | Bmul_mod | Bdiv_mod | Blshift_mod
+    |  Badd_mod | Bsub_mod | Bmul_mod | Bdiv_mod | Bmod_mod | Blshift_mod
     | Bbw_xor | Blshift | Brshift),_ -> false
 
 let is_same_relation r1 r2 =
@@ -2197,7 +2198,7 @@ and constFoldBinOpToInt ~machdep bop e1 e2 =
     | Div _ ->
       if Integer.(equal zero i2) && Integer.(is_zero (rem i1 i2)) then None
       else Some (Integer.div i1 i2)
-    | Mod -> if Integer.(equal zero i2) then None else Some (Integer.rem i1 i2)
+    | Mod _ -> if Integer.(equal zero i2) then None else Some (Integer.rem i1 i2)
     | BAnd -> Some (Integer.logand i1 i2)
     | BOr -> Some (Integer.logor i1 i2)
     | BXor -> Some (Integer.logxor i1 i2)

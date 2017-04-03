@@ -261,7 +261,7 @@ let eval_binop_int ~with_alarms ~te1 ev1 op ev2 =
     | PlusA _ ->  V.add_untyped (Int_Base.one) ev1 ev2
     | MinusA _ -> V.add_untyped Int_Base.minus_one ev1 ev2
     | MinusPP -> eval_minus_pp ~with_alarms ~te1 ev1 ev2
-    | Mod -> V.c_rem ev1 ev2
+    | Mod _ -> V.c_rem ev1 ev2
     | Div _ -> V.div ev1 ev2
     | Mult _ -> V.mul ev1 ev2
     | BXor -> V.bitwise_xor ev1 ev2

@@ -395,7 +395,7 @@ struct
     | MinusA _ -> arith env L.apply_sub (L.apply F.e_sub) a b
     | Mult _ -> arith env (L.apply e_mul) (L.apply F.e_mul) a b
     | Div _ -> arith env (L.apply e_div) (L.apply F.e_div) a b
-    | Mod -> L.apply e_mod (C.logic env a) (C.logic env b)
+    | Mod _ -> L.apply e_mod (C.logic env a) (C.logic env b)
     | PlusPI | IndexPI ->
         let va = C.logic env a in
         let vb = C.logic env b in

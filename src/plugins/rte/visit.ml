@@ -702,7 +702,7 @@ class annot_visitor kf to_annot on_alarm = object (self)
   method! vexpr exp =
     Options.debug "considering exp %a\n" Printer.pp_exp exp;
     match exp.enode with
-    | BinOp((Div _ | Mod) as op, lexp, rexp, ty) ->
+    | BinOp((Div _ | Mod _) as op, lexp, rexp, ty) ->
       (match Cil.unrollType ty with 
       | TInt(kind,_) -> 
 	(* add assertion "divisor not zero" *)

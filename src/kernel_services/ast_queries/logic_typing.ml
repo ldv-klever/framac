@@ -291,7 +291,8 @@ let type_binop = function
   | Bmul_mod -> Mult Modulo
   | Bdiv -> Div Check
   | Bdiv_mod -> Div Modulo
-  | Bmod -> Mod
+  | Bmod -> Mod Check
+  | Bmod_mod -> Mod Modulo
   | Bbw_and -> BAnd
   | Bbw_or -> BOr
   | Bbw_xor -> BXor
@@ -674,15 +675,6 @@ struct
     find_logic_ctor = C.find_logic_ctor;
     error = C.error;
   }
-
-  let add_logic_function loc li =
-    let l = Logic_env.find_all_logic_functions li.l_var_info.lv_name in
-    if List.exists (Logic_utils.is_same_logic_profile li) l then begin
-      C.error loc
-        "%s %s is already declared with the same profile"
-        (match li.l_type with None -> "predicate" | Some _ -> "logic function")
-        li.l_var_info.lv_name
-    end else C.add_logic_function li
 
   let check_non_void_ptr loc ty =
     if Logic_utils.isLogicVoidPointerType ty then
@@ -2140,11 +2132,6 @@ let add_label info lab =
       | Some lab ->
 	{ p with pred_content = Pat(p,lab) }
 
-  let update_ind_case_wrt_default_label (name, labs, tvars, p as case) =
-    match labs, !Lenv.default_label with
-    | [], Some lab -> (name, [lab], tvars, update_predicate_wrt_default_label p)
-    | _ -> case
-
   let update_predicate_wrt_label p lab =
     match p.pred_content with
       | Pat(_,lab') when lab = lab' -> p
@@ -2406,7 +2393,7 @@ let add_label info lab =
                   in
                   begin match C.find_comp_field ci member with
                     | off ->
-                      let rec iter_fields f =
+                      let iter_fields f =
                         let rec loop =
                           function
                           | Field (fi, off) ->
@@ -2612,7 +2599,7 @@ let add_label info lab =
               Cil_printer.pp_term t;
           let t = term_lval (mkAddrOfAndMark loc) t in
           t.term_node, t.term_type
-      | PLbinop (t1, (Badd | Badd_mod | Bsub | Bsub_mod | Bmul | Bmul_mod | Bdiv | Bdiv_mod | Bmod
+      | PLbinop (t1, (Badd | Badd_mod | Bsub | Bsub_mod | Bmul | Bmul_mod | Bdiv | Bdiv_mod | Bmod | Bmod_mod
 	         | Bbw_and | Bbw_or | Bbw_xor | Blshift | Blshift_mod | Brshift as op), t2) ->
           let t1 = term env t1 in
           let ty1 = t1.term_type in
@@ -3857,9 +3844,9 @@ let add_label info lab =
       | APragma (Slice_pragma sp) ->
 	  Cil_types.APragma (Slice_pragma (slice_pragma (code_annot_env()) sp))
       | APragma (Loop_pragma lp) ->
-	  APragma (Loop_pragma (loop_pragma (code_annot_env()) lp))
+	  Cil_types.APragma (Loop_pragma (loop_pragma (code_annot_env()) lp))
       | APragma (Jessie_pragma jp) ->
-          APragma (Jessie_pragma (jessie_pragma (code_annot_env ()) jp))
+          Cil_types.APragma (Jessie_pragma (jessie_pragma (code_annot_env ()) jp))
       | AStmtSpec (behav,s) ->
           (* function behaviors and statement behaviors are not at the
              same level. Do not mix them in a complete or disjoint clause

@@ -137,7 +137,7 @@ class metricsCabsVisitor = object(self)
       | BINARY (bop, _, _) ->
         begin
           match bop with
-            | ADD _ | SUB _ | MUL _ | DIV _ | MOD
+            | ADD _ | SUB _ | MUL _ | DIV _ | MOD _
             | BAND | BOR | XOR
             | SHL _ | SHR | EQ | NE | LT
             | GT | LE | GE -> ()
@@ -146,7 +146,7 @@ class metricsCabsVisitor = object(self)
             | ADD_ASSIGN _ | SUB_ASSIGN _ | MUL_ASSIGN _
             | DIV_ASSIGN _ | BOR_ASSIGN | XOR_ASSIGN
             | SHL_ASSIGN _ | SHR_ASSIGN | BAND_ASSIGN
-            | MOD_ASSIGN ->
+            | MOD_ASSIGN _ ->
               self#incr_both_metrics incr_assigns;
         end
       | CAST _ -> ()

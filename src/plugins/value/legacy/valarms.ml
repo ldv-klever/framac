@@ -156,7 +156,7 @@ let warn_div warn_mode ~addresses =
 	| _,SyNone -> ()
 	| _,(SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
-	| _, (SyBinOp (_, (Div _ |Mod), _, e) as old_sc) ->
+	| _, (SyBinOp (_, (Div _ |Mod _), _, e) as old_sc) ->
           (* Extract the relevant part of the syntactic context *)
           set_syntactic_context (SyUnOp e);
           warn_pointer_comparison Cil.intType warn_mode;
@@ -172,7 +172,7 @@ let warn_div warn_mode ~addresses =
 	| _,SyNone -> ()
 	| _,(SyUnOp _ | SyMem _ | SyMemLogic _ | SySep _ | SyCallResult) ->
 	  assert false
-	| ki, (SyBinOp (_, (Div _|Mod), _, e)) ->
+	| ki, (SyBinOp (_, (Div _|Mod _), _, e)) ->
            register_alarm emitter ki (Alarms.Division_by_zero e)
              (fun annot k -> k "@[division by zero.@ %a@]%t" pr_annot annot)
 	|_, SyBinOp _ -> assert false) 

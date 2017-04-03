@@ -24,7 +24,7 @@ open Cil_types
 
 let category = File.register_code_transformation_category "asm contracts"
 
-let dkey = Kernel.register_category "asm:contracts"
+let _dkey = Kernel.register_category "asm:contracts"
 
 let emitter =
   Emitter.(
