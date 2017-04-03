@@ -2210,6 +2210,10 @@ let add_label info lab =
     in
     aux t
 
+  let modulo_op_error ~loc ty =
+    C.error loc "modulo arithmetic is applicable to integral C types only, got type %a"
+      Cil_printer.pp_logic_type ty
+
   let rec term ?(silent=false) env t =
     match t.lexpr_node with
       | PLnamed(name,t) ->
@@ -2425,10 +2429,20 @@ let add_label info lab =
              | _ -> C.error loc "offsetof can only handle C types")
       | PLnamed _ -> assert false (* should be captured by term *)
       | PLconstant (IntConstant s) ->
+          let c0 = String.get s 0 in
+          let cn = String.get s @@ String.length s - 1 in
+          let ty =
+            match c0, cn with
+            | 'L', _ -> Ctype theMachine.wcharType
+            | '\'', _ -> Ctype charType
+            | _, ('u' | 'U' | 'L' | 'l') ->
+              Ctype (typeOf @@ parseIntExp ~loc s)
+            | _ -> Linteger
+          in
           begin match (parseInt loc s).term_node with
-            | TConst (Integer _ as c) -> TConst c, Linteger
+            | TConst (Integer _ as c) -> TConst c, ty
             | TConst ((LChr _) as c) -> (* a char literal has type int *)
-                TConst c, Linteger
+                TConst c, ty
             | _ -> assert false
           end
       | PLconstant (FloatConstant str) ->
@@ -2563,19 +2577,19 @@ let add_label info lab =
           lfun_app ~silent env loc f labels ttl
       | PLunop (Ubw_not, t) ->
           let t = type_int_term env t in
-          TUnOp (BNot, t), logic_arithmetic_promotion t.term_type
+          let ty = t.term_type in
+          if not (isLogicType isIntegralType ty) then modulo_op_error ~loc ty;
+          TUnOp (BNot, t), ty
       | PLunop (Uminus | Uminus_mod as op, t) ->
           let t = type_num_term env t in
           let ty = t.term_type in
-          let oft =
+          let oft, t, ty_r =
             match op with
-            | Uminus_mod when is_integral_type ty -> Modulo
-            | Uminus_mod ->
-              C.error loc "modulo arithmetic is applicable to integral types only, got type %a"
-                Cil_printer.pp_logic_type ty
-            | _ -> Check
+            | Uminus_mod when isLogicType isIntegralType ty -> Modulo, t, ty
+            | Uminus_mod -> modulo_op_error ~loc ty
+            | _ -> Check, mk_cast t (arithmetic_conversion ty ty), logic_arithmetic_promotion ty
           in
-          TUnOp (Neg oft, mk_cast t (arithmetic_conversion ty ty)), logic_arithmetic_promotion ty
+          TUnOp (Neg oft, t), ty_r
       | PLunop (Ustar, t) ->
           check_current_label loc env;
           (* memory access need a current label to have some semantics *)
@@ -2607,28 +2621,54 @@ let add_label info lab =
           let binop op tr =	TBinOp (op, mk_cast t1 tr, mk_cast t2 tr),
             logic_arithmetic_promotion tr
           in
+          let binop_mod op =
+            let try_integral_cast lt t =
+              match unroll_type lt with
+              | Ctype ty -> C.integral_cast ty t
+              | _ -> raise (Failure "not a C type")
+            in
+            let t1, t2 =
+              try t1, try_integral_cast ty1 t2
+              with Failure _ ->
+              try try_integral_cast ty2 t1, t2
+              with Failure _ ->
+                C.error
+                  loc
+                  "modulo arithmetic is applicable only to the values of the same C integral types,@ \
+                   here the types are: %a and %a"
+                  Cil_printer.pp_logic_type ty1 Cil_printer.pp_logic_type ty2
+            in
+            let ty = t1.term_type in
+            if not (isLogicType isIntegralType ty) then modulo_op_error ~loc ty;
+            TBinOp (op, t1, t2), ty
+          in
           begin match op with
             | Bmul | Bdiv
                 when is_arithmetic_type ty1 && is_arithmetic_type ty2 ->
-	        binop (type_binop op) (arithmetic_conversion ty1 ty2)
+                binop (type_binop op) (arithmetic_conversion ty1 ty2)
             | Bmod when is_integral_type ty1 && is_integral_type ty2 ->
                 binop (type_binop op) (arithmetic_conversion ty1 ty2)
+            | Bmod_mod when is_integral_type ty1 && is_integral_type ty2 ->
+                binop_mod (type_binop op)
             | Badd | Bsub
                 when is_arithmetic_type ty1 && is_arithmetic_type ty2 ->
-	        binop (type_binop op) (arithmetic_conversion ty1 ty2)
+                binop (type_binop op) (arithmetic_conversion ty1 ty2)
             | Badd_mod | Bsub_mod | Bmul_mod | Bdiv_mod
-                  when is_integral_type ty1 && is_integral_type ty2 ->
-                binop (type_binop op) (arithmetic_conversion ty1 ty2)
+                when is_integral_type ty1 && is_integral_type ty2 ->
+                binop_mod (type_binop op)
             | Bbw_and | Bbw_or | Bbw_xor
-	        when is_integral_type ty1 && is_integral_type ty2 ->
-	        binop (type_binop op) (arithmetic_conversion ty1 ty2)
-            | Blshift | Blshift_mod | Brshift
-                  when is_integral_type ty1 && is_integral_type ty2 ->
-                binop (type_binop op) (arithmetic_conversion ty1 ty2)
-	    | Bbw_xor
-	        when is_list_type ty1 && is_list_type ty2 ->
+                when is_integral_type ty1 && is_integral_type ty2 ->
+                binop_mod (type_binop op)
+            | Blshift | Brshift
+                when is_integral_type ty1 && is_integral_type ty2 ->
+                binop_mod (type_binop op)
+            | Blshift_mod
+                when is_integral_type ty1 && is_integral_type ty2 ->
+                binop_mod (type_binop op)
+            | Bbw_xor
+                when is_list_type ty1 && is_list_type ty2 ->
                 fresh_type#reset ();
-	        lfun_app silent env loc "\\concat" [] [t1;t2]
+                lfun_app silent env loc "\\concat" [] [t1;t2]
             | Badd when isLogicPointer t1 && is_integral_type ty2 ->
                 let t1 = mk_logic_pointer_or_StartOf t1 in
                 let ty1 = t1.term_type in
@@ -2638,7 +2678,7 @@ let add_label info lab =
                         (Logic_const.addTermOffsetLval
                            (TIndex (t2,TNoOffset)) lv)
                   | _ ->
-	            TBinOp (PlusPI, t1, mk_cast t2 (integral_promotion ty2))),
+                    TBinOp (PlusPI, t1, mk_cast t2 (integral_promotion ty2))),
                 set_conversion ty1 ty2
             | Badd when is_integral_type ty1 && isLogicPointer t2 ->
                 let t2 = mk_logic_pointer_or_StartOf t2 in
@@ -2649,22 +2689,22 @@ let add_label info lab =
                       TAddrOf (
                         Logic_const.addTermOffsetLval (TIndex(t1,TNoOffset)) lv)
                   | _ ->
-	            TBinOp (PlusPI, t2, mk_cast t1 (integral_promotion ty1))),
+                    TBinOp (PlusPI, t2, mk_cast t1 (integral_promotion ty1))),
                 set_conversion ty2 ty1
             | Bsub when isLogicPointer t1 && is_integral_type ty2 ->
                 let t1 = mk_logic_pointer_or_StartOf t1 in
-	        TBinOp (MinusPI, t1, mk_cast t2 (integral_promotion ty2)),
+                TBinOp (MinusPI, t1, mk_cast t2 (integral_promotion ty2)),
                 set_conversion ty1 ty2
             | Bsub when isLogicPointer t1 && isLogicPointer t2 ->
                 let t1 = mk_logic_pointer_or_StartOf t1 in
                 let t2 = mk_logic_pointer_or_StartOf t2 in
-	        TBinOp (MinusPP, t1, mk_cast t2 ty1), Linteger
+                TBinOp (MinusPP, t1, mk_cast t2 ty1), Linteger
             | _ ->
-	        C.error loc
+                C.error loc
                   "invalid operands to binary %a; unexpected %a and %a"
                   Cil_printer.pp_binop (type_binop op)
-		  Cil_printer.pp_logic_type ty1
-		  Cil_printer.pp_logic_type ty2
+                  Cil_printer.pp_logic_type ty1
+                  Cil_printer.pp_logic_type ty2
           end
       | PLdot (t, f) ->
           let t = term env t in

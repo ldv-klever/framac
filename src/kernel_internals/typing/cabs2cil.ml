@@ -3202,10 +3202,18 @@ let optConstFoldBinOp loc machdep bop e1 e2 t =
     new_exp ~loc (BinOp(bop, e1, e2, t))
 
 let integral_cast ty t =
-  raise
-    (Failure
-       (Format.asprintf "term %a has type %a, but %a is expected."
-          Cil_printer.pp_term t Cil_printer.pp_logic_type Linteger Cil_printer.pp_typ ty))
+  if Logic_type.equal (Ctype ty) t.term_type then t
+  else
+    match t.term_node, unrollType ty with
+    | TConst (Integer (n, _)), TInt (ik, _) when fitsInInt ik n ->
+      { t with term_type = Ctype ty }
+    | TUnOp (Neg Check, { term_node = TConst (Integer (n, _)) }), TInt (ik, _) when fitsInInt ik (Integer.neg n) ->
+      Logic_utils.mk_cast ~loc:t.term_loc ty t
+    | _ ->
+      raise
+        (Failure
+           (Format.asprintf "term %a has type %a, but %a is expected."
+              Cil_printer.pp_term t Cil_printer.pp_logic_type Linteger Cil_printer.pp_typ ty))
 
 (* Exception raised by the instance of Logic_typing local to this module.
    See document of [error] below. *)
