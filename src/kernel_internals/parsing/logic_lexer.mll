@@ -333,6 +333,7 @@ rule token = parse
   | "/"                     { SLASH }
   | "/%"                    { SLASH_MOD }
   | "%"                     { PERCENT }
+  | "%%"                    { PERCENT_MOD }
   | "<"                     { LT }
   | ">"                     { GT }
   | "<="                    { LE }

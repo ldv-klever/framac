@@ -56,7 +56,7 @@ type quantifiers = (logic_type * string) list
 type relation = Lt | Gt | Le | Ge | Eq | Neq
 
 (** arithmetic and logic binary operators. *)
-type binop = Badd | Badd_mod | Bsub | Bsub_mod | Bmul | Bmul_mod | Bdiv | Bdiv_mod | Bmod
+type binop = Badd | Badd_mod | Bsub | Bsub_mod | Bmul | Bmul_mod | Bdiv | Bdiv_mod | Bmod | Bmod_mod
            | Bbw_and | Bbw_or | Bbw_xor |
              Blshift | Blshift_mod | Brshift
 

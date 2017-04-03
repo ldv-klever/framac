@@ -243,7 +243,7 @@
 %token ALLOCATION STATIC REGISTER AUTOMATIC DYNAMIC UNALLOCATED
 %token ALLOCABLE FREEABLE FRESH
 %token DOLLAR QUESTION MINUS PLUS STAR AMP SLASH PERCENT LSQUARE RSQUARE EOF
-%token MINUS_MOD PLUS_MOD STAR_MOD SLASH_MOD
+%token MINUS_MOD PLUS_MOD STAR_MOD SLASH_MOD PERCENT_MOD
 %token GLOBAL INVARIANT VARIANT DECREASES FOR LABEL ASSERT SEMICOLON NULL EMPTY
 %token REQUIRES ENSURES ALLOCATES FREES ASSIGNS LOOP NOTHING SLICE IMPACT JESSIE PRAGMA FROM
 %token EXITS BREAKS CONTINUES RETURNS
@@ -281,7 +281,7 @@
 %left LT
 %left LTLT LTLT_MOD GTGT
 %left PLUS MINUS PLUS_MOD MINUS_MOD
-%left STAR STAR_MOD SLASH SLASH_MOD PERCENT CONST VOLATILE
+%left STAR STAR_MOD SLASH SLASH_MOD PERCENT PERCENT_MOD CONST VOLATILE
 %right prec_cast TILDE NOT prec_unary_op
 %nonassoc LTCOLON COLONGT
 %left DOT ARROW LSQUARE
@@ -497,6 +497,7 @@ lexpr_inner:
 | lexpr_inner SLASH lexpr_inner { info (PLbinop ($1, Bdiv, $3)) }
 | lexpr_inner SLASH_MOD lexpr_inner { info (PLbinop ($1, Bdiv_mod, $3)) }
 | lexpr_inner PERCENT lexpr_inner { info (PLbinop ($1, Bmod, $3)) }
+| lexpr_inner PERCENT_MOD lexpr_inner { info (PLbinop ($1, Bmod_mod, $3)) }
 | lexpr_inner STARHAT lexpr_inner  { info (PLrepeat ($1, $3)) }
 | lexpr_inner ARROW identifier_or_typename { info (PLarrow ($1, $3)) }
 | lexpr_inner DOT identifier_or_typename { info (PLdot ($1, $3)) }
@@ -1980,6 +1981,7 @@ wildcard:
 | NOT { () }
 | OR { () }
 | PERCENT { () }
+| PERCENT_MOD { () }
 | PIPE { () }
 | PLUS { () }
 | PLUS_MOD { () }
