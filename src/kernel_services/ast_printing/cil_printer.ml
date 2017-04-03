@@ -254,7 +254,7 @@ module Precedence = struct
     (* Constructions that do not require parentheses *)
     | TConst _
     | Tnull | TLval (TResult _,TNoOffset) | Tcomprehension _  | Tempty_set -> 0
-    | Tif (_, _, _)  -> logic_level
+    | Tif (_, _, _) | Tpif (_, _, _)  -> logic_level
     | TLogic_coerce(_,e) -> (getParenthLevelLogic e.term_node) + 1
 
   (* Create an expression of the same shape, and use {!getParenthLevel} *)
@@ -2241,6 +2241,11 @@ class cil_printer () = object (self)
     | Tif (cond,th,el) ->
       fprintf fmt "@[<2>%a?@;%a:@;%a@]"
 	(self#term_prec current_level) cond
+	(self#term_prec current_level) th
+	(self#term_prec current_level) el
+    | Tpif (cond,th,el) ->
+      fprintf fmt "@[<2>%a?@;%a:@;%a@]"
+	self#predicate cond
 	(self#term_prec current_level) th
 	(self#term_prec current_level) el
     | Tat (t,StmtLabel sref) ->

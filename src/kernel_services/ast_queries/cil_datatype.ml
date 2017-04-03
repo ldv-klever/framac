@@ -122,6 +122,7 @@ let rank_term = function
   | Toffset_max _ -> 33
   | Toffset_min _ -> 34
   | TLogic_coerce _ -> 35
+  | Tpif _ -> 36
 
 
 (**************************************************************************)
@@ -1440,6 +1441,9 @@ let rec compare_term t1 t2 =
       if cq <> 0 then cq else compare_list compare_term ts1 ts2
     | Tif(c1,a1,b1) , Tif(c2,a2,b2) ->
       compare_list compare_term [c1;a1;b1] [c2;a2;b2]
+    | Tpif(_p1,a1,b1) , Tpif(_p2,a2,b2) ->
+      let cq = compare_list compare_term [a1;b1] [a2;b2] in
+      if cq <> 0 then cq else assert false (* TODO! *)
     | Tbase_addr (l1,t1) , Tbase_addr (l2,t2)
     | Tblock_length (l1,t1) , Tblock_length (l2,t2)
     | Toffset (l1,t1) , Toffset (l2,t2)
@@ -1483,7 +1487,7 @@ let rec compare_term t1 t2 =
         else compare_term e1 e2
     | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TOffsetOf _ | TAlignOf _
       | TAlignOfE _ | TUnOp _ | TBinOp _ | TCastE _ | TAddrOf _ | TStartOf _
-      | Tapp _ | Tlambda _ | TDataCons _ | Tif _ | Tat _
+      | Tapp _ | Tlambda _ | TDataCons _ | Tif _ | Tpif _ | Tat _
       | Tbase_addr _ | Tblock_length _ | Toffset _ | Toffset_max _ | Toffset_min _
       | Tnull | TCoerce _ | TCoerceE _ | TUpdate _ | Ttypeof _
       | Ttype _ | Tempty_set | Tunion _ | Tinter _  | Tcomprehension _
@@ -1609,6 +1613,9 @@ let rec hash_term (acc,depth,tot) t =
         let hash1,tot1 = hash_term (acc+285,depth-1,tot) t1 in
         let hash2,tot2 = hash_term (hash1,depth-1,tot1) t2 in
         hash_term (hash2,depth-1,tot2) t3
+      | Tpif(_,t1,t2) -> (* TODO: hash predicate *)
+        let hash1,tot1 = hash_term (acc+293,depth-1,tot) t1 in
+        hash_term (hash1,depth-1,tot1) t2
       | Tat(t,l) ->
         let hash = acc + 304 + hash_label l in
         hash_term (hash,depth-1,tot-2) t

@@ -698,6 +698,8 @@ let rec is_same_term t1 t2 =
       && List.for_all2 is_same_term args1 args2
     | Tif(c1,t1,e1), Tif(c2,t2,e2) ->
         is_same_term c1 c2 && is_same_term t1 t2 && is_same_term e1 e2
+    | Tpif(p1,t1,e1), Tpif(p2,t2,e2) ->
+        is_same_predicate p1 p2 && is_same_term t1 t2 && is_same_term e1 e2
     | Tbase_addr (l1,t1), Tbase_addr (l2,t2)
     | Tblock_length (l1,t1), Tblock_length (l2,t2)
     | Toffset (l1,t1), Toffset (l2,t2)
@@ -736,7 +738,7 @@ let rec is_same_term t1 t2 =
     | (TConst _ | TLval _ | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TOffsetOf _
       | TAlignOf _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TCastE _
       | TAddrOf _ | TStartOf _ | Tapp _ | Tlambda _ | TDataCons _
-      | Tif _ | Tat _ | Tbase_addr _ | Tblock_length _
+      | Tif _ | Tpif _ | Tat _ | Tbase_addr _ | Tblock_length _
       | Toffset _ | Toffset_max _ | Toffset_min _ | Tnull
       | TCoerce _ | TCoerceE _ | TUpdate _ | Ttypeof _ | Ttype _
       | Tcomprehension _ | Tempty_set | Tunion _ | Tinter _ | Trange _
@@ -1260,6 +1262,9 @@ let rec hash_term (acc,depth,tot) t =
         let hash1,tot1 = hash_term (acc+285,depth-1,tot) t1 in
         let hash2,tot2 = hash_term (hash1,depth-1,tot1) t2 in
         hash_term (hash2,depth-1,tot2) t3
+      | Tpif(_,t1,t2) -> (* TODO: hash predicates *)
+        let hash1,tot1 = hash_term (acc+293,depth-1,tot) t1 in
+        hash_term (hash1,depth-1,tot1) t2
       | Tat(t,l) ->
         let hash = acc + 304 + hash_label l in
         hash_term (hash,depth-1,tot-2) t
@@ -1431,6 +1436,14 @@ let rec compare_term t1 t2 =
     else res
   | Tif _, _ -> 1
   | _, Tif _ -> -1
+  | Tpif(c1,t1,e1), Tpif(c2,t2,e2) ->
+    let res = compare_predicate c1 c2 in
+    if res = 0 then
+      let res = compare_term t1 t2 in
+      if res = 0 then compare_term e1 e2 else res
+    else res
+  | Tpif _, _ -> 1
+  | _, Tpif _ -> -1
   | Tbase_addr (l1,t1), Tbase_addr (l2,t2)
   | Tblock_length (l1,t1), Tblock_length (l2,t2)
   | Toffset (l1,t1), Toffset (l2,t2)
@@ -2149,7 +2162,7 @@ let rec constFoldTermToInt ?(machdep=true) (e: term) : Integer.t option =
   | TLval _ | TAddrOf _ | TStartOf _ | Tapp _ | Tlambda _ | TDataCons _
   | Tat _ | Tbase_addr _ | Tblock_length _ | TCoerce _ | TCoerceE _
   | TUpdate _ | Ttypeof _ | Ttype _ | Tempty_set | Tunion _ | Tinter _
-  | Tcomprehension _ | Trange _ | Tlet _ | Toffset_min _ | Toffset_max _ ->
+  | Tcomprehension _ | Tpif _ | Trange _ | Tlet _ | Toffset_min _ | Toffset_max _ ->
     None
 
 and constFoldCastToInt ~machdep typ e =

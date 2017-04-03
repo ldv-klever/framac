@@ -1346,6 +1346,8 @@ and term_node =
       (** constructor of logic sum-type. *)
   | Tif of term * term * term
       (** conditional operator*)
+  | Tpif of predicate * term * term
+      (** conditional operator with predicate condition. *)
   | Tat of term * logic_label
       (** term refers to a particular program point. *)
   | Tbase_addr of logic_label * term (** base address of a pointer. *)

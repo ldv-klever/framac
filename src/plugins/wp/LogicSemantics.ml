@@ -615,7 +615,9 @@ struct
     | Tlet _ ->
         Warning.error "Complex let-binding not implemented yet (%a)"
           Printer.pp_term t
-
+    | Tpif _ ->
+        Warning.error "Logic if (?:) on predicate not implemented yet (%a)"
+          Printer.pp_term t
     | Trange(a,b) ->
         let bound env = function
           | None -> None
@@ -798,11 +800,11 @@ struct
 
     | TLogic_coerce(_,t) -> C.region env t
 
-    | TBinOp _ | TUnOp _ | Trange _ | TUpdate _ | Tapp _ | Tif _
+    | TBinOp _ | TUnOp _ | Trange _ | TUpdate _ | Tapp _ | Tif _ | Tpif _
     | TConst _ | Tnull | TDataCons _ | Tlambda _
     | Ttype _ | Ttypeof _
     | TAlignOfE _ | TAlignOf _ | TSizeOfStr _ | TSizeOfE _ | TSizeOf _ | TOffsetOf _
-    | Tblock_length _ | Tbase_addr _ | Toffset _ | TAddrOf _ 
+    | Tblock_length _ | Tbase_addr _ | Toffset _ | TAddrOf _ | TStartOf _
       -> Wp_parameters.abort ~current:true 
            "Non-assignable term (%a)" Printer.pp_term t
 

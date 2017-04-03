@@ -787,6 +787,7 @@ let rec eval_term ~with_alarms env t =
     | Ttypeof _ -> unsupported "\\typeof operator"
     | Toffset_min _ | Toffset_max _ -> unsupported "\\offset_[max/min] operator"
     | Tcomprehension _ -> unsupported "sets defined by comprehension"
+    | Tpif _ -> unsupported "logic if (?:) on predicate"
     | Tinter _ -> unsupported "set intersection"
     | Tlet _ -> unsupported "\\let bindings"
     | TConst (LStr _) -> unsupported "constant strings"

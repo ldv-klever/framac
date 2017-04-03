@@ -2198,6 +2198,13 @@ and childrenTermNode vis tn =
           if test' != test || ttrue' != ttrue || tfalse' != tfalse then
             Tif(test',ttrue',tfalse')
           else tn
+    | Tpif(test,ttrue,tfalse) ->
+        let test' = visitCilPredicate vis test in
+        let ttrue' = vTerm ttrue in
+        let tfalse' = vTerm tfalse in
+          if test' != test || ttrue' != ttrue || tfalse' != tfalse then
+            Tpif(test',ttrue',tfalse')
+          else tn
     | Tat(t,s) ->
         let t' = vTerm t in
         let s' = visitCilLogicLabel vis s in
@@ -7309,6 +7316,12 @@ let rec free_vars_term bound_vars t = match t.term_node with
       (Logic_var.Set.union
          (free_vars_term bound_vars t2)
          (free_vars_term bound_vars t3))
+  | Tpif (p,t1,t2) ->
+    Logic_var.Set.union
+      (free_vars_predicate bound_vars p)
+      (Logic_var.Set.union
+         (free_vars_term bound_vars t1)
+         (free_vars_term bound_vars t2))
   | TDataCons(_,t) | Tapp (_,_,t) ->
     List.fold_left
       (fun acc t ->

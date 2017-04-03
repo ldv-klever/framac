@@ -921,6 +921,7 @@ struct
       | Trange (Some t1, Some t2) -> needs_at t1 || needs_at t2
       | Tlet(_,t) -> needs_at t
       | Tif(t1,t2,t3) -> needs_at t1 || needs_at t2 || needs_at t3
+      | Tpif(p,t1,t2) -> needs_at_pred p || needs_at t1 || needs_at t2
       | TLogic_coerce(_,t) -> needs_at t
     and needs_at_offset = function
       | TNoOffset -> false
@@ -1919,7 +1920,14 @@ struct
           List.fold_left (fun l x -> x.lv_name :: l) known_vars quants
         in
         aux known_vars (kont $ (add_binders quants)) term
-      | Tif (cond, ttrue, tfalse) ->
+      | Tif (_, ttrue, tfalse)
+      | Tpif (_, ttrue, tfalse) as node ->
+        let reconstruct t1 t2 =
+          match node with
+          | Tif (cond, _, _) -> Tif (cond, t1, t2)
+          | Tpif (cond, _, _) -> Tpif (cond, t1, t2)
+          | _ -> assert false
+        in
         let known_vars, ttrue = aux known_vars (fun x -> x) ttrue in
         let known_vars, tfalse = aux known_vars (fun x -> x) tfalse in
         let term =
@@ -1936,7 +1944,7 @@ struct
               term_node =
                 Tlambda(quants1,
                         {term with
-                          term_node = Tif(cond,term1,term2);
+                          term_node = reconstruct term1 term2;
                           term_type = term1.term_type});
               term_type = ttrue.term_type }
           | Tlambda _, _ | _, Tlambda _ ->
@@ -2181,7 +2189,7 @@ let add_label info lab =
          | TModel _ -> m.accept_models
          | _ -> true)
       | TAddrOf lv -> is_fct_ptr lv && m.accept_func_ptr
-      | Tif (_,t1,t2) -> aux t1 && aux t2
+      | Tif (_,t1,t2) | Tpif (_,t1,t2) -> aux t1 && aux t2
 
       | Tunion l | Tinter l -> List.for_all aux l
 
@@ -2749,8 +2757,16 @@ let add_label info lab =
           let t = lift_set (mk_shift loc env t'2 tres) t'1 in
             t.term_node, t.term_type
 
-      | PLif (t1, t2, t3) ->
-          let t1 = type_bool_term ~silent env t1 in
+      | PLif (tp1, t2, t3) ->
+          let tp1 =
+            try
+              `Term (type_bool_term ~silent:true env tp1)
+            with
+            | Backtrack ->
+              (* Seems OK since the first operand should be either term or predicate in any case, if one of the
+                 result operands can't be typed as term, we backtrack below *)
+              `Pred (predicate env tp1)
+          in
           let t2 = term ~silent env t2 in
           let t3 = term ~silent env t3 in
           let env,ty,ty2,ty3 =
@@ -2764,8 +2780,10 @@ let add_label info lab =
           let _,t3 = implicit_conversion
             ~overloaded:false loc t3 t3.term_type ty3
           in
-          Tif (t1, mk_cast t2 ty, mk_cast t3 ty), ty
-
+          begin match tp1 with
+          | `Term t1 -> Tif (t1, mk_cast t2 ty, mk_cast t3 ty), ty
+          | `Pred p -> Tpif (p, mk_cast t2 ty, mk_cast t3 ty), ty
+          end
       | PLold t ->
           let lab = find_old_label loc env in
           let env = Lenv.set_current_logic_label lab env in

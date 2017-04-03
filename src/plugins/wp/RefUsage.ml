@@ -447,7 +447,9 @@ and term (env:ctx) (t:term) : model = match t.term_node with
       rem_tlet env.local l_var_info;
       m
   | Tlet(_,_t) ->
-      Wp_parameters.not_yet_implemented "unknown \\let construct"
+     Wp_parameters.not_yet_implemented "unknown \\let construct"
+  | Tpif _ ->
+     Wp_parameters.not_yet_implemented "logic if (?:) on predicate"
 
   (* No escape *)
   | Tblock_length(_, t) -> m_unescape ((term env) t)

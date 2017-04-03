@@ -290,7 +290,7 @@ and loc_to_exp ~result {term_node = lnode ; term_type = ltype; term_loc = loc} =
   (* additional constructs *)
   | Tapp _ | Tlambda _ | Trange _   | Tlet _
   | TDataCons _
-  | Tif _
+  | Tif _ | Tpif _
   | Tat _
   | Tbase_addr _
   | Toffset _
@@ -318,7 +318,7 @@ let rec loc_to_lval ~result t =
   | Tinter _ -> error_lval() (* TODO *)
   | Tcomprehension _ -> error_lval()
   | TSizeOfE _ | TOffsetOf _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TSizeOfStr _
-  | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | Tapp _ | Tif _
+  | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | Tapp _ | Tif _| Tpif _
   | Tat _ | Toffset _ | Toffset_max _ | Toffset_min _
   | Tbase_addr _ | Tblock_length _ | Tnull | Trange _
   | TCoerce _ | TCoerceE _ | TDataCons _ | TUpdate _ | Tlambda _
@@ -342,7 +342,7 @@ let loc_to_offset ~result loc =
       | Tempty_set -> h,[]
       | Trange _ | TAddrOf _
       | TSizeOfE _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TSizeOfStr _
-      | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | TOffsetOf _ | Tapp _ | Tif _
+      | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | TOffsetOf _ | Tapp _ | Tif _ | Tpif _
       | Tat _ | Toffset _ | Toffset_max _ | Toffset_min _
       | Tbase_addr _ | Tblock_length _ | Tnull
       | TCoerce _ | TCoerceE _ | TDataCons _ | TUpdate _ | Tlambda _
