@@ -2897,6 +2897,14 @@ let add_label info lab =
           let t1 = type_bool_term ~silent env t1 in
           let t2 = type_bool_term ~silent env t2 in
           TBinOp(LOr,t1,t2), Ltype (C.find_logic_type Utf8_logic.boolean,[])
+      | PLxor (t1,t2) ->
+          let ty = Ltype (C.find_logic_type Utf8_logic.boolean,[]) in
+          let { lv_name = v1 } = Lenv.fresh_var env "tmp" LVLocal ty in
+          let { lv_name = v2 } = Lenv.fresh_var env "tmp" LVLocal ty in
+          let mk lexpr_node = { lexpr_node; lexpr_loc = loc } in
+          let and_not v1 v2 = mk @@ PLand (mk @@ PLvar v1, mk @@ PLnot (mk @@ PLvar v2)) in
+          term_node ~silent env loc @@
+            PLlet (v1, t1, mk @@ PLlet (v2, t2, mk @@ PLor (and_not v1 v2, and_not v2 v1)))
       | PLtypeof t1 ->
           let t1 = term env t1 in
           Ttypeof t1, Ltype (C.find_logic_type "typetag",[])
@@ -2990,7 +2998,7 @@ let add_label info lab =
       | PLfresh _ | PLallocable _ | PLfreeable _
       | PLinitialized _ | PLdangling _ | PLexists _ | PLforall _ 
       | PLimplies _ | PLiff _
-      | PLxor _ | PLsubtype _ | PLseparated _ ->
+      | PLsubtype _ | PLseparated _ ->
         if silent then raise Backtrack;
         C.error loc "syntax error (expression expected but predicate found)"
   and type_relation:
