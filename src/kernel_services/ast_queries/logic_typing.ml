@@ -1634,6 +1634,17 @@ struct
     let env,ty1,_ =
       partial_unif ~overloaded:false loc t1 t1.term_type var env
     in
+    let can_apply_integral_cast t1 lty2 =
+      match lty2 with
+      | Ctype ty2 ->
+        begin try
+          ignore @@ C.integral_cast ty2 t1;
+          true
+        with
+        | Failure _ -> false
+        end
+      | _ -> false
+    in
     let rec aux lty1 lty2 =
       match (unroll_type lty1), (unroll_type lty2) with
         | t1, t2 when is_same_type t1 t2 -> t1
@@ -1662,6 +1673,10 @@ struct
               Cil_printer.pp_typ ty1 Cil_printer.pp_typ ty2
             else (* pointer to integer conversion *)
               Ctype (C.conditionalConversion ty1 ty2)
+        | (Linteger, Ctype _ | Ctype _, Linteger)
+            when can_apply_integral_cast t2 lty1 -> lty1
+        | (Linteger, Ctype _ | Ctype _, Linteger)
+            when can_apply_integral_cast t1 lty2 -> lty2
         | (Linteger, Ctype t | Ctype t, Linteger)
             when Cil.isIntegralType t -> Linteger
         | (Linteger, Ctype t | Ctype t, Linteger)
