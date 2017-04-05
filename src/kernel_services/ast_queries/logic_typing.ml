@@ -2932,8 +2932,8 @@ let add_label info lab =
           TBinOp(LOr,t1,t2), Ltype (C.find_logic_type Utf8_logic.boolean,[])
       | PLxor (t1,t2) ->
           let ty = Ltype (C.find_logic_type Utf8_logic.boolean,[]) in
-          let { lv_name = v1 } = Lenv.fresh_var env "tmp" LVLocal ty in
-          let { lv_name = v2 } = Lenv.fresh_var env "tmp" LVLocal ty in
+          let { lv_name = v1 } as lv1 = Lenv.fresh_var env "tmp" LVLocal ty in
+          let { lv_name = v2 } = Lenv.fresh_var (add_var v1 lv1 env) "tmp" LVLocal ty in
           let mk lexpr_node = { lexpr_node; lexpr_loc = loc } in
           let and_not v1 v2 = mk @@ PLand (mk @@ PLvar v1, mk @@ PLnot (mk @@ PLvar v2)) in
           term_node ~silent env loc @@
