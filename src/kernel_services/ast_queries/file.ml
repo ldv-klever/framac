@@ -352,23 +352,31 @@ let generate_pp_file =
     close_in ic;
     Array.of_list @@ Str.split newline (Bytes.unsafe_to_string s)
   in
+  let pp_line_present = Array.make (Array.length pp_input) false in
+  let newline_length = String.length "\n" in
   let oc = open_out Filename.(remove_extension pp_in_file ^ ".pp" ^ extension pp_in_file) in
   let file = ref pp_in_file and line = ref 1 in
   let ic = open_in pp_out_file in
   begin try while true do
-    let s = input_line ic in
+    let s = input_line ic ^ "\n" in
     if Str.string_match linedir s 0 then begin
       line := int_of_string (Str.matched_group 2 s);
       try file := Str.matched_group 4 s with Not_found -> ();
     end else if String.equal !file pp_in_file then begin
-      pp_input.(!line - 1) <- s;
+      if String.(length s > newline_length || length pp_input.(!line - 1) = newline_length) then
+        pp_input.(!line - 1) <- s
+      else
+        pp_input.(!line - 1) <- "// " ^ pp_input.(!line - 1);
+      pp_line_present.(!line - 1) <- true;
       incr line
     end
   done with
   | End_of_file ->
     close_in ic
   end;
-  Array.iter (Printf.fprintf oc "%s\n") pp_input;
+  Array.iter2
+    Printf.(fun present -> if present then fprintf oc "%s" else fprintf oc "// %s")
+    pp_line_present pp_input;
   close_out oc
 
 let safe_remove_file f =
