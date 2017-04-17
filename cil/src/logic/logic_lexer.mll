@@ -402,6 +402,7 @@ and chr buffer = parse
              | '"' -> '"'
              | '?' -> '?'
              | '\\' -> '\\'
+             | 'v' -> '\011'
              | _ -> assert false
           ); chr buffer lexbuf}
   | eof { Buffer.contents buffer }
