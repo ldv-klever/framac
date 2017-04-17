@@ -5115,7 +5115,7 @@ and constFold (machdep: bool) (e: exp) : exp =
           with Floating_point.Float_Non_representable_as_Int64 _ -> (* too big*)
             new_exp ~loc (CastE (t, Modulo, e))
         end
-      | _, _ -> new_exp ~loc (CastE (t, Modulo, e))
+      | _, _ -> new_exp ~loc (CastE (t, oft, e))
     end
   | Lval lv -> new_exp ~loc (Lval (constFoldLval machdep lv))
   | AddrOf lv -> new_exp ~loc (AddrOf (constFoldLval machdep lv))
