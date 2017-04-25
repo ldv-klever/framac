@@ -395,14 +395,16 @@ let buf = Buffer.create 1024
 let save_current_pos () =
   annot_start_pos := currentLoc ()
 
-let make_annot ~one_line lexbuf s =
+let make_annot lexbuf s =
   let start = snd !annot_start_pos in
   let stop, token = Logic_lexer.annot (start, s) in
-  lexbuf.Lexing.lex_curr_p <- stop; 
+  lexbuf.Lexing.lex_curr_p <-
+    Lexing.{ stop with
+              pos_cnum = stop.pos_cnum + start.pos_cnum;
+              pos_bol = stop.pos_bol + start.pos_cnum    };
   (* The filename has already been normalized, so we must reuse it "as is". *)
   E.setCurrentFile ~normalize:false stop.Lexing.pos_fname;
   E.setCurrentLine stop.Lexing.pos_lnum;
-  if one_line then E.newline ();
   match token with
     | Logic_ptree.Adecl d -> DECL d
     | Logic_ptree.Aspec -> SPEC (start,s)
@@ -801,7 +803,7 @@ and annot_first_token = parse
   | "" { annot_token lexbuf }
 and annot_token = parse
   | "*/" { let s = Buffer.contents buf in
-           make_annot ~one_line:false lexbuf s }
+           make_annot lexbuf s }
   | eof  { E.parse_error "Unterminated annotation" }
   | '\n' {E.newline(); Buffer.add_char buf '\n'; annot_token lexbuf }
   | _ as c { Buffer.add_char buf c; annot_token lexbuf }
@@ -814,7 +816,7 @@ and annot_one_line = parse
   | ' '|'@'|'\t'|'\r' as c { Buffer.add_char buf c; annot_one_line lexbuf }
   | "" { annot_one_line_logic lexbuf }
 and annot_one_line_logic = parse
-  | '\n' { make_annot ~one_line:true lexbuf (Buffer.contents buf) }
+  | '\n' { Buffer.add_char buf '\n'; make_annot lexbuf (Buffer.contents buf) }
   | _ as c { Buffer.add_char buf c; annot_one_line_logic lexbuf }
 
 {
