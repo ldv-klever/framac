@@ -394,10 +394,9 @@ let make_annot lexbuf s =
   lexbuf.Lexing.lex_curr_p <-
     Lexing.{ stop with
              pos_cnum = stop.pos_cnum + start.pos_cnum;
-             pos_bol = stop.pos_bol + start.pos_cnum    };
+             pos_bol = if stop.pos_lnum <> start.pos_lnum then stop.pos_bol + start.pos_cnum else start.pos_bol };
   (* The filename has already been normalized, so we must reuse it "as is". *)
   E.setCurrentFile ~normalize:false stop.Lexing.pos_fname;
-  E.setCurrentLine stop.Lexing.pos_lnum;
   match token with
     | Logic_ptree.Adecl d -> DECL d
     | Logic_ptree.Aspec -> SPEC (start,s)
