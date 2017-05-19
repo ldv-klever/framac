@@ -384,8 +384,25 @@ let generate_pp_file =
       line := int_of_string (Str.matched_group 2 s);
       try file := Str.matched_group 4 s with Not_found -> ();
     end else if String.equal !file pp_in_file then begin
-      if pp_line_present.(!line - 1) then
-        warn_preprocessor_output "overwriting the same input file location twice" pp_in_file;
+      let s =
+        let first_nonspace s =
+          let fnsp = ref 0 in
+          while !fnsp < String.length s && (s.[!fnsp] = ' ' || s.[!fnsp] = '\t') do incr fnsp; done;
+          !fnsp
+        in
+        let olds = pp_input.(!line - 1) in
+        let fs = first_nonspace s and oldfs = first_nonspace olds in
+        if pp_line_present.(!line - 1) then begin
+          (* Handle multiline output *)
+          if fs <= oldfs then
+            warn_preprocessor_output "overwriting the same input file location twice" pp_in_file;
+          String.(sub olds 0 (length olds - 1) ^ sub s fs @@ length s - fs)
+        end else if fs > 0 && oldfs > 0 && not String.(equal (sub olds 0 oldfs) @@ sub s 0 fs) then
+          (* Handle messed indentation *)
+          String.(sub olds 0 oldfs ^ sub s fs @@ length s - fs)
+        else
+          s
+      in
       if String.(length s > newline_length || length pp_input.(!line - 1) = newline_length) then
         pp_input.(!line - 1) <- s
       else
