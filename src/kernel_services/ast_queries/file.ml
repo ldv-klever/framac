@@ -343,6 +343,21 @@ let get_machdep () =
 let generate_pp_file =
   let newline = Str.regexp "^" in
   let linedir = Str.regexp "#[ ]*\\(line\\)? \\([0-9]+\\)[ ]*\\(\"\\([^\"]+\\)\"\\)?" in
+  let warn_preprocessor_output =
+    let module H = Datatype.String.Hashtbl in
+    let h = H.create 2 in
+    fun s file ->
+      let key = s ^ " " ^ file in
+      if not (H.mem h key) then begin
+        Kernel.warning
+          "Frama-C@ detected@ suspicious@ preprocessor@ output@ %s (%s).@ \
+           This@ is@ likely@ to@ be@ due@ to@ GCC@ bug 23779@ related@ to@ \
+           incorrect@ handling@ of@ CR+LF@ newlines@ in@ comments. Consider@ using@ UNIX-style@ line@ ends@ or@ \
+           another@ preprocessor@ e.g.@ clang@ (see@ also@ option -cpp-command)."
+          s file;
+        H.replace h key ()
+      end
+  in
   fun pp_in_file pp_out_file ->
   let pp_input =
     let ic = open_in pp_in_file in
@@ -350,7 +365,13 @@ let generate_pp_file =
     let s = Bytes.create n in
     really_input ic s 0 n;
     close_in ic;
-    Array.of_list @@ Str.split newline (Bytes.unsafe_to_string s)
+    (* Dirty HARDLY AVOIDABLE HACK!!! Workaround for OLD GCC BUG #23779 about incorrect processing of
+       \r in comments (they are replaced with \n(!!!)).
+       In this case we get wrong preprocessor output, but at least we don't fail
+       and are able to warn the user about the issue. *)
+    Array.(concat @@
+           let lines = of_list @@ Str.split newline (Bytes.unsafe_to_string s) in
+           [lines; make (length lines) ""])
   in
   let pp_line_present = Array.make (Array.length pp_input) false in
   let newline_length = String.length "\n" in
@@ -363,6 +384,8 @@ let generate_pp_file =
       line := int_of_string (Str.matched_group 2 s);
       try file := Str.matched_group 4 s with Not_found -> ();
     end else if String.equal !file pp_in_file then begin
+      if pp_line_present.(!line - 1) then
+        warn_preprocessor_output "overwriting the same input file location twice" pp_in_file;
       if String.(length s > newline_length || length pp_input.(!line - 1) = newline_length) then
         pp_input.(!line - 1) <- s
       else
@@ -374,6 +397,19 @@ let generate_pp_file =
   | End_of_file ->
     close_in ic
   end;
+  (* DIRTY HACK CONT'D *)
+  let pp_input, pp_line_present =
+    try
+      let n = Array.length pp_input in
+      for i = n / 2 to n - 1 do
+        if pp_line_present.(i) then raise Exit
+      done;
+      Array.(sub pp_input 0 (n / 2), sub pp_line_present 0 (n / 2))
+    with
+    | Exit ->
+      warn_preprocessor_output "exceeding beyond the end location of the input file" pp_in_file;
+      pp_input, pp_line_present
+  in
   Array.iter2
     Printf.(fun present -> if present then fprintf oc "%s" else fprintf oc "// %s")
     pp_line_present pp_input;
