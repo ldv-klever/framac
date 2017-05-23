@@ -391,12 +391,13 @@ let generate_pp_file =
           !fnsp
         in
         let olds = pp_input.(!line - 1) in
+        let olds = if String.length olds >= 2 && olds.[0] = '/' && olds.[1] = '/' then "" else olds in
         let fs = first_nonspace s and oldfs = first_nonspace olds in
         if pp_line_present.(!line - 1) then begin
           (* Handle multiline output *)
-          if fs <= oldfs then
+          if fs <= oldfs && olds <> "" then
             warn_preprocessor_output "overwriting the same input file location twice" pp_in_file;
-          String.(sub olds 0 (length olds - 1) ^ sub s fs @@ length s - fs)
+          String.((if olds = "" then "" else sub olds 0 (length olds - 1)) ^ sub s fs @@ length s - fs)
         end else if fs > 0 && oldfs > 0 && not String.(equal (sub olds 0 oldfs) @@ sub s 0 fs) then
           (* Handle messed indentation *)
           String.(sub olds 0 oldfs ^ sub s fs @@ length s - fs)
