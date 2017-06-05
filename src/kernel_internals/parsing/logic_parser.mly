@@ -1299,6 +1299,7 @@ annotation:
 | full_identifier_or_typename { Aattribute_annot (loc (), $1) }
 | CHAR STAR full_identifier_or_typename EQUAL { Aliteral_annot $3 }
 | PERCENT { Amodulo_op_annot }
+| LPAR type_spec PERCENT RPAR { Amodulo_op_annot }
 ;
 
 /*** loop annotations ***/
