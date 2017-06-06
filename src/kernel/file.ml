@@ -1374,7 +1374,7 @@ let propagate_logic_info_default_labels =
         DoChildrenPost (fun x -> ignore @@ Stack.pop labels; x)
 
       method private do_with_label : 'a. logic_label -> 'a visitAction = fun lab -> self#do_with_label_opt (Some lab)
-      method private do_without_label : 'a visitAction = self#do_with_label_opt None
+      method private do_without_label : 'a. 'a visitAction = self#do_with_label_opt None
 
       method private do_app : 'a. 'a what -> _ -> _ -> 'a visitAction =
         fun (type a) what li args ->
@@ -1411,6 +1411,11 @@ let propagate_logic_info_default_labels =
       method! vlogic_info_decl =
         function
         | { l_labels = [lab] } -> self#do_with_label lab
+        | _ -> self#do_without_label
+
+      method! vannotation =
+        function
+        | Dlemma (_, _, [lab], _, _, _) -> self#do_with_label lab
         | _ -> self#do_without_label
     end
   in
