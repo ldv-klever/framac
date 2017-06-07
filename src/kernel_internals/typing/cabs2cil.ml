@@ -5241,7 +5241,7 @@ and makeCompType ghost (isstruct: bool)
             else (* valid flexible array member *) ()
           end
          | _ ->
-           Kernel.error ~current:true
+           Kernel.warning ~current:true
              "field %s is declared with incomplete type %a"
             n Cil_printer.pp_typ ftype
       end;
