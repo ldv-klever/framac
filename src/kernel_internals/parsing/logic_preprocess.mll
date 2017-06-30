@@ -175,6 +175,10 @@
 }
 
 rule main = parse
+  | ("#define"|"#undef") [' ''\t']* ['a'-'z''A'-'Z''0'-'9''_']* [' ''\t']* '('[^')']*"..."[^')']*')'
+      {
+        macro true lexbuf
+      }
   | ("#define"|"#undef") [' ''\t']* ((['a'-'z''A'-'Z''0'-'9''_'])* as m)
       {
         let blacklisted = List.mem m blacklisted_macros in
