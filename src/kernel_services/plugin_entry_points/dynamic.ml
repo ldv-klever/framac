@@ -273,6 +273,8 @@ let load_script base =
 (* --- Command-Line Entry Points                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
+let findlib_path = ref ""
+
 let set_module_load_path path =
   let add_dir ~user d ps =
     if is_dir d then d::ps else
@@ -282,9 +284,11 @@ let set_module_load_path path =
   load_path :=
     List.fold_right (add_dir ~user:true) path
       (List.fold_right (add_dir ~user:false) Config.plugin_dir []);
-  let findlib_path = String.concat ":" !load_path in
-  Klog.debug ~dkey "setting findlib path to %s" findlib_path;
-  Findlib.init ~env_ocamlpath:findlib_path ()
+  let findlib_path_ = String.concat ":" !load_path in
+  Klog.debug ~dkey "setting findlib path to %s" findlib_path_;
+  findlib_path := findlib_path_
+
+let get_findlib_path () = !findlib_path
 
 let load_plugin_path () =
   let scan_directory pkgs dir =
