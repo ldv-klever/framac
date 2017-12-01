@@ -45,7 +45,7 @@
 
 # 47 "src/plugins/wp/qed/src/numbers.ml"
 let __ocaml_lex_tables = {
-  Lexing.lex_base = 
+  Lexing.lex_base =
    "\000\000\253\255\033\000\065\000\255\255\103\000\141\000\179\000\
     \217\000\045\001\250\000\083\001\121\001\159\001\197\001\006\002\
     \044\002\082\002\254\255\120\002\230\001\153\002\185\002\218\002\
@@ -53,7 +53,7 @@ let __ocaml_lex_tables = {
     \140\003\171\003\181\003\203\003\237\003\055\003\083\003\044\004\
     \254\255\255\255\008\004\109\004\174\004\212\004\031\005\077\004\
     \069\005\134\005\172\005\116\003\142\004";
-  Lexing.lex_backtrk = 
+  Lexing.lex_backtrk =
    "\255\255\255\255\002\000\002\000\255\255\002\000\002\000\002\000\
     \002\000\002\000\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
@@ -61,7 +61,7 @@ let __ocaml_lex_tables = {
     \001\000\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\001\000\001\000\001\000\001\000\001\000\255\255\
     \255\255\255\255\255\255\255\255\255\255";
-  Lexing.lex_default = 
+  Lexing.lex_default =
    "\001\000\000\000\255\255\255\255\000\000\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\000\000\255\255\255\255\255\255\255\255\255\255\
@@ -69,7 +69,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\040\000\
     \000\000\000\000\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255";
-  Lexing.lex_trans = 
+  Lexing.lex_trans =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -284,7 +284,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\041\000";
-  Lexing.lex_check = 
+  Lexing.lex_check =
    "\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
@@ -499,7 +499,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\050\000";
-  Lexing.lex_base_code = 
+  Lexing.lex_base_code =
    "\000\000\000\000\000\000\025\000\045\000\063\000\086\000\124\000\
     \149\000\187\000\000\000\225\000\250\000\032\001\057\001\095\001\
     \119\001\157\001\081\000\180\001\000\000\000\000\218\001\000\000\
@@ -507,7 +507,7 @@ let __ocaml_lex_tables = {
     \043\002\000\000\000\002\055\002\067\002\000\000\000\000\084\002\
     \000\000\045\000\000\000\107\002\145\002\170\002\208\002\000\000\
     \231\002\013\003\038\003\000\000\000\000";
-  Lexing.lex_backtrk_code = 
+  Lexing.lex_backtrk_code =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -515,7 +515,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000";
-  Lexing.lex_default_code = 
+  Lexing.lex_default_code =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -523,7 +523,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000";
-  Lexing.lex_trans_code = 
+  Lexing.lex_trans_code =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -657,7 +657,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000";
-  Lexing.lex_check_code = 
+  Lexing.lex_check_code =
    "\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
@@ -791,7 +791,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255";
-  Lexing.lex_code = 
+  Lexing.lex_code =
    "\255\011\255\010\255\009\255\008\255\007\255\006\255\005\255\004\
     \255\255\011\255\007\255\255\011\255\010\255\007\255\006\255\255\
     \011\255\010\255\255\011\255\255\010\255\011\255\255\000\004\001\
@@ -803,7 +803,7 @@ let __ocaml_lex_tables = {
 }
 
 let rec token lexbuf =
-  lexbuf.Lexing.lex_mem <- Array.make 12 (-1) ; (* L=8 [11] <- p ; [10] <- p ; [9] <- p ; [8] <- p ; [7] <- p ; [6] <- p ; [5] <- p ; [4] <- p ;  *)
+  lexbuf.Lexing.lex_mem <- Array.make 12 (-1);(* L=8 [11] <- p ; [10] <- p ; [9] <- p ; [8] <- p ; [7] <- p ; [6] <- p ; [5] <- p ; [4] <- p ;  *)
   lexbuf.Lexing.lex_mem.(11) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(10) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(9) <- lexbuf.Lexing.lex_curr_pos ;
@@ -812,7 +812,7 @@ let rec token lexbuf =
   lexbuf.Lexing.lex_mem.(6) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(5) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(4) <- lexbuf.Lexing.lex_curr_pos ;
-  __ocaml_lex_token_rec lexbuf 0
+ __ocaml_lex_token_rec lexbuf 0
 and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
   match Lexing.new_engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -870,16 +870,16 @@ and
       ( raise Not_found )
 # 872 "src/plugins/wp/qed/src/numbers.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_token_rec lexbuf __ocaml_lex_state
 
 and token_dec lexbuf =
-  lexbuf.Lexing.lex_mem <- Array.make 8 (-1) ; (* L=4 [7] <- p ; [6] <- p ; [5] <- p ; [4] <- p ;  *)
+  lexbuf.Lexing.lex_mem <- Array.make 8 (-1);(* L=4 [7] <- p ; [6] <- p ; [5] <- p ; [4] <- p ;  *)
   lexbuf.Lexing.lex_mem.(7) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(6) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(5) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(4) <- lexbuf.Lexing.lex_curr_pos ;
-  __ocaml_lex_token_dec_rec lexbuf 25
+ __ocaml_lex_token_dec_rec lexbuf 25
 and __ocaml_lex_token_dec_rec lexbuf __ocaml_lex_state =
   match Lexing.new_engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -912,16 +912,16 @@ and
       ( raise Not_found )
 # 914 "src/plugins/wp/qed/src/numbers.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_token_dec_rec lexbuf __ocaml_lex_state
 
 and token_hex lexbuf =
-  lexbuf.Lexing.lex_mem <- Array.make 8 (-1) ; (* L=4 [7] <- p ; [6] <- p ; [5] <- p ; [4] <- p ;  *)
+  lexbuf.Lexing.lex_mem <- Array.make 8 (-1);(* L=4 [7] <- p ; [6] <- p ; [5] <- p ; [4] <- p ;  *)
   lexbuf.Lexing.lex_mem.(7) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(6) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(5) <- lexbuf.Lexing.lex_curr_pos ;
   lexbuf.Lexing.lex_mem.(4) <- lexbuf.Lexing.lex_curr_pos ;
-  __ocaml_lex_token_hex_rec lexbuf 39
+ __ocaml_lex_token_hex_rec lexbuf 39
 and __ocaml_lex_token_hex_rec lexbuf __ocaml_lex_state =
   match Lexing.new_engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -954,7 +954,7 @@ and
       ( raise Not_found )
 # 956 "src/plugins/wp/qed/src/numbers.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_token_hex_rec lexbuf __ocaml_lex_state
 
 ;;
@@ -988,9 +988,7 @@ and
       | '0' .. '9' -> int_of_char '0'
       | 'a' .. 'f' -> int_of_char 'a' - 10
       | 'A' .. 'F' -> int_of_char 'A' - 10
-      | _ ->
-	  let e = "?" in e.[0] <- c ;
-	  error "Incorrect hex-digit" e
+      | _ -> error "Incorrect hex-digit" (String.make 1 c)
     in int_of_char c - d
 
   open Big_int
@@ -1025,8 +1023,7 @@ and
 
   let power_of_ten e =
     if e < 0 then raise (Invalid_argument "negative power") ;
-    let s = String.make (succ e) '0' in
-    s.[0] <- '1' ; s
+    String.init (succ e) (fun i -> if i = 0 then '1' else '0')
 
   let significant cst =
     let digits = cst.man ^ cst.com in
@@ -1037,4 +1034,4 @@ and
     in digits , exp
 
 
-# 1041 "src/plugins/wp/qed/src/numbers.ml"
+# 1038 "src/plugins/wp/qed/src/numbers.ml"
