@@ -941,6 +941,8 @@ let files_to_cil files =
   Kernel.feedback ~level:2 "symbolic link";
   let merged_file = Mergecil.merge cil_files "whole_program" in
   Logic_utils.complete_types merged_file;
+  (* Lemma functions *)
+  Logic_lemma_functions.make_axioms_for_functions merged_file;
   if Kernel.UnspecifiedAccess.get () then
     Undefined_sequence.check_sequences merged_file;
   merged_file, cabs_files

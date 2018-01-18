@@ -508,6 +508,7 @@ KERNEL_CMO=\
 	src/kernel_services/ast_data/property_status.cmo                \
 	src/kernel_services/ast_data/annotations.cmo                    \
 	src/kernel_services/ast_printing/printer.cmo                    \
+	src/kernel_services/ast_queries/logic_lemma_functions.cmo   \
 	src/kernel_internals/typing/logic_builtin.cmo                 \
 	src/kernel_services/ast_printing/cabs_debug.cmo                 \
 	src/kernel_internals/parsing/lexerhack.cmo                     \
