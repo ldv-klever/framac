@@ -1397,6 +1397,8 @@ let prepare_cil_file ast =
        "Trying to add the same varinfo twice: %a (vid:%d)"
        Printer.pp_varinfo vi vi.vid);
   Kernel.feedback ~level:2 "register globals done";
+  (* Lemma functions *)
+  Logic_lemma_functions.make_axioms_for_functions ast;
   (* NB: register_global also calls oneret, which might introduce new
      statements and new annotations tied to them. Since sid are set by cfg,
      we must compute it again before annotation synchronisation *)
