@@ -25,6 +25,16 @@ open Cil_types
 open Logic_const
 open Logic_typing
 
+(** \result → result, where just 'result' is a variable under Exists *)
+let replace_result result_var pred = Visitor.visitFramacPredicate (object
+  inherit Visitor.frama_c_inplace
+
+  method! vterm t =
+    if is_result t then ChangeTo (tvar result_var)
+    else DoChildren
+
+  end) pred
+
 let () = Logic_typing.register_behavior_extension
   "lemmafn" (fun ~typing_context ~loc l -> Ext_terms [tinteger 1])
 
@@ -34,8 +44,7 @@ let add_usage_of_pred f p =
     beh.b_requires <- (Logic_const.new_predicate app) :: beh.b_requires
   ) f.sspec.spec_behavior
 
-let lemma_for_behavior fname args beh =
-  let arg_quants = List.map cvar_to_lvar args in
+let lemma_for_behavior fvar args beh =
   let preconds = List.map (fun pred -> pred.ip_content)
     (List.append beh.b_requires beh.b_assumes) in
   let precond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue preconds in
@@ -44,22 +53,26 @@ let lemma_for_behavior fname args beh =
       Kernel.fatal "postcondition of unsupported kind Exits for lemma function";
     pred.ip_content) beh.b_post_cond in
   let postcond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue postconds in
-  let final_pred = pforall (arg_quants,
-    (* not using the pimplies function to avoid collapsing
-     * to just "true" right here *)
-    unamed (Pimplies (precond_pred, postcond_pred))) in
-  (* TODO: error when \old is used *)
-  let name = "LF__Lemma__" ^ fname in
-  Dlemma (name, false, [Logic_const.old_label], [], final_pred, Cil_datatype.Location.unknown)
+  let arg_vars = List.map cvar_to_lvar args in
+  (* not using the pimplies function to avoid collapsing to just "true" right here *)
+  let impl_pred = unamed (Pimplies (precond_pred, postcond_pred)) in
+  let pred_with_args = pforall (arg_vars, impl_pred) in
+  let pred_with_ret = match (cvar_to_lvar fvar).lv_type with
+    | Ctype (TFun (ret_typ, _, _, _)) when ret_typ <> voidType ->
+        let ret_var = Cil_const.make_logic_var_formal "result" (Ctype (ret_typ)) in
+        pexists ([ret_var], replace_result ret_var pred_with_args)
+    | _ -> pred_with_args in
+  let name = "LF__Lemma__" ^ fvar.vname in
+  Dlemma (name, false, [Logic_const.old_label], [], pred_with_ret, Cil_datatype.Location.unknown)
 
-let axiomatic_for_behavior fname args beh l =
-  let lemma = lemma_for_behavior fname args beh in
-  let pred_name = "LF__Predicate__" ^ fname in
+let axiomatic_for_behavior fvar args beh l =
+  let lemma = lemma_for_behavior fvar args beh in
+  let pred_name = "LF__Predicate__" ^ fvar.vname in
   let pred = { (Cil_const.make_logic_info pred_name) with
     l_profile = [Cil_const.make_logic_var_formal "x" Linteger];
     l_body = LBpred (ptrue) } in
   let pred_def = Dfun_or_pred (pred, l) in
-  let axiomatic = Daxiomatic ("LF__Axiomatic__" ^ fname, [
+  let axiomatic = Daxiomatic ("LF__Axiomatic__" ^ fvar.vname, [
       lemma;
       pred_def
     ], l) in
@@ -104,7 +117,7 @@ class make_axioms_for_functions = object
         List.iter (add_usage_of_pred f) added_preds;
         match check_annot_get_beh f with
         | Some(beh) ->
-          let (axiomatic_ann, pred_name) = axiomatic_for_behavior f.svar.vname f.sformals beh l in
+          let (axiomatic_ann, pred_name) = axiomatic_for_behavior f.svar f.sformals beh l in
           added_preds <- pred_name :: added_preds;
           ChangeTo [
             GFun (f, l);
