@@ -24,6 +24,33 @@ open Cil
 open Cil_types
 open Logic_const
 
+(** Lemma-Functions **
+ *
+ * RATIONALE:
+   * Some properties are hard to prove as lemmas (solvers don't solve them automatically).
+   * It is often possible to prove them as ghost functions instead.
+   * With this feature, you don't have to explicitly call these functions,
+   * because it automatically generates axioms from them.
+ *
+ * DESIGN:
+   * For every function marked annotated with 'lemmafn something' (a term is
+   * required by the extension system, but we don't care which term it is here),
+   * an axiom is generated of the form
+   * 'exists (return value). * forall (arguments). precondition => * postconditions'.
+   *
+   * To prevent the axiom from proving the function itself,
+   * the axiom is wrapped in an axiomatic with an extra dummy predicate,
+   * which is then used in all functions defined below the lemma-function.
+   *
+   * Some restrictions for the functions: must assign and allocate nothing, must
+   * have only one (default) behavior. (Actually the annotation is on the behavior.)
+ *
+ * TODO:
+   * examples/tests: jessie/tests/bitvectors, verker/strcat+strlen
+   * remove \old?
+   * jessie: remove unused axiomatic symbol error
+ * *)
+
 (** \result → result, where just 'result' is a variable under Exists *)
 let replace_result result_var pred = Visitor.visitFramacPredicate (object
   inherit Visitor.frama_c_inplace
@@ -34,22 +61,21 @@ let replace_result result_var pred = Visitor.visitFramacPredicate (object
 
   end) pred
 
-let () = Logic_typing.register_behavior_extension
-  "lemmafn" (fun ~typing_context ~loc l -> Ext_terms [tinteger 1])
-
+(** Append \requires p(1) to a function's specification (to all behaviors) *)
 let add_usage_of_pred f p =
   let app = papp (p, [], [tinteger 1]) in
   List.iter (fun beh ->
     beh.b_requires <- (new_predicate app) :: beh.b_requires
   ) f.sspec.spec_behavior
 
+(** Generate an axiom from a behavior *)
 let lemma_for_behavior fvar args beh =
   let preconds = List.map (fun pred -> pred.ip_content)
     (List.append beh.b_requires beh.b_assumes) in
   let precond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue preconds in
   let postconds = List.map (fun (kind, pred) ->
     if (kind = Exits) then
-      Kernel.fatal "postcondition of unsupported kind Exits for lemma function";
+      Kernel.fatal "postcondition of unsupported kind Exits for lemma-function";
     pred.ip_content) beh.b_post_cond in
   let postcond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue postconds in
   let arg_vars = List.map cvar_to_lvar args in
@@ -64,6 +90,7 @@ let lemma_for_behavior fvar args beh =
   let name = "LF__Lemma__" ^ fvar.vname in
   Dlemma (name, false, [old_label], [], pred_with_ret, Cil_datatype.Location.unknown)
 
+(** Generate an axiomatic for a behavior (with the dummy predicate), registering globals *)
 let axiomatic_for_behavior fvar args beh l =
   let lemma = lemma_for_behavior fvar args beh in
   let pred_name = "LF__Predicate__" ^ fvar.vname in
@@ -82,29 +109,37 @@ let axiomatic_for_behavior fvar args beh l =
    * function after axiomatic { requires pred }
    *)
 
+(** Annotation that marks functions as lemma-functions *)
+let () = Logic_typing.register_behavior_extension
+  "lemmafn" (fun ~typing_context ~loc l -> Ext_terms [tinteger 1])
+
 let beh_is_lemma beh =
   List.exists (fun (extname, _) -> extname = "lemmafn") beh.b_extended
 
+(** If a functions is marked with the annotation,
+ *  make sure the function is a valid lemma-function
+ *  and return the default behavior *)
 let check_annot_get_beh f =
   if (List.length f.sspec.spec_behavior = 1) then (
     let beh = (List.hd f.sspec.spec_behavior) in
     if (beh_is_lemma beh) then (
       if not (beh.b_name = default_behavior_name) then
-        Kernel.fatal "behavior name for lemma function does not match the default";
+        Kernel.fatal "behavior name for lemma-function is not default";
       if (beh.b_assigns <> Writes []) then
-        Kernel.fatal "can't make a lemma for function with non-empty 'assigns'";
+        Kernel.fatal "lemma-function with non-empty \assigns";
       if (beh.b_allocation <> FreeAlloc ([], [])) then
-        Kernel.fatal "can't make a lemma for function with non-empty 'allocates'";
+        Kernel.fatal "lemma-function with non-empty \allocates";
       Some beh
     ) else None
   ) else (
     List.iter (fun beh ->
       if (beh_is_lemma beh) then
-        Kernel.fatal "number of behaviors is not 1, but asked for lemma function"
+        Kernel.fatal "lemma-function with number of behaviors != 1"
     ) f.sspec.spec_behavior;
     None
   )
 
+(** The main visitor for processing lemma-functions *)
 class make_axioms_for_functions = object
   inherit Visitor.frama_c_inplace
 
