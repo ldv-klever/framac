@@ -23,7 +23,6 @@
 open Cil
 open Cil_types
 open Logic_const
-open Logic_typing
 
 (** \result → result, where just 'result' is a variable under Exists *)
 let replace_result result_var pred = Visitor.visitFramacPredicate (object
@@ -41,7 +40,7 @@ let () = Logic_typing.register_behavior_extension
 let add_usage_of_pred f p =
   let app = papp (p, [], [tinteger 1]) in
   List.iter (fun beh ->
-    beh.b_requires <- (Logic_const.new_predicate app) :: beh.b_requires
+    beh.b_requires <- (new_predicate app) :: beh.b_requires
   ) f.sspec.spec_behavior
 
 let lemma_for_behavior fvar args beh =
@@ -59,18 +58,18 @@ let lemma_for_behavior fvar args beh =
   let pred_with_args = pforall (arg_vars, impl_pred) in
   let pred_with_ret = match (cvar_to_lvar fvar).lv_type with
     | Ctype (TFun (ret_typ, _, _, _)) when ret_typ <> voidType ->
-        let ret_var = Cil_const.make_logic_var_formal "result" (Ctype (ret_typ)) in
+        let ret_var = Cil_const.make_logic_var_formal "result" (Ctype ret_typ) in
         pexists ([ret_var], replace_result ret_var pred_with_args)
     | _ -> pred_with_args in
   let name = "LF__Lemma__" ^ fvar.vname in
-  Dlemma (name, false, [Logic_const.old_label], [], pred_with_ret, Cil_datatype.Location.unknown)
+  Dlemma (name, false, [old_label], [], pred_with_ret, Cil_datatype.Location.unknown)
 
 let axiomatic_for_behavior fvar args beh l =
   let lemma = lemma_for_behavior fvar args beh in
   let pred_name = "LF__Predicate__" ^ fvar.vname in
   let pred = { (Cil_const.make_logic_info pred_name) with
     l_profile = [Cil_const.make_logic_var_formal "x" Linteger];
-    l_body = LBpred (ptrue) } in
+    l_body = LBpred ptrue } in
   let pred_def = Dfun_or_pred (pred, l) in
   let axiomatic = Daxiomatic ("LF__Axiomatic__" ^ fvar.vname, [
       lemma;
@@ -90,13 +89,13 @@ let check_annot_get_beh f =
   if (List.length f.sspec.spec_behavior = 1) then (
     let beh = (List.hd f.sspec.spec_behavior) in
     if (beh_is_lemma beh) then (
-      if not (beh.b_name = Cil.default_behavior_name) then
+      if not (beh.b_name = default_behavior_name) then
         Kernel.fatal "behavior name for lemma function does not match the default";
       if (beh.b_assigns <> Writes []) then
         Kernel.fatal "can't make a lemma for function with non-empty 'assigns'";
       if (beh.b_allocation <> FreeAlloc ([], [])) then
         Kernel.fatal "can't make a lemma for function with non-empty 'allocates'";
-      Some(beh)
+      Some beh
     ) else None
   ) else (
     List.iter (fun beh ->
@@ -109,14 +108,14 @@ let check_annot_get_beh f =
 class make_axioms_for_functions = object
   inherit Visitor.frama_c_inplace
 
-  val mutable added_preds : Cil_types.logic_info list = []
+  val mutable added_preds : logic_info list = []
 
   method! vglob_aux g =
     match g with
-    | GFun(f, l) -> (
+    | GFun (f, l) -> (
         List.iter (add_usage_of_pred f) added_preds;
         match check_annot_get_beh f with
-        | Some(beh) ->
+        | Some beh ->
           let (axiomatic_ann, pred_name) = axiomatic_for_behavior f.svar f.sformals beh l in
           added_preds <- pred_name :: added_preds;
           ChangeTo [
