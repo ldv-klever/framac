@@ -22,10 +22,11 @@
 
 open Cil
 open Cil_types
-open Cil_const
 open Logic_const
-open Annotations
-open Visitor
+open Logic_typing
+
+let () = Logic_typing.register_behavior_extension
+  "lemmafn" (fun ~typing_context ~loc l -> Ext_terms [tinteger 1])
 
 let add_usage_of_pred f p =
   let app = papp (p, [], [tinteger 1]) in
@@ -33,56 +34,64 @@ let add_usage_of_pred f p =
     beh.b_requires <- (Logic_const.new_predicate app) :: beh.b_requires
   ) f.sspec.spec_behavior
 
-let lemma_for_behavior f beh =
-    let arg_quants = List.map cvar_to_lvar f.sformals in
-    let preconds = List.map (fun pred -> pred.ip_content)
-      (List.append beh.b_requires beh.b_assumes) in
-    let precond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue preconds in
-    let postconds = List.map (fun (kind, pred) ->
-      if not (kind != Exits) then
-        Kernel.fatal "postcondition of unsupported kind for lemma function";
-      pred.ip_content) beh.b_post_cond in
-    let postcond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue postconds in
-    let final_pred = pforall (arg_quants,
-      (* not using the pimplies function to avoid collapsing
-       * to just "true" right here *)
-      unamed (Pimplies (precond_pred, postcond_pred))) in
-    (* TODO: error when \old is used *)
-    let name = "LF__Lemma__" ^ f.svar.vname in
-    Dlemma (name, false, [Logic_const.old_label], [], final_pred, Cil_datatype.Location.unknown)
+let lemma_for_behavior fname args beh =
+  let arg_quants = List.map cvar_to_lvar args in
+  let preconds = List.map (fun pred -> pred.ip_content)
+    (List.append beh.b_requires beh.b_assumes) in
+  let precond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue preconds in
+  let postconds = List.map (fun (kind, pred) ->
+    if (kind = Exits) then
+      Kernel.fatal "postcondition of unsupported kind Exits for lemma function";
+    pred.ip_content) beh.b_post_cond in
+  let postcond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue postconds in
+  let final_pred = pforall (arg_quants,
+    (* not using the pimplies function to avoid collapsing
+     * to just "true" right here *)
+    unamed (Pimplies (precond_pred, postcond_pred))) in
+  (* TODO: error when \old is used *)
+  let name = "LF__Lemma__" ^ fname in
+  Dlemma (name, false, [Logic_const.old_label], [], final_pred, Cil_datatype.Location.unknown)
 
-let lemma_for_func f l =
-  (* Format.printf "\n\n||| lemma function %s\n" f.svar.vname;
-  Format.printf "b %d\n" (List.length f.sspec.spec_behavior);
-  List.iter (fun x -> Format.printf "b %s\n" x.b_name) f.sspec.spec_behavior; *)
-  if not (List.length f.sspec.spec_behavior = 1) then
-    Kernel.fatal "number of behaviors is not 1 for lemma function";
-  let beh = (List.hd f.sspec.spec_behavior) in
-  if not (beh.b_name = Cil.default_behavior_name) then
-    Kernel.fatal "behavior name for lemma function does not match the default";
-  if not (beh.b_assigns = Writes [] && beh.b_allocation = FreeAlloc ([], [])) then (
-    Kernel.fatal "can't make a lemma for behavior";
-  ) else (
-    let lemma = lemma_for_behavior f beh in
-    let pred_name = "LF__Predicate__" ^ f.svar.vname in
-    let pred = { (Cil_const.make_logic_info pred_name) with
-      l_profile = [Cil_const.make_logic_var_formal "x" Linteger];
-      l_body = LBpred (ptrue) } in
-    let pred_def = Dfun_or_pred (pred, l) in
-    let axiomatic = Daxiomatic ("LF__Axiomatic__" ^ f.svar.vname, [
-        lemma;
-        pred_def
-      ], l) in
-    Annotations.add_global Emitter.end_user pred_def;
-    Annotations.add_global Emitter.end_user axiomatic;
-    (ChangeTo [
-      GFun (f, l);
-      GAnnot (axiomatic, l)
-    ], pred)
-  )
+let axiomatic_for_behavior fname args beh l =
+  let lemma = lemma_for_behavior fname args beh in
+  let pred_name = "LF__Predicate__" ^ fname in
+  let pred = { (Cil_const.make_logic_info pred_name) with
+    l_profile = [Cil_const.make_logic_var_formal "x" Linteger];
+    l_body = LBpred (ptrue) } in
+  let pred_def = Dfun_or_pred (pred, l) in
+  let axiomatic = Daxiomatic ("LF__Axiomatic__" ^ fname, [
+      lemma;
+      pred_def
+    ], l) in
+  Annotations.add_global Emitter.end_user pred_def;
+  Annotations.add_global Emitter.end_user axiomatic;
+  (GAnnot (axiomatic, l), pred)
   (* axiomatic { lemma; pred = true }
    * function after axiomatic { requires pred }
    *)
+
+let beh_is_lemma beh =
+  List.exists (fun (extname, _) -> extname = "lemmafn") beh.b_extended
+
+let check_annot_get_beh f =
+  if (List.length f.sspec.spec_behavior = 1) then (
+    let beh = (List.hd f.sspec.spec_behavior) in
+    if (beh_is_lemma beh) then (
+      if not (beh.b_name = Cil.default_behavior_name) then
+        Kernel.fatal "behavior name for lemma function does not match the default";
+      if (beh.b_assigns <> Writes []) then
+        Kernel.fatal "can't make a lemma for function with non-empty 'assigns'";
+      if (beh.b_allocation <> FreeAlloc ([], [])) then
+        Kernel.fatal "can't make a lemma for function with non-empty 'allocates'";
+      Some(beh)
+    ) else None
+  ) else (
+    List.iter (fun beh ->
+      if (beh_is_lemma beh) then
+        Kernel.fatal "number of behaviors is not 1, but asked for lemma function"
+    ) f.sspec.spec_behavior;
+    None
+  )
 
 class make_axioms_for_functions = object
   inherit Visitor.frama_c_inplace
@@ -91,12 +100,18 @@ class make_axioms_for_functions = object
 
   method! vglob_aux g =
     match g with
-    | GFun(f, l) ->
+    | GFun(f, l) -> (
         List.iter (add_usage_of_pred f) added_preds;
-        (* TODO: if marked *)
-        let (result, pred_name) = lemma_for_func f l in
-        added_preds <- pred_name :: added_preds;
-        result
+        match check_annot_get_beh f with
+        | Some(beh) ->
+          let (axiomatic_ann, pred_name) = axiomatic_for_behavior f.svar.vname f.sformals beh l in
+          added_preds <- pred_name :: added_preds;
+          ChangeTo [
+            GFun (f, l);
+            axiomatic_ann
+          ]
+        | None -> DoChildren
+      )
     | _ -> DoChildren
 end
 
