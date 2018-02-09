@@ -46,9 +46,8 @@ open Logic_const
    * have only one (default) behavior. (Actually the annotation is on the behavior.)
  *
  * TODO:
-   * examples/tests: jessie/tests/bitvectors, verker/strcat+strlen
-   * remove \old?
-   * jessie: remove unused axiomatic symbol error
+   * examples/tests: jessie/tests/bitvectors
+   * support lemmafn pre ==> post;
  * *)
 
 (** \result → result, where just 'result' is a variable under Exists *)
@@ -61,12 +60,32 @@ let replace_result result_var pred = Visitor.visitFramacPredicate (object
 
   end) pred
 
-(** Append \requires p(1) to a function's specification (to all behaviors) *)
+(** \old(x) → x, error on other labels *)
+let remove_old pred = Visitor.visitFramacPredicate (object
+  inherit Visitor.frama_c_inplace
+
+  method! vpredicate_node = function
+    | Pat (p, lab) when lab = Logic_const.old_label -> ChangeTo p.pred_content
+    | Pat (_, _) -> Kernel.fatal "unsupported label in lemma-function"
+    | _ -> DoChildren
+
+  method! vterm_node = function
+    | Tat (t, lab) when lab = Logic_const.old_label -> ChangeTo t.term_node
+    | Tat (_, _) -> Kernel.fatal "unsupported label in lemma-function"
+    | _ -> DoChildren
+
+  end) pred
+
+(** Append \requires p(1) to a function's specification (to the default behavior) *)
 let add_usage_of_pred f p =
   let app = papp (p, [], [tinteger 1]) in
-  List.iter (fun beh ->
+  match Cil.find_default_behavior f.sspec with
+  | Some beh ->
     beh.b_requires <- (new_predicate app) :: beh.b_requires
-  ) f.sspec.spec_behavior
+  | None ->
+      let beh = Cil.mk_behavior ~requires:[new_predicate app] ~post_cond:[] () in
+      let my_kf = Globals.Functions.get f.svar in
+      Annotations.add_behaviors Emitter.end_user my_kf [beh]
 
 (** Generate an axiom from a behavior *)
 let lemma_for_behavior fvar args beh =
@@ -87,8 +106,9 @@ let lemma_for_behavior fvar args beh =
         let ret_var = Cil_const.make_logic_var_formal "result" (Ctype ret_typ) in
         pexists ([ret_var], replace_result ret_var pred_with_args)
     | _ -> pred_with_args in
+  let pred_without_old = remove_old pred_with_ret in
   let name = "LF__Lemma__" ^ fvar.vname in
-  Dlemma (name, false, [old_label], [], pred_with_ret, Cil_datatype.Location.unknown)
+  Dlemma (name, true, [], [], pred_without_old, Cil_datatype.Location.unknown)
 
 (** Generate an axiomatic for a behavior (with the dummy predicate), registering globals *)
 let axiomatic_for_behavior fvar args beh l =
@@ -125,8 +145,12 @@ let check_annot_get_beh f =
     if (beh_is_lemma beh) then (
       if not (beh.b_name = default_behavior_name) then
         Kernel.fatal "behavior name for lemma-function is not default";
+      if (beh.b_assigns = WritesAny) then
+        beh.b_assigns <- Writes [];
       if (beh.b_assigns <> Writes []) then
         Kernel.fatal "lemma-function with non-empty \assigns";
+      if (beh.b_allocation = FreeAllocAny) then
+        beh.b_allocation <- FreeAlloc ([], []);
       if (beh.b_allocation <> FreeAlloc ([], [])) then
         Kernel.fatal "lemma-function with non-empty \allocates";
       Some beh
