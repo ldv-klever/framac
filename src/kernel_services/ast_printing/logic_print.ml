@@ -376,6 +376,13 @@ let rec print_decl fmt d =
           (pp_list ~pre:"{@[" ~sep:",@ " ~suf:"@]}" pp_print_string) labels
           (pp_list ~pre:"<@[" ~sep:",@ " ~suf:"@>}" pp_print_string) tvar
           print_lexpr body
+    | LDinclude(name,types,functions,lemmas) ->
+        let pp_print_subst fmt (id_from, id_to) =
+          fprintf fmt "%s@ =@ %s" id_from id_to in
+        fprintf fmt "@[<2>include@ %s@ \\with %a%a%a;@]" name
+          (pp_list ~pre:"type " ~sep:",@ type " ~suf:", " pp_print_subst) types
+          (pp_list ~pre:"function " ~sep:",@ function " ~suf:", " pp_print_subst) functions
+          (pp_list ~pre:"lemma " ~sep:",@ lemma " ~suf:", " pp_print_subst) lemmas
     | LDaxiomatic (s,d) ->
         fprintf fmt "@[<2>axiomatic@ %s@ {@\n%a@]@\n}" s
           (pp_list ~sep:"@\n" print_decl) d

@@ -44,6 +44,9 @@ module Model_info: State_builder.Hashtbl
 module Lemmas: State_builder.Hashtbl 
   with type key = string and type data = Cil_types.global_annotation
 
+module Axiomatics: State_builder.Hashtbl
+  with type key = string and type data = Cil_types.global_annotation
+
 val builtin_states: State.t list
 
 (** {2 Shortcuts to the functions of the modules above} *)

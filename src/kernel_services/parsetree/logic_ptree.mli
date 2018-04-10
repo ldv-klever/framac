@@ -249,6 +249,9 @@ and decl_node =
   | LDaxiomatic of string * decl list
         (** [LDaxiomatic(id,decls)]
             represents a block of axiomatic definitions.*)
+  | LDinclude of string * (string * string) list * (string * string) list * (string * string) list (** axiomatic inclusion *)
+        (** LDinclude(name,types,functions,lemmas)
+            an inclusion statement (with substitutions) for axiomatics. *)
   | LDinvariant of string * lexpr (** global invariant. *)
   | LDtype_annot of type_annot    (** type invariant. *)
   | LDmodel_annot of model_annot    (** model field. *)

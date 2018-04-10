@@ -4270,8 +4270,29 @@ let add_label info lab =
           (* Not supported yet. See issue 43 on ACSL's github repository. *)
           C.error loc "Nested axiomatic. Ignoring body of %s" id
         else
-    	  let l = List.map (annot ~stage true) decls in
-	  Daxiomatic (id, l, [], loc)
+          if stage = `Bodies then (
+            (* import, register *)
+            let l = List.map (fun x -> match x.decl_node with
+                | LDinclude (name,types,functions,lemmas) ->
+                    Format.printf "Including %s: %a" name Logic_print.print_decl x;
+                    if Logic_env.Axiomatics.mem name then (
+                      []
+                    )
+                    else Kernel.fatal ~current:true "Including an unknown axiomatic"
+                | _ -> [annot ~stage true x]) decls
+              |> List.flatten in
+            let def = Daxiomatic (id, l, [], loc) in
+            Logic_env.Axiomatics.add id def;
+            def
+          ) else (
+            let l = List.map (fun x -> match x.decl_node with
+                | LDinclude (_,_,_,_) -> []
+                | _ -> [annot ~stage true x]) decls
+              |> List.flatten in
+            Daxiomatic (id, l, [], loc)
+          )
+      | LDinclude (name,types,functions,lemmas) ->
+          Kernel.fatal ~current:true "Includes should be handled in axiomatics"
       | LDtype (s, l, def) ->
           let finish_with my_info =
             add_logic_type loc my_info;

@@ -220,6 +220,16 @@
   let cv_const = Attr ("const", [])
   let cv_volatile = Attr ("volatile", [])
 
+  type subst_type = Type | Function | Lemma
+
+  let sort_substs ss =
+    let rec sort_substs_inner ts fs ls ss = match ss with
+      | []                             -> (ts, fs, ls)
+      | (Type,     id_from, id_to)::tl -> sort_substs_inner ((id_from, id_to)::ts) fs ls tl
+      | (Function, id_from, id_to)::tl -> sort_substs_inner ts ((id_from, id_to)::fs) ls tl
+      | (Lemma,    id_from, id_to)::tl -> sort_substs_inner ts fs ((id_from, id_to)::ls) tl in
+    sort_substs_inner [] [] [] ss
+
 %}
 
 /*****************************************************************************/
@@ -248,7 +258,7 @@
 %token REQUIRES ENSURES ALLOCATES FREES ASSIGNS LOOP NOTHING SLICE IMPACT JESSIE PRAGMA FROM
 %token EXITS BREAKS CONTINUES RETURNS
 %token VOLATILE READS WRITES
-%token LOGIC PREDICATE INDUCTIVE AXIOMATIC AXIOM LEMMA LBRACE RBRACE
+%token LOGIC PREDICATE INDUCTIVE ABSTRACT AXIOMATIC AXIOM LEMMA LBRACE RBRACE
 %token GHOST MODEL CASE
 %token VOID CHAR SIGNED UNSIGNED SHORT LONG DOUBLE STRUCT ENUM UNION
 %token BSUNION INTER
@@ -1647,6 +1657,25 @@ logic_decl:
     { let (id,labels,tvars) = $2 in
       exit_type_variables_scope ();
       LDlemma (id, true, labels, tvars, $4) }
+/* include */
+| INCLUDE any_identifier WITH subst SEMICOLON
+    { let (types, functions, lemmas) = sort_substs $4 in
+      LDinclude ($2, types, functions, lemmas) }
+;
+
+subst_type:
+| FUNCTION { Function }
+| TYPE { Type }
+| LEMMA { Lemma }
+;
+
+subst_elt:
+| subst_type any_identifier EQUAL any_identifier { ($1, $2, $4) }
+;
+
+subst:
+| subst_elt                 { [$1] }
+| subst_elt COMMA subst     { $1::$3 }
 ;
 
 logic_decl_loc:
@@ -1829,6 +1858,7 @@ is_acsl_decl_or_code_annot:
 | ASSUMES   { "assumes" }
 | GLOBAL    { "global" }
 | IMPACT    { "impact" }
+| INCLUDE   { "include" }
 | INDUCTIVE { "inductive" }
 | INVARIANT { "invariant" }
 | LEMMA     { "lemma" }

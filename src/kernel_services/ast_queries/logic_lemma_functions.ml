@@ -47,6 +47,8 @@ open Logic_const
  *
  * TODO:
    * examples/tests: jessie/tests/bitvectors
+   * verker strchrnul
+   * benchmark forall/exists orders
    * support lemmafn pre ==> post;
  * *)
 

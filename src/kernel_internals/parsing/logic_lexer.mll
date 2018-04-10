@@ -81,6 +81,7 @@
          if flag then Hashtbl.add c_kw i t
       )
       [
+        "abstract", ABSTRACT, false;
         "allocates", ALLOCATES, false;
         "assert", ASSERT, false;
         "assigns", ASSIGNS, false;
