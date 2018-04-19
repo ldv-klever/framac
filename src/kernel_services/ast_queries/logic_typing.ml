@@ -661,6 +661,73 @@ module Make
     end) =
 struct
 
+  (* Abstract axiomatics *)
+
+  let apply_substs types functions lemmas loc ga =
+    Cil.visitCilGlobal (object(self)
+      inherit Cil.genericCilVisitor (Cil.refresh_visit (Project.current ()))
+
+      val mutable ts = types
+      val mutable fs = List.fold_left (fun a (k, v) ->
+        Cil_datatype.Logic_var.Map.add
+          (Logic_env.Logic_info.find k).l_var_info
+          (Logic_env.Logic_info.find v).l_var_info
+          a
+      ) Cil_datatype.Logic_var.Map.empty functions
+
+      method vglob t =
+        match t with
+        | GAnnot (Dfun_or_pred (_, _), _) -> ChangeTo []
+        | GAnnot (Dtype (_, _), _) -> ChangeTo []
+        | GAnnot (Dlemma (_, _, _, _, _, _), _) ->
+            DoChildrenPost (fun x -> x |> List.map (function
+              | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, loc), aloc) ->
+                  let (_, new_name) = Extlib.make_unique_name Logic_env.Lemmas.mem ~sep:"_" name in
+                  GAnnot (Dlemma (new_name, is_axiom, labels, ss, pred, loc), aloc)))
+        | _ -> DoChildren
+
+      method vlogic_type_info_use t =
+        if List.mem_assoc t.lt_name ts then
+          ChangeTo { t with lt_name = List.assoc t.lt_name ts }
+        else DoChildren
+
+      val used_names = Datatype.String.Hashtbl.create 1
+      val used_vars = Cil_datatype.Logic_var.Hashtbl.create 1
+
+      method vlogic_var_use t =
+        if Cil_datatype.Logic_var.Map.mem t fs then (
+          let newt = Cil_datatype.Logic_var.Map.find t fs in
+          ChangeTo newt
+        ) else (
+          (* avoid name collisions for non-replaced variables *)
+          (match t.lv_kind with
+          | LVFormal | LVQuant | LVLocal when not
+          (Cil_datatype.Logic_var.Hashtbl.mem used_vars t) ->
+              let (_, new_name) = Extlib.make_unique_name
+                (fun x ->
+                  Logic_env.Logic_info.mem x ||
+                  Datatype.String.Hashtbl.mem used_names x ||
+                  try ignore (C.find_var x); true
+                  with Not_found -> false)
+                ~sep:"_" t.lv_name in
+              Format.printf "replacing %s -> %s\n" t.lv_name new_name;
+              Datatype.String.Hashtbl.add used_names new_name true;
+              Cil_datatype.Logic_var.Hashtbl.add used_vars t true;
+              t.lv_name <- new_name
+          | _ -> ()
+          );
+          DoChildren
+        )
+
+      (* why is this required? *)
+      method vlogic_info_use t =
+        if Cil_datatype.Logic_var.Map.mem t.l_var_info fs then (
+          let newlvarinfo = Cil_datatype.Logic_var.Map.find t.l_var_info fs in
+          ChangeTo { t with l_var_info = newlvarinfo }
+        ) else DoChildren
+
+    end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x)
+
   let make_typing_context ~pre_state ~post_state ~assigns_env
       ~logic_type ~type_predicate ~type_term ~type_assigns = {
     silent = false;
@@ -4276,7 +4343,8 @@ let add_label info lab =
                 | LDinclude (name,types,functions,lemmas) ->
                     Format.printf "Including %s: %a" name Logic_print.print_decl x;
                     if Logic_env.Axiomatics.mem name then (
-                      []
+                      let Daxiomatic (_, decls, _) = Logic_env.Axiomatics.find name in
+                      List.map (apply_substs types functions lemmas loc)   decls |> List.flatten
                     )
                     else Kernel.fatal ~current:true "Including an unknown axiomatic"
                 | _ -> [annot ~stage true x]) decls
