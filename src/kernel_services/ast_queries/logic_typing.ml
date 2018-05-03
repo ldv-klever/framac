@@ -675,14 +675,22 @@ struct
           a
       ) Cil_datatype.Logic_var.Map.empty functions
 
+      (* Changing included declarations: drop types, rename funcs/preds/lemmas *)
       method vglob t =
         match t with
-        | GAnnot (Dfun_or_pred (_, _), _) -> ChangeTo []
+        | GAnnot (Dfun_or_pred (_, _), _) ->
+            DoChildrenPost (fun x -> x |> List.map (function
+              | GAnnot (Dfun_or_pred (info, loc), aloc) ->
+                  let (_, new_name) = Extlib.make_unique_name
+                    Logic_env.Logic_info.mem ~sep:"_" info.l_var_info.lv_name in
+                  GAnnot (Dfun_or_pred ({ info with l_var_info =
+                    { info.l_var_info with lv_name = new_name } }, loc), aloc)))
         | GAnnot (Dtype (_, _), _) -> ChangeTo []
         | GAnnot (Dlemma (_, _, _, _, _, _), _) ->
             DoChildrenPost (fun x -> x |> List.map (function
               | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, loc), aloc) ->
-                  let (_, new_name) = Extlib.make_unique_name Logic_env.Lemmas.mem ~sep:"_" name in
+                  let (_, new_name) = Extlib.make_unique_name
+                    Logic_env.Lemmas.mem ~sep:"_" name in
                   GAnnot (Dlemma (new_name, is_axiom, labels, ss, pred, loc), aloc)))
         | _ -> DoChildren
 
