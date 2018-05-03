@@ -736,6 +736,35 @@ struct
 
     end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x)
 
+  (* Apply forward type inclusion (non-abstract type in src axiomatic, abstract
+   * in dest) + prevent inclusion when both are non-abstract.
+   *
+   * Called on the whole dest axiomatic! *)
+  let apply_forward_type_substs types loc ga =
+    Cil.visitCilGlobal (object(self)
+      inherit Cil.genericCilVisitor (Cil.refresh_visit (Project.current ()))
+
+      val rev_types = List.map (fun (k, v) -> (v, k)) types
+
+      method vglob t =
+        match t with
+        | GAnnot (Dtype (info, loc), aloc) ->
+            if List.mem_assoc info.lt_name rev_types then (
+              let src_type = List.assoc info.lt_name rev_types |>
+                Logic_env.Logic_type_info.find in
+              let dst_type = info (* Logic_env.Logic_type_info.find info.lt_name *) in
+              if src_type.lt_def <> None && dst_type.lt_def <> None then
+                Kernel.fatal ~current:true
+                  "Substitution with two non-abstract types: %s and %s"
+                  src_type.lt_name dst_type.lt_name;
+              if src_type.lt_def <> None && dst_type.lt_def = None then
+                ChangeTo [GAnnot (Dtype ({ info with lt_def = src_type.lt_def }, loc), aloc)]
+              else DoChildren
+            ) else DoChildren
+        | _ -> DoChildren
+
+  end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x)
+
   let make_typing_context ~pre_state ~post_state ~assigns_env
       ~logic_type ~type_predicate ~type_term ~type_assigns = {
     silent = false;
@@ -4346,16 +4375,20 @@ let add_label info lab =
           C.error loc "Nested axiomatic. Ignoring body of %s" id
         else
           if stage = `Bodies then (
+            let used_types = ref [] in
             (* import, register *)
             let l = List.map (fun x -> match x.decl_node with
                 | LDinclude (name,types,functions,lemmas) ->
                     Format.printf "Including %s: %a" name Logic_print.print_decl x;
+                    used_types := List.append !used_types types;
                     if Logic_env.Axiomatics.mem name then (
                       let Daxiomatic (_, decls, _) = Logic_env.Axiomatics.find name in
                       List.map (apply_substs types functions lemmas loc)   decls |> List.flatten
                     )
                     else Kernel.fatal ~current:true "Including an unknown axiomatic"
                 | _ -> [annot ~stage true x]) decls
+              |> List.flatten
+              |> List.map (apply_forward_type_substs !used_types loc)
               |> List.flatten in
             let def = Daxiomatic (id, l, [], loc) in
             Logic_env.Axiomatics.add id def;
