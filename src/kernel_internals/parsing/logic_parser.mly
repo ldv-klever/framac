@@ -220,14 +220,17 @@
   let cv_const = Attr ("const", [])
   let cv_volatile = Attr ("volatile", [])
 
-  type subst_type = Type | Function | Lemma
+  type subst_type =
+    | Type of logic_type * logic_type
+    | Function of string * string
+    | Lemma of string * string
 
   let sort_substs ss =
     let rec sort_substs_inner ts fs ls ss = match ss with
-      | []                             -> (ts, fs, ls)
-      | (Type,     id_from, id_to)::tl -> sort_substs_inner ((id_from, id_to)::ts) fs ls tl
-      | (Function, id_from, id_to)::tl -> sort_substs_inner ts ((id_from, id_to)::fs) ls tl
-      | (Lemma,    id_from, id_to)::tl -> sort_substs_inner ts fs ((id_from, id_to)::ls) tl in
+      | []                              -> (ts, fs, ls)
+      | Type     (id_from, id_to) :: tl -> sort_substs_inner ((id_from, id_to)::ts) fs ls tl
+      | Function (id_from, id_to) :: tl -> sort_substs_inner ts ((id_from, id_to)::fs) ls tl
+      | Lemma    (id_from, id_to) :: tl -> sort_substs_inner ts fs ((id_from, id_to)::ls) tl in
     sort_substs_inner [] [] [] ss
 
 %}
@@ -1663,14 +1666,10 @@ logic_decl:
       LDinclude ($2, types, functions, lemmas) }
 ;
 
-subst_type:
-| FUNCTION { Function }
-| TYPE { Type }
-| LEMMA { Lemma }
-;
-
 subst_elt:
-| subst_type any_identifier EQUAL any_identifier { ($1, $2, $4) }
+| FUNCTION any_identifier EQUAL any_identifier { Function ($2, $4) }
+| TYPE     type_spec      EQUAL type_spec      { Type     ($2, $4) }
+| LEMMA    any_identifier EQUAL any_identifier { Lemma    ($2, $4) }
 ;
 
 subst:

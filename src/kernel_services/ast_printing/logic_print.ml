@@ -379,8 +379,11 @@ let rec print_decl fmt d =
     | LDinclude(name,types,functions,lemmas) ->
         let pp_print_subst fmt (id_from, id_to) =
           fprintf fmt "%s@ =@ %s" id_from id_to in
+        let pp_print_type_subst fmt (id_from, id_to) =
+          fprintf fmt "%a@ =@ %a" (print_logic_type None) id_from
+            (print_logic_type None) id_to in
         fprintf fmt "@[<2>include@ %s@ \\with %a%a%a;@]" name
-          (pp_list ~pre:"type " ~sep:",@ type " ~suf:", " pp_print_subst) types
+          (pp_list ~pre:"type " ~sep:",@ type " ~suf:", " pp_print_type_subst) types
           (pp_list ~pre:"function " ~sep:",@ function " ~suf:", " pp_print_subst) functions
           (pp_list ~pre:"lemma " ~sep:",@ lemma " ~suf:", " pp_print_subst) lemmas
     | LDaxiomatic (s,d) ->

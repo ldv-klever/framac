@@ -249,7 +249,7 @@ and decl_node =
   | LDaxiomatic of string * decl list
         (** [LDaxiomatic(id,decls)]
             represents a block of axiomatic definitions.*)
-  | LDinclude of string * (string * string) list * (string * string) list * (string * string) list (** axiomatic inclusion *)
+  | LDinclude of string * (logic_type * logic_type) list * (string * string) list * (string * string) list (** axiomatic inclusion *)
         (** LDinclude(name,types,functions,lemmas)
             an inclusion statement (with substitutions) for axiomatics. *)
   | LDinvariant of string * lexpr (** global invariant. *)
