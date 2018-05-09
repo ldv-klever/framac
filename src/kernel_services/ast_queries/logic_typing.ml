@@ -670,13 +670,6 @@ struct
     let modified_global = Cil.visitCilGlobal (object(self)
       inherit Cil.genericCilVisitor (Cil.refresh_visit (Project.current ()))
 
-      val mutable fs = List.fold_left (fun a (k, v) ->
-        Cil_datatype.Logic_var.Map.add
-          (Logic_env.Logic_info.find k).l_var_info
-          (Logic_env.Logic_info.find v).l_var_info
-          a
-      ) Cil_datatype.Logic_var.Map.empty functions
-
       (* Changing included declarations:
        * - drop types/funcs/preds
        * - (but store funcs/preds with substitutions in a separate list for typechecking!)
@@ -706,36 +699,50 @@ struct
       val used_vars = Cil_datatype.Logic_var.Hashtbl.create 1
 
       method vlogic_var_use t =
-        if Cil_datatype.Logic_var.Map.mem t fs then (
-          let newt = Cil_datatype.Logic_var.Map.find t fs in
-          ChangeTo newt
-        ) else (
-          (* avoid name collisions for non-replaced variables *)
-          (match t.lv_kind with
-          | LVFormal | LVQuant | LVLocal when not
-          (Cil_datatype.Logic_var.Hashtbl.mem used_vars t) ->
-              let (_, new_name) = Extlib.make_unique_name
-                (fun x ->
-                  Logic_env.Logic_info.mem x ||
-                  Datatype.String.Hashtbl.mem used_names x ||
-                  try ignore (C.find_var x); true
-                  with Not_found -> false)
-                ~sep:"_" t.lv_name in
-              Kernel.debug "Axiomatic substitution: replacing logic_var %s -> %s\n"
-                t.lv_name new_name;
-              Datatype.String.Hashtbl.add used_names new_name true;
-              Cil_datatype.Logic_var.Hashtbl.add used_vars t true;
-              t.lv_name <- new_name
-          | _ -> ()
-          );
-          DoChildren
-        )
+        match t.lv_kind with
+        (* avoid name collisions for non-replaced variables *)
+        | LVFormal | LVQuant | LVLocal when not
+        (Cil_datatype.Logic_var.Hashtbl.mem used_vars t) ->
+            let (_, new_name) = Extlib.make_unique_name
+              (fun x ->
+                Logic_env.Logic_info.mem x ||
+                Datatype.String.Hashtbl.mem used_names x ||
+                try ignore (C.find_var x); true
+                with Not_found -> false)
+              ~sep:"_" t.lv_name in
+            Kernel.debug ~level:3
+              "Subst: replacing local logic_var use %s -> %s\n"
+              t.lv_name new_name;
+            Datatype.String.Hashtbl.add used_names new_name true;
+            Cil_datatype.Logic_var.Hashtbl.add used_vars t true;
+            t.lv_name <- new_name;
+            DoChildren
+        | _ ->
+            (* vlogic_info_use is where the substitution we want happens,
+             * but the code that calls vlogic_info_use first visits the
+             * l_var_info field and re-inserts it afterwards,
+             * so we need to put the appropriate info (name) first *)
+            let result = ref None in
+            try Cil_datatype.Logic_info.Map.iter (fun k v ->
+                if k.l_var_info == t then (
+                  result := Some v;
+                  raise Exit
+                )
+              ) functions; DoChildren
+            with Exit -> match !result with
+              | Some x ->
+                  Kernel.debug ~level:3
+                    "Subst: replacing non-local logic_var use %s -> %s\n"
+                    t.lv_name x.l_var_info.lv_name;
+                  ChangeTo x.l_var_info
 
-      (* why is this required? *)
       method vlogic_info_use t =
-        if Cil_datatype.Logic_var.Map.mem t.l_var_info fs then (
-          let newlvarinfo = Cil_datatype.Logic_var.Map.find t.l_var_info fs in
-          ChangeTo { t with l_var_info = newlvarinfo }
+        if Cil_datatype.Logic_info.Map.mem t functions then (
+          let newt = Cil_datatype.Logic_info.Map.find t functions in
+          Kernel.debug "Subst: replacing logic_info use %a -> %a\n"
+            Cil_printer.pp_logic_var t.l_var_info
+            Cil_printer.pp_logic_var newt.l_var_info;
+          ChangeTo newt
         ) else DoChildren
 
     end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x) in
@@ -4417,10 +4424,15 @@ let add_label info lab =
                        logic_type loc (Lenv.empty ()) v)) types in
                     used_types := List.append !used_types types;
                     if Logic_env.Axiomatics.mem name then (
+                      let fs = List.fold_left (fun a (k, v) ->
+                        let src_fun = Logic_env.Logic_info.find k in
+                        let dst_fun = Logic_env.Logic_info.find v in
+                        Cil_datatype.Logic_info.Map.add src_fun dst_fun a
+                      ) Cil_datatype.Logic_info.Map.empty functions in
                       let Daxiomatic (_, decls, _) = Logic_env.Axiomatics.find name in
                       List.map (fun x ->
                         let (result, funcs_with_new_types) = apply_substs
-                          types functions lemmas loc x in
+                          types fs lemmas loc x in
                         used_functions := List.map (fun (k, v) ->
                           try [(v, List.assoc k funcs_with_new_types)] with Not_found -> []
                           ) functions |> List.flatten |> List.append !used_functions;
