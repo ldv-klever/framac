@@ -665,7 +665,8 @@ struct
 
   (** Apply axiomatic declaration substitutions *)
   let apply_substs types functions lemmas loc ga =
-    let renamed_funcs = ref [] in
+    (* For typechecking, we need original functions but with new types *)
+    let funcs_with_new_types = ref [] in
     let modified_global = Cil.visitCilGlobal (object(self)
       inherit Cil.genericCilVisitor (Cil.refresh_visit (Project.current ()))
 
@@ -676,18 +677,18 @@ struct
           a
       ) Cil_datatype.Logic_var.Map.empty functions
 
-      (* Changing included declarations: drop types, rename funcs/preds/lemmas *)
+      (* Changing included declarations:
+       * - drop types/funcs/preds
+       * - (but store funcs/preds with substitutions in a separate list for typechecking!)
+       * - rename lemmas *)
       method vglob t =
         match t with
         | GAnnot (Dfun_or_pred (_, _), _) ->
-            DoChildrenPost (fun x -> x |> List.map (function
-              | GAnnot (Dfun_or_pred (info, loc), aloc) ->
-                  let (_, new_name) = Extlib.make_unique_name
-                    Logic_env.Logic_info.mem ~sep:"_" info.l_var_info.lv_name in
-                  renamed_funcs :=
-                    (info.l_var_info.lv_name, new_name) :: !renamed_funcs;
-                  GAnnot (Dfun_or_pred ({ info with l_var_info =
-                    { info.l_var_info with lv_name = new_name } }, loc), aloc)))
+            DoChildrenPost (fun x -> List.iter (function
+              | GAnnot (Dfun_or_pred (info, aloc), loc) ->
+                  funcs_with_new_types :=
+                    (info.l_var_info.lv_name, info) :: !funcs_with_new_types
+            ) x; [])
         | GAnnot (Dtype (_, _), _) -> ChangeTo []
         | GAnnot (Dlemma (_, _, _, _, _, _), _) ->
             DoChildrenPost (fun x -> x |> List.map (function
@@ -738,7 +739,7 @@ struct
         ) else DoChildren
 
     end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x) in
-    (modified_global, !renamed_funcs)
+    (modified_global, !funcs_with_new_types)
 
   (* Apply forward type inclusion (non-abstract type in src axiomatic, abstract
    * in dest) + prevent inclusion when both are non-abstract + typecheck
@@ -770,27 +771,24 @@ struct
         | GAnnot (Dfun_or_pred (dst_fun, loc), aloc) ->
             let dst_name = dst_fun.l_var_info.lv_name in
             if List.mem_assoc dst_name functions then (
-              let src_name = List.assoc dst_name functions in
-              if Logic_env.Logic_info.mem src_name then (
-                let src_fun = Logic_env.Logic_info.find src_name in
-                let src_name = src_fun.l_var_info.lv_name in
-                let mismatches = ref [] in
-                let is_matched = Logic_utils.is_same_list (fun src_lv dst_lv ->
-                    let src_typ = Logic_utils.unroll_type src_lv.lv_type in
-                    let dst_typ = Logic_utils.unroll_type dst_lv.lv_type in
-                    Logic_utils.is_same_type src_typ dst_typ || (
-                      mismatches := (src_typ, dst_typ) :: !mismatches; false
-                    )
-                ) src_fun.l_profile dst_fun.l_profile in
-                if not is_matched then
-                  Kernel.fatal ~current:true
-                    "Type mismatch in axiomatic include substitution, at %s <- %s: %a"
-                    src_name dst_name
-                    (Pretty_utils.pp_list ~sep:",@ "
-                      (Pretty_utils.pp_pair ~sep:" != "
-                        Cil_printer.pp_logic_type
-                        Cil_printer.pp_logic_type)) !mismatches
-              )
+              let src_fun = List.assoc dst_name functions in
+              let src_name = src_fun.l_var_info.lv_name in
+              let mismatches = ref [] in
+              let is_matched = Logic_utils.is_same_list (fun src_lv dst_lv ->
+                  let src_typ = Logic_utils.unroll_type src_lv.lv_type in
+                  let dst_typ = Logic_utils.unroll_type dst_lv.lv_type in
+                  Logic_utils.is_same_type src_typ dst_typ || (
+                    mismatches := (src_typ, dst_typ) :: !mismatches; false
+                  )
+              ) src_fun.l_profile dst_fun.l_profile in
+              if not is_matched then
+                Kernel.fatal ~current:true
+                  "Type mismatch in axiomatic include substitution, at %s <- %s: %a"
+                  src_name dst_name
+                  (Pretty_utils.pp_list ~sep:",@ "
+                    (Pretty_utils.pp_pair ~sep:" != "
+                      Cil_printer.pp_logic_type
+                      Cil_printer.pp_logic_type)) !mismatches
             );
             DoChildren
         | _ -> DoChildren
@@ -4412,7 +4410,7 @@ let add_label info lab =
             (* import, register *)
             let l = List.map (fun x -> match x.decl_node with
                 | LDinclude (name,types,functions,lemmas) ->
-                    Format.printf "Including %s: %a" name Logic_print.print_decl x;
+                    Kernel.debug "Including axiomatic %s: %a" name Logic_print.print_decl x;
                     let types = List.map (fun (k, v) ->
                       (* convert Logic_typing types to Cil types *)
                       (logic_type loc (Lenv.empty ()) k,
@@ -4421,10 +4419,10 @@ let add_label info lab =
                     if Logic_env.Axiomatics.mem name then (
                       let Daxiomatic (_, decls, _) = Logic_env.Axiomatics.find name in
                       List.map (fun x ->
-                        let (result, renamed_funcs) = apply_substs
+                        let (result, funcs_with_new_types) = apply_substs
                           types functions lemmas loc x in
                         used_functions := List.map (fun (k, v) ->
-                          try [(List.assoc k renamed_funcs, v)] with Not_found -> []
+                          try [(v, List.assoc k funcs_with_new_types)] with Not_found -> []
                           ) functions |> List.flatten |> List.append !used_functions;
                         result
                       ) decls |> List.flatten
