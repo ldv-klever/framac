@@ -664,7 +664,7 @@ struct
   (* Abstract axiomatics *)
 
   (** Apply axiomatic declaration substitutions *)
-  let apply_substs types functions lemmas loc ga =
+  let apply_substs types functions lemmas loc inc_loc ga =
     (* For typechecking, we need original functions but with new types *)
     let funcs_with_new_types = ref [] in
     let modified_global = Cil.visitCilGlobal (object(self)
@@ -678,7 +678,7 @@ struct
         match t with
         | GAnnot (Dfun_or_pred (_, _), _) ->
             DoChildrenPost (fun x -> List.iter (function
-              | GAnnot (Dfun_or_pred (info, aloc), loc) ->
+              | GAnnot (Dfun_or_pred (info, _), loc) ->
                   funcs_with_new_types :=
                     (info.l_var_info.lv_name, info) :: !funcs_with_new_types
             ) x; [])
@@ -688,9 +688,9 @@ struct
               | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, loc), aloc) ->
                   let (_, new_name) = Extlib.make_unique_name
                     Logic_env.Lemmas.mem ~sep:"_" name in
-                  let def = Dlemma (new_name, is_axiom, labels, ss, pred, loc) in
+                  let def = Dlemma (new_name, false, labels, ss, pred, inc_loc) in
                   Logic_env.Lemmas.add new_name def;
-                  GAnnot (def, aloc)))
+                  GAnnot (def, inc_loc)))
         | _ -> DoChildren
 
       method vlogic_type t =
@@ -4419,7 +4419,8 @@ let add_label info lab =
             (* import, register *)
             let l = List.map (fun x -> match x.decl_node with
                 | LDinclude (name,types,functions,lemmas) ->
-                    Kernel.debug "Including axiomatic %s: %a" name Logic_print.print_decl x;
+                    Kernel.debug "Including axiomatic %s:@ %a@ at location: %a" name Logic_print.print_decl x
+                      Cil_printer.pp_location x.decl_loc;
                     let types = List.map (fun (k, v) ->
                       (* convert Logic_typing types to Cil types *)
                       (logic_type loc (Lenv.empty ()) k,
@@ -4432,9 +4433,10 @@ let add_label info lab =
                         Cil_datatype.Logic_info.Map.add src_fun dst_fun a
                       ) Cil_datatype.Logic_info.Map.empty functions in
                       let Daxiomatic (_, decls, _) = Logic_env.Axiomatics.find name in
-                      List.map (fun x ->
+                      List.mapi (fun i dec ->
+                        (* TODO add i to loc *)
                         let (result, funcs_with_new_types) = apply_substs
-                          types fs lemmas loc x in
+                          types fs lemmas loc x.decl_loc dec in
                         used_functions := List.map (fun (k, v) ->
                           try [(v, List.assoc k funcs_with_new_types)] with Not_found -> []
                           ) functions |> List.flatten |> List.append !used_functions;
