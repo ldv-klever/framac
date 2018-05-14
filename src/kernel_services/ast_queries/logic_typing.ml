@@ -688,7 +688,9 @@ struct
               | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, loc), aloc) ->
                   let (_, new_name) = Extlib.make_unique_name
                     Logic_env.Lemmas.mem ~sep:"_" name in
-                  GAnnot (Dlemma (new_name, is_axiom, labels, ss, pred, loc), aloc)))
+                  let def = Dlemma (new_name, is_axiom, labels, ss, pred, loc) in
+                  Logic_env.Lemmas.add new_name def;
+                  GAnnot (def, aloc)))
         | _ -> DoChildren
 
       method vlogic_type t =
