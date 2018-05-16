@@ -477,7 +477,7 @@ val compFullName: compinfo -> string
    @param allowZeroSizeArrays defaults to [false]. When [true], arrays of
    size 0 (a gcc extension) are considered as complete
 *)
-val isCompleteType: ?allowZeroSizeArrays:bool -> typ -> bool
+val isCompleteType: ?isLastField:bool -> ?allowZeroSizeArrays:bool -> typ -> bool
 
 (** Unroll a type until it exposes a non
  * [TNamed]. Will collect all attributes appearing in [TNamed]!!! *)

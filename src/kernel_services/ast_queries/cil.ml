@@ -6959,14 +6959,20 @@ let rec makeZeroInit ~loc (t: typ) : init =
 
 
 
- let rec isCompleteType ?(allowZeroSizeArrays=false) t =
+ let rec isCompleteType ?(isLastField=false) ?(allowZeroSizeArrays=false) t =
    match unrollType t with
-   | TArray(_t, None, _, _) -> false
+   | TArray(_t, None, _, _) -> isLastField && allowZeroSizeArrays
    | TArray(_t, Some z, _, _) when isZero z -> allowZeroSizeArrays
    | TComp (comp, _, _) -> (* Struct or union *)
        comp.cdefined &&
+       let last = if comp.cfields <> [] then Some (Extlib.last comp.cfields) else None in
        List.for_all
-         (fun fi -> isCompleteType ~allowZeroSizeArrays fi.ftype) comp.cfields
+         (fun fi ->
+            isCompleteType
+              ?isLastField:(Extlib.opt_map (Fieldinfo.equal fi) last)
+              ~allowZeroSizeArrays
+              fi.ftype)
+         comp.cfields
    | _ -> true
 
 
