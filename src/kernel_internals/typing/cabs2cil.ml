@@ -9263,10 +9263,12 @@ and doStatement local_env (s : A.statement) : chunk =
     CurrentLoc.set loc';
     (* Sometimes we return the result of a void function call *)
     if isVoidType !currentReturnType then begin
-      Kernel.error ~current:true
-        "Return statement with a value in function returning void";
-      let (se, _, _) = doFullExp local_env false e ADrop in
-      se @@ (returnChunk ~ghost None loc', ghost)
+      let (_, _, et) = doFullExp local_env false e AType in
+      if not (isVoidType et) then
+        Kernel.error ~current:true
+          "Return statement with a value of type %a in function returning void"
+          Cil_printer.pp_typ et;
+      doStatement local_env { s with stmt_node = A.COMPUTATION (e, loc) }
     end else begin
       let rt =
         typeRemoveAttributes ["warn_unused_result"] !currentReturnType
