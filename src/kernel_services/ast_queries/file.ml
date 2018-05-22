@@ -787,20 +787,10 @@ let propagate_logic_info_default_labels =
         inherit genericCilVisitor inplace_visit
 
         method! vlogic_info_use li =
-          if List.(memq li (tl path)) then
-            Kernel.abort
-              ~current:true
-              "Cyclic dependency detected between the following logic functions and/or predicates: @[+    %a@]"
-              (Pretty_utils.pp_list
-                 ~sep:"@]@.@[`--> "
-                 (fun fmt li ->
-                    let loc = H.find locations li in
-                    Format.fprintf fmt "%a:@.     %a"
-                      Printer.pp_location loc
-                      Printer.pp_global_annotation (Dfun_or_pred (li, loc))))
-              (List.rev path);
-          if not (H.mem finished li) && li != List.hd path then logic_info_decl_handler path li
-          else SkipChildren
+          if not List.(memq li (tl path)) && not (H.mem finished li) && li != List.hd path then
+            logic_info_decl_handler path li
+          else
+            SkipChildren
       end
     and logic_info_decl_handler path li =
       ignore @@ visitCilLogicInfo (logic_info_use_visitor (li :: path)) li;
@@ -819,6 +809,7 @@ let propagate_logic_info_default_labels =
       method! vlogic_info_decl = logic_info_decl_handler []
     end
   in
+  let fixpoint_reached = ref false in
   let logic_info_use_visitor li =
     object
       inherit genericCilVisitor inplace_visit
@@ -827,6 +818,7 @@ let propagate_logic_info_default_labels =
         function
         | { l_labels = [_] } ->
           li.l_labels <- [LogicLabel (None, "L")];
+          fixpoint_reached := false;
           SkipChildren
         | { l_labels = _ :: _; l_type; l_var_info } ->
           let pp_kind fmt ty =
@@ -908,11 +900,14 @@ let propagate_logic_info_default_labels =
   fun file ->
     visitCilFile glob_annot_visitor file;
     visitCilFile logic_info_decl_visitor file;
-    List.iter
-      (fun li ->
-         if li.l_labels = [] then
-           ignore @@ visitCilLogicInfo (logic_info_use_visitor li) li)
-      (List.rev !sorted);
+    while not !fixpoint_reached do
+      fixpoint_reached := true;
+      List.iter
+        (fun li ->
+           if li.l_labels = [] then
+             ignore @@ visitCilLogicInfo (logic_info_use_visitor li) li)
+        (List.rev !sorted)
+    done;
     visitCilFile default_label_assoc_visitor file
 
 let files_to_cil files =
