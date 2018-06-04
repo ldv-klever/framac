@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2017                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -379,7 +379,7 @@ let help (main_ui:Design.main_window_extension_points) =
        ^"and the data is the one that is selected if any, "
        ^"or it can be given via a popup.\n"
        ^"\tIf the text given in the popup is empty, or 'Cancel' is chosen, "
-       ^"the selection of the command is reseted.");
+       ^"the selection of the command is reset.");
     add (ShowDef.help);
     add (Zones.help);
     add (DataScope.help);
@@ -484,7 +484,7 @@ let check_value (main_ui:Design.main_window_extension_points) =
       else false
 
 
-(** To add a sensitive/unsensitive menu item to a [factory].
+(** To add a sensitive/insensitive menu item to a [factory].
 * The menu item is insensitive when [arg_opt = None],
 * else, when the item is selected, the callback is called with the argument.
 * If [~use_values], check if the value analysis has been computed.
