@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/saveload/sparecode.i (no preprocessing)
 [slicing] slicing requests in progress...
 [value] Analyzing a complete application starting at main
@@ -7,15 +6,15 @@
 [value:initial-state] Values of globals at initialization
   G ∈ {0}
 [value] computing for function f <- main.
-        Called from tests/saveload/sparecode.i:16.
+    Called from tests/saveload/sparecode.i:16.
 [value] Recording results for f
 [value] Done for function f
 [value] computing for function f <- main.
-        Called from tests/saveload/sparecode.i:17.
+    Called from tests/saveload/sparecode.i:17.
 [value] Recording results for f
 [value] Done for function f
 [value] computing for function f <- main.
-        Called from tests/saveload/sparecode.i:18.
+    Called from tests/saveload/sparecode.i:18.
 [value] Recording results for f
 [value] Done for function f
 [value] Recording results for main

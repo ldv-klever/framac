@@ -96,13 +96,10 @@ struct
       method op_scope = function Aint -> Some "%Z" | Areal -> Some "%R"
 
       method pp_int _amode fmt z = pp_print_string fmt (Z.to_string z)
-      method pp_cst fmt cst =
-        let open Numbers in
-        let man,exp = significant cst in
-        let sign = match cst.sign with Pos -> "" | Neg -> "-" in
-        match cst.base with
-        | Dec -> fprintf fmt "(real_dec (%s%s) (%d))" sign man exp
-        | Hex -> fprintf fmt "(real_hex (%s%s) (%d))" sign (dec_of_hex man) exp
+      method pp_real fmt q =
+        fprintf fmt "( %s / %s )%%R"
+          (Z.to_string q.Q.num)
+          (Z.to_string q.Q.den)       
 
       method e_true  = function Cterm -> "true"  | Cprop -> "True"
       method e_false = function Cterm -> "false" | Cprop -> "False"
@@ -331,6 +328,18 @@ struct
           fprintf fmt "@[<hov 4>Parameter %s :" (link_name (self#link f)) ;
           List.iter (fun t -> fprintf fmt "@ %a ->" self#pp_tau t) ts ;
           fprintf fmt "@ %a.@]@\n" self#pp_tau t ;
+        end
+
+      method declare_inductive fmt f ts t l =
+        begin
+          fprintf fmt "@[<hov 4>Inductive %s :" (link_name (self#link f)) ;
+          List.iter (fun t -> fprintf fmt "@ %a ->" self#pp_tau t) ts ;
+          fprintf fmt "@ %a :=" self#pp_tau t ;
+          List.iter
+                  (fun (lemma,xs,(_:trigger list list),p) ->
+                     fprintf fmt "@ | @[<hov 2>%s: %a@]" lemma self#pp_prop (T.e_forall xs p)
+                  ) l ;
+          fprintf fmt ".@]@\n"
         end
 
       method declare_definition fmt f xs t e =

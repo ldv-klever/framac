@@ -1,5 +1,4 @@
 # frama-c -wp -wp-model 'Typed (Ref)' [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_hoare/dispatch_var.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -84,7 +83,7 @@
 [wp] [Qed] Goal typed_ref_ref_bd_post : Valid
 [wp] [Qed] Goal typed_ref_ref_bd_assign : Valid
 [wp] Proved goals:   78 / 78
-     Qed:            78
+    Qed:            78
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 call_ref_ctr         4     -           4       100%

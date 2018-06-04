@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_bts/nupw-bcl-bts1120.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -20,7 +19,7 @@
 [wp] [Qed] Goal typed_unreachable_smt_with_contract_post_ok : Valid
 [wp] [Qed] Goal typed_unreachable_smt_with_contract_call_f_with_precond_pre_ok_2 : Valid
 [wp] Proved goals:    8 / 8
-     Qed:             8
+    Qed:             8
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 g                    6     -           6       100%

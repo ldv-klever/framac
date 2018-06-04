@@ -1,5 +1,4 @@
 [value] warning: New option name for -no-val-left-shift-negative-alarms is -no-val-warn-left-shift-negative
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/shift.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -29,17 +28,17 @@ tests/value/shift.i:32:[value] warning: assertion got status unknown.
 tests/value/shift.i:35:[value] warning: invalid RHS operand for shift. assert 0 ≤ 32 < 32;
 tests/value/shift.i:36:[value] warning: invalid RHS operand for shift. assert 0 ≤ 5555 < 32;
 tests/value/shift.i:40:[value] warning: invalid RHS operand for shift. assert 0 ≤ b < 32;
-[value] Called Frama_C_show_each({{ "ua:%u\nub:%u\n" }}, {1401}, {1073741074})
+tests/value/shift.i:48:[value] Frama_C_show_each: {{ "ua:%u\nub:%u\n" }}, {1401}, {1073741074}
 tests/value/shift.i:52:[value] Assigning imprecise value to r.
-        The imprecision originates from Arithmetic {tests/value/shift.i:52}
+    The imprecision originates from Arithmetic {tests/value/shift.i:52}
 tests/value/shift.i:53:[value] warning: signed overflow. assert -2147483648 ≤ (long)((char *)t) << 8;
 tests/value/shift.i:53:[value] warning: signed overflow. assert (long)((char *)t) << 8 ≤ 2147483647;
 tests/value/shift.i:53:[value] warning: signed overflow.
-                 assert -2147483648 ≤ (long)r + (long)((long)((char *)t) << 8);
+    assert -2147483648 ≤ (long)r + (long)((long)((char *)t) << 8);
 tests/value/shift.i:53:[value] warning: signed overflow.
-                 assert (long)r + (long)((long)((char *)t) << 8) ≤ 2147483647;
+    assert (long)r + (long)((long)((char *)t) << 8) ≤ 2147483647;
 tests/value/shift.i:53:[value] Assigning imprecise value to r.
-        The imprecision originates from Arithmetic
+    The imprecision originates from Arithmetic
 [value] Recording results for main
 [value] done for function main
 tests/value/shift.i:35:[value] assertion 'Value,shift' got final status invalid.
@@ -56,11 +55,11 @@ tests/value/shift.i:40:[value] assertion 'Value,shift' got final status invalid.
   c ∈ [--..--]
   z ∈ [-2147483648..2147483631]
   zz ∈ {0}
-  shl ∈ {0}
+  shl ∈ {0; 1}
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function main:
   a FROM v; c
   b FROM z (and SELF)
@@ -71,6 +70,6 @@ tests/value/shift.i:40:[value] assertion 'Value,shift' got final status invalid.
   \result FROM b; z
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main:
-          a; b; d; f; ua; ub; c; z; zz; r; shl
+      a; b; d; f; ua; ub; c; z; zz; r; shl
 [inout] Inputs for function main:
-          b; d; f; ua; ub; v
+      b; d; f; ua; ub; v

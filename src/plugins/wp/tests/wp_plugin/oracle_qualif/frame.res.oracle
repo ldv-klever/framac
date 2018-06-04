@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_plugin/frame.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -12,8 +11,8 @@
 [wp] [Alt-Ergo] Goal typed_localref_post_KO : Unknown
 [wp] [Qed] Goal typed_localref_assert_FRAMED : Valid
 [wp] Proved goals:    2 / 6
-     Qed:             2 
-     Alt-Ergo:        0  (unknown: 4)
+    Qed:             2 
+    Alt-Ergo:        0  (unknown: 4)
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 local                1     -           2      50.0%

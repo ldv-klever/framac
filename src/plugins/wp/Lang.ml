@@ -30,6 +30,8 @@ open Ctypes
 open Qed
 open Qed.Logic
 
+let dkey_pretty = Wp_parameters.register_category "pretty"
+
 (* -------------------------------------------------------------------------- *)
 
 let basename def name =
@@ -264,8 +266,10 @@ let atype t =
   with Not_found -> Atype t
 
 let builtin_type ~name ~link ~library =
-  let m = new_extern ~link ~library ~debug:name in
-  Hashtbl.add builtins name m
+  try Mtype (Hashtbl.find builtins name)
+  with Not_found ->
+    let m = new_extern ~link ~library ~debug:name in
+    Hashtbl.add builtins name m ; Mtype m
 
 let is_builtin_type ~name = function
   | Data(Mtype m,_) ->
@@ -364,8 +368,8 @@ type lfun =
 and model = {
   m_category : lfun category ;
   m_params : sort list ;
-  m_resort : sort ;
-  m_result : tau option ;
+  m_result : sort ;
+  m_typeof : tau option list -> tau ;
   m_source : source ;
 }
 
@@ -373,19 +377,21 @@ and source =
   | Generated of string
   | Extern of Engine.link extern
 
-let tau_of_lfun = function
+let tau_of_lfun phi ts =
+  match phi with
   | ACSL f -> tau_of_return f
   | CTOR c ->
       if c.ctor_type.lt_params = [] then Logic.Data(Atype c.ctor_type,[])
       else raise Not_found
-  | Model { m_result = Some t } -> t
-  | Model m -> match m.m_resort with
+  | Model m -> match m.m_result with
     | Sint -> Int
     | Sreal -> Real
     | Sbool -> Bool
-    | _ -> raise Not_found
+    | _ -> m.m_typeof ts
 
 type balance = Nary | Left | Right
+
+let not_found _ = raise Not_found
 
 let symbolf
     ?library
@@ -395,6 +401,7 @@ let symbolf
     ?(params=[])
     ?(sort=Logic.Sdata)
     ?(result:tau option)
+    ?(typecheck:(tau option list -> tau) option)
     name =
   let buffer = Buffer.create 80 in
   Format.kfprintf
@@ -414,27 +421,29 @@ let symbolf
                | Some info -> info
              in
              Extern (new_extern ~library:th ~link ~debug:name) in
-       let resort,result = match sort,result with
-         | _,Some t -> Kind.of_tau t,result
-         | Sint,None -> sort,Some Int
-         | Sreal,None -> sort,Some Real
-         | Sbool,None -> sort,Some Bool
-         | Sprop,None -> sort,Some Prop
-         | _ -> sort,None in
+       let typeof =
+         match typecheck with Some phi -> phi | None ->
+         match result with Some t -> fun _ -> t | None -> not_found in
+       let result =
+         match result with Some t -> Kind.of_tau t | None -> sort in
        Model {
          m_category = category ;
          m_params = params ;
          m_result = result ;
-         m_resort = resort ;
-         m_source = source;
+         m_typeof = typeof ;
+         m_source = source ;
        }
     ) (Format.formatter_of_buffer buffer) name
 
-let extern_s ~library ?link ?category ?params ?sort ?result name =
-  symbolf ~library ?category ?params ?sort ?result ?link "%s" name
+let extern_s
+    ~library ?link ?category ?params ?sort ?result ?typecheck name =
+  symbolf
+    ~library ?category ?params ?sort ?result ?typecheck ?link "%s" name
 
-let extern_f ~library ?link ?balance ?category ?params ?sort ?result name =
-  symbolf ~library ?category ?params ?link ?balance ?sort ?result name
+let extern_f
+    ~library ?link ?balance ?category ?params ?sort ?result ?typecheck name =
+  symbolf
+    ~library ?category ?params ?link ?balance ?sort ?result ?typecheck name
 
 let extern_p ~library ?bool ?prop ?link ?(params=[]) () =
   let link =
@@ -447,8 +456,8 @@ let extern_p ~library ?bool ?prop ?link ?(params=[]) () =
   Model {
     m_category = Logic.Function;
     m_params = params ;
-    m_resort = Logic.Sprop;
-    m_result = Some Logic.Prop;
+    m_result = Logic.Sprop;
+    m_typeof = not_found;
     m_source = Extern (new_extern ~library ~link ~debug)
   }
 
@@ -459,8 +468,8 @@ let extern_fp ~library ?(params=[]) ?link phi =
   Model {
     m_category = Logic.Function ;
     m_params = params ;
-    m_resort = Logic.Sprop;
-    m_result = Some Logic.Prop;
+    m_result = Logic.Sprop;
+    m_typeof = not_found;
     m_source = Extern (new_extern
                          ~library
                          ~link
@@ -474,8 +483,8 @@ let generated_p name =
   Model {
     m_category = Logic.Function ;
     m_params = [] ;
-    m_resort = Logic.Sprop;
-    m_result = Some Logic.Prop;
+    m_result = Logic.Sprop;
+    m_typeof = not_found;
     m_source = Generated name
   }
 
@@ -522,7 +531,7 @@ struct
     | CTOR _ -> Logic.Constructor
 
   let sort = function
-    | Model m -> m.m_resort
+    | Model m -> m.m_result
     | ACSL { l_type=None } -> Logic.Sprop
     | ACSL { l_type=Some t } -> sort_of_ltype t
     | CTOR _ -> Logic.Sdata
@@ -579,20 +588,7 @@ let name_of_field = function
 module F =
 struct
 
-  module ZInteger =
-  struct
-    include Integer
-    let leq = Integer.le
-    let div = Integer.c_div (* acsl division *)
-    let rem = Integer.c_rem (* acsl remainder *)
-    let div_rem a b = (* acsl division, remainder *)
-      let sa, a = if leq zero a then true, a else false, neg a in
-      let sb, b = if leq zero b then true, b else false, neg b in
-      let d,r = div_rem a b in
-      (if sa == sb then d else neg d), (if sa then r else neg r)
-  end
-
-  module QZERO = Qed.Term.Make(ZInteger)(ADT)(Field)(Fun)
+  module QZERO = Qed.Term.Make(ADT)(Field)(Fun)
 
   (* -------------------------------------------------------------------------- *)
   (* --- Qed Projectified State                                             --- *)
@@ -688,18 +684,13 @@ struct
   let e_zero = QED.constant (e_zint Z.zero)
   let e_one  = QED.constant (e_zint Z.one)
   let e_minus_one = QED.constant (e_zint Z.minus_one)
-  let e_one_real  = QED.constant (e_real (R.of_string "1.0"))
-  let e_zero_real = QED.constant (e_real (R.of_string "0.0"))
-
-  let hex_of_float f =
-    Pretty_utils.to_string (Floating_point.pretty_normal ~use_hex:true) f
+  let e_one_real  = QED.constant (e_real Q.one)
+  let e_zero_real = QED.constant (e_real Q.zero)
 
   let e_int64 z = e_zint (Z.of_string (Int64.to_string z))
   let e_fact k e = e_times (Z.of_int k) e
   let e_bigint z = e_zint (Z.of_string (Integer.to_string z))
   let e_range a b = e_sum [b;e_one;e_opp a]
-  let e_mthfloat f = QED.e_real (R.of_string (string_of_float f))
-  let e_hexfloat f = QED.e_real (R.of_string (hex_of_float f))
 
   let e_setfield r f v =
     (*TODO:NUPW: check for UNIONS *)
@@ -786,11 +777,11 @@ struct
   
   let pp_tau = Pretty.pp_tau
   let pp_term fmt e =
-    if Wp_parameters.has_dkey "pretty"
+    if Wp_parameters.has_dkey dkey_pretty
     then QED.debug fmt e
     else Pretty.pp_term Pretty.empty fmt e
   let pp_pred fmt p =
-    if Wp_parameters.has_dkey "pretty"
+    if Wp_parameters.has_dkey dkey_pretty
     then QED.debug fmt p
     else Pretty.pp_term Pretty.empty fmt p
   let pp_var fmt x = pp_term fmt (e_var x)
@@ -886,6 +877,7 @@ let new_gamma ?copy () =
 
 let get_pool () = Context.get cpool
 let get_gamma () = Context.get cgamma
+let has_gamma () = Context.defined cgamma
 
 let freshvar ?basename tau = F.fresh (Context.get cpool) ?basename tau
 let freshen x = F.alpha (Context.get cpool) x

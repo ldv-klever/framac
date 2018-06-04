@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_plugin/model.i (no preprocessing)
 tests/wp_plugin/model.i:11:[kernel] warning: parsing obsolete ACSL construct 'logic declaration'. 'an axiomatic block' should be used instead.
 [wp] Running WP plugin...
@@ -43,7 +42,7 @@ logic P_P : int -> prop
 
 [wp] [Alt-Ergo] Goal typed_f_post : Typechecked
 [wp] Proved goals:    0 / 1
-     Alt-Ergo:        0  (unknown: 1)
+    Alt-Ergo:        0  (unknown: 1)
 [wp] Running WP plugin...
 [wp] 2 goals scheduled
 ---------------------------------------------
@@ -101,4 +100,4 @@ goal f_post:
 [wp] [Alt-Ergo] Goal typed_ref_f_post : Typechecked
 [wp] [Alt-Ergo] Goal typed_f_post : Typechecked
 [wp] Proved goals:    0 / 2
-     Alt-Ergo:        0  (unknown: 2)
+    Alt-Ergo:        0  (unknown: 2)

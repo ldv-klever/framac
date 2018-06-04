@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/statement_contract.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -14,11 +13,11 @@ tests/value/statement_contract.i:5:[value] function main, behavior test: postcon
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function main:
   \result FROM \nothing
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main:
-          d
+      d
 [inout] Inputs for function main:
-          \nothing
+      \nothing

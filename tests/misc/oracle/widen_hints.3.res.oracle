@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/misc/widen_hints.c (with preprocessing)
 [value:widen-hints] computing global widen hints
 tests/misc/widen_hints.c:79:[value:widen-hints] adding global hint from annotation: for all variables, {88} (for all statements)
@@ -15,7 +14,7 @@ tests/misc/widen_hints.c:72:[value] entering loop for the first time
 tests/misc/widen_hints.c:73:[value] entering loop for the first time
 tests/misc/widen_hints.c:80:[value:widen-hints] computing dynamic hints for statement 50
 [value] computing for function f <- main.
-        Called from tests/misc/widen_hints.c:80.
+    Called from tests/misc/widen_hints.c:80.
 tests/misc/widen_hints.c:41:[value] entering loop for the first time
 tests/misc/widen_hints.c:42:[value] entering loop for the first time
 [value] Recording results for f
@@ -37,22 +36,22 @@ tests/misc/widen_hints.c:118:[value:widen-hints] adding new base due to dynamic 
 tests/misc/widen_hints.c:118:[value] entering loop for the first time
 tests/misc/widen_hints.c:123:[value] entering loop for the first time
 [value] computing for function using_dynamic_global <- main.
-        Called from tests/misc/widen_hints.c:124.
+    Called from tests/misc/widen_hints.c:124.
 tests/misc/widen_hints.c:58:[value:widen-hints] computing dynamic hints for statement 22
 tests/misc/widen_hints.c:58:[value:widen-hints] adding new base due to dynamic widen hint: outer_i, {87}
 tests/misc/widen_hints.c:58:[value] entering loop for the first time
 [value] Recording results for using_dynamic_global
 [value] Done for function using_dynamic_global
 [value] computing for function using_dynamic_global <- main.
-        Called from tests/misc/widen_hints.c:124.
+    Called from tests/misc/widen_hints.c:124.
 [value] Recording results for using_dynamic_global
 [value] Done for function using_dynamic_global
 [value] computing for function using_dynamic_global <- main.
-        Called from tests/misc/widen_hints.c:124.
+    Called from tests/misc/widen_hints.c:124.
 [value] Recording results for using_dynamic_global
 [value] Done for function using_dynamic_global
 [value] computing for function using_dynamic_global <- main.
-        Called from tests/misc/widen_hints.c:124.
+    Called from tests/misc/widen_hints.c:124.
 [value] Recording results for using_dynamic_global
 [value] Done for function using_dynamic_global
 [value] Recording results for main

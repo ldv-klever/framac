@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/if.i (no preprocessing)
 [value] Analyzing a complete application starting at main6
 [value] Computing initial state
@@ -19,7 +18,7 @@
 [from] Computing for function main6
 [from] Done for function main6
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function main6:
   G FROM \nothing
   \result FROM \nothing

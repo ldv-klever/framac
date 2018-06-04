@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/float/dr_infinity.i (no preprocessing)
 tests/float/dr_infinity.i:8:[kernel] warning: Floating-point constant 3.4028235677973366e+38f is not represented exactly. Will use 0x1.fffffe0000000p127
 tests/float/dr_infinity.i:11:[kernel] warning: Floating-point constant 3.402823567797366e+38 is not represented exactly. Will use 0x1.ffffff000004ep127
@@ -13,14 +12,14 @@ tests/float/dr_infinity.i:36:[kernel] warning: Floating-point constant 0.001 is 
 [value] Initial state computed
 [value:initial-state] Values of globals at initialization
   v ∈ [--..--]
-[value] Called Frama_C_show_each({0x1.fffffe0000000p127})
+tests/float/dr_infinity.i:9:[value] Frama_C_show_each: {0x1.fffffe0000000p127}
 tests/float/dr_infinity.i:11:[value] warning: non-finite float value. assert \is_finite((float)3.402823567797366e+38);
 tests/float/dr_infinity.i:16:[value] warning: non-finite float value. assert \is_finite((float)(x * x));
 tests/float/dr_infinity.i:21:[value] warning: non-finite double value. assert \is_finite((double)(d * (double)10));
 tests/float/dr_infinity.i:26:[value] warning: non-finite double value. assert \is_finite((double)((double)2 / d));
 tests/float/dr_infinity.i:31:[value] warning: non-finite double value. assert \is_finite((double)(d / 0.01));
 tests/float/dr_infinity.i:36:[value] warning: non-finite float value.
-                 assert \is_finite((float)((double)((double)x / 0.001)));
+    assert \is_finite((float)((double)((double)x / 0.001)));
 [value] Recording results for main
 [value] done for function main
 [value] ====== VALUES COMPUTED ======
@@ -30,11 +29,11 @@ tests/float/dr_infinity.i:36:[value] warning: non-finite float value.
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function main:
   NO EFFECTS
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main:
-          x; d
+      x; d
 [inout] Inputs for function main:
-          v
+      v

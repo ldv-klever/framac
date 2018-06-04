@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/bts336.i (no preprocessing)
 [value] Analyzing a complete application starting at main2
 [value] Computing initial state
@@ -7,13 +6,13 @@
   T[0..9] ∈ {0}
   x5 ∈ {0}
 [value] computing for function f2 <- main2.
-        Called from tests/slicing/bts336.i:35.
+    Called from tests/slicing/bts336.i:35.
 [value] Recording results for f2
 [from] Computing for function f2
 [from] Done for function f2
 [value] Done for function f2
 [value] computing for function f2 <- main2.
-        Called from tests/slicing/bts336.i:36.
+    Called from tests/slicing/bts336.i:36.
 [value] Recording results for f2
 [from] Computing for function f2
 [from] Done for function f2
@@ -65,5 +64,4 @@ int main2(void)
 }
 
 
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/result/ocode_1_bts336.i (no preprocessing)

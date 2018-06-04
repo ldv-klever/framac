@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_typed/user_init.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -15,8 +14,8 @@
 [wp] [Alt-Ergo] Goal typed_init_loop_assign_part3 : Valid
 [wp] [Alt-Ergo] Goal typed_init_assign : Valid
 [wp] Proved goals:    9 / 9
-     Qed:             3 
-     Alt-Ergo:        6
+    Qed:             3 
+    Alt-Ergo:        6
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 init                 3      6 (77)     9       100%

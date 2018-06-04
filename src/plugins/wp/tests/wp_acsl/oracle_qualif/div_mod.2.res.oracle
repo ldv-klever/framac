@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_acsl/div_mod.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -8,7 +7,7 @@
 [wp] [Alt-Ergo] Goal typed_f_post_d7_div_0_x_ko : Unknown
 [wp] [Alt-Ergo] Goal typed_f_post_m7_mod_0_x_ko : Unknown
 [wp] Proved goals:    0 / 2
-     Alt-Ergo:        0  (unknown: 2)
+    Alt-Ergo:        0  (unknown: 2)
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 f                   -      -           2       0.0%

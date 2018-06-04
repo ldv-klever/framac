@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/unitialized.c (with preprocessing)
 [slicing] slicing requests in progress...
 [value] Analyzing a complete application starting at main
@@ -8,15 +7,15 @@
   X1 ∈ {0}
   X2 ∈ {0}
 [value] computing for function f1 <- main.
-        Called from tests/slicing/unitialized.c:38.
+    Called from tests/slicing/unitialized.c:38.
 [value] Recording results for f1
 [value] Done for function f1
 [value] computing for function f2 <- main.
-        Called from tests/slicing/unitialized.c:39.
+    Called from tests/slicing/unitialized.c:39.
 [value] Recording results for f2
 [value] Done for function f2
 [value] computing for function g <- main.
-        Called from tests/slicing/unitialized.c:40.
+    Called from tests/slicing/unitialized.c:40.
 tests/slicing/unitialized.c:30:[value] warning: accessing uninitialized left-value. assert \initialized(&y);
 [value] Recording results for g
 [value] Done for function g
@@ -64,5 +63,4 @@ void main(void)
 }
 
 
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/result/ocode_1_unitialized.i (no preprocessing)

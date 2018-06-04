@@ -46,7 +46,7 @@ let make_pred_float name f =
   extern_f ~library ~result:Logic.Prop ~params "%s_%a" name Ctypes.pp_float f
 
 let f_int =
-  extern_f ~library:"qed" ~result "real_of_int"
+  extern_f ~library:"qed" ~result ~params:[Logic.Sint] "real_of_int"
 
 let f_sqrt =
   extern_f ~library:"cmath" ~result ~params ~link:(link "sqrt") "\\sqrt"
@@ -94,44 +94,30 @@ let model = Context.create ~default:Real "Cfloat.model"
 (* --- Literals                                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
-let code_lit f =
-  match Context.get model with
-  | Real  -> e_mthfloat f
-  | Float -> e_hexfloat f
+let code_lit = F.e_float
 
-let suffixed r_literal =
-  let n = String.length r_literal in
-  n > 0 &&
-  match r_literal.[n-1]
-  with 'f' | 'F' | 'd' | 'D' | 'l' | 'L' -> true | _ -> false
+let mantissa = "\\([-+]?[0-9]*\\)"
+let comma = "\\(.\\(\\(0*[1-9]\\)*\\)0*\\)?"
+let exponent = "\\([eE]\\([-+]?[0-9]*\\)\\)?"
+let real = Str.regexp (mantissa ^ comma ^ exponent ^ "$")
 
-let acsl_lit =
+let real_of_literal l =
   let open Cil_types in
-  function { r_literal ; r_nearest } ->
-  match r_literal with
-  | "0" | ".0" | "0." | "0.0" -> F.e_zero_real
-  | _ ->
-      match Context.get model with
-      | Float ->
-          if suffixed r_literal
-          then e_hexfloat r_nearest
-          else e_real (R.of_string r_literal)
-      | Real ->
-          e_mthfloat r_nearest
+  let r = l.r_literal in
+  if Str.string_match real r 0 then
+    let ma = Str.matched_group 1 r in
+    let mb = try Str.matched_group 3 r with Not_found -> "" in
+    let me = try Str.matched_group 6 r with Not_found -> "0" in
+    let n = int_of_string me - String.length mb in
+    let d n =
+      let s = Bytes.make (succ n) '0' in
+      Bytes.set s 0 '1' ; Q.of_string (Bytes.to_string s) in
+    let m = Q.of_string (ma ^ mb) in
+    if n < 0 then Q.div m (d (-n)) else
+    if n > 0 then Q.mul m (d n) else m
+  else Q.of_float l.r_nearest
 
-let round_pos sign flt r =
-  let open Floating_point in
-  let p = match flt with
-    | Float32 -> single_precision_of_string r
-    | Float64 -> double_precision_of_string r
-  in e_hexfloat (if sign then p.f_nearest else -. p.f_nearest)
-
-let round_lit flt = function
-  | "" | "0" | ".0" | "0." | "0.0" -> F.e_zero_real
-  | r ->
-      if r.[0] = '-'
-      then round_pos false flt (String.sub r 1 (String.length r - 1))
-      else round_pos true flt r
+let acsl_lit l = F.e_real (real_of_literal l)
 
 (* -------------------------------------------------------------------------- *)
 (* --- Maths                                                              --- *)
@@ -144,17 +130,17 @@ let is_eq0 z b = QED.eval_eq  b z
 let builtin_positive_eq lfun z a b =
   let open Qed.Logic in
   begin match F.repr a , F.repr b with
-    | Fun(f,[_]) , _ when f = lfun && is_lt0 z b -> e_false
-    | Fun(f,[a]) , _ when f = lfun && is_eq0 z b -> e_eq a b
+    | Fun(f,[_]) , _ when f == lfun && is_lt0 z b -> e_false
+    | Fun(f,[a]) , _ when f == lfun && is_eq0 z b -> e_eq a b
     | _ -> raise Not_found
   end
 
 let builtin_positive_leq lfun z a b =
   let open Qed.Logic in
   begin match F.repr a , F.repr b with
-    | Fun(f,[_]) , _ when f = lfun && is_lt0 z b -> e_false
-    | Fun(f,[a]) , _ when f = lfun && is_eq0 z b -> e_eq a b
-    | _ , Fun(f,[_]) when f = lfun && is_le0 z a -> e_true
+    | Fun(f,[_]) , _ when f == lfun && is_lt0 z b -> e_false
+    | Fun(f,[a]) , _ when f == lfun && is_eq0 z b -> e_eq a b
+    | _ , Fun(f,[_]) when f == lfun && is_le0 z a -> e_true
     | _ -> raise Not_found
   end
 
@@ -170,7 +156,7 @@ let builtin_abs f z = function
       begin match F.repr e with
         | Times(k,a) -> e_times (Integer.abs k) (e_fun f [a])
         | Kint k -> e_zint (Integer.abs k)
-        | Kreal r when Qed.R.negative r -> e_real (Qed.R.opp r)
+        | Kreal r when Q.lt r Q.zero -> e_real (Q.neg r)
         | Add [a;m] when is_model (e_opp a) m -> e_fun f_delta [m]
         | Add [m;a] when is_model (e_opp a) m -> e_fun f_delta [m]
         | Div (a,m) when is_delta a m -> e_fun f_epsilon [m]
@@ -197,10 +183,7 @@ let builtin_of_int = function
   | [e] ->
       begin
         match F.repr e with
-        | Qed.Logic.Kint k ->
-            let m = Z.to_string k in
-            let r = R.of_string (m ^ ".") in
-            F.e_real r
+        | Qed.Logic.Kint k -> F.e_real (Q.of_bigint k)
         | _ -> raise Not_found
       end
   | _ -> raise Not_found
@@ -228,6 +211,15 @@ let () =
   end
 
 (* -------------------------------------------------------------------------- *)
+(* --- Floating Point Predicate                                           --- *)
+(* -------------------------------------------------------------------------- *)
+
+let fle   _ = F.p_leq
+let flt   _ = F.p_lt
+let feq   _ = F.p_equal
+let fneq  _ = F.p_neq
+
+(* -------------------------------------------------------------------------- *)
 (* --- Precision                                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
@@ -250,9 +242,9 @@ let builtin_model = function
   | [e] ->
       let open Qed.Logic in
       begin match F.repr e with
-        | Fun(f,_) when f = f_model -> e
-        | Fun(f,_) when f = f_delta -> e_zero_real
-        | Fun(f,_) when f = f_epsilon -> e_zero_real
+        | Fun(f,_) when f == f_model -> e
+        | Fun(f,_) when f == f_delta -> e_zero_real
+        | Fun(f,_) when f == f_epsilon -> e_zero_real
         | Fun(op,xs) ->
             let phi = OP.find op in
             (* find phi before computing arguments *)
@@ -262,19 +254,23 @@ let builtin_model = function
       end
   | _ -> raise Not_found
 
-let builtin_round f = function
+let builtin_round ulp = function
   | [e] ->
       let open Qed.Logic in
       begin match F.repr e with
-        | Div(x,y) -> e_fun (flt_div f) [x;y]
-        | Add ([_;_] as xs) -> e_fun (flt_add f) xs
-        | Mul ([_;_] as xs) -> e_fun (flt_mul f) xs
-        | Fun(s,([_] as xs)) when s = f_sqrt -> e_fun (flt_sqrt f) xs
+        | Div(x,y) -> e_fun (flt_div ulp) [x;y]
+        | Add ([_;_] as xs) -> e_fun (flt_add ulp) xs
+        | Mul ([_;_] as xs) -> e_fun (flt_mul ulp) xs
+        | Fun(s,([_] as xs)) when s == f_sqrt -> e_fun (flt_sqrt ulp) xs
+        | Kreal r when Q.equal r Q.zero -> e
+        | Kreal r when Q.equal r Q.one -> e
         | Kreal r ->
-            begin match R.to_string r with
-              | "0.0" | "1.0" | "-1.0" -> e
-              | lit -> round_lit f lit
-            end
+            let flt = Transitioning.Q.to_float r in
+            let rnd =
+              match ulp with
+              | Float32 -> Floating_point.round_to_single_precision_float flt
+              | Float64 -> flt
+            in F.e_float rnd
         | _ -> raise Not_found
       end
   | _ -> raise Not_found
@@ -283,7 +279,7 @@ let builtin_error = function
   | [e] ->
       let open Qed.Logic in
       begin match F.repr e with
-        | Fun(f,_) when f = f_model -> e_zero_real
+        | Fun(f,_) when f == f_model -> e_zero_real
         | _ -> raise Not_found
       end
   | _ -> raise Not_found
@@ -292,14 +288,14 @@ let builtin_error = function
 (* --- Conversion Symbols                                                 --- *)
 (* -------------------------------------------------------------------------- *)
 
-let convert =
-  fun f a ->
+let float_of_real f a =
     match Context.get model with
     | Real -> a
     | Float -> e_fun (flt_rnd f) [a]
 
 let real_of_int a = e_fun f_int [a]
-let float_of_int f a = convert f (real_of_int a)
+let float_of_int f a = float_of_real f (real_of_int a)
+let real_of_float _f a = a
 
 let range =
   let is_float = Ctypes.f_memo (make_pred_float "is") in

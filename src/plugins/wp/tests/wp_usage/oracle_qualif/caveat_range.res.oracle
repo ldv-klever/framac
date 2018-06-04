@@ -1,5 +1,4 @@
 # frama-c -wp -wp-model 'Typed (Caveat)' [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_usage/caveat_range.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -18,9 +17,9 @@
 [wp] [Qed] Goal typed_caveat_reset_loop_assign_part3 : Valid
 [wp] [Qed] Goal typed_caveat_reset_assign : Valid
 [wp] Proved goals:   12 / 12
-     Qed:             7 
-     Alt-Ergo:        5
+    Qed:             7 
+    Alt-Ergo:        5
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
-reset                7      5 (100)   12       100%
+reset                7      5 (80)    12       100%
 ----------------------------------------------------------

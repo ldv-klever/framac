@@ -80,8 +80,8 @@ type lfun =
 and model = {
   m_category : lfun category ;
   m_params : sort list ;
-  m_resort : sort ;
-  m_result : tau option ;
+  m_result : sort ;
+  m_typeof : tau option list -> tau ;
   m_source : source ;
 }
 
@@ -89,7 +89,7 @@ and source =
   | Generated of string
   | Extern of Engine.link extern
 
-val builtin_type : name:string -> link:string infoprover -> library:string -> unit
+val builtin_type : name:string -> link:string infoprover -> library:string -> adt
 val is_builtin_type : name:string -> tau -> bool
 val datatype : library:string -> string -> adt
 val record :
@@ -110,6 +110,7 @@ val extern_s :
   ?params:sort list ->
   ?sort:sort ->
   ?result:tau ->
+  ?typecheck:(tau option list -> tau) ->
   string -> lfun
 
 val extern_f :
@@ -120,6 +121,7 @@ val extern_f :
   ?params:sort list ->
   ?sort:sort ->
   ?result:tau ->
+  ?typecheck:(tau option list -> tau) ->
   ('a,Format.formatter,unit,lfun) format4 -> 'a
 (** balance just give a default when link is not specified *)
 
@@ -128,7 +130,8 @@ val extern_p :
   ?bool:string ->
   ?prop:string ->
   ?link:Engine.link infoprover ->
-  ?params:sort list -> unit -> lfun
+  ?params:sort list ->
+  unit -> lfun
 
 val extern_fp : library:library -> ?params:sort list ->
   ?link:string infoprover -> string -> lfun
@@ -147,7 +150,7 @@ val tau_of_object : c_object -> tau
 val tau_of_ctype : typ -> tau
 val tau_of_ltype : logic_type -> tau
 val tau_of_return : logic_info -> tau
-val tau_of_lfun : lfun -> tau
+val tau_of_lfun : lfun -> tau option list -> tau
 val tau_of_field : field -> tau
 val tau_of_record : field -> tau
 
@@ -187,9 +190,7 @@ class virtual idprinting :
 module F :
 sig
 
-  module Z : Arith.Z with type t = Integer.t
-  module QED : Logic.Term with module Z = Z
-                           and module ADT = ADT
+  module QED : Logic.Term with module ADT = ADT
                            and module Field = Field
                            and module Fun = Fun
 
@@ -237,8 +238,7 @@ sig
 
   val e_int64 : int64 -> term
   val e_bigint : Integer.t -> term
-  val e_mthfloat : float -> term
-  val e_hexfloat : float -> term
+  val e_float : float -> term
   val e_setfield : term -> field -> term -> term
   val e_range : term -> term -> term (** e_range a b = b+1-a *)
   val is_zero : term -> bool
@@ -249,7 +249,7 @@ sig
   val e_literal : bool -> term -> term
   val e_int : int -> term
   val e_zint : Z.t -> term
-  val e_real : R.t -> term
+  val e_real : Q.t -> term
   val e_var : var -> term
   val e_opp : term -> term
   val e_times : Z.t -> term -> term
@@ -368,7 +368,7 @@ sig
   val lc_closed : term -> bool
   val lc_iter : (term -> unit) -> term -> unit
   val lc_map : (term -> term) -> term -> term
-  
+
   (** {3 Utilities} *)
 
   val decide   : term -> bool (** Return [true] if and only the term is [e_true]. Constant time. *)
@@ -415,7 +415,8 @@ sig
   val typeof :
     ?field:(Field.t -> tau) ->
     ?record:(Field.t -> tau) ->
-    ?call:(Fun.t -> tau) -> term -> tau
+    ?call:(Fun.t -> tau option list -> tau) ->
+    term -> tau
 
   (** {3 Builtins}
 
@@ -496,6 +497,7 @@ val variables : gamma -> var list
 
 val get_pool : unit -> pool
 val get_gamma : unit -> gamma
+val has_gamma : unit -> bool
 val get_hypotheses : unit -> pred list
 val get_variables : unit -> var list
 

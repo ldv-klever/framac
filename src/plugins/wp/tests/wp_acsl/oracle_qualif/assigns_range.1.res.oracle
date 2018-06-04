@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_acsl/assigns_range.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -12,7 +11,7 @@
 [wp] [Alt-Ergo] Goal typed_call_assigns_t4_assign_exit : Unknown
 [wp] [Alt-Ergo] Goal typed_call_assigns_t4_assign_normal : Unknown
 [wp] Proved goals:    0 / 6
-     Alt-Ergo:        0  (unknown: 6)
+    Alt-Ergo:        0  (unknown: 6)
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 call_assigns_t1     -      -           2       0.0%

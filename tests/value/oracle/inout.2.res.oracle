@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/inout.i (no preprocessing)
 [value] Analyzing a complete application starting at never_terminate
 [value] Computing initial state
@@ -28,14 +27,14 @@ tests/value/inout.i:50:[value] entering loop for the first time
 [from] Non-terminating function never_terminate (no dependencies)
 [from] Done for function never_terminate
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function never_terminate:
   NON TERMINATING - NO EFFECTS
 [from] ====== END OF DEPENDENCIES ======
 [inout] InOut (internal) for function never_terminate:
-        Operational inputs:
-          i1_nt; i2_nt; i3_nt
-        Operational inputs on termination:
-          \nothing
-        Sure outputs:
-          ANYTHING(origin:Unknown)
+    Operational inputs:
+      i1_nt; i2_nt; i3_nt
+    Operational inputs on termination:
+      \nothing
+    Sure outputs:
+      ANYTHING(origin:Unknown)

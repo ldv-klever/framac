@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/saveload/segfault_datatypes.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -17,11 +16,11 @@ tests/saveload/segfault_datatypes.i:13:[value] warning: signed overflow. assert 
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function main:
   \result FROM \nothing
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main:
-          i; j; tmp; __retres
+      i; j; tmp; __retres
 [inout] Inputs for function main:
-          \nothing
+      \nothing

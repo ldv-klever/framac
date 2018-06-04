@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/slevel_return.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -7,18 +6,19 @@
   x ∈ {0}
   y ∈ {0}
 [value] computing for function main1 <- main.
-        Called from tests/value/slevel_return.i:44.
+    Called from tests/value/slevel_return.i:44.
 tests/value/slevel_return.i:7:[value] function main1: postcondition got status valid.
 [value] Recording results for main1
 [value] Done for function main1
 [value] computing for function main2 <- main.
-        Called from tests/value/slevel_return.i:45.
-[value] DUMPING STATE of file tests/value/slevel_return.i line 38
-        x ∈ {-3}
-        y ∈ {0; 1; 6}
-        c ∈ [--..--]
-        c ∈ [--..--]
-        =END OF DUMP==
+    Called from tests/value/slevel_return.i:45.
+tests/value/slevel_return.i:38:[value] Frama_C_dump_each:
+    # Cvalue domain:
+    x ∈ {-3}
+    y ∈ {0; 1; 6}
+    c ∈ [--..--]
+    c ∈ [--..--]
+    ==END OF DUMP==
 tests/value/slevel_return.i:23:[value] function main2: postcondition got status valid.
 [value] Recording results for main2
 [value] Done for function main2
@@ -37,13 +37,11 @@ tests/value/slevel_return.i:23:[value] function main2: postcondition got status 
 [from] Computing for function main1
 [from] Done for function main1
 [from] Computing for function main2
-[from] Computing for function Frama_C_dump_each <-main2
-[from] Done for function Frama_C_dump_each
 [from] Done for function main2
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function main1:
   x FROM c
   y FROM c (and SELF)
@@ -55,14 +53,14 @@ tests/value/slevel_return.i:23:[value] function main2: postcondition got status 
   y FROM c (and SELF)
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main1:
-          x; y
+      x; y
 [inout] Inputs for function main1:
-          \nothing
+      \nothing
 [inout] Out (internal) for function main2:
-          x; y
+      x; y
 [inout] Inputs for function main2:
-          \nothing
+      \nothing
 [inout] Out (internal) for function main:
-          x; y
+      x; y
 [inout] Inputs for function main:
-          \nothing
+      \nothing

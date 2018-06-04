@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_bts/bts0843.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -10,8 +9,8 @@
 [wp] [Alt-Ergo] Goal typed_g3_assign_normal : Valid
 [wp] [Qed] Goal typed_g3_call_f3_pre : Valid
 [wp] Proved goals:    4 / 4
-     Qed:             2 
-     Alt-Ergo:        2
+    Qed:             2 
+    Alt-Ergo:        2
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 f3                   1     -           1       100%

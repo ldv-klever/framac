@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/strings_cond.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -6,14 +5,15 @@
 [value:initial-state] Values of globals at initialization
   
 [value] computing for function foo <- main.
-        Called from tests/value/strings_cond.i:8.
-[value] DUMPING STATE of file tests/value/strings_cond.i line 3
-        s ∈ {{ "Bla" }}
-        =END OF DUMP==
+    Called from tests/value/strings_cond.i:8.
+tests/value/strings_cond.i:3:[value] Frama_C_dump_each:
+    # Cvalue domain:
+    s ∈ {{ "Bla" }}
+    ==END OF DUMP==
 tests/value/strings_cond.i:4:[value] entering loop for the first time
-[value] Called Frama_C_show_each_s({{ "Bla" }})
-[value] Called Frama_C_show_each_s({{ "Bla" + {0; 1} }})
-[value] Called Frama_C_show_each_s({{ "Bla" + {0; 1; 2} }})
+tests/value/strings_cond.i:4:[value] Frama_C_show_each_s: {{ "Bla" }}
+tests/value/strings_cond.i:4:[value] Frama_C_show_each_s: {{ "Bla" + {0; 1} }}
+tests/value/strings_cond.i:4:[value] Frama_C_show_each_s: {{ "Bla" + {0; 1; 2} }}
 [value] Recording results for foo
 [value] Done for function foo
 [value] Recording results for main
@@ -24,23 +24,21 @@ tests/value/strings_cond.i:4:[value] entering loop for the first time
 [value:final-states] Values at end of function main:
   
 [from] Computing for function foo
-[from] Computing for function Frama_C_dump_each <-foo
-[from] Done for function Frama_C_dump_each
 [from] Done for function foo
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function foo:
   NO EFFECTS
 [from] Function main:
   NO EFFECTS
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function foo:
-          s
+      s
 [inout] Inputs for function foo:
-          "Bla"
+      "Bla"
 [inout] Out (internal) for function main:
-          \nothing
+      \nothing
 [inout] Inputs for function main:
-          "Bla"
+      "Bla"

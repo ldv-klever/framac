@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/saveload/multi_project.i (no preprocessing)
 [scf] beginning constant propagation
 [value] Analyzing a complete application starting at main
@@ -7,7 +6,7 @@
 [value:initial-state] Values of globals at initialization
   
 [value] computing for function f <- main.
-        Called from tests/saveload/multi_project.i:14.
+    Called from tests/saveload/multi_project.i:14.
 [value] Recording results for f
 [value] Done for function f
 tests/saveload/multi_project.i:15:[value] assertion got status valid.

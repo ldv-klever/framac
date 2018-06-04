@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/val6.i (no preprocessing)
 [value] Analyzing a complete application starting at f
 [value] Computing initial state
@@ -27,7 +26,7 @@
 [from] Computing for function f
 [from] Done for function f
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function f:
   NULL[18..21] FROM \nothing
   c FROM \nothing
@@ -38,6 +37,6 @@
   \result FROM \nothing
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function f:
-          NULL[18..21]; c; a; b; y; x; __retres
+      NULL[18..21]; c; a; b; y; x; __retres
 [inout] Inputs for function f:
-          NULL[18..21]; c; x
+      NULL[18..21]; c; x

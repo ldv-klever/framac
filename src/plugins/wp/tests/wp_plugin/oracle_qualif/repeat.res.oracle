@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_plugin/repeat.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -54,12 +53,12 @@ tests/wp_plugin/repeat.c:47:[wp] warning: Missing assigns clause (assigns 'every
 [wp] [Qed] Goal typed_unroll_assign_normal_part10 : Valid
 [wp] [Qed] Goal typed_unroll_assign_normal_part11 : Valid
 [wp] Proved goals:   47 / 47
-     Qed:            42 
-     Alt-Ergo:        5
+    Qed:            42 
+    Alt-Ergo:        5
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 master               3     -           3       100%
 unroll              25     -          25       100%
-induction            7      2 (565)    9       100%
-shifted              7      3 (561)   10       100%
+induction            7      2 (47)     9       100%
+shifted              7      3 (48)    10       100%
 ----------------------------------------------------------

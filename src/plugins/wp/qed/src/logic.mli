@@ -134,12 +134,12 @@ type ('f,'a) funtype = {
     - 'b: representation of bound term (phantom type equal to 'e)
     - 'e: sub-expression
 *)
-type ('z,'f,'a,'d,'x,'b,'e) term_repr =
+type ('f,'a,'d,'x,'b,'e) term_repr =
   | True
   | False
-  | Kint  of 'z
-  | Kreal of R.t
-  | Times of 'z * 'e      (** mult: k1 * e2 *)
+  | Kint  of Z.t
+  | Kreal of Q.t
+  | Times of Z.t * 'e      (** mult: k1 * e2 *)
   | Add   of 'e list      (** add:  e11 + ... + e1n *)
   | Mul   of 'e list      (** mult: e11 * ... * e1n *)
   | Div   of 'e * 'e
@@ -163,13 +163,12 @@ type ('z,'f,'a,'d,'x,'b,'e) term_repr =
   | Apply of 'e * 'e list (** High-Order application (Cf. binder) *)
   | Bind  of binder * ('f,'a) datatype * 'b
 
-type ('z,'a) affine = { constant : 'z ; factors : ('z * 'a) list }
+type 'a affine = { constant : Z.t ; factors : (Z.t * 'a) list }
 
 (** {2 Formulae} *)
 module type Term =
 sig
 
-  module Z : Arith.Z
   module ADT : Data
   module Field : Field
   module Fun : Function
@@ -203,7 +202,7 @@ sig
 
   (** {3 Terms} *)
 
-  type 'a expression = (Z.t,Field.t,ADT.t,Fun.t,var,bind,'a) term_repr
+  type 'a expression = (Field.t,ADT.t,Fun.t,var,bind,'a) term_repr
 
   type repr = term expression
   type path = int list (** position of a subterm in a term. *)
@@ -237,8 +236,9 @@ sig
   val e_bool : bool -> term
   val e_literal : bool -> term -> term
   val e_int : int -> term
+  val e_float : float -> term
   val e_zint : Z.t -> term
-  val e_real : R.t -> term
+  val e_real : Q.t -> term
   val e_var : var -> term
   val e_opp : term -> term
   val e_times : Z.t -> term -> term
@@ -321,7 +321,7 @@ sig
   val typeof :
     ?field:(Field.t -> tau) ->
     ?record:(Field.t -> tau) ->
-    ?call:(Fun.t -> tau) -> term -> tau
+    ?call:(Fun.t -> tau option list -> tau) -> term -> tau
 
   (** {3 Support for Builtins} *)
 
@@ -361,14 +361,8 @@ sig
   val consequence : term -> term -> term
   (** Knowing [h], [consequence h a] returns [b] such that [h -> (a<->b)] *)
   val literal : term -> bool * term
-  val congruence_eq : term -> term -> (term * term) list option
-  (** If [congruence_eq a b] returns [[ai,bi]], [a=b] is equivalent to [And{ai=bi}]. *)
-  val congruence_neq : term -> term -> (term * term) list option
-  (** If [congruence_eq a b] returns [[ai,bi]], [a<>b] is equivalent to [Or{ai<>bi}]. *)
-  val flattenable : term -> bool
-  val flattens : term -> term -> bool (** The comparison flattens *)
-  val flatten : term -> term list (** Returns an equivalent conjunction *)
-  val affine : term -> (Z.t,term) affine
+
+  val affine : term -> term affine
   val record_with : record -> (term * record) option
 
   (** {3 Symbol} *)

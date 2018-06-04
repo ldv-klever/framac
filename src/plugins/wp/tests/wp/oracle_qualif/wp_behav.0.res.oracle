@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp/wp_behav.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -49,8 +48,8 @@ tests/wp/wp_behav.c:81:[wp] warning: Missing assigns clause (assigns 'everything
 [wp] [Qed] Goal typed_stmt_contract_label_post_qed_ok : Valid
 [wp] [Qed] Goal typed_stmt_contract_label_stmt_post_qed_ok : Valid
 [wp] Proved goals:   32 / 38
-     Qed:            30 
-     Alt-Ergo:        2  (unknown: 6)
+    Qed:            30 
+    Alt-Ergo:        2  (unknown: 6)
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 f                    5     -           5       100%

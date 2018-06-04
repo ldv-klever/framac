@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_acsl/div_mod.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -28,8 +27,8 @@
 [wp] [Alt-Ergo] Goal typed_f_post_sm2_mod_pos_neg : Valid
 [wp] [Alt-Ergo] Goal typed_f_post_sm3_mod_neg_neg : Valid
 [wp] Proved goals:   22 / 22
-     Qed:             0 
-     Alt-Ergo:       22
+    Qed:             0 
+    Alt-Ergo:       22
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 f                   -      22 (9)     22       100%

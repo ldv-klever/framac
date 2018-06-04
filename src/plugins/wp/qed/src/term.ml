@@ -28,13 +28,10 @@ open Hcons
 open Logic
 
 module Make
-    (Z:Arith.Z)
     (ADT : Logic.Data)
     (Field : Logic.Field)
     (Fun : Logic.Function) =
 struct
-
-  module Z = Z
 
   (* -------------------------------------------------------------------------- *)
 
@@ -67,11 +64,11 @@ struct
     sort : sort ;
     repr : repr ;
   }
-  and repr = (Z.t,Field.t,ADT.t,Fun.t,var,term,term) term_repr
+  and repr = (Field.t,ADT.t,Fun.t,var,term,term) term_repr
 
   type bind = term
 
-  type 'a expression = (Z.t,Field.t,ADT.t,Fun.t,var,bind,'a) term_repr
+  type 'a expression = (Field.t,ADT.t,Fun.t,var,bind,'a) term_repr
 
   (* ------------------------------------------------------------------------ *)
   (* ---  Term Set,Map and Vars                                           --- *)
@@ -148,7 +145,7 @@ struct
     | False -> 0
     | True  -> 0
     | Kint n -> Z.hash n
-    | Kreal x -> R.hash x
+    | Kreal x -> hash_pair (Z.hash x.Q.num) (Z.hash x.Q.den)
     | Times(n,t) -> Z.hash n * t.hash
     | Add xs | Mul xs | And xs | Or xs -> hash_list hash 0 xs
     | Div(x,y) | Mod(x,y) | Eq(x,y) | Neq(x,y) | Leq(x,y) | Lt(x,y)
@@ -203,7 +200,7 @@ struct
     | True , True -> true
     | False , False -> true
     | Kint n , Kint m -> Z.equal n m
-    | Kreal x , Kreal y -> R.equal x y
+    | Kreal x , Kreal y -> Q.equal x y
     | Times(n,x) , Times(m,y) -> x==y && Z.equal n m
     | Add xs , Add ys
     | Mul xs , Mul ys
@@ -402,7 +399,7 @@ struct
       | Kint _ , _ -> (-1)
       | _ , Kint _ -> 1
 
-      | Kreal a , Kreal b -> R.compare a b
+      | Kreal a , Kreal b -> Q.compare a b
       | Kreal _ , _ -> (-1)
       | _ , Kreal _ -> 1
 
@@ -743,6 +740,7 @@ struct
   let e_zero   = constant (insert (Kint Z.zero))
   let e_one    = constant (insert (Kint Z.one))
   let e_int n  = insert (Kint (Z.of_int n))
+  let e_float r = insert (Kreal (Q.of_float r))
   let e_zint z = insert (Kint z)
   let e_real x = insert (Kreal x)
   let e_var x  = insert(Fvar x)
@@ -1112,7 +1110,7 @@ struct
     if Z.equal z Z.zero then e_zint Z.zero else
       match e.repr with
       | Kint z' -> e_zint (Z.mul z z')
-      | Kreal r when Z.equal z Z.minus_one -> e_real (R.opp r)
+      | Kreal r when Z.equal z Z.minus_one -> e_real (Q.neg r)
       | Times(z',t) -> times (Z.mul z z') t
       | _ -> c_times z e
 
@@ -1127,8 +1125,8 @@ struct
     | Times(n,t) -> unfold_affine1 acc (Z.mul k n) t
     | Kint z -> if z == Z.zero then acc else (Z.mul k z , e_one) :: acc
     | Add ts -> unfold_affine acc k ts
-    | Kreal z when R.is_zero z -> acc
-    | Kreal r when R.negative r -> (Z.neg k,e_real (R.opp r)) :: acc
+    | Kreal r when Q.(equal r zero) -> acc
+    | Kreal r when Q.(leq r zero) -> (Z.neg k,e_real (Q.neg r)) :: acc
     | _ -> (k,t) :: acc
 
   (* sorts monoms by terms *)
@@ -1164,7 +1162,7 @@ struct
 
   let is_affine e = match e.repr with
     | Kint _ | Times _ | Add _ -> true
-    | Kreal z -> R.is_zero z
+    | Kreal z -> Q.equal z Q.zero
     | _ -> false
 
   let rec partition_monoms phi c xs ys = function
@@ -1419,68 +1417,41 @@ struct
     | _      -> consequence_aux [h] x
 
   type structural =
-    | S_equal        (* equal constants or constructors *)
-    | S_disequal     (* different constants or constructors *)
-    | S_injection    (* same function, injective or constructor *)
-    | S_invertible   (* same function, invertible on both side *)
-    | S_disjunction  (* both constructors, but different ones *)
+    | S_diff         (* different constructors *)
+    | S_injection    (* same injective function *)
+    | S_invertible   (* same invertible function *)
     | S_functions    (* general functions *)
 
   let structural f g =
     if Fun.equal f g then
       match Fun.category f with
-      | Logic.Injection -> S_injection
       | Logic.Operator { invertible=true } -> S_invertible
-      | Logic.Constructor -> S_equal
+      | Logic.Injection | Logic.Constructor -> S_injection
       | Logic.Function | Logic.Operator _ -> S_functions
     else
       match Fun.category f , Fun.category g with
-      | Logic.Constructor , Logic.Constructor -> S_disequal
+      | Logic.Constructor , Logic.Constructor -> S_diff
       | _ -> S_functions
 
   let contrary x y = (is_prop x || is_prop y) && (e_not x == y)
 
-  let rec eq_all phi xs ys =
-    match xs , ys with
-    | [] , [] -> Yes
-    | [] , _ | _ , [] -> No
-    | x::xs , y::ys ->
-        match (phi x y).repr with
-        | False -> No
-        | True -> eq_all phi xs ys
-        | _ -> match eq_all phi xs ys with
-          | No -> No
-          | Yes | Maybe -> Maybe
+  (* -------------------------------------------------------------------------- *)
+  (* --- List All2/Any2                                                     --- *)
+  (* -------------------------------------------------------------------------- *)
 
-  let rec neq_any phi xs ys =
-    match xs , ys with
-    | [] , [] -> No
-    | [] , _ | _ , [] -> Yes
-    | x::xs , y :: ys ->
-        match (phi x y).repr with
-        | True -> Yes
-        | False -> neq_any phi xs ys
-        | _ -> match neq_any phi xs ys with
-          | Yes -> Yes
-          | No | Maybe -> Maybe
+  let e_all2 phi xs ys =
+    let n = List.length xs in
+    let m = List.length ys in
+    if n <> m then e_false else conjunction (List.map2 phi xs ys)
+
+  let e_any2 phi xs ys =
+    let n = List.length xs in
+    let m = List.length ys in
+    if n <> m then e_true else disjunction (List.map2 phi xs ys)
 
   (* -------------------------------------------------------------------------- *)
   (* --- Equality on R                                                      --- *)
   (* -------------------------------------------------------------------------- *)
-
-  let kreal_of_kint z = R.of_string (Z.to_string z ^ ".0")
-
-  let eq_real x y z z' =
-    match R.eq z z' with
-    | R.Sure_true -> e_true
-    | R.Sure_false -> e_false
-    | R.Unknown -> c_eq x y
-
-  let neq_real x y z z' =
-    match R.neq z z' with
-    | R.Sure_true -> e_true
-    | R.Sure_false -> e_false
-    | R.Unknown -> c_neq x y
 
   (* -------------------------------------------------------------------------- *)
   (* --- Equality                                                           --- *)
@@ -1492,8 +1463,9 @@ struct
   and eq_symb x y =
     match x.repr , y.repr with
     | Kint z , Kint z' -> if Z.equal z z' then e_true else e_false
-    | Kreal z , Kreal z' -> eq_real x y z z'
-    | Kint a , Kreal r | Kreal r , Kint a -> eq_real x y r (kreal_of_kint a)
+    | Kreal z , Kreal z' -> if Q.equal z z' then e_true else e_false
+    | Kint a , Kreal r | Kreal r , Kint a ->
+        if Q.equal r (Q.of_bigint a) then e_true else e_false
     | True , _ -> y
     | _ , True -> x
     | False , _ -> e_not y
@@ -1501,10 +1473,8 @@ struct
     | Fun(f,xs) , Fun(g,ys) ->
         begin
           match structural f g with
-          | S_equal -> e_true
-          | S_disequal -> e_false
-          | S_injection -> eq_maybe x y (eq_all e_eq xs ys)
-          | S_disjunction -> e_false
+          | S_diff -> e_false
+          | S_injection -> e_all2 e_eq xs ys
           | S_functions -> c_builtin_eq x y
           | S_invertible ->
               let modified,xs,ys = op_invertible xs ys in
@@ -1514,18 +1484,18 @@ struct
         end
     | Rdef fxs , Rdef gys ->
         begin
-          try eq_maybe x y (eq_all eq_field fxs gys)
+          try e_all2 eq_field fxs gys
           with Exit -> e_false
         end
+        
     | _ when contrary x y -> e_false
+      
     | Fun _ , _ | _ , Fun _ -> c_builtin_eq x y
     | _ -> c_eq x y
 
-  and eq_maybe x y = function
-    | Yes -> e_true | No -> e_false | Maybe -> c_builtin_eq x y
-
   and eq_field (f,x) (g,y) =
     if Field.equal f g then e_eq x y else raise Exit
+
   let () = extern_eq := e_eq
 
   (* -------------------------------------------------------------------------- *)
@@ -1538,8 +1508,9 @@ struct
   and neq_symb x y =
     match x.repr , y.repr with
     | Kint z , Kint z' -> if Z.equal z z' then e_false else e_true
-    | Kreal z , Kreal z' -> neq_real x y z z'
-    | Kreal r , Kint a | Kint a , Kreal r -> neq_real x y r (kreal_of_kint a)
+    | Kreal z , Kreal z' -> if Q.equal z z' then e_false else e_true
+    | Kreal r , Kint a | Kint a , Kreal r ->
+        if Q.equal r (Q.of_bigint a) then e_false else e_true
     | True , _ -> e_not y
     | _ , True -> e_not x
     | False , _ -> y
@@ -1547,10 +1518,8 @@ struct
     | Fun(f,xs) , Fun(g,ys) ->
         begin
           match structural f g with
-          | S_equal -> e_false
-          | S_disequal -> e_true
-          | S_injection -> neq_maybe x y (neq_any e_neq xs ys)
-          | S_disjunction -> e_true
+          | S_diff -> e_true
+          | S_injection -> e_any2 e_neq xs ys
           | S_functions -> c_builtin_neq x y
           | S_invertible ->
               let modified,xs,ys = op_invertible xs ys in
@@ -1560,18 +1529,18 @@ struct
         end
     | Rdef fxs , Rdef gys ->
         begin
-          try neq_maybe x y (neq_any neq_field fxs gys)
+          try e_any2 neq_field fxs gys
           with Exit -> e_true
         end
+        
     | _ when contrary x y -> e_true
+      
     | Fun _ , _ | _ , Fun _ -> c_builtin_neq x y
     | _ -> c_neq x y
 
-  and neq_maybe x y = function
-    | Yes -> e_true | No -> e_false | Maybe -> c_builtin_neq x y
-
   and neq_field (f,x) (g,y) =
     if Field.equal f g then e_neq x y else raise Exit
+
   let () = extern_neq := e_neq
 
   (* -------------------------------------------------------------------------- *)
@@ -1878,133 +1847,6 @@ struct
   let e_mul x y = multiplication [x;y]
 
   (* -------------------------------------------------------------------------- *)
-  (* --- Congruence                                                         --- *)
-  (* -------------------------------------------------------------------------- *)
-
-  exception NO_CONGRUENCE
-  exception FIELD_NEQ
-
-  let rec concat2 f xs ys = match xs,ys with
-    | [],[] -> []
-    | x::xs , y::ys -> f x y @ (concat2 f xs ys)
-    | _ -> raise NO_CONGRUENCE
-
-  let rec congr_eq a b =
-    match a.repr , b.repr with
-    | Fun(f,xs) , Fun(g,ys) ->
-        begin
-          match structural f g with
-          | S_equal | S_disequal | S_disjunction | S_invertible -> []
-          | S_injection -> concat2 congr_argeq xs ys
-          | S_functions -> raise NO_CONGRUENCE
-        end
-    | Rdef fxs , Rdef gys -> concat2 congr_fieldeq fxs gys
-    | _ -> raise NO_CONGRUENCE
-
-  and congr_argeq a b = try congr_eq a b with NO_CONGRUENCE -> [a,b]
-  and congr_fieldeq (f,a) (g,b) =
-    if Field.equal f g then congr_argeq a b else raise NO_CONGRUENCE
-
-  let congruence_eq a b = try Some (congr_eq a b) with NO_CONGRUENCE -> None
-
-  let rec congr_neq a b =
-    match a.repr , b.repr with
-    | Fun(f,xs) , Fun(g,ys) ->
-        begin
-          match structural f g with
-          | S_equal | S_disequal | S_disjunction | S_invertible -> []
-          | S_injection -> concat2 congr_argneq xs ys
-          | S_functions -> raise NO_CONGRUENCE
-        end
-    | Rdef fxs , Rdef gys ->
-        begin
-          try concat2 congr_fieldneq fxs gys
-          with FIELD_NEQ -> []
-        end
-    | _ -> raise NO_CONGRUENCE
-
-  and congr_argneq a b = try congr_neq a b with NO_CONGRUENCE -> [a,b]
-  and congr_fieldneq (f,a) (g,b) =
-    if Field.equal f g then congr_argneq a b else raise FIELD_NEQ
-
-  let congruence_neq a b = try Some(congr_neq a b) with NO_CONGRUENCE -> None
-
-  (* -------------------------------------------------------------------------- *)
-  (* --- List All2/Any2                                                     --- *)
-  (* -------------------------------------------------------------------------- *)
-
-  let e_all2 phi xs ys =
-    let n = List.length xs in
-    let m = List.length ys in
-    if n <> m then e_false else conjunction (List.map2 phi xs ys)
-
-  let e_any2 phi xs ys =
-    let n = List.length xs in
-    let m = List.length ys in
-    if n <> m then e_true else disjunction (List.map2 phi xs ys)
-
-  (* -------------------------------------------------------------------------- *)
-  (* --- Flat Reasoning                                                  --- *)
-  (* -------------------------------------------------------------------------- *)
-
-  let rec flat_eq a b =
-    match a.repr , b.repr with
-    | Fun(f,xs) , Fun(g,ys) ->
-        begin
-          match structural f g with
-          | S_equal -> e_true
-          | S_disequal -> e_false
-          | S_injection -> e_all2 flat_eq xs ys
-          | S_disjunction -> e_false
-          | S_functions | S_invertible -> e_eq a b
-        end
-    | Rdef fxs , Rdef gys ->
-        begin
-          try e_all2 (fun (f,x) (g,y) ->
-              if Field.equal f g then flat_eq x y else raise Exit
-            ) fxs gys
-          with Exit -> e_false
-        end
-    | _ -> e_eq a b
-
-  let rec flat_neq a b =
-    match a.repr , b.repr with
-    | Fun(f,xs) , Fun(g,ys) ->
-        begin
-          match structural f g with
-          | S_equal -> e_false
-          | S_disequal -> e_true
-          | S_injection -> e_any2 flat_neq xs ys
-          | S_disjunction -> e_true
-          | S_functions | S_invertible -> e_neq a b
-        end
-    | Rdef fxs , Rdef gys ->
-        begin
-          try e_any2 (fun (f,x) (g,y) ->
-              if Field.equal f g then flat_neq x y else raise Exit
-            ) fxs gys
-          with Exit -> e_true
-        end
-    | _ -> e_neq a b
-
-  let flattens a b = match a.repr , b.repr with
-    | (Rdef _ | Fun _) , (Rdef _ | Fun _) -> true
-    | _ -> false
-
-  let rec flat qs e = match e.repr with
-    | Eq(a,b) when flattens a b -> (flat_eq a b)::qs
-    | Neq(a,b) when flattens a b -> (flat_neq a b)::qs
-    | And ps -> List.fold_left flat qs ps
-    | _ -> e::qs
-
-  let flatten p = List.rev (flat [] p)
-
-  let flattenable e = match e.repr with
-    | Eq(a,b) | Neq(a,b) -> flattens a b
-    | And _ -> true
-    | _ -> false
-
-  (* -------------------------------------------------------------------------- *)
   (* --- Iterators                                                          --- *)
   (* -------------------------------------------------------------------------- *)
 
@@ -2181,7 +2023,7 @@ struct
   let pp_record fmt fxs = List.iter (pp_field fmt) fxs
   let pp_repr fmt = function
     | Kint z -> Format.fprintf fmt "constant %s" (Z.to_string z)
-    | Kreal z -> Format.fprintf fmt "real constant %s" (R.to_string z)
+    | Kreal z -> Format.fprintf fmt "real constant %s" (Q.to_string z)
     | True  -> Format.pp_print_string fmt "true"
     | False -> Format.pp_print_string fmt "false"
     | Times(z,x) -> Format.fprintf fmt "times %s%a" (Z.to_string z) pp_id x
@@ -2438,7 +2280,7 @@ struct
   type env = {
     field : Field.t -> tau ;
     record : Field.t -> tau ;
-    call : Fun.t -> tau ;
+    call : Fun.t -> tau option list -> tau ;
   }
 
   let rec typecheck env e =
@@ -2455,9 +2297,9 @@ struct
             (try typecheck env m
              with Not_found ->
                Array(typecheck env k,typecheck env v))
-        | Fun(f,_) ->
+        | Fun(f,es) ->
             (try tau_of_sort (Fun.sort f)
-             with Not_found -> env.call f)
+             with Not_found -> env.call f (List.map (typeof env) es))
         | Aget(m,_) ->
             (try match typecheck env m with
                | Array(_,v) -> v
@@ -2479,6 +2321,8 @@ struct
         | Bind((Forall|Exists),_,_) -> Prop
         | Apply _ | Bind(Lambda,_,_) -> raise Not_found
 
+  and typeof env e = try Some (typecheck env e) with Not_found -> None
+  
   let undefined _ = raise Not_found
   let typeof ?(field=undefined) ?(record=undefined) ?(call=undefined) e =
     typecheck { field ; record ; call } e

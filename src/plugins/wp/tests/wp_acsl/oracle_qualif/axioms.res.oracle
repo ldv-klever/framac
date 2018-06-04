@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_acsl/axioms.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -16,8 +15,8 @@
 [wp] [Alt-Ergo] Goal typed_f_loop_assign_part3 : Valid
 [wp] [Alt-Ergo] Goal typed_f_assign : Unknown
 [wp] Proved goals:    8 / 10
-     Qed:             2 
-     Alt-Ergo:        6  (unknown: 2)
+    Qed:             2 
+    Alt-Ergo:        6  (unknown: 2)
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 f                    2      6 (98)    10      80.0%

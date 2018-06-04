@@ -1,5 +1,4 @@
 # frama-c -wp -wp-model 'Hoare' [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp/wp_strategy.c (with preprocessing)
 [rte] annotating function bts0513
 [rte] annotating function bts0513_bis
@@ -38,8 +37,8 @@
 [wp] [Qed] Goal hoare_spec_if_cond_stmt_post_qed_ok : Valid
 [wp] [Qed] Goal hoare_spec_if_not_cond_stmt_post_qed_ok : Valid
 [wp] Proved goals:   17 / 25
-     Qed:            17 
-     Alt-Ergo:        0  (unknown: 8)
+    Qed:            17 
+    Alt-Ergo:        0  (unknown: 8)
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 bts0513             -      -           2       0.0%

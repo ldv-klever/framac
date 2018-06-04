@@ -222,9 +222,6 @@ module Binary(* :BINARY_SEMILATTICE *) = struct
     | Unknown, Unknown -> Unknown
     | _,_ -> Unknown
 
-  (* let pretty _ = assert false *)
-  (* let join_and_is_included _ = assert false *)
-  (* let is_included _ = assert false *)
 end
 
 
@@ -452,18 +449,21 @@ module Store(* (B:sig *)
             Printer.pp_varinfo vi pretty_int divident
             Printer.pp_varinfo vi pretty_increment increment
         else
-          let value = (Integer.to_int (Integer.c_div bound_offset increment)) in
-          let adjusted_value =
-            if (binop = Cil_types.Le && Integer.(equal remainder zero))
-            || (not Integer.(equal remainder zero))
-            then value + 1
-            else value
-          in
-          if adjusted_value >= 0 then
-            begin
-              success := true;
-              add_loop_bound stmt adjusted_value
-            end
+          try
+            let value = (Integer.to_int (Integer.c_div bound_offset increment)) in
+            let adjusted_value =
+              if (binop = Cil_types.Le && Integer.(equal remainder zero))
+              || (not Integer.(equal remainder zero))
+              then value + 1
+              else value
+            in
+            if adjusted_value >= 0 then
+              begin
+                success := true;
+                add_loop_bound stmt adjusted_value
+              end
+          with Failure _ -> (* overflow in Integer.to_int *)
+            ()
       (* TODO: check if this is useful and does not cause false alarms
          else
          if Kernel.UnsignedOverflow.get() then

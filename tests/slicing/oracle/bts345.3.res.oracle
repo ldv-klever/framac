@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/bts345.i (no preprocessing)
 [slicing] slicing requests in progress...
 [value] Analyzing a complete application starting at top
@@ -10,10 +9,10 @@
 [value:initial-state] creating variable S_1_S___va_params with imprecise size (type void)
 tests/slicing/bts345.i:21:[value] warning: signed overflow. assert x + 1 ≤ 2147483647;
 [value] computing for function called_by_top <- top.
-        Called from tests/slicing/bts345.i:22.
+    Called from tests/slicing/bts345.i:22.
 tests/slicing/bts345.i:15:[value] warning: signed overflow. assert x + 1 ≤ 2147483647;
 [value] computing for function called_indirectly_by_top <- called_by_top <- top.
-        Called from tests/slicing/bts345.i:16.
+    Called from tests/slicing/bts345.i:16.
 tests/slicing/bts345.i:10:[value] warning: signed overflow. assert x + 1 ≤ 2147483647;
 [value] Recording results for called_indirectly_by_top
 [value] Done for function called_indirectly_by_top
@@ -65,5 +64,4 @@ void top(int x)
 }
 
 
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/result/ocode_3_bts345.i (no preprocessing)

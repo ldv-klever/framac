@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/undef-fun.i (no preprocessing)
 [slicing] slicing requests in progress...
 [value] Analyzing a complete application starting at main
@@ -9,7 +8,7 @@
 tests/slicing/undef-fun.i:16:[value] warning: signed overflow. assert x + 1 ≤ 2147483647;
 tests/slicing/undef-fun.i:17:[value] warning: signed overflow. assert y + 2 ≤ 2147483647;
 [value] computing for function f <- main.
-        Called from tests/slicing/undef-fun.i:18.
+    Called from tests/slicing/undef-fun.i:18.
 [value] using specification for function f
 [value] Done for function f
 [value] Recording results for main
@@ -43,5 +42,4 @@ void main(int x)
 }
 
 
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/result/ocode_0_undef-fun.i (no preprocessing)

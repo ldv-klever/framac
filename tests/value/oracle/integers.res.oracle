@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/integers.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -20,7 +19,7 @@ tests/value/integers.i:7:[value] assertion got status valid.
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+    These dependencies hold at termination for the executions that terminate:
 [from] Function main:
   bin FROM \nothing
   hex FROM \nothing
@@ -28,6 +27,6 @@ tests/value/integers.i:7:[value] assertion got status valid.
   dec FROM \nothing
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main:
-          bin; hex; oct; dec
+      bin; hex; oct; dec
 [inout] Inputs for function main:
-          \nothing
+      \nothing

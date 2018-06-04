@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/bts1306.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -6,7 +5,7 @@
 [value:initial-state] Values of globals at initialization
   
 [value] computing for function g <- main.
-        Called from tests/value/bts1306.i:9.
+    Called from tests/value/bts1306.i:9.
 tests/value/bts1306.i:5:[value] warning: non-finite double value. assert \is_finite((double)(x * x));
 [value] Recording results for g
 [value] Done for function g
@@ -40,7 +39,7 @@ int main(double x)
 [value:initial-state] Values of globals at initialization
   
 [value] computing for function g <- main.
-        Called from tests/value/bts1306.i:9.
+    Called from tests/value/bts1306.i:9.
 tests/value/bts1306.i:5:[value] warning: non-finite double value. assert \is_finite((double)(x * x));
 [value] Recording results for g
 [value] Done for function g

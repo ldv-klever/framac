@@ -1,5 +1,4 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_usage/issue-189-bis.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -16,8 +15,8 @@
 [wp] [Qed] Goal typed_memcpy_context_vars_loop_inv_ok_src_preserved : Valid
 [wp] [Qed] Goal typed_memcpy_context_vars_loop_inv_ok_src_established : Valid
 [wp] Proved goals:   10 / 10
-     Qed:             6 
-     Alt-Ergo:        4
+    Qed:             6 
+    Alt-Ergo:        4
 ----------------------------------------------------------
 Functions           WP   Alt-Ergo    Total   Success
 memcpy_context_vars   6     4 (75)    10       100%
