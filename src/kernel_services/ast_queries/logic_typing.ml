@@ -783,14 +783,21 @@ struct
               let src_fun = List.assoc dst_name functions in
               let src_name = src_fun.l_var_info.lv_name in
               let mismatches = ref [] in
-              let is_matched = Logic_utils.is_same_list (fun src_lv dst_lv ->
+              let is_matched_args = Logic_utils.is_same_list (fun src_lv dst_lv ->
                   let src_typ = Logic_utils.unroll_type src_lv.lv_type in
                   let dst_typ = Logic_utils.unroll_type dst_lv.lv_type in
                   Logic_utils.is_same_type src_typ dst_typ || (
                     mismatches := (src_typ, dst_typ) :: !mismatches; false
                   )
               ) src_fun.l_profile dst_fun.l_profile in
-              if not is_matched then
+              let src_typ_ret = Logic_utils.unroll_type (match src_fun.l_type with
+                | Some x -> x | None -> Ctype Cil.voidType) in
+              let dst_typ_ret = Logic_utils.unroll_type (match dst_fun.l_type with
+                | Some x -> x | None -> Ctype Cil.voidType) in
+              let is_matched_ret = Logic_utils.is_same_type src_typ_ret dst_typ_ret || (
+                mismatches := (src_typ_ret, dst_typ_ret) :: !mismatches; false
+              ) in
+              if not (is_matched_args && is_matched_ret) then
                 Kernel.fatal ~current:true
                   "Type mismatch in axiomatic include substitution, at %s <- %s: %a"
                   src_name dst_name
