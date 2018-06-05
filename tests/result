@@ -1,0 +1,308 @@
+Running      ptests
+make[1]: Entering directory '/home/schrodi/repos/Frama-C'
+make[1]: Leaving directory '/home/schrodi/repos/Frama-C'
+make[1]: Entering directory '/home/schrodi/repos/Frama-C'
+make[1]: Leaving directory '/home/schrodi/repos/Frama-C'
+make[1]: Entering directory '/home/schrodi/repos/Frama-C'
+make[1]: Leaving directory '/home/schrodi/repos/Frama-C'
+Env:
+FRAMAC_LIB (set from outside) = "/home/schrodi/repos/Frama-C/lib/fc"
+FRAMAC_PLUGIN_GUI = "./lib/plugins/gui"
+FRAMAC_PLUGIN = "./lib/plugins"
+FRAMAC_SHARE = "./share"
+FRAMAC_SESSION = "."
+OCAMLRUNPARAM = ""
+Command:
+bin/toplevel.opt tests/libc/sys_select.c -check  -val -val-show-progress -cpp-extra-args='-nostdinc -Ishare/libc'  2>tests/libc/result/sys_select.err.log >tests/libc/result/sys_select.res.log
+--- tests/libc/oracle/sys_select.res.oracle	2018-06-04 14:43:14.807547028 +0300
++++ tests/libc/result/sys_select.res.log	2018-06-05 21:19:45.856207566 +0300
+@@ -29,10 +29,14 @@
+   Called from tests/libc/sys_select.c:10.
+ [value] using specification for function exit
+ [value] Done for function exit
++[value] computing for function memset <- main.
++  Called from tests/libc/sys_select.c:16.
++[value] using specification for function memset
+ [value] tests/libc/sys_select.c:16: 
+   function memset: precondition 'valid_s' got status valid.
+-[value] tests/libc/sys_select.c:16: 
+-  Call to builtin memset(({{ (void *)&addr }},{0},{8}))
++[value] share/libc/string.h:104: 
++  cannot evaluate ACSL term, unsupported ACSL construct: logic function memset
++[value] Done for function memset
+ [value] computing for function htonl <- main.
+   Called from tests/libc/sys_select.c:18.
+ [value] using specification for function htonl
+@@ -66,14 +70,18 @@
+ [value] tests/libc/sys_select.c:24: 
+   function FD_SET: precondition 'initialization' got status valid.
+ [value] Done for function FD_SET
++[value] computing for function memcpy <- main.
++  Called from tests/libc/sys_select.c:30.
++[value] using specification for function memcpy
+ [value] tests/libc/sys_select.c:30: 
+   function memcpy: precondition 'valid_dest' got status valid.
+ [value] tests/libc/sys_select.c:30: 
+   function memcpy: precondition 'valid_src' got status valid.
+ [value] tests/libc/sys_select.c:30: 
+   function memcpy: precondition 'separation' got status valid.
+-[value] tests/libc/sys_select.c:30: 
+-  Call to builtin memcpy(({{ (void *)&fds2 }},{{ (void const *)&fds1 }},{1}))
++[value] share/libc/string.h:84: 
++  cannot evaluate ACSL term, unsupported ACSL construct: logic function memcmp
++[value] Done for function memcpy
+ [value] computing for function select <- main.
+   Called from tests/libc/sys_select.c:31.
+ [value] using specification for function select
+Env:
+FRAMAC_LIB (set from outside) = "/home/schrodi/repos/Frama-C/lib/fc"
+FRAMAC_PLUGIN_GUI = "./lib/plugins/gui"
+FRAMAC_PLUGIN = "./lib/plugins"
+FRAMAC_SHARE = "./share"
+FRAMAC_SESSION = "."
+OCAMLRUNPARAM = ""
+Command:
+bin/toplevel.opt tests/libc/fc_libc.c -check  -load-script tests/libc/check_libc_naming_conventions.ml -print -cpp-extra-args='-nostdinc -Ishare/libc' -metrics -metrics-libc -load-script tests/libc/check_const.ml -load-module metrics -val -val-show-progress -no-autoload-plugins -load-module from,inout,value,scope,variadic -then -lib-entry -no-print -metrics-no-libc  2>tests/libc/result/fc_libc.0.err.log >tests/libc/result/fc_libc.0.res.log
+--- tests/libc/oracle/fc_libc.0.res.oracle	2018-06-04 14:43:14.803546962 +0300
++++ tests/libc/result/fc_libc.0.res.log	2018-06-05 21:19:47.744238361 +0300
+@@ -172,12 +172,13 @@
+    toupper (0 call); wcscat (0 call); wcscpy (0 call); wcslen (2 calls);
+    wcsncat (0 call); wcsncpy (0 call); wmemcpy (0 call); wmemset (0 call); 
+   
+-  Undefined functions (295)
++  Undefined functions (297)
+   =========================
+    FD_CLR (0 call); FD_ISSET (0 call); FD_SET (0 call); FD_ZERO (0 call);
+    Frama_C_abort (1 call); Frama_C_char_interval (0 call);
+-   Frama_C_int_interval (0 call); Frama_C_long_interval (0 call);
+-   Frama_C_long_long_interval (0 call); Frama_C_make_unknown (0 call);
++   Frama_C_int_interval (0 call); Frama_C_interval_split (0 call);
++   Frama_C_long_interval (0 call); Frama_C_long_long_interval (0 call);
++   Frama_C_make_unknown (0 call); Frama_C_offset (0 call);
+    Frama_C_short_interval (0 call); Frama_C_size_t_interval (0 call);
+    Frama_C_unsigned_char_interval (0 call);
+    Frama_C_unsigned_int_interval (0 call);
+@@ -279,7 +280,7 @@
+   Goto = 47
+   Assignment = 275
+   Exit point = 65
+-  Function = 360
++  Function = 362
+   Function call = 35
+   Pointer dereferencing = 103
+   Cyclomatic complexity = 199
+Env:
+FRAMAC_LIB (set from outside) = "/home/schrodi/repos/Frama-C/lib/fc"
+FRAMAC_PLUGIN_GUI = "./lib/plugins/gui"
+FRAMAC_PLUGIN = "./lib/plugins"
+FRAMAC_SHARE = "./share"
+FRAMAC_SESSION = "."
+OCAMLRUNPARAM = ""
+Command:
+bin/toplevel.opt tests/libc/netdb_c.c -check   -val-split-return auto -slevel 2 -val -val-show-progress -cpp-extra-args='-nostdinc -Ishare/libc'  2>tests/libc/result/netdb_c.err.log >tests/libc/result/netdb_c.res.log
+--- tests/libc/oracle/netdb_c.res.oracle	2018-06-04 14:43:14.807547028 +0300
++++ tests/libc/result/netdb_c.res.log	2018-06-05 21:19:48.616252586 +0300
+@@ -79,10 +79,14 @@
+   S___fc_stdin[0..1] ∈ [--..--]
+   S___fc_stdout[0..1] ∈ [--..--]
+   S_optarg[0..1] ∈ [--..--]
++[value] computing for function memset <- main.
++  Called from tests/libc/netdb_c.c:33.
++[value] using specification for function memset
+ [value] tests/libc/netdb_c.c:33: 
+   function memset: precondition 'valid_s' got status valid.
+-[value] tests/libc/netdb_c.c:33: 
+-  Call to builtin memset(({{ (void *)&hints }},{0},{32}))
++[value] share/libc/string.h:104: 
++  cannot evaluate ACSL term, unsupported ACSL construct: logic function memset
++[value] Done for function memset
+ [value] computing for function getaddrinfo <- main.
+   Called from tests/libc/netdb_c.c:42.
+ [value] share/libc/netdb.c:54: allocating variable __malloc_getaddrinfo_l54
+@@ -231,7 +235,9 @@
+   hints.ai_flags ∈ {1}
+        .ai_family ∈ {0}
+        .ai_socktype ∈ {2}
+-       {.ai_protocol; .ai_addrlen; .ai_addr; .ai_canonname; .ai_next} ∈ {0}
++       .ai_protocol ∈ {0}
++       .ai_addrlen ∈ [--..--] or UNINITIALIZED
++       {.ai_addr; .ai_canonname; .ai_next} ∈ {0}
+   result ∈ {{ &__malloc_getaddrinfo_l54 }}
+   rp ∈ {{ &__malloc_getaddrinfo_l54 }}
+   sfd ∈ [0..1023]
+Env:
+FRAMAC_LIB (set from outside) = "/home/schrodi/repos/Frama-C/lib/fc"
+FRAMAC_PLUGIN_GUI = "./lib/plugins/gui"
+FRAMAC_PLUGIN = "./lib/plugins"
+FRAMAC_SHARE = "./share"
+FRAMAC_SESSION = "."
+OCAMLRUNPARAM = ""
+Command:
+bin/toplevel.opt tests/value/empty_struct2.c -check  -val -val-show-progress -no-autoload-plugins -load-module from,inout,value,scope,variadic -journal-disable -out -input -deps  2>tests/value/result/empty_struct2.err.log >tests/value/result/empty_struct2.res.log
+--- tests/value/oracle/empty_struct2.res.oracle	2018-06-04 14:43:14.871548098 +0300
++++ tests/value/result/empty_struct2.res.log	2018-06-05 21:19:52.740319856 +0300
+@@ -10,33 +10,46 @@
+ [value] tests/value/empty_struct2.c:44: assertion got status valid.
+ [value] tests/value/empty_struct2.c:46: Frama_C_show_each_global_empty: ∅
+ [value] tests/value/empty_struct2.c:47: Frama_C_show_each_e1: ∅
++[value] computing for function memcpy <- main.
++  Called from tests/value/empty_struct2.c:48.
++[value] using specification for function memcpy
+ [value] tests/value/empty_struct2.c:48: 
+   function memcpy: precondition 'valid_dest' got status valid.
+ [value] tests/value/empty_struct2.c:48: 
+   function memcpy: precondition 'valid_src' got status valid.
+ [value] tests/value/empty_struct2.c:48: 
+   function memcpy: precondition 'separation' got status valid.
+-[value] tests/value/empty_struct2.c:48: 
+-  Call to builtin memcpy(({{ (void *)&e2 }},{{ (void const *)&e1 }},{0}))
++[value] share/libc/string.h:84: 
++  cannot evaluate ACSL term, unsupported ACSL construct: logic function memcmp
++[value] Done for function memcpy
++[value] computing for function memcpy <- main.
++  Called from tests/value/empty_struct2.c:53.
+ [value] tests/value/empty_struct2.c:53: 
+   function memcpy: precondition 'valid_dest' got status valid.
+ [value] tests/value/empty_struct2.c:53: 
+   function memcpy: precondition 'valid_src' got status valid.
+ [value] tests/value/empty_struct2.c:53: 
+   function memcpy: precondition 'separation' got status valid.
+-[value] tests/value/empty_struct2.c:53: 
+-  Call to builtin memcpy(({{ (void *)&c2 }},{{ (void const *)&c1 }},{8}))
++[value] Done for function memcpy
+ [value] tests/value/empty_struct2.c:54: 
+-  Frama_C_show_each_c2: .a ∈ {42}
+-                        .b ∈ {77}
++  Frama_C_show_each_c2: [--..--] or UNINITIALIZED
+ [value] tests/value/empty_struct2.c:55: Frama_C_show_each_c2_e: ∅
+ [value] computing for function f <- main.
+   Called from tests/value/empty_struct2.c:56.
++[value:alarm] tests/value/empty_struct2.c:28: Warning: 
++  accessing uninitialized left-value. assert \initialized(&s.b);
++[value:alarm] tests/value/empty_struct2.c:28: Warning: 
++  signed overflow. assert s.b + 10 ≤ 2147483647;
++[value:alarm] tests/value/empty_struct2.c:29: Warning: 
++  accessing uninitialized left-value. assert \initialized(&s.a);
++[value:alarm] tests/value/empty_struct2.c:29: Warning: 
++  signed overflow. assert -2147483648 ≤ s.a - 3;
+ [value] Recording results for f
+ [value] Done for function f
+ [value] tests/value/empty_struct2.c:58: 
+-  Frama_C_show_each_res: .a ∈ {87}
+-                         .b ∈ {39}
++  Frama_C_show_each_res:
++  .a ∈ [-2147483638..2147483647]
++  .b ∈ [-2147483648..2147483644]
+ [value] tests/value/empty_struct2.c:62: assertion got status valid.
+ [value] computing for function ret_empty <- main.
+   Called from tests/value/empty_struct2.c:64.
+@@ -50,15 +63,14 @@
+ [value] done for function main
+ [value] ====== VALUES COMPUTED ======
+ [value:final-states] Values at end of function f:
+-  res.a ∈ {87}
+-     .b ∈ {39}
++  res.a ∈ [-2147483638..2147483647]
++     .b ∈ [-2147483648..2147483644]
+ [value:final-states] Values at end of function main:
+   c1.a ∈ {42}
+     .b ∈ {77}
+-  c2.a ∈ {42}
+-    .b ∈ {77}
+-  res.a ∈ {87}
+-     .b ∈ {39}
++  c2 ∈ [--..--] or UNINITIALIZED
++  res.a ∈ [-2147483638..2147483647]
++     .b ∈ [-2147483648..2147483644]
+   cb.i ∈ {91}
+   ce.ch ∈ {90}
+   p ∈ {{ (struct empty *)&cb }}
+Env:
+FRAMAC_LIB (set from outside) = "/home/schrodi/repos/Frama-C/lib/fc"
+FRAMAC_PLUGIN_GUI = "./lib/plugins/gui"
+FRAMAC_PLUGIN = "./lib/plugins"
+FRAMAC_SHARE = "./share"
+FRAMAC_SESSION = "."
+OCAMLRUNPARAM = ""
+Command:
+bin/toplevel.opt tests/value/empty_union.c -check   -val -val-show-progress -no-autoload-plugins -load-module from,inout,value,scope,variadic -journal-disable -out -input -deps -machdep gcc_x86_32  2>tests/value/result/empty_union.err.log >tests/value/result/empty_union.res.log
+--- tests/value/oracle/empty_union.res.oracle	2018-06-04 14:43:14.871548098 +0300
++++ tests/value/result/empty_union.res.log	2018-06-05 21:20:01.608464507 +0300
+@@ -17,23 +17,29 @@
+ [value] tests/value/empty_union.c:68: assertion got status valid.
+ [value] tests/value/empty_union.c:70: Frama_C_show_each_global_empty: ∅
+ [value] tests/value/empty_union.c:71: Frama_C_show_each_e1: ∅
++[value] computing for function memcpy <- main.
++  Called from tests/value/empty_union.c:72.
++[value] using specification for function memcpy
+ [value] tests/value/empty_union.c:72: 
+   function memcpy: precondition 'valid_dest' got status valid.
+ [value] tests/value/empty_union.c:72: 
+   function memcpy: precondition 'valid_src' got status valid.
+ [value] tests/value/empty_union.c:72: 
+   function memcpy: precondition 'separation' got status valid.
+-[value] tests/value/empty_union.c:72: 
+-  Call to builtin memcpy(({{ (void *)&e2 }},{{ (void const *)&e1 }},{0}))
++[value] share/libc/string.h:84: 
++  cannot evaluate ACSL term, unsupported ACSL construct: logic function memcmp
++[value] Done for function memcpy
++[value] computing for function memcpy <- main.
++  Called from tests/value/empty_union.c:77.
+ [value] tests/value/empty_union.c:77: 
+   function memcpy: precondition 'valid_dest' got status valid.
+ [value] tests/value/empty_union.c:77: 
+   function memcpy: precondition 'valid_src' got status valid.
+ [value] tests/value/empty_union.c:77: 
+   function memcpy: precondition 'separation' got status valid.
+-[value] tests/value/empty_union.c:77: 
+-  Call to builtin memcpy(({{ (void *)&c2 }},{{ (void const *)&c1 }},{4}))
+-[value] tests/value/empty_union.c:78: Frama_C_show_each_c2: {77}
++[value] Done for function memcpy
++[value] tests/value/empty_union.c:78: 
++  Frama_C_show_each_c2: [--..--] or UNINITIALIZED
+ [value] tests/value/empty_union.c:79: Frama_C_show_each_c2_e: ∅
+ [value] computing for function f <- main.
+   Called from tests/value/empty_union.c:80.
+@@ -55,7 +61,7 @@
+   res{.a; .e{}; .b} ∈ {74}
+ [value:final-states] Values at end of function main:
+   c1{.a; .e{}; .b} ∈ {77}
+-  c2{.a; .e{}; .b} ∈ {77}
++  c2 ∈ [--..--] or UNINITIALIZED
+   res{.a; .e{}; .b} ∈ {74}
+   cb{.s{}; .i} ∈ {91}
+   ce{.ch; .ss{}} ∈ {90}
+% Dispatch finished, waiting for workers to complete
+% Comparisons finished, waiting for diffs to complete
+% Diffs finished. Summary:
+Run = 1564
+Ok   = 3345 of 3350
+Time = 397.592000 s.
+TESTING PLUG-IN E_ACSL
+% Dispatch finished, waiting for workers to complete
+% Comparisons finished, waiting for diffs to complete
+% Diffs finished. Summary:
+Run = 0
+Ok   = 0 of 0
+Time = 0.000000 s.
+TESTING PLUG-IN Report
+% Dispatch finished, waiting for workers to complete
+% Comparisons finished, waiting for diffs to complete
+% Diffs finished. Summary:
+Run = 12
+Ok   = 31 of 31
+Time = 1.296000 s.
+TESTING PLUG-IN Wp
+% Dispatch finished, waiting for workers to complete
+% Comparisons finished, waiting for diffs to complete
+% Diffs finished. Summary:
+Run = 246
+Ok   = 495 of 495
+Time = 25.000000 s.
+Running      ptests
+% Dispatch finished, waiting for workers to complete
+% Comparisons finished, waiting for diffs to complete
+% Diffs finished. Summary:
+Run = 0
+Ok   = 0 of 0
+Time = 0.000000 s.
