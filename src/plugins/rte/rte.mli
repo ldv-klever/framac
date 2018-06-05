@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,16 +34,18 @@ type 'a alarm_gen =
     optionally a status indicating that the alarm is red. *)
 
 val lval_assertion: read_only: Alarms.access_kind -> lval alarm_gen
+val lval_initialized_assertion: lval alarm_gen
 val divmod_assertion: exp alarm_gen
 val signed_div_assertion: (exp * exp * exp) alarm_gen
-val shift_alarm: (exp * int option) alarm_gen
-val signed_shift_assertion: (exp * binop * exp * exp) alarm_gen
-val mult_sub_add_assertion: (bool * exp * binop * exp * exp) alarm_gen
+val shift_width_assertion: (exp * int option) alarm_gen
+val shift_overflow_assertion: signed:bool -> (exp * binop * exp * exp) alarm_gen
+val mult_sub_add_assertion: signed:bool -> (exp * binop * exp * exp) alarm_gen
 val uminus_assertion: exp alarm_gen
 val signed_downcast_assertion: (typ * exp) alarm_gen
 val unsigned_downcast_assertion: (typ * exp) alarm_gen
 val float_to_int_assertion: (typ * exp) alarm_gen
-val pointer_call: exp alarm_gen
+val finite_float_assertion: (fkind * exp) alarm_gen
+val pointer_call: (exp * exp list) alarm_gen
 
 (*
 Local Variables:

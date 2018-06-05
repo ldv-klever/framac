@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,7 +38,6 @@ module R =
 
 let cat_rm_asserts = R.register_category cat_rm_asserts_name
 
-
 (** {2 Computing a mapping between zones and modifying statements}
 We first go through all the function statements in other to build
 a mapping between each zone and the statements that are modifying it.
@@ -71,9 +70,9 @@ module InitSid = struct
   let empty = LM.empty
   let find = LM.find
 
-  let add_zone ~exact lmap zone sid =
+  let add_zone lmap zone sid =
     let new_val = StmtSetLattice.single sid in
-    LM.add_binding ~reducing:false ~exact lmap zone new_val
+    LM.add_binding ~exact:false lmap zone new_val
 
   let pretty fmt lmap =
     Format.fprintf fmt "Lmap = %a@\n" LM.pretty lmap
@@ -91,9 +90,10 @@ let get_lval_zones ~for_writing stmt lval =
 * Something to do only for calls and assignments.
 * *)
 let register_modified_zones lmap stmt =
-  let register lmap zone =
-    (* [exact] should always be false because we want to store all the stmts *)
-    InitSid.add_zone ~exact:false lmap zone stmt
+  let register lmap zone = InitSid.add_zone lmap zone stmt in
+  let aux_out kf out =
+    let inout= !Db.Operational_inputs.get_internal_precise ~stmt kf in
+    Locations.Zone.join out inout.Inout_type.over_outputs
   in
     match stmt.skind with
       | Instr (Set (lval, _, _)) ->
@@ -101,6 +101,15 @@ let register_modified_zones lmap stmt =
             get_lval_zones ~for_writing:true  stmt lval
           in
           register lmap zone
+      | Instr (Local_init(v, i, _)) ->
+        let _, _, zone = get_lval_zones ~for_writing:true stmt (Cil.var v) in
+        let lmap_init = register lmap zone in
+        (match i with
+         | AssignInit _ -> lmap_init
+         | ConsInit(f,_,_) ->
+           let kf = Globals.Functions.get f in
+           let out = aux_out kf Locations.Zone.bottom in
+           register lmap_init out)
       | Instr (Call (dst,funcexp,_args,_)) ->
           begin
             let lmap = match dst with
@@ -112,12 +121,7 @@ let register_modified_zones lmap stmt =
                 register lmap zone
             in
             let _, kfs =
-              !Db.Value.expr_to_kernel_function
-                ~with_alarms:CilE.warn_none_mode ~deps:None (Kstmt stmt) funcexp
-            in
-            let aux_out kf out =
-              let inout= !Db.Operational_inputs.get_internal_precise ~stmt kf in
-              Locations.Zone.join out inout.Inout_type.over_outputs
+              !Db.Value.expr_to_kernel_function ~deps:None (Kstmt stmt) funcexp
             in
             let out =
               Kernel_function.Hptset.fold aux_out kfs Locations.Zone.bottom
@@ -134,6 +138,7 @@ let compute kf =
    R.debug ~level:1 "computing for function %a" Kernel_function.pretty kf;
   let f = Kernel_function.get_definition kf in
   let do_stmt lmap s =
+    Cil.CurrentLoc.set (Cil_datatype.Stmt.loc s);
     if Db.Value.is_reachable_stmt s
     then register_modified_zones lmap s
     else lmap
@@ -238,7 +243,7 @@ module BackwardScope (X : sig val modified : stmt -> bool end ) = struct
     
 end
 
-let backward_data_scope _allstmts modif_stmts s kf =
+let backward_data_scope modif_stmts s kf =
   let modified s = StmtSetLattice.mem s modif_stmts in 
   let module Fenv = (val Dataflows.function_env kf: Dataflows.FUNCTION_ENV) in
   let module Arg = struct
@@ -249,12 +254,21 @@ let backward_data_scope _allstmts modif_stmts s kf =
   Compute.pre_state
 ;;
 
-module ForwardScope (X : sig val modified : stmt -> bool end ) = struct
+module ForwardScope (X : sig
+    (* Effects of the statement itself *)
+    val modified : stmt -> bool
+    (* Effects of scope change *)
+    val modified_by_edge: stmt -> stmt -> bool
+  end) =
+struct
   include State;;
 
   let transfer_stmt s state =
     let map_on_all_succs new_state =
-      List.map (fun x -> (x,new_state)) s.succs
+      let do_succ s' =
+        (s', State.transfer (X.modified_by_edge s s') new_state)
+      in
+      List.map do_succ s.succs
     in
     match s.skind with
     | Instr _ -> map_on_all_succs (State.transfer (X.modified s) state)
@@ -270,11 +284,14 @@ module ForwardScope (X : sig val modified : stmt -> bool end ) = struct
 
 end
 
-let forward_data_scope modif_stmts s kf =
+let forward_data_scope modif_stmts modif_edge s kf =
   let modified s = StmtSetLattice.mem s modif_stmts in 
   let module Fenv = (val Dataflows.function_env kf: Dataflows.FUNCTION_ENV) in
   let module Arg = struct
-      include ForwardScope(struct let modified = modified end)
+    include ForwardScope(struct
+        let modified = modified
+        let modified_by_edge = modif_edge
+      end)
       let init = [(s,State.Start)];;
   end in
   let module Compute = Dataflows.Simple_forward(Fenv)(Arg) in
@@ -295,21 +312,96 @@ let add_s s acc =
 * - forward and backward,
 * - backward only.
 *)
-let find_scope allstmts modif_stmts s kf =
+let find_scope allstmts modif_stmts modif_edge s kf =
   (* Add only statements for which the lvalue certainly did not change. *)
   let add get_state acc s =
     match get_state s with
     | State.Start | State.SameVal -> add_s s acc
     | _ -> acc
   in
-  let _, fw_post = forward_data_scope modif_stmts s kf in
+  let _, fw_post = forward_data_scope modif_stmts modif_edge s kf in
   let fw = List.fold_left (add fw_post) Cil_datatype.Stmt.Hptset.empty allstmts in
-  let bw_pre = backward_data_scope allstmts modif_stmts s kf in
+  let bw_pre = backward_data_scope modif_stmts s kf in
   let bw = List.fold_left (add bw_pre)  Cil_datatype.Stmt.Hptset.empty allstmts in
   let fb = Cil_datatype.Stmt.Hptset.inter bw fw in
   let fw = Cil_datatype.Stmt.Hptset.diff fw fb in
   let bw = Cil_datatype.Stmt.Hptset.diff bw fb in
     fw, fb, bw
+
+(* Computes the memory zones that points to a base in [escaping] in a state. *)
+let gather_escaping_zones escaping = function
+  | Cvalue.Model.Top -> Locations.Zone.top
+  | Cvalue.Model.Bottom -> Locations.Zone.bottom
+  | Cvalue.Model.Map m ->
+    let aux base offsm zone =
+      let test b = Base.Hptset.mem b escaping in
+      let gather (_, _ as itv) (v, _, _) acc =
+        let v = Cvalue.V_Or_Uninitialized.get_v v in
+        if Cvalue.V.contains_addresses_of_locals test v
+        then
+          let z = Locations.Zone.inject base (Int_Intervals.inject_itv itv) in
+          Locations.Zone.join acc z
+        else acc
+      in
+      Cvalue.V_Offsetmap.fold gather offsm zone
+    in
+    Cvalue.Model.fold aux m Locations.Zone.bottom
+
+(* compute the memory zones that are changed into ESCAPING ADDRESS
+   when taking the cfg edge s1->s2 *)
+let compute_escaping_zones s1 s2 =
+  let closed_blocks = Kernel_function.blocks_closed_by_edge s1 s2 in
+  let locals = List.flatten (List.map (fun b -> b.blocals) closed_blocks) in
+  let filter acc v =
+    if v.vtemp || not v.vreferenced
+    then acc else Base.Hptset.add (Base.of_varinfo v) acc
+  in
+  let bases = List.fold_left filter Base.Hptset.empty locals in
+  if Base.Hptset.is_empty bases
+  then Locations.Zone.bottom
+  else gather_escaping_zones bases (Db.Value.get_stmt_state s1)
+
+(* type pair_stmts = stmt * stmt *)
+module PairStmts =
+  Datatype.Pair_with_collections
+    (Cil_datatype.Stmt)(Cil_datatype.Stmt)
+    (struct let module_name = "Scope.Datascope.PairStmts" end)
+
+(* Hashtbl from pairs of stmts to zone. Used as maps from Cfg edges to the
+   memory zones that are 'modified' by thescope change. *)
+module HashPairStmtsZone =
+  PairStmts.Hashtbl.Make(Locations.Zone)
+type modified_by_edge = HashPairStmtsZone.t
+
+(* compute the {!modified_by_edge} hashtbl for the fundec [fdec] *)
+let compute_modif_edge fdec : modified_by_edge =
+  let modifs_edge = PairStmts.Hashtbl.create 17 in
+  let do_stmt stmt =
+    let do_succ stmt' =
+      let z = compute_escaping_zones stmt stmt' in
+      PairStmts.Hashtbl.add modifs_edge (stmt, stmt') z
+    in
+    List.iter do_succ stmt.succs
+  in
+  List.iter do_stmt fdec.sallstmts;
+  modifs_edge
+
+module ModifEdge =
+  Cil_state_builder.Kernel_function_hashtbl(HashPairStmtsZone)
+    (struct
+      let name = "Scope.Datatscope.ModifsEdge"
+      let dependencies = [Db.Value.self]
+      let size = 16
+    end)
+
+let modified_by_edge_kf =
+  ModifEdge.memo
+    (fun kf -> compute_modif_edge (Kernel_function.get_definition kf))
+
+(* Does the Cfg edge [s1->s2] has an effect on [z]? *)
+let is_modified_by_edge kf z s1 s2 =
+  let modifs_edge = modified_by_edge_kf kf in
+  Locations.Zone.intersects z (PairStmts.Hashtbl.find modifs_edge (s1, s2))
 
 (** Try to find the statement set where [data] has the same value than
 * before [stmt].
@@ -321,7 +413,10 @@ let get_data_scope_at_stmt kf stmt lval =
   let zone = Locations.Zone.join dpds zone in
   let allstmts, info = compute kf in
   let modif_stmts = InitSid.find info zone in
-  let (f_scope, fb_scope, b_scope) = find_scope allstmts modif_stmts stmt kf in
+  let modifs_edge = is_modified_by_edge kf zone in
+  let (f_scope, fb_scope, b_scope) =
+    find_scope allstmts modif_stmts modifs_edge stmt kf
+  in
   R.debug
     "@[<hv 4>get_data_scope_at_stmt %a at %d @\n\
                    modified by = %a@\n\
@@ -406,20 +501,48 @@ let check_stmt_annots (ca, stmt_ca) stmt acc =
   in
   Annotations.fold_code_annot check stmt acc
 
+exception VolatileFound
+
+(* This visitor detects the presence of a volatile logic l-value. Such a
+   l-value may evaluate differently at different program point. *)
+class containsVolatile = object
+  inherit Visitor.frama_c_inplace
+
+  method! vterm t =
+    match t.term_node with
+    | TLval tlv -> begin
+        match Logic_utils.unroll_type (Cil.typeOfTermLval tlv) with
+        | Ctype typ ->
+          if Cil.typeHasQualifier "volatile" typ then raise VolatileFound
+        | _ -> ()
+      end;
+      Cil.DoChildren
+    | _ -> Cil.DoChildren
+
+end
+
+let code_annot_is_volatile ca =
+  let vis = new containsVolatile in
+  try ignore (Visitor.visitFramacCodeAnnotation vis ca); false
+  with VolatileFound -> true
+
 (** Return the set of stmts ([scope]) where [annot] has the same value
    as at [stmt], and adds to [proven] the annotations that are identical to
    [annot] at statements that are both in [scope] and dominated by [stmt].
     [stmt] is not added to the set, and [annot] is not added to [proven]. *)
-let get_prop_scope_at_stmt kf stmt ?(proven=CA_Map.empty) annot =
+let get_prop_scope_at_stmt ~warn kf stmt ?(proven=CA_Map.empty) annot =
   R.debug "[get_prop_scope_at_stmt] at stmt %d in %a : %a"
     stmt.sid Kernel_function.pretty kf
     Printer.pp_code_annotation annot;
   let acc = (Cil_datatype.Stmt.Hptset.empty, proven) in
+  if code_annot_is_volatile annot then acc
+  else
   try
     let zone =  get_annot_zone kf stmt annot in
     let allstmts, info = compute kf in
     let modif_stmts = InitSid.find info zone in
-    let pre_state, _ = forward_data_scope modif_stmts stmt kf in
+    let modifs_edge = is_modified_by_edge kf zone in
+    let pre_state, _ = forward_data_scope modif_stmts modifs_edge stmt kf in
     begin match annot.annot_content with
       | AAssert _ -> ()
       | _ -> R.abort "only 'assert' are handled by get_prop_scope_at_stmt"
@@ -436,11 +559,12 @@ let get_prop_scope_at_stmt kf stmt ?(proven=CA_Map.empty) annot =
     in
     List.fold_left add acc allstmts
   with ToDo ->
-    R.warning
+    if warn then
+      R.warning ~current:true ~once:true
       "[get_annot_zone] don't know how to compute zone: skip this annotation";
     acc
 
-(** Collect the annotations that can be removed because they are redondant. *)
+(** Collect the annotations that can be removed because they are redundant. *)
 class check_annot_visitor = object(self)
 
   inherit Visitor.frama_c_inplace
@@ -459,7 +583,9 @@ class check_annot_visitor = object(self)
         R.debug ~level:2 "[check] annot %d at stmt %d in %a : %a@."
           annot.annot_id stmt.sid Kernel_function.pretty kf
           Printer.pp_code_annotation annot;
-        let _scope, proven' = get_prop_scope_at_stmt kf stmt ~proven annot in 
+        let _scope, proven' =
+          get_prop_scope_at_stmt ~warn:false kf stmt ~proven annot
+        in
 	proven <- proven'
       | _ -> ()
     end;
@@ -477,7 +603,7 @@ class check_annot_visitor = object(self)
 
 end (* class check_annot_visitor *)
 
-let f_check_asserts () =
+let redundant_assertions () =
   let visitor = new check_annot_visitor in
   ignore (Visitor.visitFramacFile
             (visitor:>Visitor.frama_c_visitor)
@@ -485,15 +611,15 @@ let f_check_asserts () =
   visitor#proven ()
 
 let check_asserts () =
-  R.feedback "check if there are some redondant assertions...";
-  let to_be_removed = f_check_asserts () in
+  R.feedback "check if there are some redundant assertions...";
+  let to_be_removed = redundant_assertions () in
   let n = CA_Map.cardinal to_be_removed in
     R.result "[check_asserts] %d assertion(s) could be removed@." n;
     (list_proven to_be_removed)
 
 (* erasing optional arguments, plus return a list*)
 let get_prop_scope_at_stmt kf stmt annot =
-  let s, m = get_prop_scope_at_stmt kf stmt annot in
+  let s, m = get_prop_scope_at_stmt ~warn:true kf stmt annot in
   s, list_proven m
 
 (* Currently lazy, because we need to define it after Value as been registered
@@ -507,7 +633,7 @@ let emitter = lazy (
 
 (** Mark as proved the annotations collected by [check_asserts]. *)
 let rm_asserts () =
-  let to_be_removed = f_check_asserts () in
+  let to_be_removed = redundant_assertions () in
   let n = CA_Map.cardinal to_be_removed in
   if n > 0 then begin
     R.feedback ~dkey:cat_rm_asserts "removing %d assertion(s)@." n;
@@ -526,45 +652,48 @@ let rm_asserts () =
     CA_Map.iter aux to_be_removed
   end
 
-(** Register external functions into Db. *)
-let () =
-  Db.register (* kernel_function -> stmt -> lval ->
-       Cil_datatype.Stmt.Set.t * 
-       (Cil_datatype.Stmt.Set.t * 
-        Cil_datatype.Stmt.Set.t) *)
-    (Db.Journalize
-       ("Scope.get_data_scope_at_stmt",
-        Datatype.func3
+let get_data_scope_at_stmt =
+  Journal.register
+    "Scope.Datascope.get_data_scope_at_stmt"
+    (Datatype.func3
           Kernel_function.ty
           Cil_datatype.Stmt.ty
           Cil_datatype.Lval.ty
           (Datatype.pair 
              Cil_datatype.Stmt.Hptset.ty 
              (Datatype.pair Cil_datatype.Stmt.Hptset.ty 
-                            Cil_datatype.Stmt.Hptset.ty))))
-  Db.Scope.get_data_scope_at_stmt get_data_scope_at_stmt;
+                            Cil_datatype.Stmt.Hptset.ty)))
+    get_data_scope_at_stmt
 
-   Db.register (* (kernel_function -> stmt -> code_annotation ->
-       Cil_datatype.Stmt.Hptset.t * code_annotation list *)
-      Db.Journalization_not_required (* TODO *)
-     (* (Db.Journalize("Scope.get_prop_scope_at_stmt",
-                    Datatype.func Kernel_type.kernel_function
-                     (Datatype.func Kernel_type.stmt
-                        (Datatype.func code_annotation_type
-                           (Datatype.couple  Kernel_type.stmt_set
-                              (Datatype.list code_annotation_type)))))) *)
-     Db.Scope.get_prop_scope_at_stmt  get_prop_scope_at_stmt;
+let get_prop_scope_at_stmt =
+  Journal.register
+    "Scope.Datascope.get_prop_scope_at_stmt"
+    (Datatype.func3
+       Kernel_function.ty
+       Cil_datatype.Stmt.ty
+       Cil_datatype.Code_annotation.ty
+       (Datatype.pair
+          (Cil_datatype.Stmt.Hptset.ty)
+          (Datatype.list Cil_datatype.Code_annotation.ty)))
+    get_prop_scope_at_stmt
 
-   Db.register (* unit -> code_annotation list *)
-      Db.Journalization_not_required (* TODO *)
-     (* (Db.Journalize("Scope.check_asserts",
-                    Datatype.func Datatype.unit  (Datatype.list code_annotation_type))) *)
-     Db.Scope.check_asserts check_asserts;
+let check_asserts =
+  Journal.register
+    "Scope.Datascope.check_asserts"
+    (Datatype.func Datatype.unit (Datatype.list Cil_datatype.Code_annotation.ty))
+    check_asserts
 
+let rm_asserts =
+  Journal.register
+    "Scope.Datascope.rm_asserts"
+    (Datatype.func Datatype.unit Datatype.unit)
+    rm_asserts
+
+let () =
   Db.register
     (Db.Journalize
-       ("Scope.rm_asserts", Datatype.func Datatype.unit Datatype.unit))
-    Db.Scope.rm_asserts rm_asserts
+       ("Value.rm_asserts", Datatype.func Datatype.unit Datatype.unit))
+    Db.Value.rm_asserts rm_asserts
 
 (*
 Local Variables:

@@ -3,7 +3,7 @@
 */
 
 /* run.config_qualif
-   OPT: -wp -wp-proof alt-ergo -wp-par 1 -wp-model +ref 
+   OPT: -wp-model +ref 
 */
 
 int tt[10][5];
@@ -15,7 +15,7 @@ int f1 (int * p1,int i) ;
 int call_f1(void)
 { 
   tt[0][3] = 5; 
-  return f1(tt,3);
+  return f1(tt[0],3);
 }
 
 

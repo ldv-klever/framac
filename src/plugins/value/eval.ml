@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,6 +31,7 @@ open Cil_types
 include Bottom.Type
 
 type 'a or_top    = [ `Value of 'a | `Top ]
+type 'a or_top_or_bottom = [ `Value of 'a | `Top | `Bottom ]
 
 (* -------------------------------------------------------------------------- *)
 (**                     {2 Types for the evaluations }                        *)
@@ -44,7 +45,7 @@ type 't evaluated = 't or_bottom with_alarms
    alarms returned during the evaluation. *)
 let (>>=) (t, a) f = match t with
   | `Bottom  -> `Bottom, a
-  | `Value t -> let t', a' = f t in t', Alarmset.union a a'
+  | `Value t -> let t', a' = f t in t', Alarmset.combine a a'
 
 (* Use this monad if the following function returns a simple value. *)
 let (>>=:) (t, a) f = match t with
@@ -62,14 +63,20 @@ type 'a reduced = [ `Bottom | `Unreduced | `Value of 'a ]
 
 (* Context for the evaluation of abstract value operators. *)
 
-(* unop e1 = e2. *)
-type unop_context = exp * exp
+(** Context for the evaluation of an unary operator: contains the involved
+    expressions needed to create the appropriate alarms. *)
+type unop_context = {
+  operand: exp;
+}
 
-(* e1 binop e2 = e3. *)
-type binop_context = exp * exp * exp * typ
-
-(* index, remaining, typ pointed, array size expression *)
-type index_context =  exp * offset * typ * exp option
+(** Context for the evaluation of a binary operator: contains the expressions
+    of both operands and of the result, needed to create the appropriate
+    alarms. *)
+type binop_context = {
+  left_operand: exp;
+  right_operand: exp;
+  binary_result: exp;
+}
 
 
 (* -------------------------------------------------------------------------- *)
@@ -89,6 +96,32 @@ type 'a flagged_value = {
   initialized: bool;
   escaping: bool;
 }
+
+module Flagged_Value = struct
+
+  let bottom = {v = `Bottom; initialized=true; escaping=false; }
+  let equal equal v1 v2  =
+    Bottom.equal equal v1.v v2.v &&
+    v1.initialized = v2.initialized && v1.escaping = v2.escaping
+  let join join v1 v2 =
+    { v = Bottom.join join v1.v v2.v;
+      initialized = v1.initialized && v2.initialized;
+      escaping = v1.escaping || v2.escaping }
+
+  let pretty_flags fmt value = match value.initialized, value.escaping with
+    | false, true  -> Format.pp_print_string fmt "UNINITIALIZED or ESCAPINGADDR"
+    | false, false -> Format.pp_print_string fmt "UNINITIALIZED"
+    | true, true   -> Format.pp_print_string fmt "ESCAPINGADDR"
+    | true, false  -> Format.pp_print_string fmt "BOTTOM"
+
+  let pretty pp fmt value = match value.v with
+    | `Bottom -> pretty_flags fmt value
+    | `Value v ->
+      if value.initialized && not value.escaping
+      then pp fmt v
+      else Format.fprintf fmt "%a or %a" pp v pretty_flags value
+
+end
 
 (* Data record associated to each evaluated expression. *)
 type ('a, 'origin) record_val = {
@@ -128,7 +161,7 @@ end
 let compute_englobing_subexpr ~subexpr ~expr =
   let merge = Extlib.merge_opt (fun _ -> (@)) () in
   (* Returns [Some] of the list of subexpressions of [expr] that contain
-     [subexpr], apart from [expr] and [subexpr] themself, or [None] if [subexpr]
+     [subexpr], apart from [expr] and [subexpr] themselves, or [None] if [subexpr]
      does not appear in [expr]. *)
   let rec compute expr =
     if Cil_datatype.ExpStructEq.equal expr subexpr
@@ -157,14 +190,14 @@ let compute_englobing_subexpr ~subexpr ~expr =
   Extlib.opt_conv [] (compute expr)
 
 module Englobing =
-  Datatype.Pair_with_collections (Cil_datatype.Exp) (Cil_datatype.Exp)
+  Datatype.Pair_with_collections (Cil_datatype.ExpStructEq) (Cil_datatype.ExpStructEq)
     (struct  let module_name = "Subexpressions" end)
 module SubExprs = Datatype.List (Cil_datatype.Exp)
 
 module EnglobingSubexpr =
   State_builder.Hashtbl (Englobing.Hashtbl) (SubExprs)
     (struct
-      let name = "Englobing_subexpressions"
+      let name = "Value.Eval.Englobing_subexpressions"
       let size = 32
       let dependencies = [ Ast.self ]
     end)
@@ -220,32 +253,16 @@ type 'value argument = {
 type 'value call = {
   kf: kernel_function;
   arguments: 'value argument list;
-  rest: (exp * 'value assigned) list
+  rest: (exp * 'value assigned) list;
+  return: varinfo option;
+  recursive: bool;
 }
 
-
-type ('state, 'return, 'value) return_state = {
-  post_state: 'state;
-  return: ('value flagged_value * 'return) option;
-}
-
-type ('state, 'return, 'value) call_result =
-  ('state, 'return, 'value) return_state list or_bottom
-
-(* Initialization of a dataflow analysis, by definig the initial value of
-    each statement. *)
-type 't init =
-  | Default
-  | Continue of 't
-  | Custom of (stmt * 't) list
 
 (* Action to perform on a call site. *)
-type ('state, 'summary, 'value) call_action =
-  | Compute of 'state init * bool
-  | Result  of ('state, 'summary, 'value) call_result * Value_types.cacheable
-
-exception InvalidCall
-
+type 'state call_action =
+  | Compute of 'state
+  | Result  of 'state list or_bottom * Value_types.cacheable
 
 (*
 Local Variables:

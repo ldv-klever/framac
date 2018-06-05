@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -24,145 +24,193 @@
 #ifndef __FC_WCHAR_H
 #define __FC_WCHAR_H
 
+#include "features.h"
+__PUSH_FC_STDLIB
 #include "__fc_define_wchar_t.h"
+#include "__fc_define_wint_t.h"
 #include "__fc_define_size_t.h"
 #include "__fc_define_file.h"
-#include "features.h"
+#include "__fc_string_axiomatic.h"
+
+// Include <stdint.h> to retrieve definitions such as WCHAR_MIN and WINT_MAX,
+// required by ISO C (and not necessarily respected by the glibc).
+// Note that POSIX does not specify that all symbols in <stdint.h> can be
+// made visible in wchar.h, but in practice this should be fine.
+#include <stdint.h>
+
+// ISO C requires the tag 'struct tm' (as declared in <time.h>) to be declared.
+#include <time.h>
 
 __BEGIN_DECLS
 
+#ifndef WEOF
+#define WEOF __FC_WEOF
+#endif
+
 /*@
   assigns \result \from s, indirect:s[0 .. n-1], indirect:c, indirect:n;
-  ensures \result == \null || \subset (\result, s+(0 .. n-1));
+  ensures result_null_or_inside_s:
+    \result == \null || \subset (\result, s+(0 .. n-1));
  */
-wchar_t * wmemchr(const wchar_t *s, wchar_t c, size_t n);
+extern wchar_t * wmemchr(const wchar_t *s, wchar_t c, size_t n);
 
 /*@ assigns \result \from indirect:s1[0 .. n-1], indirect:s2[0 .. n-1], indirect:n; */
-int wmemcmp(const wchar_t *s1, const wchar_t *s2, size_t n);
+extern int wmemcmp(const wchar_t *s1, const wchar_t *s2, size_t n);
 
 /*@
-  requires \separated(dest+(0 .. n-1), src+(0 .. n-1));
+  requires separation:dest:src: \separated(dest+(0 .. n-1), src+(0 .. n-1));
   assigns dest[0 .. n-1] \from src[0 .. n-1], indirect:src, indirect:n;
   assigns \result \from dest;
-  ensures \result == dest;
+  ensures result_ptr: \result == dest;
  */
-wchar_t * wmemcpy(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
+extern wchar_t * wmemcpy(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
 
 /*@
   assigns dest[0 .. n-1] \from src[0 .. n-1], indirect:src, indirect:n;
   assigns \result \from dest;
-  ensures \result == dest;
+  ensures result_ptr: \result == dest;
 */
-wchar_t * wmemmove(wchar_t *dest, const wchar_t *src, size_t n);
+extern wchar_t * wmemmove(wchar_t *dest, const wchar_t *src, size_t n);
 
 /*@
   assigns wcs[0 .. n-1] \from wc, indirect:n;
   assigns \result \from wcs;
-  ensures \result == wcs;
+  ensures result_ptr: \result == wcs;
+  ensures initialization:wcs: \initialized(wcs + (0 .. n-1));
+  ensures contents_equal_wc: \subset(wcs[0 .. n-1], wc);
 */
-wchar_t * wmemset(wchar_t *wcs, wchar_t wc, size_t n);
+extern wchar_t * wmemset(wchar_t *wcs, wchar_t wc, size_t n);
 
 /*@
   assigns dest[0 .. ] \from dest[0 .. ], indirect:dest, src[0 .. ], indirect:src;
   assigns \result \from dest;
-  ensures \result == dest;
+  ensures result_ptr: \result == dest;
 */
-wchar_t * wcscat(wchar_t *restrict dest, const wchar_t *restrict src);
+extern wchar_t * wcscat(wchar_t *restrict dest, const wchar_t *restrict src);
 
 /*@
-  assigns \result \from wcs, indirect:wc;
-  ensures \result == \null || \subset (\result, wcs+(0 .. ));
+  requires valid_wstring_src: valid_read_wstring(wcs);
+  assigns \result \from wcs, indirect:wcs[0 ..], indirect:wc;
+  ensures result_null_or_inside_wcs:
+    \result == \null || \subset(\result, wcs+(0..));
 */
-wchar_t * wcschr(const wchar_t *wcs, wchar_t wc);
+extern wchar_t * wcschr(const wchar_t *wcs, wchar_t wc);
 
 /*@ assigns \result \from indirect:s1[0 .. ], indirect:s2[0 .. ]; */
-int wcscmp(const wchar_t *s1, const wchar_t *s2);
+extern int wcscmp(const wchar_t *s1, const wchar_t *s2);
 
 /*@
   assigns dest[0 .. ] \from src[0 .. ], indirect:src, dest[0 .. ], indirect:dest;
   assigns \result \from dest;
-  ensures \result == dest;
+  ensures result_ptr: \result == dest;
  */
-wchar_t * wcscpy(wchar_t *restrict dest, const wchar_t *restrict src);
+extern wchar_t * wcscpy(wchar_t *restrict dest, const wchar_t *restrict src);
 
 /*@ assigns \result \from indirect:wcs[0 .. ], indirect:accept[0 .. ]; */
-size_t wcscspn(const wchar_t *wcs, const wchar_t *accept);
+extern size_t wcscspn(const wchar_t *wcs, const wchar_t *accept);
 
 // wcslcat is a BSD extension (non-C99, non-POSIX)
 /*@
   assigns dest[0 .. ] \from dest[0 .. ], indirect:dest, src[0 .. n-1], indirect:src, indirect:n;
   assigns \result \from indirect:dest[0 .. ], indirect:src[0 .. n-1], indirect:n;
 */
-size_t wcslcat(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
+extern size_t wcslcat(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
 
 // wcslcpy is a BSD extension (non-C99, non-POSIX)
 /*@
-  requires \separated(dest+(0 .. n-1), src+(0 .. n-1));
+  requires separation:dest:src: \separated(dest+(0 .. n-1), src+(0 .. n-1));
   assigns dest[0 .. n-1] \from src[0 .. n-1], indirect:src, indirect:n;
-  assigns \result \from indirect:dest[0 .. n-1], indirect:dest, indirect:src[0 .. n-1], indirect:src, indirect:n;
+  assigns \result \from indirect:dest[0 .. n-1], indirect:dest,
+    indirect:src[0 .. n-1], indirect:src, indirect:n;
  */
-size_t wcslcpy(wchar_t *dest, const wchar_t *src, size_t n);
+extern size_t wcslcpy(wchar_t *dest, const wchar_t *src, size_t n);
 
-/*@ assigns \result \from indirect:s[0 .. ]; */
-size_t wcslen(const wchar_t *s);
+/*@ requires valid_string_s: valid_read_wstring(s);
+  assigns \result \from indirect:s[0 .. ]; */
+extern size_t wcslen(const wchar_t *s);
 
 /*@
   assigns dest[0 .. ] \from dest[0 .. ], indirect:dest, src[0 .. n-1], indirect:src, indirect:n;
   assigns \result \from dest;
-  ensures \result == dest;
+  ensures result_ptr: \result == dest;
 */
-wchar_t * wcsncat(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
+extern wchar_t * wcsncat(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
 
 /*@ assigns \result \from indirect:s1[0 .. n-1], indirect:s2[0 .. n-1], indirect:n; */
-int wcsncmp(const wchar_t *s1, const wchar_t *s2, size_t n);
+extern int wcsncmp(const wchar_t *s1, const wchar_t *s2, size_t n);
 
 /*@
-  requires \separated(dest+(0 .. n-1), src+(0 .. n-1));
+  requires separation:dest:src: \separated(dest+(0 .. n-1), src+(0 .. n-1));
   assigns dest[0 .. n-1] \from src[0 .. n-1], indirect:src, indirect:n;
   assigns \result \from dest;
-  ensures \result == dest;
+  ensures result_ptr: \result == dest;
  */
-wchar_t * wcsncpy(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
+extern wchar_t * wcsncpy(wchar_t *restrict dest, const wchar_t *restrict src, size_t n);
 
 /*@
   assigns \result \from wcs, indirect:wcs[0 .. ], indirect:accept[0 .. ];
-  ensures \result == \null || \subset (\result, wcs+(0 .. ));
+  ensures result_null_or_inside_wcs:
+    \result == \null || \subset (\result, wcs+(0 .. ));
 */
-wchar_t * wcspbrk(const wchar_t *wcs, const wchar_t *accept);
+extern wchar_t * wcspbrk(const wchar_t *wcs, const wchar_t *accept);
 
 /*@
   assigns \result \from wcs, indirect:wcs[0 .. ], indirect:wc;
-  ensures \result == \null || \subset (\result, wcs+(0 .. ));
+  ensures result_null_or_inside_wcs:
+    \result == \null || \subset (\result, wcs+(0 .. ));
  */
-wchar_t * wcsrchr(const wchar_t *wcs, wchar_t wc);
+extern wchar_t * wcsrchr(const wchar_t *wcs, wchar_t wc);
 
 /*@ assigns \result \from indirect:wcs[0 .. ], indirect:accept[0 .. ]; */
-size_t wcsspn(const wchar_t *wcs, const wchar_t *accept);
+extern size_t wcsspn(const wchar_t *wcs, const wchar_t *accept);
 
 /*@
   assigns \result \from haystack, indirect:haystack[0 .. ], indirect:needle[0 .. ];
-  ensures \result == \null || \subset (\result, haystack+(0 .. ));
+  ensures result_null_or_inside_haystack:
+    \result == \null || \subset (\result, haystack+(0 .. ));
  */
-wchar_t * wcsstr(const wchar_t *haystack, const wchar_t *needle);
+extern wchar_t * wcsstr(const wchar_t *haystack, const wchar_t *needle);
 
+/*@
+  requires valid_stream: \valid(stream);
+  assigns ws[0..n] \from indirect:n, indirect:*stream;
+  assigns \result \from ws, indirect:n, indirect:*stream;
+  ensures result_null_or_same: \result == \null || \result == ws;
+  ensures terminated_string_on_success:
+    \result != \null ==> valid_wstring(ws);
+ */
+extern wchar_t *fgetws(wchar_t * restrict ws, int n, FILE * restrict stream);
+
+/*@
+  // Axiomatic used by the Variadic plugin to generate specifications
+  // for some functions, e.g. swprintf().
+  axiomatic wformat_length {
+    //TODO: this logic function will be extended to handle variadic formats
+    logic integer wformat_length{L}(wchar_t *format);
+  }
+*/
 
 /* It is unclear whether these are more often in wchar.h or stdio.h */
 
-int fwprintf(FILE * stream, const wchar_t * format, ...);
+extern int fwprintf(FILE * stream, const wchar_t * format, ...);
 
-int swprintf(wchar_t * ws, size_t n, const wchar_t * format, ...);
+extern int swprintf(wchar_t * ws, size_t n, const wchar_t * format, ...);
 
-int wprintf(const wchar_t * format, ...);
+extern int wprintf(const wchar_t * format, ...);
 
 
-int wscanf(const wchar_t * format, ...);
+extern int wscanf(const wchar_t * format, ...);
 
-int fwscanf(FILE * stream, const wchar_t * format, ...);
+extern int fwscanf(FILE * stream, const wchar_t * format, ...);
 
-int swscanf(const wchar_t * str, const wchar_t * format, ...);
+extern int swscanf(const wchar_t * str, const wchar_t * format, ...);
 
+#ifndef __mbstate_t_defined
 typedef struct { int __count; char __value[4]; } mbstate_t;
+#define __mbstate_t_defined
+#endif
 
 __END_DECLS
 
+__POP_FC_STDLIB
 #endif

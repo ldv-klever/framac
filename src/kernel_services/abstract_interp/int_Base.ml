@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -72,8 +72,6 @@ let neg x =
     | Value v -> Value (Int.neg v)
     | Top -> x
 let inject i = Value i
-
-exception Error_Top
 
 let project = function
   | Top -> raise Error_Top

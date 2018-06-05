@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,11 +42,10 @@ module Annot =
 
 module GlobDecl =
   False(struct
-          let option_name = "-rm-unused-globals"
-          let help = ("only remove unused global types and variables "^
-                       "(automatically done by -sparecode-analysis)")
-        end)
- 
+    let option_name = "-sparecode-rm-unused-globals"
+    let help = ("only remove unused global types and variables "^
+                "(automatically done by -sparecode-analysis)")
+  end)
 
 (*
 Local Variables:

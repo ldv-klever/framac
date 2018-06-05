@@ -60,7 +60,7 @@
 
 # 62 "src/plugins/wp/driver.ml"
 let __ocaml_lex_tables = {
-  Lexing.lex_base = 
+  Lexing.lex_base =
    "\000\000\246\255\000\000\001\000\248\255\249\255\078\000\160\000\
     \017\000\003\000\254\255\255\255\251\255\027\000\252\255\236\000\
     \055\001\130\001\029\001\252\255\253\255\013\000\255\255\254\255\
@@ -75,7 +75,7 @@ let __ocaml_lex_tables = {
     \255\255\024\000\040\000\034\000\037\000\037\000\053\000\001\000\
     \253\255\056\000\050\000\003\000\252\255\070\000\058\000\004\000\
     \251\255";
-  Lexing.lex_backtrk = 
+  Lexing.lex_backtrk =
    "\255\255\255\255\009\000\009\000\255\255\255\255\005\000\009\000\
     \009\000\002\000\255\255\255\255\255\255\255\255\255\255\255\255\
     \008\000\255\255\255\255\255\255\255\255\003\000\255\255\255\255\
@@ -90,7 +90,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255";
-  Lexing.lex_default = 
+  Lexing.lex_default =
    "\001\000\000\000\255\255\255\255\000\000\000\000\255\255\255\255\
     \255\255\255\255\000\000\000\000\000\000\013\000\000\000\255\255\
     \255\255\255\255\019\000\000\000\000\000\255\255\000\000\000\000\
@@ -105,7 +105,7 @@ let __ocaml_lex_tables = {
     \000\000\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \000\000\255\255\255\255\255\255\000\000\255\255\255\255\255\255\
     \000\000";
-  Lexing.lex_trans = 
+  Lexing.lex_trans =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\009\000\010\000\000\000\009\000\009\000\000\000\029\000\
     \009\000\045\000\051\000\029\000\000\000\045\000\051\000\058\000\
@@ -365,7 +365,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     ";
-  Lexing.lex_check = 
+  Lexing.lex_check =
    "\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\000\000\000\000\255\255\009\000\000\000\255\255\029\000\
     \009\000\045\000\051\000\029\000\255\255\045\000\051\000\058\000\
@@ -625,7 +625,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     ";
-  Lexing.lex_base_code = 
+  Lexing.lex_base_code =
    "\000\000\000\000\000\000\000\000\000\000\000\000\075\000\150\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -640,7 +640,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000";
-  Lexing.lex_backtrk_code = 
+  Lexing.lex_backtrk_code =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \004\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -655,7 +655,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000";
-  Lexing.lex_default_code = 
+  Lexing.lex_default_code =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -670,7 +670,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000";
-  Lexing.lex_trans_code = 
+  Lexing.lex_trans_code =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -722,7 +722,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000";
-  Lexing.lex_check_code = 
+  Lexing.lex_check_code =
    "\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
@@ -774,12 +774,12 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255";
-  Lexing.lex_code = 
+  Lexing.lex_code =
    "\255\001\255\255\000\001\255";
 }
 
 let rec tok lexbuf =
-  lexbuf.Lexing.lex_mem <- Array.make 2 (-1) ;   __ocaml_lex_tok_rec lexbuf 0
+  lexbuf.Lexing.lex_mem <- Array.make 2 (-1); __ocaml_lex_tok_rec lexbuf 0
 and __ocaml_lex_tok_rec lexbuf __ocaml_lex_state =
   match Lexing.new_engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -847,11 +847,11 @@ and
                     ( KEY (Lexing.lexeme lexbuf) )
 # 849 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_tok_rec lexbuf __ocaml_lex_state
 
 and comment lexbuf =
-    __ocaml_lex_comment_rec lexbuf 18
+   __ocaml_lex_comment_rec lexbuf 18
 and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -874,11 +874,11 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
       ( comment lexbuf )
 # 876 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_comment_rec lexbuf __ocaml_lex_state
 
 and value lexbuf =
-    __ocaml_lex_value_rec lexbuf 24
+   __ocaml_lex_value_rec lexbuf 24
 and __ocaml_lex_value_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -911,11 +911,11 @@ let
         ( failwith "Ident or String expected" )
 # 913 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_value_rec lexbuf __ocaml_lex_state
 
 and string_val buf lexbuf =
-    __ocaml_lex_string_val_rec buf lexbuf 31
+   __ocaml_lex_string_val_rec buf lexbuf 31
 and __ocaml_lex_string_val_rec buf lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -968,11 +968,11 @@ let
       ( failwith "Unterminated string" )
 # 970 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_string_val_rec buf lexbuf __ocaml_lex_state
 
 and recstring acc lexbuf =
-    __ocaml_lex_recstring_rec acc lexbuf 39
+   __ocaml_lex_recstring_rec acc lexbuf 39
 and __ocaml_lex_recstring_rec acc lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1005,11 +1005,11 @@ let
       ( failwith "Identifier or '}' expected" )
 # 1007 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_recstring_rec acc lexbuf __ocaml_lex_state
 
 and recstring_bis acc field lexbuf =
-    __ocaml_lex_recstring_bis_rec acc field lexbuf 47
+   __ocaml_lex_recstring_bis_rec acc field lexbuf 47
 and __ocaml_lex_recstring_bis_rec acc field lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1032,11 +1032,11 @@ and __ocaml_lex_recstring_bis_rec acc field lexbuf __ocaml_lex_state =
          ( failwith "'=' expected" )
 # 1034 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_recstring_bis_rec acc field lexbuf __ocaml_lex_state
 
 and recstring_ter acc field lexbuf =
-    __ocaml_lex_recstring_ter_rec acc field lexbuf 52
+   __ocaml_lex_recstring_ter_rec acc field lexbuf 52
 and __ocaml_lex_recstring_ter_rec acc field lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1071,11 +1071,11 @@ let
       ( failwith "Identifier or String expected" )
 # 1073 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_recstring_ter_rec acc field lexbuf __ocaml_lex_state
 
 and recorstring lexbuf =
-    __ocaml_lex_recorstring_rec lexbuf 59
+   __ocaml_lex_recorstring_rec lexbuf 59
 and __ocaml_lex_recorstring_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1108,11 +1108,11 @@ let
            ( failwith (Printf.sprintf "found '%c' instead of \" or {" c) )
 # 1110 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_recorstring_rec lexbuf __ocaml_lex_state
 
 and reclink acc lexbuf =
-    __ocaml_lex_reclink_rec acc lexbuf 65
+   __ocaml_lex_reclink_rec acc lexbuf 65
 and __ocaml_lex_reclink_rec acc lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1145,11 +1145,11 @@ let
       ( failwith "Identifier or '}' expected" )
 # 1147 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_reclink_rec acc lexbuf __ocaml_lex_state
 
 and reclink_bis acc field lexbuf =
-    __ocaml_lex_reclink_bis_rec acc field lexbuf 73
+   __ocaml_lex_reclink_bis_rec acc field lexbuf 73
 and __ocaml_lex_reclink_bis_rec acc field lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1172,11 +1172,11 @@ and __ocaml_lex_reclink_bis_rec acc field lexbuf __ocaml_lex_state =
            ( failwith "'=' expected" )
 # 1174 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_reclink_bis_rec acc field lexbuf __ocaml_lex_state
 
 and reclink_ter acc field lexbuf =
-    __ocaml_lex_reclink_ter_rec acc field lexbuf 78
+   __ocaml_lex_reclink_ter_rec acc field lexbuf 78
 and __ocaml_lex_reclink_ter_rec acc field lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1214,11 +1214,11 @@ let
       ( failwith "Identifier or String expected" )
 # 1216 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_reclink_ter_rec acc field lexbuf __ocaml_lex_state
 
 and bal lexbuf =
-    __ocaml_lex_bal_rec lexbuf 85
+   __ocaml_lex_bal_rec lexbuf 85
 and __ocaml_lex_bal_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1251,7 +1251,7 @@ let
                             ( if c = "" then `Default else `Left )
 # 1253 "src/plugins/wp/driver.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_bal_rec lexbuf __ocaml_lex_state
 
 ;;
@@ -1270,13 +1270,20 @@ let
 
   type input = {
     lexbuf : Lexing.lexbuf ;
+    mutable position : Lexing.position ;
     mutable current : token ;
   }
 
   let skip input =
-    if input.current <> EOF then input.current <- tok input.lexbuf
+    if input.current <> EOF then
+      begin
+        input.position <- input.lexbuf.lex_curr_p ;
+        input.current <- tok input.lexbuf ;
+      end
 
   let token input = input.current
+
+  let source input = input.position
 
   let value input =
     if input.current = EOF then failwith "Value expected"
@@ -1376,7 +1383,7 @@ let
 
 
   let op = {
-    inversible = false ;
+    invertible = false ;
     associative = false ;
     commutative = false ;
     idempotent = false ;
@@ -1395,10 +1402,11 @@ let
       | "\\true" -> E_true
       | "\\false" -> E_false
       | _ ->
-        match LogicBuiltins.constant op with
-        | ACSLDEF -> failwith (Printf.sprintf "Symbol '%s' not found" op)
-        | LFUN lfun -> E_const lfun
-
+          match LogicBuiltins.constant op with
+          | ACSLDEF -> failwith (Printf.sprintf "Symbol '%s' not found" op)
+          | HACK _ -> failwith (Printf.sprintf "Symbol '%s' hacked" op)
+          | LFUN lfun -> E_fun(lfun,[])
+                             
   let rec op_link op input =
     match token input with
       | LINK _ | RECLINK _ ->
@@ -1411,8 +1419,8 @@ let
 	  op_link { op with commutative = true ; associative = true } input
       | ID "idempotent" -> skip input ; skipkey input ":" ;
 	  op_link { op with idempotent = true } input
-      | ID "inversible" -> skip input ; skipkey input ":" ;
-	  op_link { op with inversible = true } input
+      | ID "invertible" -> skip input ; skipkey input ":" ;
+	  op_link { op with invertible = true } input
       | ID "neutral" ->
 	  skip input ; let e = op_elt input in
 	  op_link { op with neutral = e } input
@@ -1428,7 +1436,7 @@ let
 	  Function, link `Nary input
       | ID "constructor" ->
 	  skip input ; skipkey input ":" ;
-	  Constructor, link `Nary input
+	  Qed.Logic.Constructor, link `Nary input
       | ID "injective" ->
 	  skip input ; skipkey input ":" ;
 	  Injection, link `Nary input
@@ -1447,53 +1455,57 @@ let
           parse ~driver_dir name input
       | KEY "type" ->
 	  skip input ;
-	  let name = ident input in
-	  noskipkey input "=" ;
-	  let link = linkstring input in
-	  add_type name ~library ~link () ;
+          let name = ident input in
+          let source = source input in
+          noskipkey input "=" ;
+          let link = linkstring input in
+          add_type ~source name ~library ~link () ;
 	  skipkey input ";" ;
 	  parse ~driver_dir library input
       | KEY "ctor" ->
 	  skip input ;
 	  let name = ident input in
+          let source = source input in
 	  let args = signature input in
 	  skipkey input "=" ;
 	  let link = link `Nary input in
-	  add_ctor name args ~library ~link () ;
+	  add_ctor ~source name args ~library ~link () ;
 	  skipkey input ";" ;
 	  parse ~driver_dir library input
       | KEY "logic" ->
 	  skip input ;
 	  let result = kind input in
 	  let name = ident input in
+          let source = source input in
 	  let args = signature input in
           if key input ":=" then
             begin
               let alias = ident input in
-              add_alias name args ~alias () ;
+              add_alias ~source name args ~alias () ;
             end
           else
             begin
 	      skipkey input "=" ;
               let category,link = logic_link input in
-              add_logic result name args ~library ~category ~link () ;
+              add_logic ~source result name args ~library ~category ~link () ;
             end ;
           skipkey input ";" ;
 	  parse ~driver_dir library input
       | KEY "predicate" ->
 	  skip input ;
 	  let name = ident input in
+          let source = source input in
 	  let args = signature input in
           if key input ":=" then
             begin
               let alias = ident input in
-              add_alias name args ~alias () ;
+              add_alias ~source name args ~alias () ;
             end
           else
             begin
 	      noskipkey input "=" ;
 	      let link = linkstring input in
-	      add_predicate name args ~library ~link () ;
+	      add_predicate ~source name args ~library ~link () ;
             end ;
           skipkey input ";" ;
           parse ~driver_dir library input
@@ -1512,16 +1524,16 @@ let
         parse ~driver_dir library input
       | _ -> failwith "Unexpected entry"
 
-  let load ?(ontty=`Transient) file =
+  let load_file ?(ontty=`Transient) file =
     try
       Wp_parameters.feedback ~ontty "Loading driver '%s'" (Filepath.pretty file) ;
       let driver_dir = Filename.dirname file in
       let inc = open_in file in
       let lex = Lexing.from_channel inc in
-      lex.Lexing.lex_curr_p <-
-        { lex.Lexing.lex_curr_p with Lexing.pos_fname = file } ;
-      let input = { current = tok lex ; lexbuf = lex } in
+      let position = { lex.Lexing.lex_curr_p with Lexing.pos_fname = file } in
+      let input = { current = tok lex ; position = position ; lexbuf = lex } in
       try
+        lex.Lexing.lex_curr_p <- position ;
 	parse ~driver_dir "qed" input ;
 	close_in inc
       with Failure msg ->
@@ -1537,6 +1549,7 @@ let
 
   (*TODO[LC] Think about projectification ... *)
   let dkey = Wp_parameters.register_category "includes"
+  let dkey_driver = Wp_parameters.register_category "driver"
 
   let loaded : (string list * string list, driver) Hashtbl.t =Hashtbl.create 10
   let load_driver () =
@@ -1559,7 +1572,7 @@ let
             try [Wp_parameters.Share.dir ~error:false ()]
             with Wp_parameters.Share.No_dir -> [] in
           let directories = includes @ shared in
-          if Wp_parameters.has_dkey "includes" then
+          if Wp_parameters.has_dkey dkey then
             Wp_parameters.debug ~dkey "Included directories:%t"
               (fun fmt ->
                  List.iter
@@ -1578,11 +1591,11 @@ let
         let default = Wp_parameters.Share.file ~error:true "wp.driver" in
         let feedback = Wp_parameters.Share.Dir_name.is_set () in
         let ontty = if feedback then `Message else `Transient in
-        load ~ontty default;
-        List.iter load drivers;
+        load_file ~ontty default;
+        List.iter load_file drivers;
         Hashtbl.add loaded key (Context.get LogicBuiltins.driver);
-        if Wp_parameters.has_dkey "driver" then LogicBuiltins.dump ()
+        if Wp_parameters.has_dkey dkey_driver  then LogicBuiltins.dump ()
     end ; Context.get LogicBuiltins.driver
 
 
-# 1589 "src/plugins/wp/driver.ml"
+# 1602 "src/plugins/wp/driver.ml"

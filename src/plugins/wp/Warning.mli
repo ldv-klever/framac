@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,8 +48,11 @@ type context
 
 val context : ?source:string -> unit -> context
 val flush : context -> Set.t
-
 val add : t -> unit
+
+val create : ?log:bool -> ?severe:bool -> ?source:string -> effect:string ->
+  ('a,Format.formatter,unit,t) format4 -> 'a
+
 val emit : ?severe:bool -> ?source:string -> effect:string ->
   ('a,Format.formatter,unit) format -> 'a
 (** Emit a warning in current context.
@@ -69,4 +72,3 @@ val catch : ?source:string -> ?severe:bool -> effect:string -> ('a -> 'b) -> 'a 
 (** Set up a context for the job. If non-handled errors are raised,
     then a warning is emitted with specified severity and effect.
     Default for [severe] is [true]. *)
-

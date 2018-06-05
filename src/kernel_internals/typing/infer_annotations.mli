@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,5 +22,4 @@
 
 (** Generation of possible assigns from the C prototype of a function. *)
 
-val assigns_from_prototype:
-  Kernel_function.t -> Cil_types.identified_term Cil_types.from list
+val assigns_from_prototype: Kernel_function.t -> Cil_types.from list

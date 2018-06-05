@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -135,13 +135,12 @@ let expr_fits_in_range (expr: Apron.Texpr1.expr) range =
   | Var v ->
     let name = Apron.Var.to_string v in
     let range_v = VarRanges.find name in
-    let ok_l, ok_r = Eval_typ.range_inclusion range_v range in
-    ok_l && ok_r
+    Eval_typ.range_inclusion range_v range
   | Cst _ | Unop (_,_,_,_) | Binop (_,_,_,_,_) ->
     false (* TODO? Unclear whether those cases would add expressivity. *)
 
 (* Auxiliary function for {!coerce} below. It normalizes [expr] in an expression
-   that is guaranteed to fit withing the integer type [range], or returns
+   that is guaranteed to fit within the integer type [range], or returns
    an interval covering the entire range.
    Algorithm from Verasco.
    See section 6.5 of the paper 'A Formally-Verified C Static Analyzer'. *)
@@ -282,7 +281,7 @@ let rec translate_expr eval oracle expr = match expr.enode with
     match Cil.constFoldToInt expr with
     | None -> raise (Out_of_Scope "translate_expr sizeof alignof")
     | Some i -> Texpr1.Cst (Coeff.s_of_int (Integer.to_int i))
-(* Expresssions that cannot be translated by [translate_expr] are replaced
+(* Expressions that cannot be translated by [translate_expr] are replaced
    using an oracle. Of course, this oracle must be sound!. If the oracle
    cannot find a suitable replacement, it can re-raise the expresssion. *)
 and translate_expr_linearize eval oracle expr =
@@ -362,6 +361,7 @@ module Make
     (Man: sig
        type t
        val manager: t Manager.t
+       val name: string
        val key: t Abstract1.t Abstract_domain.key
      end)
 = struct
@@ -373,6 +373,7 @@ module Make
   let man = Man.manager
 
   let structure = Abstract_domain.Leaf Man.key
+  let log_category = dkey
 
   let empty_env = Environment.make [||] [||]
 
@@ -383,11 +384,15 @@ module Make
     struct
       include Datatype.Undefined
       type t = state
-      let name = Manager.get_library man
+      let name = Manager.get_library Man.manager
       let reprs = [top]
       let structural_descr = Structural_descr.t_unknown
 
-      let equal = Abstract1.is_eq man
+      (* Abstract1.is_eq raises an error when the environments of the two
+         states are incompatible. *)
+      let equal a b =
+        Environment.equal (Abstract1.env a) (Abstract1.env b)
+        && Abstract1.is_eq man a b
 
       let hash = Abstract1.hash man
 
@@ -408,6 +413,8 @@ module Make
       let mem_project = Datatype.never_any_project
     end )
 
+  let name = Man.name
+
   let is_included = Abstract1.is_leq man
 
   let join s1 s2 =
@@ -425,8 +432,11 @@ module Make
       and s2 = Abstract1.change_environment man s2 env false in
       Abstract1.join man s1 s2
 
-  let join_and_is_included a b = let j = join a b in j, equal j b
   let widen _kf _stmt s1 s2 = Abstract1.widening man s1 s2
+
+  let narrow s1 s2 =
+    let s = Abstract1.meet man s1 s2 in
+    if Abstract1.is_bottom man s then `Bottom else `Value s
 
   type origin = unit
 
@@ -441,11 +451,11 @@ module Make
     let array = Tcons1.array_make env (List.length constraints) in
     List.iteri (fun i c -> Tcons1.array_set array i c) constraints;
     let st = Abstract1.meet_tcons_array man state array in
-    if Abstract1.is_bottom man st then(
-      Format.printf "Bottom with state %a and constraints %a@."
+    if debug && Abstract1.is_bottom man st then
+      Value_parameters.result ~current:true ~once:true
+        "Bottom with state %a and constraints %a@."
         Abstract1.print state (fun fmt a -> Tcons1.array_print fmt a) array;
-      st)
-    else st
+    st
 
   let _constraint_to_typ env state vars =
     let aux (var_apron, vi) =
@@ -488,12 +498,16 @@ module Make
         value, Alarmset.all
       with
       | Out_of_Scope _ -> top
+      (* May happen when evaluating an expression in the GUI, while the states
+         of Apron have not been saved. In this case, we evaluate in the top
+         apron state, whose environment raises the Failure exception. *)
+      | Failure _ -> top
 
   let extract_expr _oracle state expr =
     compute state expr (Cil.typeOf expr)
 
   let extract_lval _oracle state lval typ _loc =
-    let expr = Cil.dummy_exp (Cil_types.Lval lval) in
+    let expr = Value_util.lval_to_exp lval in
     compute state expr typ
 
   let reduce_further _ _ _ = []
@@ -540,41 +554,26 @@ module Make
     in
     Precise_locs.fold aux_ploc loc state
 
-  (* We coul replace this type by a Value to model the return code, but
-     this would add little expressivity compared to what is offerred by
-     the Interval domain. Another possibility would be to return the Apron
-     expression corresponding to the variable being returned in the callee.
-     But beware of scoping problems... *)
-  type return = unit
-  module Return = Datatype.Unit
-
-  let top_return =
-    let top_value = `Value Main_values.Interval.top in
-    let top_flagged_value =
-      {v = top_value; initialized = false; escaping = true; }
+  let enter_scope vars state =
+    let translate acc varinfo =
+      try translate_varinfo varinfo :: acc
+      with Out_of_Scope _ -> acc
     in
-    Some (top_flagged_value, ())
+    let vars = List.fold_left translate [] vars in
+    let env = Environment.add (Abstract1.env state) (Array.of_list vars) [||] in
+    Abstract1.change_environment man state env false
 
-  let approximate_call kf state =
-    let post_state =
-      let name = Kernel_function.get_name kf in
-      if Ast_info.is_frama_c_builtin name ||
-         (name <> "free" && Eval_typ.kf_assigns_only_result_or_volatile kf)
-      then state
-      else make_top (Abstract1.env state)
-    in
-    `Value [{ post_state; return = top_return }]
+  let leave_scope _kf vars state =
+    forget_varinfo_list ~remove:true vars state
+
+  let enter_loop _ state = state
+  let incr_loop_counter _ state = state
+  let leave_loop _ state = state
 
   module Transfer
       (Valuation: Abstract_domain.Valuation with type value = value
                                              and type loc = location)
   = struct
-
-    type state = t
-    type return = unit
-    type value = Main_values.Interval.t
-    type location = Precise_locs.precise_location
-    type valuation = Valuation.t
 
     (* make an oracle for the translation Cil->Apron, using the valuation.
        Translate integer expressions that have been evaluated (which should
@@ -689,74 +688,43 @@ module Make
       in
       if Abstract1.is_bottom man state
       then Result (`Bottom, Value_types.Cacheable)
-      else Compute (Continue state, true)
+      else Compute state
 
-    let make_return _kf _stmt _assign _valuation _state = ()
+    let finalize_call _stmt _call ~pre:_ ~post = `Value post
 
-    let finalize_call _stmt call ~pre ~post =
-      let kf = call.kf in
-      let name = Kernel_function.get_name kf in
-      if  Ast_info.is_frama_c_builtin name then begin
-        if Ast_info.is_cea_dump_function name &&
-           Value_parameters.is_debug_key_enabled dkey
-        then begin
-          let l = fst (Cil.CurrentLoc.get ()) in
-          Value_parameters.result "DUMPING APRON STATE \
-                                   of file %s line %d@.%a"
-            (Filepath.pretty l.Lexing.pos_fname) l.Lexing.pos_lnum
-            pretty post;
-        end;
-      end;
-      let env = Abstract1.env pre in
-      `Value (Abstract1.change_environment man post env false)
+    let approximate_call _stmt call state =
+      let name = Kernel_function.get_name call.kf in
+      let state =
+        if Ast_info.is_frama_c_builtin name ||
+           (name <> "free" && Eval_typ.kf_assigns_only_result_or_volatile call.kf)
+        then state
+        else make_top (Abstract1.env state)
+      in
+      (* We need to introduce the variable used to model the return code
+         (even though we do not constrain it), because it will be remove later
+         by the generic part of the evaluator. *)
+      let state = match call.return with
+        | Some vi_ret -> enter_scope [vi_ret] state
+        | None -> state
+      in
+      `Value [state]
 
-    let assign_return _stmt lv _kf () _value _valuation state =
-      maybe_bottom (kill_bases lv.lloc state)
-
-    let default_call _stmt call state =
-      approximate_call call.kf state
-
-    let enter_loop _ state = state
-    let incr_loop_counter _ state = state
-    let leave_loop _ state = state
-
+    let show_expr _valuation _state _fmt _expr = ()
   end
 
-  let compute_using_specification _ (kf, _) state =
-    approximate_call kf state
-
-  type eval_env = state
-  let env_current_state state = `Value state
-  let env_annot ~pre:_ ~here () = here
-  let env_pre_f ~pre () = pre
-  let env_post_f ~pre:_ ~post ~result:_ () = post
-  let eval_predicate _ _ = Alarmset.Unknown
-  let reduce_by_predicate state _ _ = state
-
-  let enter_scope _kf vars state =
-    let translate acc varinfo =
-      try translate_varinfo varinfo :: acc
-      with Out_of_Scope _ -> acc
-    in
-    let vars = List.fold_left translate [] vars in
-    let env = Environment.add (Abstract1.env state) (Array.of_list vars) [||] in
-    Abstract1.change_environment man state env false
-
-  let leave_scope _kf vars state =
-    forget_varinfo_list ~remove:true vars state
+  let logic_assign _assigns location ~pre:_ state = kill_bases location state
+  let evaluate_predicate _ _ _ = Alarmset.Unknown
+  let reduce_by_predicate _ state _ _ = `Value state
 
   let empty () = top
 
-  let initialize_var state lval _loc _value =
-    try
-      let env = Abstract1.env state in
-      let var = translate_lval lval in
-      let env = Environment.add env [|var|] [||] in
-      Abstract1.change_environment man state env false
-    with
-    | Out_of_Scope _ -> state
+  let introduce_globals vars state = enter_scope vars state
 
-  let initialize_var_using_type state varinfo =
+  let enter_scope _kf vars state = enter_scope vars state
+
+  let initialize_variable _lval _loc ~initialized:_ _init_value state = state
+
+  let initialize_variable_using_type _kind varinfo state =
     try
       let var = translate_varinfo varinfo in
       let env = Abstract1.env state in
@@ -768,8 +736,6 @@ module Make
         constraint_to_typ env state [(var, varinfo)]
     with
     | Out_of_Scope _ -> state
-
-  let global_state () = None
 
   let filter_by_bases _ state = state
   let reuse ~current_input:_ ~previous_output = previous_output
@@ -789,28 +755,33 @@ let polka_equalities_key = Structure.Key_Domain.create_key "polka-equalities"
 module Apron_Octagon = struct
   type t = Oct.t
   let manager = Oct.manager_alloc ()
+  let name = "Apron octagon domain"
   let key = octagon_key
 end
 
 module Apron_Box = struct
   type t = Box.t
   let manager = Box.manager_alloc ()
+  let name = "Apron box domain"
   let key = box_key
 end
 
 module Apron_Polka_Loose = struct
   type t = Polka.loose Polka.t
   let manager = Polka.manager_alloc_loose ()
+  let name = "Polka loose polyhedra domain"
   let key = polka_loose_key
 end
 module Apron_Polka_Strict = struct
   type t = Polka.strict Polka.t
   let manager = Polka.manager_alloc_strict ()
+  let name = "Polka strict polyhedra domain"
   let key = polka_strict_key
 end
 module Apron_Polka_Equalities = struct
   type t = Polka.equalities Polka.t
   let manager = Polka.manager_alloc_equalities ()
+  let name = "Polka linear equalities domain"
   let key = polka_equalities_key
 end
 

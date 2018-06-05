@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -126,6 +126,7 @@ let stmt_is_in_cycle_filtered filterfunc stmt =
 let stmt_is_in_cycle = stmt_is_in_cycle_filtered (fun _ -> true)
 
 module SG = Graph.Imperative.Digraph.Concrete(Stmt)
+module SG_Dfs = Graph.Traverse.Dfs(SG)
 
 module TP = struct
   include SG
@@ -219,7 +220,7 @@ module StmtsGraphTbl=
        (struct
          include Datatype.Serializable_undefined
          type t = SG.t
-         let name = "Stmts_Graph.SG.t"
+         let name = "Stmts_Graph.StmtsGraphTbl"
          let reprs = [ SG.create () ]
          let mem_project = Datatype.never_any_project
         end))
@@ -248,30 +249,15 @@ module Reachable_Stmts =
     end)
 
 let reachable_stmts kf s =
+  try
+    Reachable_Stmts.find s
+  with Not_found ->
+    (* compute successors *)
   let g = get_graph kf in
-  let add e v =
-    let new_v =
-      try
-        Stmt.Hptset.add v (Reachable_Stmts.find e)
-      with Not_found -> Stmt.Hptset.singleton v
-    in
-    Reachable_Stmts.replace e new_v
-  in
-  let rec apply s =
-    try
-      Reachable_Stmts.find s
-    with Not_found ->
-      SG.iter_succ
-        (fun s' ->
-           add s s';
-           Stmt.Hptset.iter (add s) (apply s'))
-        g
-        s;
-      try
-        Reachable_Stmts.find s
-      with Not_found -> (* stmt has no successors *) Stmt.Hptset.empty
-  in
-  apply s
+    let visited = ref Stmt.Hptset.empty in
+    SG_Dfs.prefix_component (fun s' -> visited := Stmt.Hptset.add s' !visited) g s;
+    Reachable_Stmts.replace s !visited;
+    !visited
 
 (* ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ *)
 (** Store for each statement, the set of the statements it is composed of.
@@ -281,7 +267,7 @@ module StmtStmts =
   Cil_state_builder.Stmt_hashtbl
     (Stmt.Set)
     (struct
-      let name = "StmtStmts"
+      let name = "Stmts_graph.StmtStmts"
       let size = 142
       let dependencies = [ Ast.self ]
      end)
@@ -346,7 +332,7 @@ module WaysOutDatatype =
 module StmtWaysOut =
   Cil_state_builder.Stmt_hashtbl (WaysOutDatatype)
     (struct
-      let name = "StmtWaysOut"
+      let name = "Stmts_graphs.StmtWaysOut"
       let size = 142
       let dependencies = [ StmtStmts.self ]
      end)
@@ -428,7 +414,7 @@ module StmtWaysIn =
   Cil_state_builder.Stmt_hashtbl
     (Datatype.List (EdgeDatatype))
     (struct
-      let name = "StmtWaysIn"
+      let name = "Stmts_graphs.StmtWaysIn"
       let size = 142
       let dependencies = [ StmtStmts.self ]
      end)

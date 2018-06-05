@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,7 +35,7 @@ type annot_kind =
              but not an hypothesis (see Aboth): A /\ ...*)
   | Aboth of bool
   (* annotation can be used as both hypothesis and goal :
-     	 - with true : considerer as both : A /\ A=>..
+     	 - with true : considered as both : A /\ A=>..
      	 - with false : we just want to use it as hyp right now. *)
   | AcutB of bool
   (* annotation is use as a cut :
@@ -56,8 +56,8 @@ type annot_kind =
 module ForCall = Kernel_function.Map
 
 (** Some elements can be used as both Hyp and Goal : because of the selection
- * mecanism, we need to add a boolean [as_goal] to tell if the element is to be
- * considered as a goal. If [false], the element can still be used as hypthesis.
+ * mechanism, we need to add a boolean [as_goal] to tell if the element is to be
+ * considered as a goal. If [false], the element can still be used as hypothesis.
 *)
 type annots = {
   p_hyp : WpPropId.pred_info list;
@@ -164,7 +164,7 @@ let add_prop_fct_bhv_pre acc kind kf bhv ~impl_assumes =
 
 let add_prop_stmt_pre acc kind kf s bhv ~assumes pre =
   let id = WpPropId.mk_pre_id kf (Kstmt s) bhv pre in
-  let labels = NormAtLabels.labels_stmt_pre s in
+  let labels = NormAtLabels.labels_stmt_pre ~kf s in
   let p = Logic_const.pred_of_id_pred pre in
   let p = normalize id labels ?assumes p in
   add_prop acc kind id p
@@ -185,7 +185,7 @@ let add_prop_stmt_spec_pre acc kind kf s spec =
 
 let add_prop_stmt_post acc kind kf s bhv tkind l_post ~assumes post =
   let id = WpPropId.mk_stmt_post_id kf s bhv (tkind, post) in
-  let labels = NormAtLabels.labels_stmt_post s l_post in
+  let labels = NormAtLabels.labels_stmt_post ~kf s l_post in
   let p = Logic_const.pred_of_id_pred post in
   let p = normalize id labels ?assumes p in
   add_prop acc kind id p
@@ -207,12 +207,12 @@ let add_prop_call_post acc kind called_kf bhv tkind ~assumes post =
 
 let add_prop_assert acc kind kf s ca p =
   let id = WpPropId.mk_assert_id kf s ca in
-  let labels = NormAtLabels.labels_assert_before s in
+  let labels = NormAtLabels.labels_assert_before ~kf s in
   let p = normalize id labels p in
   add_prop acc kind id p
 
-let add_prop_loop_inv acc kind s id p =
-  let labels = NormAtLabels.labels_loop_inv s in
+let add_prop_loop_inv acc kind s ~established id p =
+  let labels = NormAtLabels.labels_loop_inv ~established s in
   let p = normalize id labels p in
   add_prop acc kind id p
 
@@ -223,7 +223,8 @@ let fold_bhv_post_cond ~warn f_normal f_exits acc b =
     match termination_kind with
     | Normal -> f_normal p_acc pe, e_acc
     | Exits -> p_acc, f_exits e_acc pe
-    | (Breaks|Continues|Returns) -> (* TODO *)
+    | Returns -> p_acc, e_acc (* HANDLED by an ASSERT from CIL *)
+    | (Breaks|Continues) -> (* TODO *)
         begin
           if warn then
             Wp_parameters.warning
@@ -310,7 +311,7 @@ let add_stmt_spec_assigns_hyp acc kf s l_post spec =
       | None -> add_assigns_any acc Ahyp
                   (WpPropId.mk_stmt_any_assigns_info s)
       | Some id ->
-          let labels = NormAtLabels.labels_stmt_assigns s l_post in
+          let labels = NormAtLabels.labels_stmt_assigns ~kf s l_post in
           let assigns = NormAtLabels.preproc_assigns labels assigns in
           let a_desc = WpPropId.mk_stmt_assigns_desc s assigns in
           add_assigns acc Ahyp id a_desc
@@ -338,7 +339,8 @@ let add_call_assigns_hyp acc kf_caller s ~called_kf l_post spec_opt =
               let asgn = WpPropId.mk_stmt_any_assigns_info s in
               add_assigns_any acc (AcallHyp called_kf) asgn
           | Some pid ->
-              let labels = NormAtLabels.labels_stmt_assigns s l_post in
+              let kf = kf_caller in
+              let labels = NormAtLabels.labels_stmt_assigns ~kf s l_post in
               let assigns = NormAtLabels.preproc_assigns labels assigns in
               let a_desc = WpPropId.mk_stmt_assigns_desc s assigns in
               add_assigns acc (AcallHyp called_kf) pid a_desc
@@ -513,8 +515,7 @@ let add_node_annots tbl cfg v (before, (post, exits)) =
     begin
       let edges_after = Cil2cfg.get_post_edges cfg v in
       if edges_after = []
-      then Wp_parameters.warning ~once:true
-          "Ignoring annotation rooted after statement with no succ"
+      then (* unreachable (see [process_unreached_annots]) *) ()
       else add_on_edges tbl post edges_after
     end;
   if exits <> empty_acc then
@@ -555,8 +556,8 @@ let add_axiom tbl lemma =
 let add_all_axioms tbl =
   let rec do_g g =
     match g with
-    | Daxiomatic (_ax_name, globs,_) -> do_globs globs
-    | Dlemma (name,_,_,_,_,_) ->
+    | Daxiomatic (_ax_name, globs,_,_) -> do_globs globs
+    | Dlemma (name,_,_,_,_,_,_) ->
         let lem = LogicUsage.logic_lemma name in
         add_axiom tbl lem
     | _ -> ()
@@ -588,9 +589,6 @@ type strategy = {
   desc : string ;
   cfg : Cil2cfg.t;
   behavior_name : string option ;
-
-  new_loops : bool;
-
   strategy_kind : strategy_kind;
   annots : annots_tbl;
 }
@@ -602,8 +600,8 @@ let get_bhv s = s.behavior_name
 let is_default_behavior s =
   match s.behavior_name with None -> true | Some _ -> false
 
-let mk_strategy desc cfg bhv_name new_loops kind tbl = {
-  desc = desc; cfg = cfg; behavior_name = bhv_name; new_loops = new_loops;
+let mk_strategy desc cfg bhv_name kind tbl = {
+  desc = desc; cfg = cfg; behavior_name = bhv_name;
   strategy_kind = kind; annots = tbl;
 }
 
@@ -614,7 +612,6 @@ let strategy_kind strat = strat.strategy_kind
 let strategy_has_prop_goal strat = strat.annots.tbl_has_prop_goal
 let strategy_has_asgn_goal strat = strat.annots.tbl_has_asgn_goal
 let get_annots strat = get_annots strat.annots
-let new_loop_computation strat = strat.new_loops
 
 let pp_info_of_strategy fmt strat =
   Format.fprintf fmt "@[%s@]" strat.desc
@@ -645,11 +642,11 @@ let mk_variant_properties kf s ca v =
   let vpos_id = WpPropId.mk_var_pos_id kf s ca in
   let vdecr_id = WpPropId.mk_var_decr_id kf s ca in
   let loc = v.term_loc in
-  let lhead = Clabels.loop_head_label s in
-  let vhead = Logic_const.tat ~loc (v, lhead) in
+  let lcurr = Clabels.to_logic (Clabels.loop_current s) in
+  let vcurr = Logic_const.tat ~loc (v, lcurr) in
   let zero = Cil.lzero ~loc () in
-  let vpos = Logic_const.prel ~loc (Rle, zero, vhead) in
-  let vdecr = Logic_const.prel ~loc (Rlt, v, vhead) in
+  let vpos = Logic_const.prel ~loc (Rle, zero, vcurr) in
+  let vdecr = Logic_const.prel ~loc (Rlt, v, vcurr) in
   (vpos_id, vpos), (vdecr_id, vdecr)
 
 (* -------------------------------------------------------------------------- *)

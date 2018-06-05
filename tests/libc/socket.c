@@ -1,6 +1,6 @@
 /* run.config
-   STDOPT: +"-value-verbose 2 -val-builtin bzero:Frama_C_bzero"
-   STDOPT: +"-value-verbose 2 -val-builtin bzero:Frama_C_bzero -machdep x86_64"
+   STDOPT: +"-value-verbose 2 -no-val-builtins-auto"
+   STDOPT: +"-value-verbose 2 -machdep x86_64 -no-val-builtins-auto"
 */
 #include <sys/types.h>
 #include <sys/socket.h>
@@ -25,7 +25,7 @@ char rcv_buffer[SIZEOF_RCV_BUFFER];
 char rcv_buffer_scattered1[2];					\
 char rcv_buffer_scattered2[5];					\
 char rcv_buffer_scattered3[3];					\
-const struct iovec rcv_buffer_scattered_iovec[3] =		\
+struct iovec rcv_buffer_scattered_iovec[3] =			\
   {{ &rcv_buffer_scattered1, sizeof(rcv_buffer_scattered1)},	\
    { &rcv_buffer_scattered2, sizeof(rcv_buffer_scattered2)},	\
    { &rcv_buffer_scattered3, sizeof(rcv_buffer_scattered3)}}

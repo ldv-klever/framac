@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,7 @@ open Cil_types
 
 (* Kernel functions with a custom function [compare] independent of vids. So the
    callgraph and its iterations are independent from the vids generator and is
-   only dependent of the analyzed program itsef. *)
+   only dependent of the analyzed program itself. *)
 module Kf_sorted = struct
   type t =  Kernel_function.t
   let equal = Kernel_function.equal
@@ -75,24 +75,28 @@ let get_pointed_kfs =
   let res = ref None in
   fun () ->
     let compute () =
-      let l = ref [] in
-      let o = object
-        inherit Visitor.frama_c_inplace
-        method !vexpr e = match e.enode with
-        | AddrOf (Var vi, NoOffset) when Cil.isFunctionType vi.vtype ->
+      if Options.Function_pointers.get () then
+        let l = ref [] in
+        let o = object
+          inherit Visitor.frama_c_inplace
+          method !vexpr e = match e.enode with
+          | AddrOf (Var vi, NoOffset) when Cil.isFunctionType vi.vtype ->
           (* function pointer *)
-          let kf =
-            try Globals.Functions.get vi
-            with Not_found -> assert false
-          in
-          l := kf :: !l;
-          Cil.SkipChildren
-        | _ ->
-          Cil.DoChildren
-      end
-      in
-      Visitor.visitFramacFileSameGlobals o (Ast.get ());
-      !l
+            let kf =
+              try Globals.Functions.get vi
+              with Not_found -> assert false
+            in
+            l := kf :: !l;
+            Cil.SkipChildren
+          | _ ->
+            Cil.DoChildren
+        end
+        in
+        Visitor.visitFramacFileSameGlobals o (Ast.get ());
+        !l
+      else
+        (* ignore function pointers when the option is off *)
+        []
     in
     match !res with
     | None ->
@@ -147,14 +151,23 @@ let syntactic_compute g =
       (* call via a function pointer: add an edge from each function which
          the address is taken to this callee. *)
       let pointed = get_pointed_kfs () in
-      let callee = Extlib.the self#current_kf in
+      let caller = Extlib.the self#current_kf in
       List.iter
-        (fun caller ->
+        (fun callee ->
           G.add_edge_e g (caller, Extlib.the self#current_stmt, callee))
         pointed;
       Cil.SkipChildren
-    | _ ->
-      (* skip childrens for efficiency *)
+    | Local_init (_,ConsInit(v,_,_),_) ->
+      let callee =
+        try Globals.Functions.get v
+        with Not_found -> assert false
+      in
+      let caller = Extlib.the self#current_kf in
+      G.add_edge_e g (caller, Extlib.the self#current_stmt, callee);
+      Cil.SkipChildren
+    | Local_init (_, AssignInit _, _) | Set _
+    | Skip _ | Asm _ | Code_annot _  ->
+      (* skip children for efficiency *)
       Cil.SkipChildren
 
     (* for efficiency purpose, skip many items *)
@@ -165,7 +178,7 @@ let syntactic_compute g =
     method !vbehavior _ = Cil.SkipChildren
   end in
   Visitor.visitFramacFileSameGlobals o (Ast.get ());
-  (* now remove the potential unrelevant nodes wrt selected options *)
+  (* now remove the potential irrelevant nodes wrt selected options *)
   if not (Options.Uncalled.get () && Options.Uncalled_leaf.get ()) then
     G.iter_vertex
       (fun kf ->
@@ -226,6 +239,18 @@ let compute () = ignore (compute ())
 
 module Graphviz_attributes = struct
   include G
+  (* We rewrite [iter_edges_e] so that multiple calls to the same function
+     from the same caller do not give rise to multi-edges. *)
+  let iter_edges_e iter g =
+    let aux_e v =
+      (* This comparison function ignores the statement (as we want to
+         coalesce all call sites together). The first element of the triple
+         is always [v], so it can also be ignored. *)
+      let comp_e (_, _, kf1) (_, _, kf2) = Kf_sorted.compare kf1 kf2 in
+      let uniq_e = List.sort_uniq comp_e (G.succ_e g v) in
+      List.iter iter uniq_e
+    in
+    G.iter_vertex aux_e g
   let graph_attributes _ = [ `Ratio (`Float 0.5) ]
   let vertex_name = Kernel_function.get_name
   let vertex_attributes kf =
@@ -236,9 +261,20 @@ module Graphviz_attributes = struct
   let get_subgraph _ = None
 end
 
+module Subgraph =
+  Subgraph.Make
+    (G)
+    (D)
+    (struct
+      let self = State.self
+      let name = State.name
+      let get = get
+      let vertex kf = kf
+     end)
+
 let dump () =
   let module GV = Graph.Graphviz.Dot(Graphviz_attributes) in
-  let g = get () in
+  let g = Subgraph.get () in
   Options.dump GV.output_graph g
 
 include Journalize.Make
@@ -253,6 +289,6 @@ include Journalize.Make
 
 (*
 Local Variables:
-compile-command: "make -C ../.."
+compile-command: "make -C ../../.."
 End:
 *)

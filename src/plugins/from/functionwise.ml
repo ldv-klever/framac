@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -70,7 +70,7 @@ module To_Use = struct
     let zone_substitution x =
       try
         zone_substitution x
-      with Zone.Error_Top -> Zone.top
+      with Abstract_interp.Error_Top -> Zone.top
     in
     let map_zone = Function_Froms.Deps.map zone_substitution in
     let subst = Function_Froms.DepsOrUnassigned.subst map_zone  in
@@ -114,6 +114,8 @@ let () =
        let state = Db.Value.get_stmt_state stmt in
        let deps = From_compute.find_deps_no_transitivity state lv in
        Function_Froms.Deps.to_zone deps);
+  (* Once this function has been moved to Eva, remove the dependency of Inout
+     from From. *)
   Db.From.find_deps_no_transitivity_state :=
     (fun s e ->
       let deps = From_compute.find_deps_no_transitivity s e in

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -37,6 +37,8 @@ include module type of Bottom.Type
     is managed separately. *)
 type 'a or_top    = [ `Value of 'a | `Top ]
 
+type 'a or_top_or_bottom = [ `Value of 'a | `Top | `Bottom ]
+
 
 (* -------------------------------------------------------------------------- *)
 (**                    {2 Types for the evaluations }                         *)
@@ -70,15 +72,20 @@ type 'a reduced = [ `Bottom | `Unreduced | `Value of 'a ]
 
 (** Context for the evaluation of abstract value operators. *)
 
-(** Evaluation of unary operator: unop e1 = e2. *)
-type unop_context = exp * exp
+(** Context for the evaluation of an unary operator: contains the involved
+    expressions needed to create the appropriate alarms. *)
+type unop_context = {
+  operand: exp;
+}
 
-(** Evaluation of binary operator: e1 binop e2 = e3. *)
-type binop_context = exp * exp * exp * typ
-
-(** Evaluation of an index:
-    index, remaining, typ pointed, array size expression *)
-type index_context =  exp * offset * typ * exp option
+(** Context for the evaluation of a binary operator: contains the expressions
+    of both operands and of the result, needed to create the appropriate
+    alarms. *)
+type binop_context = {
+  left_operand: exp;
+  right_operand: exp;
+  binary_result: exp;
+}
 
 
 (* -------------------------------------------------------------------------- *)
@@ -109,7 +116,7 @@ type index_context =  exp * offset * typ * exp option
     - Unreduced: the value provided by the domain could not be reduced;
     - Reduced: the value provided by the domain has been reduced;
     - Created: the domain has returned `Top for the given expression;
-    - Dull: the domain was not queried for the given expresssion.
+    - Dull: the domain was not queried for the given expression.
 *)
 
 (** State of reduction of an abstract value. *)
@@ -126,6 +133,19 @@ type 'a flagged_value = {
   initialized: bool;
   escaping: bool;
 }
+
+module Flagged_Value : sig
+  val bottom: 'a flagged_value
+  val equal:
+    ('a -> 'a -> bool) ->
+    'a flagged_value -> 'a flagged_value -> bool
+  val join:
+    ('a -> 'a -> 'a) ->
+    'a flagged_value -> 'a flagged_value -> 'a flagged_value
+  val pretty:
+    (Format.formatter -> 'a -> unit) ->
+    Format.formatter -> 'a flagged_value -> unit
+end
 
 (** Data record associated to each evaluated expression. *)
 type ('a, 'origin) record_val = {
@@ -206,45 +226,20 @@ type 'value argument = {
 type 'value call = {
   kf: kernel_function;                (** The called function. *)
   arguments: 'value argument list;    (** The arguments of the call. *)
-  rest: (exp * 'value assigned) list  (** Extra-arguments. *)
+  rest: (exp * 'value assigned) list; (** Extra-arguments. *)
+  return: varinfo option;             (** Fake varinfo to store the return value
+                                          of the call. *)
+  recursive: bool;
 }
-
-(** Abstraction of the return of a function:
-    - the state at the end of the function;
-    - two abstractions of the return value, if any. *)
-type ('state, 'return, 'value) return_state = {
-  post_state: 'state;
-  return: ('value flagged_value * 'return) option;
-}
-
-(** Result of a call: disjunctive list of abstractions of the function return. *)
-type ('state, 'return, 'value) call_result =
-  ('state, 'return, 'value) return_state list or_bottom
-
-(** Initialization of a dataflow analysis, by definig the initial value of
-    each statement. *)
-type 't init =
-  | Default
-  (** The entry point is initialized to top, and all the others to bottom. *)
-  | Continue of 't
-  (** The entry point is initialized to the current value,
-      and all the others to bottom. *)
-  | Custom of (stmt * 't) list
-  (** Custom association list for the initial values of statements. Other
-      statements are initialized to bottom. *)
 
 (** Action to perform on a call site. *)
-type ('state, 'summary, 'value) call_action =
-  | Compute of 'state init * bool
-  (** Analyze the called function with the given initialization. If the summary
-      of a previous analysis for this initialization has been cached, it will
-      be used without re-computation.
-      The second boolean indicates whether the result must be cached. *)
-  | Result of ('state, 'summary, 'value) call_result * Value_types.cacheable
+type 'state call_action =
+  | Compute of 'state
+  (** Analyze the called function, starting with the given state at the
+      entry-point. If the summary of a previous analysis for this initialization
+      has been cached, it will be used without re-computation. *)
+  | Result  of 'state list or_bottom * Value_types.cacheable
   (** Direct computation of the result. *)
-
-exception InvalidCall
-
 
 (*
 Local Variables:

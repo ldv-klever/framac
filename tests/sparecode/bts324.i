@@ -1,7 +1,7 @@
 /* run.config
-   OPT: -sparecode-analysis -sparecode-debug 1 -journal-disable
-   OPT: -sparecode-analysis -sparecode-debug 1 -main main_bis -journal-disable
-   OPT: -sparecode-analysis -sparecode-debug 1 -main main_ter -journal-disable
+   OPT: -sparecode-analysis -val-show-progress -sparecode-debug 1 -journal-disable
+   OPT: -sparecode-analysis -val-show-progress -sparecode-debug 1 -main main_bis -journal-disable
+   OPT: -sparecode-analysis -val-show-progress -sparecode-debug 1 -main main_ter -journal-disable
 
 */
 
@@ -9,7 +9,7 @@
 int i0, o0;
 
 /*@ assigns i0, o0 ; */
-void loop_body () ;
+void loop_body (void) ;
 
 /*@ assigns *p_res; */
 void init (int * p_res) ;

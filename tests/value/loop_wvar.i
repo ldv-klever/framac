@@ -1,15 +1,15 @@
 /* run.config*
-   OPT: -no-annot -val @VALUECONFIG@ -then -continue-annot-error -annot -val -journal-disable
-   OPT: -continue-annot-error  -val @VALUECONFIG@ -main main3 -journal-disable
-   OPT: -continue-annot-error  -val @VALUECONFIG@ -main main_err1 -journal-disable
-   OPT: -continue-annot-error -val @VALUECONFIG@ -main main_err2 -journal-disable
+   OPT: -no-autoload-plugins -load-module value,inout -no-annot -val @VALUECONFIG@ -then -kernel-warn-abort=-annot-error -annot -val -journal-disable
+   OPT: -no-autoload-plugins -load-module from,inout,value -kernel-warn-abort=-annot-error  -val @VALUECONFIG@ -main main3 -journal-disable
+   OPT: -no-autoload-plugins -load-module value,inout -kernel-warn-abort=-annot-error  -val @VALUECONFIG@ -main main_err1 -journal-disable
+   OPT: -no-autoload-plugins -load-module value,inout -kernel-warn-abort=-annot-error -val @VALUECONFIG@ -main main_err2 -journal-disable
 */
 
 
 void main(void)
 { int n = 13;
   int i,j;
-// ceci était une annotation, mais on ne fait pas moins bien sans
+// ceci Ã©tait une annotation, mais on ne fait pas moins bien sans
 // maintenant:
 // loop pragma WIDEN_VARIABLES i;
   /*@ loop widen_hints i, 12, 13; */

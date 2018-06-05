@@ -1,12 +1,12 @@
 /* run.config
-  OPT: -val -inout-callwise -inout -pdg -pdg-print -calldeps -deps -then -slice-return main -then-on "Slicing export" -print
+  OPT: -val -inout -val-show-progress -pdg -pdg-print -calldeps -deps -then -slice-return main -then-last -print -val-show-progress
 */
 
 int Y, X;
 volatile v;
 
 //@ assigns \result \from \nothing;
-int input();
+int input(void);
 
 void f (void) {
   int l = 0;

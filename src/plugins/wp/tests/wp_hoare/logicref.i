@@ -1,9 +1,9 @@
 /* run.config
-   OPT: -wp-model +ref -wp-msg-key var_kind
+   OPT: -wp-model +ref
 */
 
 /* run.config_qualif
-   OPT: -wp -wp-proof alt-ergo -wp-par 1 -wp-model +ref
+   OPT: -wp-model +ref
 */
 
 //@ predicate vrange(int *p1,integer n) = \valid(p1+(0..n-1)) ;

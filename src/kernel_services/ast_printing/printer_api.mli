@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,6 +26,16 @@
     @since Fluorine-20130401 *)
 
 open Cil_types
+
+(** context in which a block will be printed. useful to decide whether
+    braces are required or not. *)
+type block_ctxt =
+  | Stmt_block of stmt (** stmt is Block b. *)
+  | Body (** body of a function. *)
+  | Then_with_else (** block is the then branch of a conditional that has
+                       an else branch. *)
+  | Other (** block is any other toplevel block of the cfg
+              (then without else, else branch, switch, while, ... *)
 
 (* ********************************************************************* *)
 (** {2 Class type for extensible printer} *)
@@ -61,6 +71,10 @@ class type extensible_printer_type = object
   method private current_behavior: funbehavior option
   (** @return the [funbehavior] being pretty-printed. *)
 
+  method private stmt_has_annot: stmt -> bool
+  (** [true] if the given statement has some annotations attached to it.
+      @since Phosphorus-20170501-beta1 *)
+
   method private has_annot: bool
   (** [true] if [current_stmt] has some annotations attached to it. *)
 
@@ -73,17 +87,20 @@ class type extensible_printer_type = object
       For example this is called whenever a [while(1)] followed by a
       conditional [if (cond) break;] may be compacted into [while (cond)]. *)
 
-  method private require_braces: ?has_annot:bool -> block -> bool
-  (** @return [true] if the given block must be enclosed in a block.
-      [has_annot] indicates if the stmt corresponding to the block may have
-      annotations (default is [true]). 
-      @modify Fluorine-20130401 optional arguments has been modified. *)
+  method private require_braces: block_ctxt -> block -> bool
+  (** @return [true] if the given block must be enclosed in a pair of braces,
+      given the context in which it appears.
+      @modify Fluorine-20130401 optional arguments has been modified.
+      @modify Phosphorus-20170501-beta1 use proper context to determine result
+  *)
 
-  method private inline_block: ?has_annot:bool -> block -> bool
+  method private inline_block: block_ctxt -> block -> bool
   (** @return [true] if the given block may be inlined in a single line.
       [has_annot] indicates if the stmt corresponding to the block may have
       annotations (default is [true]).
-      @modify Fluorine-20130401 optional arguments has been modified. *)
+      @modify Fluorine-20130401 optional arguments has been modified.
+      @modify Phosphorus-20170501-beta1 use proper context to determine result
+  *)
 
   method private get_instr_terminator: unit -> string
   (** What terminator to print after an instruction. sometimes we want to
@@ -115,12 +132,12 @@ class type extensible_printer_type = object
   (** Invoked on each variable use. *)
 
   method lval: Format.formatter -> lval -> unit
-  (** Invoked on each lvalue occurence *)
+  (** Invoked on each lvalue occurrence *)
 
   method field: Format.formatter -> fieldinfo -> unit
 
   method offset: Format.formatter -> offset -> unit
-  (** Invoked on each offset occurence. The second argument is the base. *)
+  (** Invoked on each offset occurrence. The second argument is the base. *)
 
   method global: Format.formatter -> global -> unit
   (** Global (vars, types, etc.). This can be slow. *)
@@ -142,7 +159,7 @@ class type extensible_printer_type = object
       second argument must also have a value. *)
 
   method attrparam:  Format.formatter -> attrparam -> unit
-  (** Attribute paramter *)
+  (** Attribute parameter *)
 
   method attribute: Format.formatter -> attribute -> bool
   (** Attribute. Also return an indication whether this attribute must be
@@ -152,7 +169,10 @@ class type extensible_printer_type = object
   (** Attribute lists *)
 
   method label:  Format.formatter -> label -> unit
-  (** Label *)
+  method compinfo:  Format.formatter -> compinfo -> unit
+  method initinfo: Format.formatter -> initinfo -> unit
+  method fundec: Format.formatter -> fundec -> unit
+                                                           
 
   method line_directive: 
     ?forcefile:bool ->  Format.formatter -> location -> unit
@@ -187,11 +207,10 @@ class type extensible_printer_type = object
 
   method next_stmt : stmt -> Format.formatter -> stmt -> unit
 
-  method block: ?braces: bool -> Format.formatter -> block -> unit
+  method block: Format.formatter -> block -> unit
   (** Prints a block.
-      Enclose the block braces '\{' and '\}' according to the optional
-      argument. If it is not set, braces are put only when required.
-      @modify Fluorine-20130401 optional arguments has been modified. *)
+      @modify Fluorine-20130401 optional arguments has been modified.
+      @modify Phosphorus-20170501-beta1 no more options for pretty-printing *)
 
   method exp:  Format.formatter -> exp -> unit
   (** Print expressions *)
@@ -219,10 +238,15 @@ class type extensible_printer_type = object
   method term: Format.formatter -> term -> unit
   method term_node: Format.formatter -> term -> unit
   method term_lval: Format.formatter -> term_lval -> unit
+  method term_lhost: Format.formatter -> term_lhost -> unit
   method model_field: Format.formatter -> model_info -> unit
   method term_offset: Format.formatter -> term_offset -> unit
+  method logic_builtin_label:  Format.formatter -> logic_builtin_label -> unit
   method logic_label:  Format.formatter -> logic_label -> unit
   method logic_info: Format.formatter -> logic_info -> unit
+  method builtin_logic_info: Format.formatter -> builtin_logic_info -> unit
+  method logic_type_info: Format.formatter -> logic_type_info -> unit
+  method logic_ctor_info: Format.formatter -> logic_ctor_info -> unit
   method logic_var: Format.formatter -> logic_var -> unit
   method quantifiers: Format.formatter -> quantifiers -> unit
   method predicate_node: Format.formatter -> predicate_node -> unit
@@ -242,26 +266,28 @@ class type extensible_printer_type = object
 
   method assumes: Format.formatter -> identified_predicate -> unit
 
+  method extended: Format.formatter -> Cil_types.acsl_extension -> unit
+
   method funspec: Format.formatter -> funspec -> unit
 
   method assigns:
-    string -> Format.formatter -> identified_term assigns -> unit
+    string -> Format.formatter -> assigns -> unit
   (** first parameter is the introducing keyword (e.g. loop_assigns or
       assigns). *)
 
   method allocation:
-    isloop:bool -> Format.formatter -> identified_term allocation -> unit
+    isloop:bool -> Format.formatter -> allocation -> unit
   (** first parameter is the introducing keyword
       (e.g. loop_allocates, loop_frees, allocates or free)
       @since Oxygen-20120901. *)
 
-  method from: string -> Format.formatter -> identified_term from -> unit
+  method from: string -> Format.formatter -> from -> unit
   (** prints an assignment with its dependencies. *)
 
   method code_annotation: Format.formatter -> code_annotation -> unit
   method global_annotation: Format.formatter -> global_annotation -> unit
-  method decreases: Format.formatter -> term variant -> unit
-  method variant: Format.formatter -> term variant -> unit
+  method decreases: Format.formatter -> variant -> unit
+  method variant: Format.formatter -> variant -> unit
 
   (* ******************************************************************* *)
   (** {3 Modifying pretty-printer behavior}                              *)
@@ -324,7 +350,7 @@ type state =
       (** Whether to print the CIL as they are, without trying to be smart and
 	  print nicer code. Normally this is false, in which case the pretty
 	  printer will turn the while(1) loops of CIL into nicer loops, will not
-	  print empty "else" blocks, etc. These is one case howewer in which if
+	  print empty "else" blocks, etc. These is one case however in which if
 	  you turn this on you will get code that does not compile: if you use
 	  varargs the __builtin_va_arg function will be printed in its internal
 	  form. *)
@@ -373,6 +399,13 @@ module type S = sig
   val pp_block: Format.formatter -> block -> unit
   val pp_global: Format.formatter -> global -> unit
   val pp_file: Format.formatter -> file -> unit
+  val pp_compinfo: Format.formatter -> compinfo -> unit
+  val pp_logic_type_info: Format.formatter -> logic_type_info -> unit
+  val pp_logic_ctor_info: Format.formatter -> logic_ctor_info -> unit
+  val pp_initinfo: Format.formatter -> initinfo -> unit
+  val pp_logic_info: Format.formatter -> logic_info -> unit
+  val pp_logic_constant: Format.formatter -> logic_constant -> unit
+  val pp_fundec: Format.formatter -> fundec -> unit
 
   (* ********************************************************************* *)
   (** {3 Printer for ACSL constructs} *)
@@ -384,14 +417,17 @@ module type S = sig
   (** @since Oxygen-20120901 *)
 
   val pp_term_lval: Format.formatter -> term_lval -> unit
+  val pp_term_lhost: Format.formatter -> term_lhost -> unit                  
   val pp_logic_var: Format.formatter -> logic_var -> unit
   val pp_logic_type: Format.formatter -> logic_type -> unit
   val pp_identified_term:  Format.formatter -> identified_term -> unit
   val pp_term:  Format.formatter -> term -> unit
   val pp_model_field: Format.formatter -> model_info -> unit
   val pp_term_offset: Format.formatter -> term_offset -> unit
+  val pp_logic_builtin_label: Format.formatter -> logic_builtin_label -> unit
   val pp_logic_label: Format.formatter -> logic_label -> unit
-
+  val pp_builtin_logic_info: Format.formatter -> builtin_logic_info -> unit
+  val pp_extended: Format.formatter -> acsl_extension -> unit
   val pp_predicate_node: Format.formatter -> predicate_node -> unit
   val pp_predicate: Format.formatter -> predicate -> unit
   val pp_identified_predicate: Format.formatter -> identified_predicate -> unit
@@ -399,18 +435,18 @@ module type S = sig
   val pp_funspec: Format.formatter -> funspec -> unit
   val pp_behavior: Format.formatter -> funbehavior -> unit
   val pp_global_annotation: Format.formatter -> global_annotation -> unit
-  val pp_decreases: Format.formatter -> term variant -> unit
-  val pp_variant: Format.formatter -> term variant -> unit
-  val pp_from: Format.formatter -> identified_term from -> unit
-  val pp_assigns: Format.formatter -> identified_term assigns -> unit
+  val pp_decreases: Format.formatter -> variant -> unit
+  val pp_variant: Format.formatter -> variant -> unit
+  val pp_from: Format.formatter -> from -> unit
+  val pp_assigns: Format.formatter -> assigns -> unit
 
-  val pp_allocation: Format.formatter -> identified_term allocation -> unit
+  val pp_allocation: Format.formatter -> allocation -> unit
   (** @since Oxygen-20120901 *)
 
-  val pp_loop_from: Format.formatter -> identified_term from -> unit
-  val pp_loop_assigns: Format.formatter -> identified_term assigns -> unit
+  val pp_loop_from: Format.formatter -> from -> unit
+  val pp_loop_assigns: Format.formatter -> assigns -> unit
 
-  val pp_loop_allocation: Format.formatter -> identified_term allocation -> unit
+  val pp_loop_allocation: Format.formatter -> allocation -> unit
   (** @since Oxygen-20120901 *)
 
   val pp_post_cond: 
@@ -421,7 +457,7 @@ module type S = sig
   (* ********************************************************************* *)
 
   val pp_full_assigns:
-    string -> Format.formatter -> identified_term assigns -> unit
+    string -> Format.formatter -> assigns -> unit
   (** first parameter is the introducing keyword (e.g. loop_assigns or
       assigns). *)
 

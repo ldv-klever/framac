@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,8 +22,9 @@
 
 #ifndef __FC_SYSLOG_H
 #define __FC_SYSLOG_H
-#include "__fc_define_null.h"
 #include "features.h"
+__PUSH_FC_STDLIB
+#include "__fc_define_null.h"
 
 __BEGIN_DECLS
 
@@ -68,7 +69,7 @@ typedef struct _code {
 #define	LOG_FAC(p)	(((p) & LOG_FACMASK) >> 3)
 #define	LOG_PRIMASK	0x07
 #define	LOG_PRI(p)	((p) & LOG_PRIMASK)
-#define	LOG_MAKEPRI(fac, pri)	(((fac) << 3) | (pri))
+#define LOG_MAKEPRI(fac, pri) ((fac) | (pri))
 #define	INTERNAL_NOPRI	0x10	/* the "no priority" priority */
 				/* mark "facility" */
 #define	INTERNAL_MARK	LOG_MAKEPRI(LOG_NFACILITIES, 0)
@@ -131,14 +132,15 @@ CODE prioritynames[] =
   };
 
 /*@ assigns \nothing ; */
-void  closelog(void);
+extern void  closelog(void);
 /*@ assigns \nothing ; */
-void  openlog(const char *, int, int);
+extern void  openlog(const char *, int, int);
 /*@ assigns \nothing ; */
-int   setlogmask(int);
+extern int   setlogmask(int);
 /*@ assigns \nothing ; */
-void  syslog(int, const char *, ...);
+extern void  syslog(int, const char *, ...);
 
 __END_DECLS
 
+__POP_FC_STDLIB
 #endif

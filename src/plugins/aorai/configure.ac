@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Aorai plug-in of Frama-C.                        #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #    INRIA (Institut National de Recherche en Informatique et en         #
@@ -36,7 +36,7 @@ m4_ifndef([FRAMAC_M4_MACROS],
          [m4_include(FRAMAC_SHARE/configure.ac)]
         )
 
-check_plugin(aorai,PLUGIN_RELATIVE_PATH(plugin_file),[support for Aorai plug-in],yes,yes)
+check_plugin(aorai,PLUGIN_RELATIVE_PATH(plugin_file),[support for Aorai plug-in],yes)
 
 plugin_use_external(aorai,ltltoba)
 

@@ -1,14 +1,15 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/pdg/loops.c (with preprocessing)
 [value] Analyzing an incomplete application starting at two_infinite_loops
 [value] Computing initial state
 [value] Initial state computed
 [value:initial-state] Values of globals at initialization
   after ∈ [--..--]
-tests/pdg/loops.c:99:[value] entering loop for the first time
-tests/pdg/loops.c:110:[value] warning: signed overflow. assert i1 + 2 ≤ 2147483647;
-tests/pdg/loops.c:105:[value] entering loop for the first time
-tests/pdg/loops.c:106:[value] warning: signed overflow. assert i2 + 1 ≤ 2147483647;
+[value] tests/pdg/loops.c:99: entering loop for the first time
+[value:alarm] tests/pdg/loops.c:110: Warning: 
+  signed overflow. assert i1 + 2 ≤ 2147483647;
+[value] tests/pdg/loops.c:105: entering loop for the first time
+[value:alarm] tests/pdg/loops.c:106: Warning: 
+  signed overflow. assert i2 + 1 ≤ 2147483647;
 [value] Recording results for two_infinite_loops
 [value] done for function two_infinite_loops
 [pdg] computing for function two_infinite_loops
@@ -22,13 +23,13 @@ tests/pdg/loops.c:106:[value] warning: signed overflow. assert i2 + 1 ≤ 214748
  {n4}: VarDecl : s
  {n5}: VarDecl : i1
  {n6}: VarDecl : i2
- {n7}: s = 0;
+ {n7}: int s = 0;
    -[-c-]-> 1
    -[a--]-> 4
- {n8}: i1 = 0;
+ {n8}: int i1 = 0;
    -[-c-]-> 1
    -[a--]-> 5
- {n9}: i2 = 0;
+ {n9}: int i2 = 0;
    -[-c-]-> 1
    -[a--]-> 6
  {n10}: n > 0

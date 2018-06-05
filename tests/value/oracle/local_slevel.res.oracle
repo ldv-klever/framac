@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/local_slevel.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -8,128 +7,139 @@
   t[0..99] ∈ {0}
   vol ∈ [--..--]
 [value] computing for function main1 <- main.
-        Called from tests/value/local_slevel.i:47.
-tests/value/local_slevel.i:10:[value] entering loop for the first time
-[value] Called Frama_C_show_each({-1}, {0}, {0})
-[value] Called Frama_C_show_each({1}, {1}, {0; 1})
-[value] Called Frama_C_show_each({-1}, {0}, {0; 1})
-[value] Called Frama_C_show_each({1}, {1}, {0; 1; 2})
-[value] Called Frama_C_show_each({-1}, {0; 2}, {0; 1; 2})
-[value] Called Frama_C_show_each({1}, [1..79],1%2, {0; 1; 2; 3})
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, {0; 1; 2; 3})
-[value] Called Frama_C_show_each({1}, [1..79],1%2, {0; 1; 2; 3; 4})
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, {0; 1; 2; 3; 4})
-[value] Called Frama_C_show_each({1}, [1..79],1%2, [0..2147483647])
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, [0..2147483647])
-[value] Called Frama_C_show_each({1}, [1..79],1%2, [0..2147483648])
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, [0..2147483648])
-[value] Called Frama_C_show_each({1}, [1..79],1%2, [0..4294967295])
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, [0..4294967295])
+  Called from tests/value/local_slevel.i:47.
+[value] tests/value/local_slevel.i:10: entering loop for the first time
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {-1}, {0}, {0}
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {1}, {1}, {0; 1}
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {-1}, {0}, {0; 1}
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {1}, {1}, {0; 1; 2}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, {0; 2}, {0; 1; 2}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, {0; 1; 2; 3}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, {0; 1; 2; 3}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, {0; 1; 2; 3; 4}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, {0; 1; 2; 3; 4}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, [0..2147483647]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, [0..2147483647]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, [0..2147483648]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, [0..2147483648]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, [0..4294967295]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, [0..4294967295]
 [value] Recording results for main1
 [value] Done for function main1
 [value] computing for function main2 <- main.
-        Called from tests/value/local_slevel.i:48.
-[value] Called Frama_C_show_each({0})
-[value] Called Frama_C_show_each({1})
-[value] Called Frama_C_show_each({2})
-[value] Called Frama_C_show_each({3})
-[value] Called Frama_C_show_each({4})
-[value] Called Frama_C_show_each({5})
-[value] Called Frama_C_show_each({6})
-[value] Called Frama_C_show_each({7})
-[value] Called Frama_C_show_each({8})
-[value] Called Frama_C_show_each({9})
-[value] Called Frama_C_show_each({10})
-[value] Called Frama_C_show_each({11})
-[value] Called Frama_C_show_each({12})
-[value] Called Frama_C_show_each({13})
-[value] Called Frama_C_show_each({14})
-[value] Called Frama_C_show_each({15})
-[value] Called Frama_C_show_each({16})
-[value] Called Frama_C_show_each({17})
-[value] Called Frama_C_show_each({18})
-[value] Called Frama_C_show_each({19})
-[value] Called Frama_C_show_each({20})
-[value] Called Frama_C_show_each({21})
-[value] Called Frama_C_show_each({22})
-[value] Called Frama_C_show_each({23})
-[value] Called Frama_C_show_each({24})
-[value] Called Frama_C_show_each({25})
-[value] Called Frama_C_show_each({26})
-[value] Called Frama_C_show_each({27})
-[value] Called Frama_C_show_each({28})
-[value] Called Frama_C_show_each({29})
-[value] Called Frama_C_show_each({30})
-[value] Called Frama_C_show_each({31})
-[value] Called Frama_C_show_each({32})
-[value] Called Frama_C_show_each({33})
-[value] Called Frama_C_show_each({34})
-[value] Called Frama_C_show_each({35})
-[value] Called Frama_C_show_each({36})
-[value] Called Frama_C_show_each({37})
-[value] Called Frama_C_show_each({38})
-[value] Called Frama_C_show_each({39})
-[value] Called Frama_C_show_each({40})
-[value] Called Frama_C_show_each({41})
-[value] Called Frama_C_show_each({42})
-[value] Called Frama_C_show_each({43})
-[value] Called Frama_C_show_each({44})
-[value] Called Frama_C_show_each({45})
-[value] Called Frama_C_show_each({46})
-[value] Called Frama_C_show_each({47})
-[value] Called Frama_C_show_each({48})
-[value] Called Frama_C_show_each({49})
+  Called from tests/value/local_slevel.i:48.
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {0}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {1}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {2}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {3}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {4}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {5}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {6}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {7}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {8}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {9}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {10}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {11}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {12}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {13}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {14}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {15}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {16}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {17}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {18}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {19}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {20}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {21}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {22}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {23}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {24}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {25}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {26}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {27}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {28}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {29}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {30}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {31}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {32}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {33}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {34}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {35}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {36}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {37}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {38}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {39}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {40}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {41}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {42}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {43}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {44}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {45}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {46}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {47}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {48}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {49}
 [value] Semantic level unrolling superposing up to 100 states
-[value] Called Frama_C_show_each({50})
-[value] Called Frama_C_show_each({51})
-[value] Called Frama_C_show_each({52})
-[value] Called Frama_C_show_each({53})
-[value] Called Frama_C_show_each({54})
-[value] Called Frama_C_show_each({55})
-[value] Called Frama_C_show_each({56})
-[value] Called Frama_C_show_each({57})
-[value] Called Frama_C_show_each({58})
-[value] Called Frama_C_show_each({59})
-[value] Called Frama_C_show_each({60})
-[value] Called Frama_C_show_each({61})
-[value] Called Frama_C_show_each({62})
-[value] Called Frama_C_show_each({63})
-[value] Called Frama_C_show_each({64})
-[value] Called Frama_C_show_each({65})
-[value] Called Frama_C_show_each({66})
-[value] Called Frama_C_show_each({67})
-[value] Called Frama_C_show_each({68})
-[value] Called Frama_C_show_each({69})
-[value] Called Frama_C_show_each({70})
-[value] Called Frama_C_show_each({71})
-[value] Called Frama_C_show_each({72})
-[value] Called Frama_C_show_each({73})
-[value] Called Frama_C_show_each({74})
-[value] Called Frama_C_show_each({75})
-[value] Called Frama_C_show_each({76})
-[value] Called Frama_C_show_each({77})
-[value] Called Frama_C_show_each({78})
-[value] Called Frama_C_show_each({79})
-[value] Called Frama_C_show_each({80})
-[value] Called Frama_C_show_each({81})
-[value] Called Frama_C_show_each({82})
-[value] Called Frama_C_show_each({83})
-[value] Called Frama_C_show_each({84})
-[value] Called Frama_C_show_each({85})
-[value] Called Frama_C_show_each({86})
-[value] Called Frama_C_show_each({87})
-[value] Called Frama_C_show_each({88})
-[value] Called Frama_C_show_each({89})
-[value] Called Frama_C_show_each({90})
-[value] Called Frama_C_show_each({91})
-[value] Called Frama_C_show_each({92})
-[value] Called Frama_C_show_each({93})
-[value] Called Frama_C_show_each({94})
-[value] Called Frama_C_show_each({95})
-[value] Called Frama_C_show_each({96})
-[value] Called Frama_C_show_each({97})
-[value] Called Frama_C_show_each({98})
-[value] Called Frama_C_show_each({99})
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {50}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {51}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {52}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {53}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {54}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {55}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {56}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {57}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {58}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {59}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {60}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {61}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {62}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {63}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {64}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {65}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {66}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {67}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {68}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {69}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {70}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {71}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {72}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {73}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {74}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {75}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {76}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {77}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {78}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {79}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {80}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {81}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {82}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {83}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {84}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {85}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {86}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {87}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {88}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {89}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {90}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {91}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {92}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {93}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {94}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {95}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {96}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {97}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {98}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {99}
 [value] Semantic level unrolling superposing up to 200 states
 [value] Recording results for main2
 [value] Done for function main2
@@ -151,7 +161,7 @@ tests/value/local_slevel.i:10:[value] entering loop for the first time
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function main1:
   NO EFFECTS
 [from] Function main2:
@@ -160,17 +170,17 @@ tests/value/local_slevel.i:10:[value] entering loop for the first time
   t[0..99] FROM vol (and SELF)
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main1:
-          v; r; i
+    v; r; i
 [inout] Inputs for function main1:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main2:
-          t[0..99]; i; n
+    t[0..99]; i; n
 [inout] Inputs for function main2:
-          vol
+    vol
 [inout] Out (internal) for function main:
-          t[0..99]
+    t[0..99]
 [inout] Inputs for function main:
-          vol
+    vol
 /* Generated by Frama-C */
 int *p;
 /*@ assigns \result;
@@ -180,11 +190,9 @@ extern int ( /* missing proto */ Frama_C_show_each)();
 void main1(void)
 {
   int v;
-  unsigned int r;
-  r = (unsigned int)0;
+  unsigned int r = (unsigned int)0;
   {
-    int i;
-    i = 0;
+    int i = 0;
     while (i < 80) {
       /*@ ensures \true;
           slevel 50;
@@ -202,8 +210,7 @@ void main1(void)
 
 void g(void)
 {
-  int i;
-  i = 0;
+  int i = 0;
   if (! (i < 5)) goto unrolling_2_loop;
   i ++;
   unrolling_3_loop: ;
@@ -218,13 +225,11 @@ int t[100];
 int volatile vol;
 void main2(void)
 {
-  int i;
-  i = 0;
+  int i = 0;
   while (i < 100) {
     {
-      int n;
       Frama_C_show_each(i);
-      n = vol;
+      int n = vol;
       if (n >= 3) t[i] = n; else t[i] = (n + (1 << 30)) + 1;
       /*@ slevel merge; */ ;
     }
@@ -251,11 +256,9 @@ extern int ( /* missing proto */ Frama_C_show_each)();
 void main1(void)
 {
   int v;
-  unsigned int r;
-  r = 0U;
+  unsigned int r = 0U;
   {
-    int i;
-    i = 0;
+    int i = 0;
     while (i < 80) {
       /*@ ensures \true;
           slevel 50;
@@ -273,8 +276,7 @@ void main1(void)
 
 void g(void)
 {
-  int i;
-  i = 0;
+  int i = 0;
   if (! (i < 5)) goto unrolling_2_loop;
   i ++;
   unrolling_3_loop: ;
@@ -289,13 +291,11 @@ int t[100];
 int volatile vol;
 void main2(void)
 {
-  int i;
-  i = 0;
+  int i = 0;
   while (i < 100) {
     {
-      int n;
       Frama_C_show_each(i);
-      n = vol;
+      int n = vol;
       if (n >= 3) t[i] = n; else t[i] = (n + 1073741824) + 1;
       /*@ slevel merge; */ ;
     }
@@ -322,11 +322,9 @@ extern int ( /* missing proto */ Frama_C_show_each)();
 void main1(void)
 {
   int v;
-  unsigned int r;
-  r = (unsigned int)0;
+  unsigned int r = (unsigned int)0;
   {
-    int i;
-    i = 0;
+    int i = 0;
     while (i < 80) {
       /*@ ensures \true;
           slevel 50;
@@ -344,8 +342,7 @@ void main1(void)
 
 void g(void)
 {
-  int i;
-  i = 0;
+  int i = 0;
   if (! (i < 5)) goto unrolling_2_loop;
   i ++;
   unrolling_3_loop: ;
@@ -360,13 +357,11 @@ int t[100];
 int volatile vol;
 void main2(void)
 {
-  int i;
-  i = 0;
+  int i = 0;
   while (i < 100) {
     {
-      int n;
       Frama_C_show_each(i);
-      n = vol;
+      int n = vol;
       if (n >= 3) t[i] = n; else t[i] = (n + (1 << 30)) + 1;
       /*@ slevel merge; */ ;
     }
@@ -391,128 +386,139 @@ void main(void)
   t[0..99] ∈ {0}
   vol ∈ [--..--]
 [value] computing for function main1 <- main.
-        Called from tests/value/local_slevel.i:47.
-tests/value/local_slevel.i:10:[value] entering loop for the first time
-[value] Called Frama_C_show_each({-1}, {0}, {0})
-[value] Called Frama_C_show_each({1}, {1}, {0; 1})
-[value] Called Frama_C_show_each({-1}, {0}, {0; 1})
-[value] Called Frama_C_show_each({1}, {1}, {0; 1; 2})
-[value] Called Frama_C_show_each({-1}, {0; 2}, {0; 1; 2})
-[value] Called Frama_C_show_each({1}, [1..79],1%2, {0; 1; 2; 3})
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, {0; 1; 2; 3})
-[value] Called Frama_C_show_each({1}, [1..79],1%2, {0; 1; 2; 3; 4})
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, {0; 1; 2; 3; 4})
-[value] Called Frama_C_show_each({1}, [1..79],1%2, [0..2147483647])
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, [0..2147483647])
-[value] Called Frama_C_show_each({1}, [1..79],1%2, [0..2147483648])
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, [0..2147483648])
-[value] Called Frama_C_show_each({1}, [1..79],1%2, [0..4294967295])
-[value] Called Frama_C_show_each({-1}, [0..78],0%2, [0..4294967295])
+  Called from tests/value/local_slevel.i:47.
+[value] tests/value/local_slevel.i:10: entering loop for the first time
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {-1}, {0}, {0}
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {1}, {1}, {0; 1}
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {-1}, {0}, {0; 1}
+[value] tests/value/local_slevel.i:17: Frama_C_show_each: {1}, {1}, {0; 1; 2}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, {0; 2}, {0; 1; 2}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, {0; 1; 2; 3}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, {0; 1; 2; 3}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, {0; 1; 2; 3; 4}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, {0; 1; 2; 3; 4}
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, [0..2147483647]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, [0..2147483647]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, [0..2147483648]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, [0..2147483648]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {1}, [1..79],1%2, [0..4294967295]
+[value] tests/value/local_slevel.i:17: 
+  Frama_C_show_each: {-1}, [0..78],0%2, [0..4294967295]
 [value] Recording results for main1
 [value] Done for function main1
 [value] computing for function main2 <- main.
-        Called from tests/value/local_slevel.i:48.
-[value] Called Frama_C_show_each({0})
-[value] Called Frama_C_show_each({1})
-[value] Called Frama_C_show_each({2})
-[value] Called Frama_C_show_each({3})
-[value] Called Frama_C_show_each({4})
-[value] Called Frama_C_show_each({5})
-[value] Called Frama_C_show_each({6})
-[value] Called Frama_C_show_each({7})
-[value] Called Frama_C_show_each({8})
-[value] Called Frama_C_show_each({9})
-[value] Called Frama_C_show_each({10})
-[value] Called Frama_C_show_each({11})
-[value] Called Frama_C_show_each({12})
-[value] Called Frama_C_show_each({13})
-[value] Called Frama_C_show_each({14})
-[value] Called Frama_C_show_each({15})
-[value] Called Frama_C_show_each({16})
-[value] Called Frama_C_show_each({17})
-[value] Called Frama_C_show_each({18})
-[value] Called Frama_C_show_each({19})
-[value] Called Frama_C_show_each({20})
-[value] Called Frama_C_show_each({21})
-[value] Called Frama_C_show_each({22})
-[value] Called Frama_C_show_each({23})
-[value] Called Frama_C_show_each({24})
-[value] Called Frama_C_show_each({25})
-[value] Called Frama_C_show_each({26})
-[value] Called Frama_C_show_each({27})
-[value] Called Frama_C_show_each({28})
-[value] Called Frama_C_show_each({29})
-[value] Called Frama_C_show_each({30})
-[value] Called Frama_C_show_each({31})
-[value] Called Frama_C_show_each({32})
-[value] Called Frama_C_show_each({33})
-[value] Called Frama_C_show_each({34})
-[value] Called Frama_C_show_each({35})
-[value] Called Frama_C_show_each({36})
-[value] Called Frama_C_show_each({37})
-[value] Called Frama_C_show_each({38})
-[value] Called Frama_C_show_each({39})
-[value] Called Frama_C_show_each({40})
-[value] Called Frama_C_show_each({41})
-[value] Called Frama_C_show_each({42})
-[value] Called Frama_C_show_each({43})
-[value] Called Frama_C_show_each({44})
-[value] Called Frama_C_show_each({45})
-[value] Called Frama_C_show_each({46})
-[value] Called Frama_C_show_each({47})
-[value] Called Frama_C_show_each({48})
-[value] Called Frama_C_show_each({49})
+  Called from tests/value/local_slevel.i:48.
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {0}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {1}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {2}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {3}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {4}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {5}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {6}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {7}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {8}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {9}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {10}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {11}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {12}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {13}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {14}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {15}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {16}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {17}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {18}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {19}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {20}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {21}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {22}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {23}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {24}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {25}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {26}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {27}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {28}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {29}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {30}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {31}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {32}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {33}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {34}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {35}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {36}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {37}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {38}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {39}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {40}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {41}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {42}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {43}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {44}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {45}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {46}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {47}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {48}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {49}
 [value] Semantic level unrolling superposing up to 100 states
-[value] Called Frama_C_show_each({50})
-[value] Called Frama_C_show_each({51})
-[value] Called Frama_C_show_each({52})
-[value] Called Frama_C_show_each({53})
-[value] Called Frama_C_show_each({54})
-[value] Called Frama_C_show_each({55})
-[value] Called Frama_C_show_each({56})
-[value] Called Frama_C_show_each({57})
-[value] Called Frama_C_show_each({58})
-[value] Called Frama_C_show_each({59})
-[value] Called Frama_C_show_each({60})
-[value] Called Frama_C_show_each({61})
-[value] Called Frama_C_show_each({62})
-[value] Called Frama_C_show_each({63})
-[value] Called Frama_C_show_each({64})
-[value] Called Frama_C_show_each({65})
-[value] Called Frama_C_show_each({66})
-[value] Called Frama_C_show_each({67})
-[value] Called Frama_C_show_each({68})
-[value] Called Frama_C_show_each({69})
-[value] Called Frama_C_show_each({70})
-[value] Called Frama_C_show_each({71})
-[value] Called Frama_C_show_each({72})
-[value] Called Frama_C_show_each({73})
-[value] Called Frama_C_show_each({74})
-[value] Called Frama_C_show_each({75})
-[value] Called Frama_C_show_each({76})
-[value] Called Frama_C_show_each({77})
-[value] Called Frama_C_show_each({78})
-[value] Called Frama_C_show_each({79})
-[value] Called Frama_C_show_each({80})
-[value] Called Frama_C_show_each({81})
-[value] Called Frama_C_show_each({82})
-[value] Called Frama_C_show_each({83})
-[value] Called Frama_C_show_each({84})
-[value] Called Frama_C_show_each({85})
-[value] Called Frama_C_show_each({86})
-[value] Called Frama_C_show_each({87})
-[value] Called Frama_C_show_each({88})
-[value] Called Frama_C_show_each({89})
-[value] Called Frama_C_show_each({90})
-[value] Called Frama_C_show_each({91})
-[value] Called Frama_C_show_each({92})
-[value] Called Frama_C_show_each({93})
-[value] Called Frama_C_show_each({94})
-[value] Called Frama_C_show_each({95})
-[value] Called Frama_C_show_each({96})
-[value] Called Frama_C_show_each({97})
-[value] Called Frama_C_show_each({98})
-[value] Called Frama_C_show_each({99})
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {50}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {51}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {52}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {53}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {54}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {55}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {56}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {57}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {58}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {59}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {60}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {61}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {62}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {63}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {64}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {65}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {66}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {67}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {68}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {69}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {70}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {71}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {72}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {73}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {74}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {75}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {76}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {77}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {78}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {79}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {80}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {81}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {82}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {83}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {84}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {85}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {86}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {87}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {88}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {89}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {90}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {91}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {92}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {93}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {94}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {95}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {96}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {97}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {98}
+[value] tests/value/local_slevel.i:36: Frama_C_show_each: {99}
 [value] Semantic level unrolling superposing up to 200 states
 [value] Recording results for main2
 [value] Done for function main2

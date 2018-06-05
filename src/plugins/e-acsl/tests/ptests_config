@@ -1,0 +1,7 @@
+DEFAULT_SUITES= format reject runtime bts gmp no-main full-mmodel temporal
+TOPLEVEL_PATH=/home/schrodi/repos/Frama-C/bin/toplevel.opt
+FRAMAC_SHARE=/home/schrodi/repos/Frama-C/share
+FRAMAC_LIB=/home/schrodi/repos/Frama-C/lib/fc
+FRAMAC_PLUGIN=/home/schrodi/repos/Frama-C/lib/plugins
+FRAMAC_PLUGIN_GUI=/home/schrodi/repos/Frama-C/lib/plugins/gui
+OCAMLRUNPARAM=

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,6 +28,7 @@ open Cil_types
 
 (** Runtime integers. *)
 type c_int =
+  | Bool
   | UInt8
   | SInt8
   | UInt16
@@ -72,12 +73,14 @@ val object_of_logic_pointed : logic_type -> c_object
 
 (** {2 Utilities} *)
 
-val imemo : (c_int -> 'a) -> c_int -> 'a
-val fmemo : (c_float -> 'a) -> c_float -> 'a
-(** memoization function, projectified *)
+val i_iter: (c_int -> unit) -> unit
+val f_iter: (c_float -> unit) -> unit
 
-val iiter: (c_int -> unit) -> unit
-val fiter: (c_float -> unit) -> unit
+val i_memo : (c_int -> 'a) -> c_int -> 'a
+(** memoized, not-projectified *)
+
+val f_memo : (c_float -> 'a) -> c_float -> 'a
+(** memoized, not-projectified *)
 
 val is_char : c_int -> bool
 val c_char : unit -> c_int     (** Returns the type of [char] *)
@@ -98,13 +101,13 @@ val get_int : exp -> int64 option
 val i_bits : c_int -> int (** size in bits *)
 val i_bytes : c_int -> int (** size in bytes *)
 val signed : c_int -> bool  (** [true] if signed *)
-val c_int_bounds: c_int -> Integer.t * Integer.t
+val bounds: c_int -> Integer.t * Integer.t (** domain, bounds included *)
 
 (** All sizes are in bits *)
 
 val sub_c_int: c_int -> c_int -> bool
 
-val sub_c_float : c_float -> c_float -> bool
+val equal_float : c_float -> c_float -> bool
 
 val sizeof_defined : c_object -> bool
 val sizeof_object : c_object -> int
@@ -116,8 +119,8 @@ val is_comp : c_object -> compinfo -> bool
 val is_array : c_object -> elt:c_object -> bool
 val get_array : c_object -> ( c_object * int option ) option
 val get_array_size : c_object -> int option
+val get_array_dim : c_object -> int
 val array_size : arrayinfo -> int option
-val array_dim : arrayinfo -> c_object * int
 val array_dimensions : arrayinfo -> c_object * int option list
 (** Returns the list of dimensions the array consists of.
     None-dimension means undefined one. *)
@@ -135,7 +138,6 @@ val pp_object : Format.formatter -> c_object -> unit
 val basename : c_object -> string
 val compare : c_object -> c_object -> int
 val equal : c_object -> c_object -> bool
-val merge : c_object -> c_object -> c_object
 val hash : c_object -> int
 val pretty : Format.formatter -> c_object -> unit
 

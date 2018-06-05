@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -69,7 +69,7 @@ type env = {
 }
 
 let add env wpo =
-  match ProverWhy3.assemble_wpo wpo with
+  match ProverWhy3.assemble_goal wpo with
   | None -> ()
   | Some (includes,goal) ->
       let open ProverWhy3 in
@@ -158,7 +158,7 @@ let parse_session env e =
     | "file" ->
         begin
           let file = List.assoc "name" e.attributes in
-          let path = Filepath.normalize ~base:env.session file in
+          let path = Filepath.normalize ~base_name:env.session file in
           let file = Filepath.relativize path in
           List.iter (parse_file env file) e.elements
         end

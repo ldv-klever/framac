@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,7 +31,6 @@ type 'a alarm_gen =
 
 type bound_kind = Alarms.bound_kind = Lower_bound | Upper_bound
 
-
 (* Tries to evaluate expr as a constant value (Int64.t).
    Uses Cil constant folding (e.g. for (-0x7ffffff -1) => Some (-2147483648)) on
    32 bits *)
@@ -44,7 +43,10 @@ let valid_index ~remove_trivial ~on_alarm e size =
       | Lower_bound -> None
       | Upper_bound -> Some size
     in
+    (* Do not create upper-bound check on GNU zero-length arrays *)
+    if not (bk == Upper_bound && Cil.isZero size) then begin
     on_alarm ?status:None (Alarms.Index_out_of_bound(e, b))
+    end
   in
   if remove_trivial then begin
     (* See if the two assertions do not trivially hold. In this
@@ -65,6 +67,7 @@ let valid_index ~remove_trivial ~on_alarm e size =
     alarm Lower_bound;
     alarm Upper_bound;
   end
+
 
 (* returns the assertion associated with an lvalue:
    returns non empty assertions only on pointer dereferencing and array access.
@@ -103,6 +106,50 @@ let lval_assertion ~read_only ~remove_trivial ~on_alarm lv =
     if not (Cil.isFunctionType (Cil.typeOfLval lv)) then
       check_array_access true off (Cil.typeOfLhost lh) false
 
+(* assertion for lvalue initialization *)
+let lval_initialized_assertion ~remove_trivial:_ ~on_alarm lv =
+  let rec check_array_initialized default off typ in_struct l = 
+    match off with
+    | NoOffset -> 
+      begin 
+        match typ with
+        | TComp({cstruct = false; cfields} ,_,_) ->
+          (match cfields with
+           | [] -> () (* empty union, supported by gcc with size 0.
+                         Trivially initialized. *)
+           | _ ->
+             let llv =
+               List.map
+                 (fun fi -> Cil.addOffsetLval (Field (fi, NoOffset)) lv)
+                 cfields
+             in
+             if default then 
+               on_alarm ?status:None (Alarms.Uninitialized_union llv))
+        | _ ->    
+          if default then 
+            on_alarm ?status:None (Alarms.Uninitialized lv)
+      end
+    | Field (fi, off) ->
+      (* Mark that we went through a struct field, then recurse *)
+      check_array_initialized default off fi.ftype true l
+    | Index (_e, off) ->
+      match Cil.unrollType typ with
+      | TArray (bt, Some _size, _, _) ->
+        check_array_initialized true off bt in_struct l
+      | TArray (bt, None, _, _) -> check_array_initialized true off bt in_struct l
+      | _ -> assert false
+  in
+
+  match lv with
+  | Var vi , off ->
+    let loc = fst vi.vdecl in
+    let ignored_cases = vi.vglob || vi.vformal || vi.vtemp in
+    check_array_initialized (not ignored_cases) off vi.vtype false loc
+  | (Mem e as lh), off ->
+    let loc = fst e.eloc in
+    if not (Cil.isFunctionType (Cil.typeOfLval lv)) then
+      check_array_initialized true off (Cil.typeOfLhost lh) false loc
+
 (* assertion for unary minus signed overflow *)
 let uminus_assertion ~remove_trivial ~on_alarm exp =
   (* - expr overflows if exp is TYPE_MIN *)
@@ -126,7 +173,7 @@ let uminus_assertion ~remove_trivial ~on_alarm exp =
   else alarm ()
 
 (* assertions for multiplication/addition/subtraction overflows *)
-let mult_sub_add_assertion ~remove_trivial ~on_alarm (signed,exp,op,lexp,rexp) =
+let mult_sub_add_assertion ~signed ~remove_trivial ~on_alarm (exp,op,lexp,rexp) =
   (* signed multiplication/addition/subtraction:
      the expression overflows iff its integer value
      is strictly more than [max_ty] or strictly less than [min_ty] *)
@@ -213,7 +260,7 @@ let signed_div_assertion ~remove_trivial ~on_alarm (exp, lexp, rexp) =
   (* Signed division: overflow occurs when dividend is equal to the
      the minimum (negative) value for the signed integer type,
      and divisor is equal to -1. Under the hypothesis (cf Value) that
-     integers are represented in two's completement.
+     integers are represented in two's complement.
      Nothing done for modulo (the result of TYPE_MIN % -1 is 0, which does not
      overflow).
      Still it may be dangerous on a number of compilers / architectures
@@ -245,7 +292,7 @@ let signed_div_assertion ~remove_trivial ~on_alarm (exp, lexp, rexp) =
   end
   else alarm ()
 
-let shift_alarm ~remove_trivial ~on_alarm (exp, upper_bound) =
+let shift_width_assertion ~remove_trivial ~on_alarm (exp, upper_bound) =
   let alarm ?status () =
     let a = Alarms.Invalid_shift(exp, upper_bound) in
     on_alarm ?status a;
@@ -255,7 +302,7 @@ let shift_alarm ~remove_trivial ~on_alarm (exp, upper_bound) =
     | None -> alarm ()
     | Some c64 ->
       (* operand is constant:
-         check it is nonnegative and stricly less than the upper bound (if
+         check it is nonnegative and strictly less than the upper bound (if
          any) *)
       let upper_bound_ok = match upper_bound with
         | None -> true
@@ -267,7 +314,7 @@ let shift_alarm ~remove_trivial ~on_alarm (exp, upper_bound) =
   else alarm ()
 
 (* assertions for bitwise left/right shift signed overflow *)
-let signed_shift_assertion ~remove_trivial ~on_alarm (exp, op, lexp, rexp) =
+let shift_overflow_assertion ~signed ~remove_trivial ~on_alarm (exp, op, lexp, rexp) =
   (* - (1) right operand should be nonnegative and
      strictly less than the width of promoted left operand:
      now done by shift_right_operand_assertion
@@ -280,14 +327,18 @@ let signed_shift_assertion ~remove_trivial ~on_alarm (exp, op, lexp, rexp) =
   if size <> Cil.bitsSizeOf (Cil.typeOf lexp) then
     (* size of result type should be size of left (promoted) operand *)
     Options.warn "problem with bitsSize of %a: not treated" Printer.pp_exp exp;
-  shift_alarm ~remove_trivial ~on_alarm (lexp, None);
+  if signed then
+    shift_width_assertion ~remove_trivial ~on_alarm (lexp, None);
   if op = Shiftlt Check || op = Shiftlt Modulo then
     (* compute greatest representable "size bits" (signed) integer *)
-    let maxValResult = Cil.max_signed_number size in
+    let maxValResult =
+      if signed
+      then Cil.max_signed_number size
+      else Cil.max_unsigned_number size
+    in
     let overflow_alarm ?status () =
-      let a =
-        Alarms.Overflow(Alarms.Signed, exp, maxValResult, Alarms.Upper_bound)
-      in
+      let signed = if signed then Alarms.Signed else Alarms.Unsigned in
+      let a = Alarms.Overflow (signed, exp, maxValResult, Alarms.Upper_bound) in
       on_alarm ?status a;
     in
     if remove_trivial then begin
@@ -311,7 +362,7 @@ let unsigned_downcast_assertion ~remove_trivial ~on_alarm (ty, exp) =
   let e_typ = Cil.unrollType (Cil.typeOf exp) in
   match e_typ with
   | TInt (kind,_) ->
-    let szTo = Cil.bitsSizeOf ty in
+    let szTo = Cil.bitsSizeOfBitfield ty in
     let szFrom = Cil.bitsSizeOf e_typ in
     (if szTo < szFrom || Cil.isSigned kind then
       (* case signed to unsigned:
@@ -355,7 +406,7 @@ let signed_downcast_assertion ~remove_trivial ~on_alarm (ty, exp) =
   let e_typ = Cil.unrollType (Cil.typeOf exp) in
   match e_typ with
   | TInt (kind,_) ->
-    (let szTo = Cil.bitsSizeOf ty in
+    (let szTo = Cil.bitsSizeOfBitfield ty in
      let szFrom = Cil.bitsSizeOf e_typ in
      if szTo < szFrom || (szTo == szFrom && not (Cil.isSigned kind)) then
       (* downcast: the expression result should fit on szTo bits *)
@@ -394,7 +445,7 @@ let float_to_int_assertion ~remove_trivial ~on_alarm (ty, exp) =
   let e_typ = Cil.unrollType (Cil.typeOf exp) in
   match e_typ, ty with
   | TFloat _, TInt (ikind,_) ->
-    let szTo = Cil.bitsSizeOf ty in
+    let szTo = Cil.bitsSizeOfBitfield ty in
     let min_ty, max_ty =
       if Cil.isSigned ikind then
         Cil.min_signed_number szTo, Cil.max_signed_number szTo
@@ -433,9 +484,18 @@ let float_to_int_assertion ~remove_trivial ~on_alarm (ty, exp) =
     )
   | _ -> ()
 
-(* assertion for a pointer call [( *e )(...)]. *)
-let pointer_call ~remove_trivial:_ ~on_alarm e =
-  on_alarm ?status:None (Alarms.Function_pointer e)
+(* assertion for checking only finite float are used *)
+let finite_float_assertion ~remove_trivial:_ ~on_alarm (fkind, exp) =
+  let status = None in
+  match Kernel.SpecialFloat.get () with
+  | "none"       -> ()
+  | "nan"        -> on_alarm ?status (Alarms.Is_nan (exp, fkind))
+  | "non-finite" -> on_alarm ?status (Alarms.Is_nan_or_infinite (exp, fkind))
+  | _            -> assert false
+
+(* assertion for a pointer call [( *e )(args)]. *)
+let pointer_call ~remove_trivial:_ ~on_alarm (e, args) =
+  on_alarm ?status:None (Alarms.Function_pointer (e, Some args))
 
 (*
 Local Variables:

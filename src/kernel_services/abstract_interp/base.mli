@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,16 +38,21 @@ type variable_validity = private {
   max_allocable: Int.t (** Maximum valid bit after size increase *);
 }
 
+(** Whether the allocated base has been obtained via calls to
+    malloc/calloc/realloc ([Malloc]), alloca ([Alloca]), or is related to a
+    variable-length array ([VLA]). *)
+type deallocation = Malloc | VLA | Alloca
+
 type base = private
   | Var of Cil_types.varinfo * validity
       (** Base for a standard C variable. *)
   | CLogic_Var of Cil_types.logic_var * Cil_types.typ * validity
       (** Base for a logic variable that has a C type. *)
-  | Null (** Base for an addresse like [(int* )0x123] *)
+  | Null (** Base for an address like [(int* )0x123] *)
   | String of int (** unique id of the constant string (one per code location)*)
     * cstring (** contents of the constant string *)
-  | Allocated of Cil_types.varinfo * validity
-      (** Base for a variable dynamically allocated via malloc/calloc/realloc *)
+  | Allocated of Cil_types.varinfo * deallocation  * validity
+      (** Base for a variable dynamically allocated via malloc/calloc/realloc/alloca *)
 
 and validity =
   | Empty (** For 0-sized bases *)
@@ -81,7 +86,7 @@ module Hptset: Hptset.S
   with type elt = t
   and type 'a shape = 'a Hptmap.Shape(Base).t
 
-module SetLattice: Lattice_type.Lattice_Hashconsed_Set with module O = Hptset
+module SetLattice: Lattice_type.Lattice_Set with module O = Hptset
 
 module Validity: Datatype.S with type t = validity
 
@@ -172,11 +177,13 @@ val max_valid_absolute_address: unit -> Int.t
 
 val bits_sizeof : t -> Int_Base.t
 
-exception Not_valid_offset
-val is_valid_offset : for_writing:bool -> Int.t -> t -> Ival.t -> unit
+val offset_is_in_validity : Int.t -> validity -> Ival.t -> bool
+(** [is_offset_in_validity size validity ival] checks that [ival] is a valid
+    offset for an access of size [size] according to [validity]. *)
+
+val is_valid_offset : for_writing:bool -> Int.t -> t -> Ival.t -> bool
 (** [is_valid_offset ~for_writing size b offset] checks that [offset]
-    (expressed in bits) plus [size] bits is valid in [b]. It does nothing
-    in this case, and raises [Not_valid_offset] if the offset may be invalid. *)
+    (expressed in bits) plus [size] bits is valid in [b]. *)
 
 
 (** {2 Misc} *)
@@ -197,7 +204,7 @@ val is_aligned_by : t -> Int.t -> bool
     This is only useful to create an initial memory state for analysis,
     and is never needed for normal users. *)
 
-val register_allocated_var: Cil_types.varinfo -> validity -> t
+val register_allocated_var: Cil_types.varinfo -> deallocation -> validity -> t
   (** Allocated variables are variables not present in the source of the
       program, but instead created through dynamic allocation. Their field
       [vsource] is set to false. *)

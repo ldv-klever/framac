@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -61,11 +61,15 @@ val failed : ('a,Format.formatter,unit,'b task) format4 -> 'a
   (** The task that immediately fails by raising a [Failure] exception.
       Typically: [[let exit d : 'a task = failed "exit status %d" k]] *)
 
-val call : ('a -> 'b) -> 'a -> 'b task
+val call : ?canceled:('a -> unit) -> ('a -> 'b) -> 'a -> 'b task
   (** The task that, when started, invokes a function and immediately
       returns the result. *)
 
-val todo : (unit -> 'a task) -> 'a task
+val later : ?canceled:('a -> unit) -> ('a -> 'b task) -> 'a -> 'b task
+(** The task that, when started, compute a task to continue with. *)
+
+val todo :  ?canceled:(unit -> unit) -> (unit -> 'a task) -> 'a task
+(** Specialized version of [later]. *)
 
 val status : 'a status -> 'a task
   (** The task that immediately finishes with provided status *)
@@ -100,7 +104,7 @@ val (>>?) : 'a task -> ('a status -> unit) -> 'a task (** [finally] infix. *)
 val (>>!) : 'a task -> ('a status -> unit) -> unit task (** [callback] infix. *)
 
 (* ************************************************************************* *)
-(** {2 Synchroneous Command} *)
+(** {2 Synchronous Command} *)
 (* ************************************************************************* *)
 
 type mutex
@@ -147,7 +151,7 @@ val shared : descr:string -> retry:bool -> (unit -> 'a task) -> 'a shared
     instance is required but no shared instance task is actually running.
     Interrupted tasks (by Cancel or Timeout) are retried for further
     instances. If the task failed, it can be re-launch if [retry] is [true].
-    Otherwize, further instances will return [Failed] status. *)
+    Otherwise, further instances will return [Failed] status. *)
 
 val share : 'a shared -> 'a task 
 (** New instance of shared task. *)
@@ -160,7 +164,12 @@ type thread
 
 val thread : 'a task -> thread
 val cancel : thread -> unit
-val running : thread -> bool
+val progress : thread -> bool
+(** Make the thread progress and return [true] if still running *)
+
+val is_running : thread -> bool
+(** Don't make the thread progress, just returns [true] 
+    if not terminated or not started yet *)
   
 val run : thread -> unit
 (** Runs one single task in the background. 

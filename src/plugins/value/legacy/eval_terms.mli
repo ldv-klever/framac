@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,13 +27,13 @@ open Locations
 open Cvalue
 
 (** Evaluating a predicate. [Unknown] is the Top of the lattice *)
-type predicate_status = True | False | Unknown
+type predicate_status = Abstract_interp.Comp.result = True | False | Unknown
 val pretty_predicate_status : Format.formatter -> predicate_status -> unit
 
 val join_predicate_status :
   predicate_status -> predicate_status -> predicate_status
-val join_list_predicate_status :
-  predicate_status list -> predicate_status
+(* val join_list_predicate_status :
+    predicate_status list -> predicate_status *)
 
 
 (** Error during the evaluation of a term or a predicate *)
@@ -54,6 +54,9 @@ type labels_states = Cvalue.Model.t Cil_datatype.Logic_label.Map.t
 (** Evaluation environment. Currently available are function Pre and Post, or
     the environment to evaluate an annotation *)
 type eval_env
+
+val make_env: Model.t Abstract_domain.logic_environment -> Model.t -> eval_env
+
 val env_pre_f : pre:Model.t -> unit -> eval_env
 val env_annot :
   ?c_labels:labels_states -> pre:Model.t -> here:Model.t -> unit -> eval_env
@@ -70,11 +73,16 @@ val env_current_state: eval_env -> Model.t
 (** Dependencies needed to evaluate a term or a predicate *)
 type logic_deps = Zone.t Cil_datatype.Logic_label.Map.t
 
-
+(** Three modes to handle the alarms when evaluating a logical term. *)
+type alarm_mode =
+  | Ignore             (* Ignores all alarms. *)
+  | Fail               (* Raises a LogicEvalError when an alarm is encountered. *)
+  | Track of bool ref  (* Tracks the possibility of an alarm in the boolean: the
+                          boolean is set to true if an alarm is encountered. *)
 
 (** Return a pair of (under-approximating, over-approximating) zones. *)
 val eval_tlval_as_zone_under_over:
-  with_alarms:CilE.warn_mode ->
+  alarm_mode:alarm_mode ->
   for_writing:bool -> eval_env -> term -> Zone.t * Zone.t
 
 (* ML: Should not be exported. *)
@@ -85,26 +93,18 @@ type 'a eval_result = {
   ldeps: logic_deps;
 }
 
+
 val eval_term :
-  with_alarms:CilE.warn_mode ->
+  alarm_mode:alarm_mode ->
   eval_env -> term -> V.t eval_result
 
-val eval_tlval :
-  with_alarms:CilE.warn_mode ->
-  eval_env -> term -> Location_Bits.t eval_result
-
 val eval_tlval_as_location :
-  with_alarms:CilE.warn_mode ->
+  alarm_mode:alarm_mode ->
   eval_env -> term -> location
 
 val eval_tlval_as_zone :
-  with_alarms:CilE.warn_mode ->
+  alarm_mode:alarm_mode ->
   for_writing:bool -> eval_env -> term -> Zone.t
-
-exception Not_an_exact_loc
-val eval_term_as_exact_locs :
-  with_alarms:CilE.warn_mode ->
-  eval_env -> term -> Cil_datatype.Typ.t * location
 
 val eval_predicate :
   eval_env -> predicate -> predicate_status
@@ -113,15 +113,3 @@ val predicate_deps: eval_env -> predicate -> logic_deps
 
 val reduce_by_predicate :
   eval_env -> bool -> predicate -> eval_env
-
-(** If [reduce] is true, reduce in all cases. Otherwise, reduce only
-    when [p] is a disjunction, ie. split by this disjunction.
-    The Property is the one in which is [p]. *)
-val split_disjunction_and_reduce :
-  reduce:bool ->
-  env:eval_env ->
-  (Cvalue.Model.t * Trace.t) ->
-  slevel:int ->
-  predicate ->
-  Property.t ->
-  State_set.t

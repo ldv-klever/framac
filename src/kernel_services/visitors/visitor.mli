@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -115,7 +115,12 @@ val visitFramacFile: frama_c_visitor -> file -> unit
     @plugin development guide *)
 val visitFramacFileSameGlobals: frama_c_visitor -> file -> unit
 
-(** Visit a global. *)
+(** Visit a global.
+
+{b Warning} Do not call this function during another visit using the
+same visitor, as it is not reentrant: the inner visit will leave the visitor
+in an inconsistent state for the outer visit.
+*)
 val visitFramacGlobal: frama_c_visitor -> global -> global list
 
 (** Visit a kernel_function. More precisely, the entry point for the visit
@@ -179,17 +184,13 @@ val visitFramacAnnotation:
 val visitFramacCodeAnnotation:
   frama_c_visitor -> code_annotation -> code_annotation
 
-val visitFramacAllocation:
-  frama_c_visitor -> identified_term allocation -> identified_term allocation
+val visitFramacAllocation: frama_c_visitor -> allocation -> allocation
 
-val visitFramacAssigns:
-  frama_c_visitor -> identified_term assigns -> identified_term assigns
+val visitFramacAssigns: frama_c_visitor -> assigns -> assigns
 
-val visitFramacFrom:
-  frama_c_visitor -> identified_term from -> identified_term from
+val visitFramacFrom: frama_c_visitor -> from -> from
 
-val visitFramacDeps:
-  frama_c_visitor -> identified_term deps -> identified_term deps
+val visitFramacDeps: frama_c_visitor -> deps -> deps
 
 val visitFramacFunspec: frama_c_visitor -> funspec -> funspec
 

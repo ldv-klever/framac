@@ -1,5 +1,5 @@
 /* run.config*
-   OPT: -val @VALUECONFIG@ -memexec-all -inout-callwise -calldeps -no-deps -no-input -no-out -then -inout
+   STDOPT: +"-memexec-all -calldeps -no-deps -no-input -no-out -then -inout"
 */
 
 int t[50];
@@ -7,7 +7,7 @@ int t[50];
 int *p;
 
 //@ assigns t[20..*p+20] \from t[0..*p];
-void f();
+void f(void);
 
 void g() {
   f();

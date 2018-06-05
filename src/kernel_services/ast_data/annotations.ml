@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -688,7 +688,7 @@ let fold_extended f =
 (* remove_code_annot is called when adding a code annotation that must
    stay unique for a given combination of statement, active behaviors and
    emitters. *)
-let remove_code_annot e ?kf stmt ca =
+let remove_code_annot_internal e ?(remove_statuses=true) ?kf stmt ca =
   (*  Kernel.feedback "%a: removing code annot %a of stmt %a (%d)"
       Project.pretty (Project.current ())
       Code_annotation.pretty ca
@@ -700,7 +700,7 @@ let remove_code_annot e ?kf stmt ca =
     try
       let l = Emitter.Usable_emitter.Hashtbl.find tbl e in
       let kf = find_englobing_kf ?kf stmt in
-      clear_linked_to_annot kf stmt e ca;
+      if remove_statuses then clear_linked_to_annot kf stmt e ca;
       l := filterq ~eq:Code_annotation.equal ca !l;
     with Not_found ->
       (* the emitter is not the one which emits the annotation *)
@@ -847,7 +847,7 @@ let add_behaviors ?(register_children=true) e kf ?stmt ?active bhvs =
             Thus, if register_children is true, we need to update
             the property status table.
              For the other clauses (requires, assumes, ensures) we just need to
-             add the additional ip, nothing whill be removed.
+             add the additional ip, nothing will be removed.
          *)
          if register_children then begin
            let ip = Property.ip_from_of_behavior kf ki active bhv in
@@ -1054,7 +1054,11 @@ let add_allocates e kf ?stmt ?active ?behavior a =
   extend_behavior e kf ?stmt ?active ?behavior set_bhv
 
 let add_extended e kf ?stmt ?active ?behavior ext =
-  let set_bhv _ e_bhv = e_bhv.b_extended <- ext :: e_bhv.b_extended in
+  let set_bhv _ e_bhv =
+    e_bhv.b_extended <- ext :: e_bhv.b_extended;
+    Property_status.register
+      (Property.ip_of_extended kf (kinstr stmt) ext)
+  in
   extend_behavior e kf ?stmt ?active ?behavior set_bhv
 
 (** {3 Adding code annotations} *)
@@ -1106,7 +1110,7 @@ let add_code_annot emitter ?kf stmt ca =
             with the updated one. Statuses being attached to sub-elements
             of the contract, they do not need any update here.
           *)
-         remove_code_annot emitter ~kf stmt ca;
+         remove_code_annot_internal emitter ~remove_statuses:false ~kf stmt ca;
          { a with annot_content = ca.annot_content }, []
        | _ ->
          Kernel.fatal
@@ -1189,7 +1193,7 @@ let add_code_annot emitter ?kf stmt ca =
            match ca' with
            | [] -> a
            | [ { annot_content = AAssigns(_, assigns') } as ca ] ->
-             remove_code_annot emitter ~kf stmt ca;
+             remove_code_annot_internal emitter ~kf stmt ca;
              let merged =
                merge_assigns ~keep_empty:false assigns' assigns
              in
@@ -1237,7 +1241,7 @@ let add_code_annot emitter ?kf stmt ca =
            match code_annot ~emitter ~filter stmt with
            | [] -> a
            | [ { annot_content = AAllocation(_,alloc') } as ca ] ->
-             remove_code_annot emitter ~kf stmt ca;
+             remove_code_annot_internal emitter ~kf stmt ca;
              { a with annot_content =
                         AAllocation(
                           bhvs, Logic_utils.merge_allocation alloc' alloc) }
@@ -1299,7 +1303,7 @@ let rec remove_declared_global_annot logic_vars = function
     Cil_datatype.Logic_info.Set.remove li logic_vars
   | Dvolatile _ | Dtype _ | Dlemma _ | Dmodel_annot _ | Dcustom_annot _ ->
     logic_vars
-  | Daxiomatic (_,l,_) ->
+  | Daxiomatic (_,l,_, _) ->
     List.fold_left remove_declared_global_annot logic_vars l
 
 let remove_declared_global c_vars logic_vars = function
@@ -1327,13 +1331,13 @@ let insert_global_in_ast annot =
       | GEnumTag _ | GEnumTagDecl _ as g) :: l ->
       insert_after deps (g :: acc) l
     | g :: l ->
-      let c_vars, logic_vars as deps =
-        remove_declared_global c_vars logic_vars g
-      in
       if Cil_datatype.Varinfo.Set.is_empty c_vars &&
          Cil_datatype.Logic_info.Set.is_empty logic_vars
-      then List.rev acc @ g :: glob :: l
-      else insert_after deps (g :: acc) l
+      then List.rev acc @ glob :: g :: l
+      else begin
+          let deps = remove_declared_global c_vars logic_vars g in
+          insert_after deps (g :: acc) l
+        end
   in
   let globs = insert_after deps [] file.globals in
   file.globals <- globs
@@ -1538,7 +1542,8 @@ let remove_extended e kf ext =
   let set_spec spec _tbl =
     List.iter
       (fun b ->
-         b.b_extended <- Extlib.filter_out ((==) ext) b.b_extended)
+           b.b_extended <- Extlib.filter_out ((==) ext) b.b_extended;
+           Property_status.remove (Property.ip_of_extended kf Kglobal ext))
       spec.spec_behavior
   in
   remove_in_funspec e kf set_spec
@@ -1619,7 +1624,7 @@ let logic_info_of_global s =
   let rec check_one acc = function
     | Dfun_or_pred(li,_) | Dinvariant(li,_) | Dtype_annot(li,_) ->
       check_logic_info li acc
-    | Daxiomatic (_,l,_) -> List.fold_left check_one acc l
+    | Daxiomatic (_,l, _, _) -> List.fold_left check_one acc l
     | Dtype _ | Dvolatile _ | Dlemma _ | Dmodel_annot _ | Dcustom_annot _
       -> acc
   in
@@ -1664,6 +1669,10 @@ let code_annot_of_kf kf = match kf.fundec with
       f.sallstmts
   | Declaration _ ->
     []
+
+(* don't export the possibility to removing an annotation without associated
+   statuses. This is purely internal. *)
+let remove_code_annot e ?kf stmt ca = remove_code_annot_internal e ?kf stmt ca
 
 (*
   Local Variables:

@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/saveload/load_one.i (no preprocessing)
 [sparecode] remove unused code...
 [value] Analyzing a complete application starting at main
@@ -6,17 +5,17 @@
 [value] Initial state computed
 [value:initial-state] Values of globals at initialization
   G ∈ {0}
-tests/saveload/load_one.i:20:[value] assertion got status valid.
+[value] tests/saveload/load_one.i:16: assertion got status valid.
 [value] computing for function f <- main.
-        Called from tests/saveload/load_one.i:22.
+  Called from tests/saveload/load_one.i:18.
 [value] Recording results for f
 [value] Done for function f
 [value] computing for function f <- main.
-        Called from tests/saveload/load_one.i:23.
+  Called from tests/saveload/load_one.i:19.
 [value] Recording results for f
 [value] Done for function f
 [value] computing for function f <- main.
-        Called from tests/saveload/load_one.i:24.
+  Called from tests/saveload/load_one.i:20.
 [value] Recording results for f
 [value] Done for function f
 [value] Recording results for main
@@ -29,8 +28,8 @@ tests/saveload/load_one.i:20:[value] assertion got status valid.
 [pdg] done for function f
 [sparecode] remove unused global declarations...
 [sparecode] result in new project 'default without sparecode'.
-[kernel] warning: clearing dangling project pointers in project "default"
-[kernel] warning: clearing dangling project pointers in project "default 2"
+[kernel] Warning: clearing dangling project pointers in project "default"
+[kernel] Warning: clearing dangling project pointers in project "default 2"
 [sparecode] remove unused code...
 [sparecode] remove unused global declarations...
 [sparecode] result in new project 'default without sparecode'.
@@ -45,10 +44,8 @@ int f(int x, int y)
 
 int main(void)
 {
-  int a;
-  int b;
-  a = 1;
-  b = 1;
+  int a = 1;
+  int b = 1;
   /*@ assert a ≡ 1; */ ;
   f(0,0);
   a = f(a,b);
@@ -69,10 +66,8 @@ int f(int x, int y)
 
 int main(void)
 {
-  int a;
-  int b;
-  a = 1;
-  b = 1;
+  int a = 1;
+  int b = 1;
   /*@ assert a ≡ 1; */ ;
   f(0,0);
   a = f(a,b);

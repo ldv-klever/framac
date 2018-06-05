@@ -18,7 +18,7 @@
 
 # 20 "src/plugins/aorai/promelalexer.ml"
 let __ocaml_lex_tables = {
-  Lexing.lex_base = 
+  Lexing.lex_base =
    "\000\000\224\255\225\255\226\255\078\000\160\000\235\000\001\000\
     \236\255\002\000\238\255\001\000\012\000\000\000\243\255\244\255\
     \245\255\246\255\247\255\002\000\054\001\129\001\204\001\023\002\
@@ -30,7 +30,7 @@ let __ocaml_lex_tables = {
     \013\012\088\012\163\012\238\012\057\013\132\013\207\013\026\014\
     \101\014\176\014\251\014\070\015\145\015\220\015\039\016\194\015\
     \252\255\253\255\254\255\004\000\255\255";
-  Lexing.lex_backtrk = 
+  Lexing.lex_backtrk =
    "\255\255\255\255\255\255\255\255\028\000\028\000\028\000\031\000\
     \255\255\018\000\255\255\031\000\031\000\031\000\255\255\255\255\
     \255\255\255\255\255\255\007\000\028\000\028\000\028\000\028\000\
@@ -42,7 +42,7 @@ let __ocaml_lex_tables = {
     \028\000\028\000\028\000\028\000\024\000\024\000\028\000\028\000\
     \028\000\028\000\028\000\028\000\028\000\023\000\023\000\255\255\
     \255\255\255\255\255\255\003\000\255\255";
-  Lexing.lex_default = 
+  Lexing.lex_default =
    "\001\000\000\000\000\000\000\000\255\255\255\255\255\255\255\255\
     \000\000\255\255\000\000\255\255\255\255\255\255\000\000\000\000\
     \000\000\000\000\000\000\255\255\255\255\255\255\255\255\255\255\
@@ -54,7 +54,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\080\000\
     \000\000\000\000\000\000\255\255\000\000";
-  Lexing.lex_trans = 
+  Lexing.lex_trans =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\009\000\008\000\009\000\009\000\009\000\009\000\009\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -605,7 +605,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     ";
-  Lexing.lex_check = 
+  Lexing.lex_check =
    "\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\000\000\000\000\009\000\000\000\000\000\009\000\009\000\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
@@ -1156,22 +1156,22 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     ";
-  Lexing.lex_base_code = 
+  Lexing.lex_base_code =
    "";
-  Lexing.lex_backtrk_code = 
+  Lexing.lex_backtrk_code =
    "";
-  Lexing.lex_default_code = 
+  Lexing.lex_default_code =
    "";
-  Lexing.lex_trans_code = 
+  Lexing.lex_trans_code =
    "";
-  Lexing.lex_check_code = 
+  Lexing.lex_check_code =
    "";
-  Lexing.lex_code = 
+  Lexing.lex_code =
    "";
 }
 
 let rec token lexbuf =
-    __ocaml_lex_token_rec lexbuf 0
+   __ocaml_lex_token_rec lexbuf 0
 and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1307,17 +1307,17 @@ and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
 
   | 25 ->
 # 90 "src/plugins/aorai/promelalexer.mll"
-                            ( raise_located (loc lexbuf) "Illegal fonction name in Promela file." )
+                            ( raise_located (loc lexbuf) "Illegal function name in Promela file." )
 # 1312 "src/plugins/aorai/promelalexer.ml"
 
   | 26 ->
 # 91 "src/plugins/aorai/promelalexer.mll"
-                            ( raise_located (loc lexbuf) "Illegal fonction name in Promela file." )
+                            ( raise_located (loc lexbuf) "Illegal function name in Promela file." )
 # 1317 "src/plugins/aorai/promelalexer.ml"
 
   | 27 ->
 # 92 "src/plugins/aorai/promelalexer.mll"
-                            ( raise_located (loc lexbuf) "Illegal fonction name in Promela file." )
+                            ( raise_located (loc lexbuf) "Illegal function name in Promela file." )
 # 1322 "src/plugins/aorai/promelalexer.ml"
 
   | 28 ->
@@ -1342,11 +1342,11 @@ and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
                               raise Parsing.Parse_error)
 # 1344 "src/plugins/aorai/promelalexer.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_token_rec lexbuf __ocaml_lex_state
 
 and comment lexbuf =
-    __ocaml_lex_comment_rec lexbuf 79
+   __ocaml_lex_comment_rec lexbuf 79
 and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1369,7 +1369,7 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
          ( comment lexbuf )
 # 1371 "src/plugins/aorai/promelalexer.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_comment_rec lexbuf __ocaml_lex_state
 
 ;;

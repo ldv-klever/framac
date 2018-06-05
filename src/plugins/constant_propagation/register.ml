@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -81,7 +81,7 @@ class propagate project fnames ~cast_intro = object(self)
 
   (* introduce a new cast from [oldt] to [newt] or do not expand [e] *)
   method private add_cast ~ignore_const_cast ~oldt ~newt e =
-    (* strip the superfleous 'const' attribute (see bts #1787) on
+    (* strip the superfluous 'const' attribute (see bts #1787) on
        pointed values. *)
     let oldt, newt =
       if ignore_const_cast then
@@ -149,7 +149,7 @@ class propagate project fnames ~cast_intro = object(self)
              self#current_kf)
       in
       let change_to = match b with
-        | Base.Var(vi, _) | Base.Allocated (vi, _)
+        | Base.Var(vi, _) | Base.Allocated (vi, _, _)
           when not (Base.is_weak b) &&  can_replace vi ->
           if vi.vglob && not (Varinfo.Set.mem vi known_globals) then
             self#add_decl_non_source_var vi;
@@ -231,7 +231,7 @@ class propagate project fnames ~cast_intro = object(self)
               let f = Ival.project_float m in
               let f =  Fval.(F.to_float (project_float f)) in
               Cil.kfloat ~loc:expr.eloc fkind f
-            with Fval.Not_Singleton_Float | Ival.Nan_or_infinite ->
+            with Fval.Not_Singleton_Float->
               raise Cannot_expand
           in
           (match typ_e with
@@ -249,7 +249,7 @@ class propagate project fnames ~cast_intro = object(self)
     with 
     | Cannot_change -> None
     | Not_found | Cannot_expand | Cil.Not_representable 
-    | Int_Base.Error_Top as e ->
+    | Abstract_interp.Error_Top as e ->
       PropagationParameters.debug "Replacement failed %s"
         (Printexc.to_string e);
       None

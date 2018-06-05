@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,8 +20,14 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Functors for generic lattices implementations. 
+(** Functors for generic lattices implementations.
     @plugin developer guide *)
+
+exception Error_Top
+(** Raised by some functions when encountering a top value. *)
+
+exception Error_Bottom
+(** Raised by Lattice_Base.project. *)
 
 exception Not_less_than
 (** Raised by {!Lattice.cardinal_less_than}. *)
@@ -29,11 +35,19 @@ exception Not_less_than
 exception Can_not_subdiv
 (** Used by other modules e.g. {!Fval.subdiv_float_interval}. *)
 
+type truth = True | False | Unknown
+(** Truth values with a possibility for 'Unknown' *)
+
+val inv_truth: truth -> truth
+
+type alarm = SureAlarm | Alarm | NoAlarm
+(** Less ambiguous version of {!truth} for alarms. *)
+
 (** Signatures for comparison operators [==, !=, <, >, <=, >=]. *)
 module Comp: sig
   type t = Lt | Gt | Le | Ge | Eq | Ne (** comparison operators *)
 
-  type result = True | False | Unknown (** result of a comparison *)
+  type result = truth = True | False | Unknown (** result of a comparison *)
 
   val pretty_comp: t Pretty_utils.formatter
 
@@ -43,9 +57,6 @@ module Comp: sig
   val sym: t -> t
   (** Opposite relation: [a op b <==> b (sym op) a]. *)
 
-  val inv_result: result -> result
-  (** Given a result [r] for an operation [op], [inv_result r] is
-      the result that would have been obtained for [inv op]. *)
 end
 
 
@@ -90,17 +101,21 @@ module Bool : sig
 end
 
 module Make_Lattice_Base (V : Lattice_Value) : Lattice_Base with type l = V.t
-module Make_Lattice_Set (V : Lattice_Value) : Lattice_Set with type O.elt=V.t
+
+module Make_Lattice_Set
+    (V : Datatype.S)
+    (Set: Lattice_type.Set with type elt = V.t)
+  : Lattice_type.Lattice_Set with module O = Set
 
 module Make_Hashconsed_Lattice_Set
-  (V : Hptmap.Id_Datatype)
-  (O: Hptset.S with type elt = V.t)
-  : Lattice_Hashconsed_Set with module O = O
+  (V: Hptmap.Id_Datatype)
+  (Set: Hptset.S with type elt = V.t)
+  : Lattice_type.Lattice_Set with module O = Set
 (** See e.g. base.ml and locations.ml to see how this functor should be
     applied. The [O] module passed as argument is the same as [O] in the
     result. It is passed here to avoid having multiple modules calling
     [Hptset.Make] on the same argument (which is forbidden by the datatype
-    library, and would cause hashconding problems) *)
+    library, and would cause hashconsing problems) *)
 
 module type Collapse = sig val collapse : bool end
 

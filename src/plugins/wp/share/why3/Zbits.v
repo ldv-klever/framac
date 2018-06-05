@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -931,16 +931,16 @@ Proof.
     unfold bitwise_lsl; unfold btest.
   auto.
 Qed.
-						    
-Definition lsr_arithmetic_def (x:Z) (n:nat): Z := 
+
+Definition lsr_arithmetic_def (x:Z) (n:nat): Z :=
   x / (two_power_nat n).
 
-(** Note: [lsr_arithmetic_def x n] is different than [lsr_arithmetic_def x (two_power_nat n)] for negative [x]. *)
+(** Note: [lsr_arithmetic_def x n] and [Cdiv x (two_power_nat n)] differs for negative [x]. *)
 Remark lsr_differs_to_Cdiv: lsr_arithmetic_def (-1) 1%nat <> Cdiv (-1) (two_power_nat 1).
 Proof.
   by compute.
 Qed.
-							 
+
 Lemma lsr_arithmetic_shift:
   lsr_shift_def = lsr_arithmetic_def.
 Proof.
@@ -1868,10 +1868,10 @@ Local Ltac f_equal_hyp h f k :=
   end.
 
 Local Ltac linear2 :=
-  intros x y; (try split); intro H; (try split);
+  intros x y; (try split); intros H; (try split);
   let k := fresh "k" in
   Zbit_ext k; 
-  try (destruct H as [H H0] ; f_equal_hyp H0 Zbit k; generalize H0; clear H0);
+  try (destruct H as [H H0] ; f_equal_hyp H0 Zbit k; generalize H0; clear H0) ;
   f_equal_hyp H Zbit k; generalize H; clear H;
   (try unfold limpl); (try unfold lnot);
   (try unfold land); (try unfold lor); (try unfold lxor); 
@@ -1903,14 +1903,14 @@ Lemma linear_limpl_r: forall x y: Z,
 Proof.
   linear2.
 Qed.
-
+(*
 Local Ltac F_equal_hyp h f k :=
   match goal with 
     | [ h:(?X1 = ?X2) |- _ ] => idtac h;
         let H := fresh in assert (H : f X1 k = f X2 k) by (f_equal; auto); clear h;
         assert (h: f X1 k = f X2 k) by (apply H); clear H
   end.
-
+*)
 Lemma linear_limpl_l: forall x y: Z,
   limpl x y = x <-> x=-1 /\ y=-1.
 Proof.
@@ -1948,7 +1948,7 @@ Proof.
 Qed.
 
 Local Ltac linear3 :=
-  intros x y z; (try split); intro H; (try split);
+  intros x y z; (try split); intros H; (try split);
   let k := fresh "k" in
   Zbit_ext k; 
   try (destruct H as [H H0] ; f_equal_hyp H0 Zbit k; generalize H0; clear H0);

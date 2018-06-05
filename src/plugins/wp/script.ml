@@ -20,7 +20,7 @@
 
 # 22 "src/plugins/wp/script.ml"
 let __ocaml_lex_tables = {
-  Lexing.lex_base = 
+  Lexing.lex_base =
    "\000\000\247\255\248\255\001\000\250\255\081\000\162\000\254\255\
     \002\000\243\000\068\001\149\001\230\001\007\000\253\255\249\255\
     \051\000\251\255\252\255\253\255\005\000\000\000\255\255\254\255\
@@ -29,7 +29,7 @@ let __ocaml_lex_tables = {
     \037\000\027\000\028\000\044\000\072\000\046\000\030\000\254\255\
     \252\255\213\000\251\255\252\255\253\255\055\000\131\000\255\255\
     \254\255";
-  Lexing.lex_backtrk = 
+  Lexing.lex_backtrk =
    "\255\255\255\255\255\255\008\000\255\255\004\000\004\000\255\255\
     \000\000\004\000\004\000\004\000\004\000\003\000\255\255\255\255\
     \255\255\255\255\255\255\255\255\004\000\004\000\255\255\255\255\
@@ -38,7 +38,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\002\000\255\255\
     \255\255\255\255\255\255\255\255\255\255\004\000\004\000\255\255\
     \255\255";
-  Lexing.lex_default = 
+  Lexing.lex_default =
    "\001\000\000\000\000\000\255\255\000\000\255\255\255\255\000\000\
     \255\255\255\255\255\255\255\255\255\255\255\255\000\000\000\000\
     \017\000\000\000\000\000\000\000\255\255\255\255\000\000\000\000\
@@ -47,7 +47,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\000\000\
     \000\000\050\000\000\000\000\000\000\000\255\255\255\255\000\000\
     \000\000";
-  Lexing.lex_trans = 
+  Lexing.lex_trans =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\008\000\007\000\008\000\000\000\008\000\000\000\008\000\
     \013\000\014\000\000\000\000\000\013\000\000\000\000\000\000\000\
@@ -152,7 +152,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\027\000";
-  Lexing.lex_check = 
+  Lexing.lex_check =
    "\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\000\000\000\000\008\000\255\255\000\000\255\255\008\000\
     \013\000\013\000\255\255\255\255\013\000\255\255\255\255\255\255\
@@ -257,22 +257,22 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\024\000";
-  Lexing.lex_base_code = 
+  Lexing.lex_base_code =
    "";
-  Lexing.lex_backtrk_code = 
+  Lexing.lex_backtrk_code =
    "";
-  Lexing.lex_default_code = 
+  Lexing.lex_default_code =
    "";
-  Lexing.lex_trans_code = 
+  Lexing.lex_trans_code =
    "";
-  Lexing.lex_check_code = 
+  Lexing.lex_check_code =
    "";
-  Lexing.lex_code = 
+  Lexing.lex_code =
    "";
 }
 
 let rec token lexbuf =
-    __ocaml_lex_token_rec lexbuf 0
+   __ocaml_lex_token_rec lexbuf 0
 and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -331,11 +331,11 @@ and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
       ( Word )
 # 333 "src/plugins/wp/script.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_token_rec lexbuf __ocaml_lex_state
 
 and comment n lexbuf =
-    __ocaml_lex_comment_rec n lexbuf 16
+   __ocaml_lex_comment_rec n lexbuf 16
 and __ocaml_lex_comment_rec n lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -363,11 +363,11 @@ and __ocaml_lex_comment_rec n lexbuf __ocaml_lex_state =
       ( comment n lexbuf )
 # 365 "src/plugins/wp/script.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_comment_rec n lexbuf __ocaml_lex_state
 
 and proof buffer n lexbuf =
-    __ocaml_lex_proof_rec buffer n lexbuf 24
+   __ocaml_lex_proof_rec buffer n lexbuf 24
 and __ocaml_lex_proof_rec buffer n lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -409,11 +409,11 @@ and __ocaml_lex_proof_rec buffer n lexbuf __ocaml_lex_state =
          ( fill buffer lexbuf ; proof buffer n lexbuf )
 # 411 "src/plugins/wp/script.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_proof_rec buffer n lexbuf __ocaml_lex_state
 
 and skip n lexbuf =
-    __ocaml_lex_skip_rec n lexbuf 49
+   __ocaml_lex_skip_rec n lexbuf 49
 and __ocaml_lex_skip_rec n lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -441,7 +441,7 @@ and __ocaml_lex_skip_rec n lexbuf __ocaml_lex_state =
       ( skip n lexbuf )
 # 443 "src/plugins/wp/script.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_skip_rec n lexbuf __ocaml_lex_state
 
 ;;

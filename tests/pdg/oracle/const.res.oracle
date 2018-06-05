@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/pdg/const.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -11,13 +10,13 @@
   G5.M3 ∈ {{ &G2 }}
     .M4 ∈ {{ &G3 }}
 [value] computing for function F2 <- main.
-        Called from tests/pdg/const.i:39.
+  Called from tests/pdg/const.i:39.
 [value] Recording results for F2
 [from] Computing for function F2
 [from] Done for function F2
 [value] Done for function F2
 [value] computing for function F1 <- main.
-        Called from tests/pdg/const.i:41.
+  Called from tests/pdg/const.i:41.
 [value] Recording results for F1
 [from] Computing for function F1
 [from] Done for function F1
@@ -44,7 +43,7 @@
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function F1:
   G3.M2 FROM G2.M2; f1; G5
 [from] Function F2:
@@ -68,18 +67,6 @@
   G3.M2 FROM G1.M2; G4; G5
   \result FROM \nothing
 [from] ====== END OF CALLWISE DEPENDENCIES ======
-[inout] Out (internal) for function F1:
-          G3.M2
-[inout] Inputs for function F1:
-          G2.M2; G5
-[inout] Out (internal) for function F2:
-          G1.M1; V1
-[inout] Inputs for function F2:
-          G4
-[inout] Out (internal) for function main:
-          G1.M1; G2; G3.M2; V2
-[inout] Inputs for function main:
-          G1; G2.M2; G4; G5
 [pdg] computing for function F1
 [pdg] done for function F1
 [pdg] computing for function F2
@@ -112,7 +99,7 @@
  {n11}: In1
    -[a--]-> 10
  {n12}: VarDecl : V1
- {n13}: V1 = 1;
+ {n13}: int V1 = 1;
    -[-c-]-> 9
    -[a--]-> 12
  {n14}: (f2->M5)->M1 = 0;
@@ -167,3 +154,15 @@
  {n30}: In(G5)
  {n31}: In(G1.M2)
  {n32}: In(G4)
+[inout] Out (internal) for function F1:
+    G3.M2
+[inout] Inputs for function F1:
+    G2.M2; G5
+[inout] Out (internal) for function F2:
+    G1.M1; V1
+[inout] Inputs for function F2:
+    G4
+[inout] Out (internal) for function main:
+    G1.M1; G2; G3.M2; V2
+[inout] Inputs for function main:
+    G1; G2.M2; G4; G5

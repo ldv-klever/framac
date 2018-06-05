@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -56,20 +56,6 @@ let pp_callstack fmt =
       Value_types.Callstack.pretty (call_stack())
 ;;
 
-(* Misc *)
-
-let get_rounding_mode () =
-  if Value_parameters.AllRoundingModes.get ()
-  then Fval.Any
-  else Fval.Nearest_Even
-
-let stop_if_stop_at_first_alarm_mode () =
-  if Stop_at_nth.incr()
-  then begin
-      Value_parameters.log "Stopping at nth alarm" ;
-      raise Db.Value.Aborted
-    end
-
 (* Assertions emitted during the analysis *)
 
 let emitter = 
@@ -81,46 +67,9 @@ let emitter =
 
 let () = Db.Value.emitter := emitter
 
-let warn_all_mode = CilE.warn_all_mode
-
-let with_alarm_stop_at_first =
-  let stop = 
-    {warn_all_mode.CilE.others with CilE.a_call = stop_if_stop_at_first_alarm_mode}
-  in
-  {
-    CilE.imprecision_tracing = CilE.a_ignore;
-    defined_logic = stop;
-    unspecified =   stop;
-    others =        stop;
-  }
-
-let with_alarms_raise_exn exn =
-  let raise_exn () = raise exn in
-  let stop = { CilE.a_log = false; CilE.a_call = raise_exn } in
-  { CilE.imprecision_tracing = CilE.a_ignore;
-    defined_logic = stop;
-    unspecified =   stop;
-    others =        stop;
-  }
-  
-
-let warn_all_quiet_mode () =
-  if Value_parameters.StopAtNthAlarm.get () <> max_int 
-  then with_alarm_stop_at_first
-  else
-    if Value_parameters.verbose_atleast 1 then
-      warn_all_mode
-    else
-      { warn_all_mode with CilE.imprecision_tracing = CilE.a_ignore }
-
 let get_slevel kf =
   try Value_parameters.SlevelFunction.find kf
   with Not_found -> Value_parameters.SemanticUnrollingLevel.get ()
-
-let set_loc kinstr =
-  match kinstr with
-  | Kglobal -> Cil.CurrentLoc.clear ()
-  | Kstmt s -> Cil.CurrentLoc.set (Cil_datatype.Stmt.loc s)
 
 let pretty_actuals fmt actuals =
   let pp fmt (e,x,_) = Cvalue.V.pretty_typ (Some (Cil.typeOf e)) fmt x in
@@ -133,26 +82,9 @@ let warning_once_current fmt =
   Value_parameters.warning ~current:true ~once:true fmt
 
 (* Emit alarms in "non-warning" mode *)
-let alarm_report ?(level=1) ?current ?source ?emitwith ?echo ?once ?append =
-  if Value_parameters.AlarmsWarnings.get () then
-    Value_parameters.warning ?current ?source ?emitwith ?echo ?once ?append
-  else
-    Value_parameters.result ~dkey:Value_parameters.dkey_alarm
-      ?current ?source ?emitwith ?echo ?once ?append ~level
-
-let debug_result kf (last_ret,_,last_clob) =
-  Value_parameters.debug
-    "@[RESULT FOR %a <-%a:@\n\\result -> %t@\nClobered set:%a@]"
-    Kernel_function.pretty kf
-    Value_types.Callstack.pretty (call_stack ())
-    (fun fmt ->
-      match last_ret with
-        | None -> ()
-        | Some v -> Cvalue.V_Offsetmap.pretty fmt v)
-    Base.SetLattice.pretty last_clob
-
-
-
+let alarm_report ?current ?source ?emitwith ?echo ?once ?append =
+  Value_parameters.warning ~wkey:Value_parameters.wkey_alarm
+    ?current ?source ?emitwith ?echo ?once ?append
 
 module DegenerationPoints =
   Cil_state_builder.Stmt_hashtbl
@@ -162,10 +94,6 @@ module DegenerationPoints =
       let size = 17
       let dependencies = [ Db.Value.self ]
     end)
-
-let warn_indeterminate kf =
-  let params = Value_parameters.WarnCopyIndeterminate.get () in
-  Kernel_function.Set.mem kf params
 
 let register_new_var v typ =
   if Cil.isFunctionType typ then
@@ -180,15 +108,6 @@ let create_new_var name typ =
 
 let is_const_write_invalid typ =
   Kernel.ConstReadonly.get () && Cil.typeHasQualifier "const" typ
-
-let float_kind = function
-  | FFloat -> Fval.Float32
-  | FDouble -> Fval.Float64
-  | FLongDouble ->
-    if Cil.theMachine.Cil.theMachine.sizeof_longdouble <> 8 then
-      Value_parameters.error ~once:true
-        "type long double not implemented. Using double instead";
-    Fval.Float64
 
 (* Find if a postcondition contains [\result] *)
 class postconditions_mention_result = object
@@ -215,21 +134,6 @@ let postconditions_mention_result spec =
   Cil.CurrentLoc.set loc;
   res
 
-let bind_block_locals states b =
-  (* Bind [vi] in [states] *)
-  let bind_local_stateset states vi =
-    let b = Base.of_varinfo vi in
-    match Cvalue.Default_offsetmap.default_offsetmap b with
-    | `Bottom -> states
-    | `Value offsm ->
-       (* Bind [vi] in [state], and does not modify the trace *)
-       let bind_local_state (state, trace) =
-         (Cvalue.Model.add_base b offsm state, trace)
-       in
-       State_set.map bind_local_state states
-  in
-  List.fold_left bind_local_stateset states b.blocals
-
 let conv_comp op =
   let module C = Abstract_interp.Comp in
   match op with
@@ -251,77 +155,83 @@ let conv_relation rel =
   | Rge -> C.Ge
   | Rgt -> C.Gt
 
-(* Test that two functions types are compatible; used to verify that a call
-   through a function pointer is ok. In theory, we could only check that
-   both types are compatible as defined by C99, 6.2.7. However, some industrial
-   codes do not strictly follow the norm, and we must be more lenient.
-   Thus, we emit a warning on undefined code, but we also return true
-   if Value can ignore more or less safely the incompatibleness in the types. *)
-let compatible_functions ~with_alarms vi typ_pointer typ_fun =
-  try
-    ignore (Cabs2cil.compatibleTypes typ_pointer typ_fun); true
-  with Failure _ ->
-    let compatible_sizes t1 t2 =
-      try Cil.bitsSizeOf t1 = Cil.bitsSizeOf t2
-      with Cil.SizeOfError _ -> false
-    in
-    let continue = match Cil.unrollType typ_pointer, Cil.unrollType typ_fun with
-      | TFun (ret1, args1, var1, _), TFun (ret2, args2, var2, _) ->
-          (* Either both functions are variadic, or none. Otherwise, it
-             will be too complicated to make the argument match *)
-          var1 = var2 &&
-          (* Both functions return something of the same size, or nothing*)
-          (match Cil.unrollType ret1, Cil.unrollType ret2 with
-            | TVoid _, TVoid _ -> true (* let's avoid relying on the size
-                                          of void *)
-            | TVoid _, _ | _, TVoid _ -> false
-            | t1, t2 -> compatible_sizes t1 t2
-          ) &&
-          (* Argument lists of the same length, with compatible sizes between
-             the arguments, or unspecified argument lists *)
-          (match args1, args2 with
-            | None, None | None, Some _ | Some _, None -> true
-            | Some lp, Some lf ->
-                (* See corresponding function fold_left2_best_effort in
-                   Function_args *)
-                let rec comp lp lf = match lp, lf with
-                  | _, [] -> true (* accept too many arguments passed *)
-                  | [], _ :: _ -> false (* fail on too few arguments *)
-                  | (_, tp, _) :: qp, (_, tf, _) :: qf ->
-                      compatible_sizes tp tf && comp qp qf
-                in
-                comp lp lf
-          )
-      | _ -> false
-    in
-    if with_alarms.CilE.others.CilE.a_log then
-      warning_once_current
-        "@[Function@ pointer@ and@ pointed@ function@ '%a'@ have@ %s\
-         incompatible@ types:@ %a@ vs.@ %a.@ assert(function type matches)@]%t"
-        Printer.pp_varinfo vi
-        (if continue then "" else "completely ")
-        Printer.pp_typ typ_pointer Printer.pp_typ typ_fun
-        pp_callstack;
-    continue
-
 let loc_dummy_value =
   let l = { Lexing.dummy_pos with Lexing.pos_fname = "_value_" } in
   l, l
 
 let zero e =
   let loc = loc_dummy_value in
-  match Cil.unrollType (Cil.typeOf e) with
+  let typ = Cil.unrollType (Cil.typeOf e) in
+  match typ with
   | TFloat (fk, _) -> Cil.new_exp ~loc (Const (CReal (0., fk, None)))
   | TEnum ({ekind = ik },_)
   | TInt (ik, _) -> Cil.new_exp ~loc (Const (CInt64 (Integer.zero, ik, None)))
   | TPtr _ ->
     let ik = Cil.(theMachine.upointKind) in
-    Cil.new_exp ~loc (Const (CInt64 (Integer.zero, ik, None)))
+    let zero = Cil.new_exp ~loc (Const (CInt64 (Integer.zero, ik, None))) in
+    Cil.mkCast ~force:true ~overflow:Check ~e:zero ~newt:typ
   | typ -> Value_parameters.fatal ~current:true "non-scalar type %a"
              Printer.pp_typ typ
 
+let eq_with_zero positive e =
+  let op = if positive then Eq else Ne in
+  let loc = Cil_datatype.Location.unknown in
+  Cil.new_exp ~loc (BinOp (op, zero e, e, Cil.intType))
+
 let is_value_zero e =
   e.eloc == loc_dummy_value
+
+  let inv_rel = function
+    | Gt -> Le
+    | Lt -> Ge
+    | Le -> Gt
+    | Ge -> Lt
+    | Eq -> Ne
+    | Ne -> Eq
+    | _ -> assert false
+  
+(* Transform an expression supposed to be [positive] into an equivalent
+   one in which the root expression is a comparison operator. *)
+let rec normalize_as_cond expr positive =
+  match expr.enode with
+  | UnOp (LNot, e, _) -> normalize_as_cond e (not positive)
+  | BinOp ((Le|Ne|Eq|Gt|Lt|Ge as binop), e1, e2, typ) ->
+    if positive then
+      expr
+    else
+      let binop = inv_rel binop in
+      let enode = BinOp (binop, e1, e2, typ) in
+      Cil.new_exp ~loc:expr.eloc enode
+  | _ ->
+    eq_with_zero (not positive) expr
+
+module PairExpBool =
+  Datatype.Pair_with_collections(Cil_datatype.Exp)(Datatype.Bool)
+    (struct let module_name = "Value.Value_util.PairExpBool" end)
+module MemoNormalizeAsCond =
+  State_builder.Hashtbl
+    (PairExpBool.Hashtbl)
+    (Cil_datatype.Exp)
+    (struct
+      let name = "Value_util.MemoNormalizeAsCond"
+      let size = 64
+      let dependencies = [ Ast.self ]
+    end)
+let normalize_as_cond e pos =
+  MemoNormalizeAsCond.memo (fun (e, pos) -> normalize_as_cond e pos) (e, pos)
+
+module MemoLvalToExp =
+  Cil_state_builder.Lval_hashtbl
+    (Cil_datatype.Exp)
+    (struct
+      let name = "Value_util.MemoLvalToExp"
+      let size = 64
+      let dependencies = [ Ast.self ]
+    end)
+
+let lval_to_exp =
+  MemoLvalToExp.memo
+    (fun lv -> Cil.new_exp ~loc:Cil_datatype.Location.unknown (Lval lv))
 
 let dump_garbled_mix () =
   let l = Cvalue.V.get_garbled_mix () in
@@ -332,30 +242,50 @@ let dump_garbled_mix () =
       @[<v>%a@]"
       (Pretty_utils.pp_list ~pre:"" ~suf:"" ~sep:"@ " pp_one) l
 
+
+(* Computation of the inputs of an expression. *)
 let rec zone_of_expr find_loc expr =
   let rec process expr = match expr.enode with
-    | Lval lval -> zone_of_lval find_loc lval
-    | UnOp (_, e, _) | CastE (_, _, e) | Info (e, _) -> process e
-    | BinOp (_, e1, e2, _) -> Locations.Zone.join (process e1) (process e2)
-    | StartOf lv | AddrOf lv -> zone_of_lval find_loc lv
-    | _ -> Locations.Zone.bottom
+    | Lval lval ->
+      (* Dereference of an lvalue. *)
+      zone_of_lval find_loc lval
+    | UnOp (_, e, _) | CastE (_, _, e) | Info (e, _) ->
+      (* Unary operators. *)
+      process e
+    | BinOp (_, e1, e2, _) ->
+      (* Binary operators. *)
+      Locations.Zone.join (process e1) (process e2)
+    | StartOf lv | AddrOf lv ->
+      (* computation of an address: the inputs of the lvalue whose address
+         is computed are read to compute said address. *)
+      indirect_zone_of_lval find_loc lv
+    | Const _ | SizeOf _ | AlignOf _ | SizeOfStr _ | SizeOfE _ | AlignOfE _ ->
+      (* static constructs, nothing is read to evaluate them. *)
+      Locations.Zone.bottom
   in
   process expr
 
+(* dereference of an lvalue: first, its address must be computed,
+   then its contents themselves are read *)
 and zone_of_lval find_loc lval =
   let loc = find_loc lval in
   let zone = Locations.enumerate_bits (Precise_locs.imprecise_location loc) in
   Locations.Zone.join zone
     (indirect_zone_of_lval find_loc lval)
 
+(* Computations of the inputs of a lvalue : union of the "host" part and
+   the offset. *)
 and indirect_zone_of_lval find_loc (lhost, offset) =
   (Locations.Zone.join
      (zone_of_lhost find_loc lhost) (zone_of_offset find_loc offset))
 
+(* Computation of the inputs of a host. Nothing for a variable, and the
+   inputs of [e] for a dereference [*e]. *)
 and zone_of_lhost find_loc = function
   | Var _ -> Locations.Zone.bottom
   | Mem e -> zone_of_expr find_loc e
 
+(* Computation of the inputs of an offset. *)
 and zone_of_offset find_loc = function
   | NoOffset -> Locations.Zone.bottom
   | Field (_, o) -> zone_of_offset find_loc o
@@ -363,6 +293,31 @@ and zone_of_offset find_loc = function
     Locations.Zone.join
       (zone_of_expr find_loc e) (zone_of_offset find_loc o)
 
+let rec height_expr expr =
+  match expr.enode with
+  | Const _ | SizeOf _ | SizeOfStr _ | AlignOf _ -> 0
+  | Lval lv | AddrOf lv | StartOf lv  -> height_lval lv + 1
+  | UnOp (_,e,_) | CastE (_, _, e) | Info (e,_) | SizeOfE e | AlignOfE e
+    -> height_expr e + 1
+  | BinOp (_,e1,e2,_) -> max (height_expr e1) (height_expr e2) + 1
+
+and height_lval (host, offset) =
+  let h1 = match host with
+    | Var _ -> 0
+    | Mem e -> height_expr e + 1
+  in
+  max h1 (height_offset offset) + 1
+
+and height_offset = function
+  | NoOffset  -> 0
+  | Field (_,r) -> height_offset r + 1
+  | Index (e,r) -> max (height_expr e) (height_offset r) + 1
+
+
+let skip_specifications kf =
+  Value_parameters.SkipLibcSpecs.get () &&
+  Kernel_function.is_definition kf &&
+  Cil.hasAttribute "fc_stdlib" (Kernel_function.get_vi kf).vattr
 
 (*
 Local Variables:

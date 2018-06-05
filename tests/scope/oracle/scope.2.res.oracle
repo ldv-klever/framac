@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/scope/scope.c (with preprocessing)
 [value] Analyzing a complete application starting at loop
 [value] Computing initial state
@@ -8,13 +7,19 @@
   S1 ∈ {0}
   S2 ∈ {0}
   T[0..99] ∈ {0}
-tests/scope/scope.c:67:[value] entering loop for the first time
-tests/scope/scope.c:68:[value] warning: signed overflow. assert a + 1 ≤ 2147483647;
-tests/scope/scope.c:69:[value] warning: signed overflow. assert b + 1 ≤ 2147483647;
-tests/scope/scope.c:70:[value] warning: signed overflow. assert s + 1 ≤ 2147483647;
-tests/scope/scope.c:75:[value] warning: signed overflow. assert a + 1 ≤ 2147483647;
-tests/scope/scope.c:76:[value] warning: signed overflow. assert b + 1 ≤ 2147483647;
-tests/scope/scope.c:77:[value] warning: signed overflow. assert i + 1 ≤ 2147483647;
+[value] tests/scope/scope.c:67: entering loop for the first time
+[value:alarm] tests/scope/scope.c:68: Warning: 
+  signed overflow. assert a + 1 ≤ 2147483647;
+[value:alarm] tests/scope/scope.c:69: Warning: 
+  signed overflow. assert b + 1 ≤ 2147483647;
+[value:alarm] tests/scope/scope.c:70: Warning: 
+  signed overflow. assert s + 1 ≤ 2147483647;
+[value:alarm] tests/scope/scope.c:75: Warning: 
+  signed overflow. assert a + 1 ≤ 2147483647;
+[value:alarm] tests/scope/scope.c:76: Warning: 
+  signed overflow. assert b + 1 ≤ 2147483647;
+[value:alarm] tests/scope/scope.c:77: Warning: 
+  signed overflow. assert i + 1 ≤ 2147483647;
 [value] Recording results for loop
 [value] done for function loop
 [value] ====== VALUES COMPUTED ======

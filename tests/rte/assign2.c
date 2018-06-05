@@ -1,12 +1,12 @@
 /* run.config
-   OPT: -rte -warn-signed-overflow -rte-no-all -print -rte-precond
+   OPT: -rte -warn-signed-overflow -rte-no-mem -print -rte-precond
 */
 
 int i;
 int t[10];
 
 //@ ensures 0 <= \result <= 0;
-int any();
+int any(void);
 
 /*@ assigns i, t[\at(i,Post)];
   @ ensures t[i] == \old(t[\at(i,Here)]) + 1;

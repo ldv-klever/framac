@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/slice_pragma_stmt.i (no preprocessing)
 [slicing] slicing requests in progress...
 [value] Analyzing a complete application starting at test8
@@ -7,11 +6,13 @@
 [value:initial-state] Values of globals at initialization
   x ∈ {0}
   y ∈ {0}
-tests/slicing/slice_pragma_stmt.i:152:[value] warning: signed overflow. assert c1 + 1 ≤ 2147483647;
-tests/slicing/slice_pragma_stmt.i:152:[value] warning: signed overflow. assert c2 + 1 ≤ 2147483647;
+[value:alarm] tests/slicing/slice_pragma_stmt.i:152: Warning: 
+  signed overflow. assert c1 + 1 ≤ 2147483647;
+[value:alarm] tests/slicing/slice_pragma_stmt.i:152: Warning: 
+  signed overflow. assert c2 + 1 ≤ 2147483647;
 [value] Recording results for test8
 [value] done for function test8
-[slicing] making slicing project 'Slicing'...
+[slicing] initializing slicing ...
 [slicing] interpreting slicing requests from the command line...
 [pdg] computing for function test8
 [pdg] done for function test8
@@ -34,16 +35,13 @@ void test8(int c1, int c2)
   /*@ slice pragma stmt; */
   {
     int tmp;
-    L: { /* sequence */
-         tmp = c1;
-         c1 ++;
-         x = tmp;
-       }
+    L: tmp = c1;
+       c1 ++;
+       x = tmp;
     c2 ++;
   }
   return;
 }
 
 
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/result/ocode_21_slice_pragma_stmt.i (no preprocessing)

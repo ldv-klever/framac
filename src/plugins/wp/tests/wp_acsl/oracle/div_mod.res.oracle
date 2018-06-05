@@ -1,9 +1,8 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_acsl/div_mod.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 ------------------------------------------------------------
   Function f
 ------------------------------------------------------------
@@ -41,7 +40,7 @@ Prove: P_Peq(x_1, x_1).
 ------------------------------------------------------------
 
 Goal Post-condition 'd6,div_0_x' in 'f':
-Assume { Type: is_sint32(x). (* Goal *) When: 0 != x. }
+Assume { Type: is_sint32(x). (* Goal *) When: x != 0. }
 Prove: P_Peq(0 / x, 0).
 
 ------------------------------------------------------------
@@ -124,7 +123,7 @@ Prove: P_Peq(x % (-1), 0).
 ------------------------------------------------------------
 
 Goal Post-condition 'm6,mod_0_x' in 'f':
-Assume { Type: is_sint32(x). (* Goal *) When: 0 != x. }
+Assume { Type: is_sint32(x). (* Goal *) When: x != 0. }
 Prove: P_Peq(0 % x, 0).
 
 ------------------------------------------------------------

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -47,27 +47,15 @@ let import_varinfo (vi : varinfo) ~importing_value =
     end
   with Not_found ->
     (* search in the state *)
-    (* alloced_return_* variables can have their kf restored via their name *)
-    if Extlib.string_prefix "alloced_return_" vi.vname then begin
-      let len = String.length "alloced_return_" in
-      let kf_name = String.sub vi.vname len (String.length vi.vname - len) in
-      try
-        let kf = Globals.Functions.find_by_name kf_name in
-        Value_parameters.feedback ~dkey "recreating alloced_return_%s" kf_name;
-        let base = Library_functions.create_alloced_return vi.vtype kf in
-        Base.to_varinfo base
-      with Not_found ->
-        Value_parameters.abort "alloced_return should have function: `%s'" kf_name
-    end else
     if importing_value then begin
       (* Variable may be an escaping local value *)
-      Value_parameters.warning "variable `%a (id %d)' is not global, \
+      Value_parameters.warning "variable `%a' is not global, \
                                 possibly an escaping value; ignoring"
-        Printer.pp_varinfo vi vi.vid;
+        Printer.pp_varinfo vi;
       raise Possibly_escaping_value
     end else
-      Value_parameters.abort "global not found: `%a' (id %d)"
-        Printer.pp_varinfo vi vi.vid
+      Value_parameters.abort "global not found: `%a'"
+        Printer.pp_varinfo vi
 
 let import_validity = function
   | Base.Empty | Base.Known _ | Base.Unknown _ | Base.Invalid as v -> v
@@ -98,12 +86,12 @@ let import_base (base : Base.t) ~importing_value =
       in
       let e = Cil.new_exp Cil_datatype.Location.unknown c in
       Base.of_string_exp e
-    | Base.Allocated (vi, validity) ->
-      Value_parameters.feedback ~dkey "recreating allocated base for malloc: `%a'"
+    | Base.Allocated (vi, deallocation, validity) ->
+      Value_parameters.feedback ~dkey "recreating allocated base for alloc: `%a'"
         Printer.pp_varinfo vi;
       let new_vi = Value_util.create_new_var vi.vname vi.vtype in
       let validity = import_validity validity in
-      let new_base = Base.register_allocated_var new_vi validity in
+      let new_base = Base.register_allocated_var new_vi deallocation validity in
       Builtins_malloc.register_malloced_base new_base;
       new_base
   in
@@ -118,20 +106,11 @@ let import_base (base : Base.t) ~importing_value =
 
 let import_base_setlattice (sl : Base.SetLattice.t) ~importing_value =
   Base.SetLattice.fold (fun base acc ->
-      let sl' = Base.SetLattice.inject_singleton (import_base base ~importing_value) in
-      Base.SetLattice.join acc sl'
-    ) sl Base.SetLattice.empty
+      let b' = import_base base ~importing_value in
+      Base.Hptset.add b' acc
+    ) sl Base.Hptset.empty
 
-let import_ival (ival : Ival.t) =
-  match ival with
-  | Ival.Set a ->
-    Array.fold_left
-      (fun acc i -> Ival.join (Ival.inject_singleton i) acc)
-      Ival.bottom a
-  | Ival.Float _ ->
-    let mn, mx = Ival.min_and_max_float ival in
-    Ival.inject_float_interval (Fval.F.to_float mn) (Fval.F.to_float mx)
-  | Ival.Top (mn,mx,m,u) -> Ival.inject_top mn mx m u
+let import_ival = Ival.rehash
 
 let import_map (m : Cvalue.V.M.t) =
   let add base ival m =
@@ -147,8 +126,8 @@ let import_v (v : Cvalue.V.t) =
     Value_parameters.warning ~once:true
       "importing garbled mix, locations may have changed";
     (*let o' = import_origin o in*)
-    let sl' = import_base_setlattice sl ~importing_value:true in
-    Cvalue.V.Top (sl', o)
+    let s = import_base_setlattice sl ~importing_value:true in
+    Cvalue.V.inject_top_origin o s
   | Cvalue.V.Map m ->
     import_map m
 
@@ -215,7 +194,7 @@ let save_globals_to_file kf state_with_locals filename =
 let load_and_merge_function_state state : Model.t =
   let (kf, filename) = Value_parameters.get_LoadFunctionState () in
   Value_parameters.feedback
-    "Skipping call to %a,@ loading globals state from file:@ %s"
+    "@[<hov 0>Skipping call to %a,@ loading globals state from file:@ %s@]"
     Kernel_function.pretty kf filename;
   let saved_state = load_globals_from_file filename in
   Value_parameters.debug ~dkey "LOADED STATE:@.%a"
@@ -254,7 +233,8 @@ let load_and_merge_function_state state : Model.t =
   in
   let map_with_globals = match merged_globals_state with
     | Model.Map m -> m
-    | _ -> assert false
+    | _ -> Value_parameters.fatal "invalid saved state: %a"
+             Model.pretty saved_state
   in
   let merged_globals_and_locals =
     Model.fold (fun new_base offsm acc ->
@@ -268,7 +248,14 @@ let save_globals_state () : unit =
   let ret_stmt = Kernel_function.find_return kf in
   try
     let ret_state = Db.Value.get_stmt_state ret_stmt in
-    save_globals_to_file kf ret_state filename
+    match ret_state with
+    | Model.Top ->
+      Value_parameters.abort "cannot save state at return statement of %a \
+                              (too imprecise)" Kernel_function.pretty kf
+    | Model.Bottom ->
+      Value_parameters.abort "cannot save state at return statement of %a \
+                              (bottom)" Kernel_function.pretty kf
+    | Model.Map _ -> save_globals_to_file kf ret_state filename
   with Not_found ->
     if Value_parameters.LoadFunctionState.is_set () then
       let (load_kf, _) = Value_parameters.get_LoadFunctionState () in

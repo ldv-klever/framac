@@ -43,7 +43,7 @@
 
 (* FrontC -- lexical analyzer
 **
-** 1.0	3.22.99	Hugues Cassé	First version.
+** 1.0	3.22.99	Hugues CassÃ©	First version.
 ** 2.0  George Necula 12/12/00: Many extensions
 *)
 {
@@ -51,7 +51,7 @@ open Cparser
 module H = Hashtbl
 module E = Errorloc
 
-let currentLoc () = Errorloc.currentLoc ()
+let currentLoc () = E.currentLoc ()
 
 let one_line_ghost = ref false
 let is_oneline_ghost () = !one_line_ghost
@@ -62,6 +62,11 @@ let ghost_code = ref false
 let is_ghost_code () = !ghost_code
 let enter_ghost_code () = ghost_code := true
 let exit_ghost_code () = ghost_code := false
+
+let ghost_annot = ref false
+let is_ghost_annot () = !ghost_annot
+let enter_ghost_annot () = ghost_annot := true
+let exit_ghost_annot () = ghost_annot := false
 
 let addComment c = Cabshelper.Comments.add (currentLoc()) c
 
@@ -249,7 +254,7 @@ let scan_ident id =
 
 let init ~(filename: string) : Lexing.lexbuf =
   init_lexicon ();
-  (* Inititialize the pointer in Errormsg *)
+  (* Initialize the pointer in Errormsg *)
   Lexerhack.add_type := add_type;
   Lexerhack.push_context := push_context;
   Lexerhack.pop_context := pop_context;
@@ -326,9 +331,9 @@ let lex_unescaped remainder lexbuf =
   prefix :: remainder lexbuf
 
 let lex_comment remainder buffer lexbuf =
-  let ch = Lexing.lexeme_char lexbuf 0 in
-  if ch = '\n' then E.newline() ;
-  (match buffer with None -> () | Some b -> Buffer.add_char b ch) ;
+  let s = Lexing.lexeme lexbuf in
+  if s = "\n" then E.newline() ;
+  (match buffer with None -> () | Some b -> Buffer.add_string b s) ;
   remainder buffer lexbuf
 
 let do_lex_comment ?(first_string="") remainder lexbuf =
@@ -357,7 +362,7 @@ let wbtowc wstr =
   dest
 *)
 
-(* This function converst the "Hi" in L"Hi" to { L'H', L'i', L'\0' }
+(* This function converts the "Hi" in L"Hi" to { L'H', L'i', L'\0' }
   matth: this seems unused.
 let wstr_to_warray wstr =
   let len = String.length wstr in
@@ -379,8 +384,7 @@ let () =
   Kernel.ReadAnnot.add_set_hook
     (fun _ x ->
       (* prevent the C lexer interpretation of comments *)
-      annot_char := if x then '@' else '\000');
-  Kernel.CustomAnnot.add_set_hook (fun _ s -> annot_char:=s.[0])
+      annot_char := if x then '@' else '\000')
 
 let annot_start_pos = ref Cabshelper.cabslu
 let buf = Buffer.create 1024
@@ -388,16 +392,28 @@ let buf = Buffer.create 1024
 let save_current_pos () =
   annot_start_pos := currentLoc ()
 
-let make_annot lexbuf s =
+let annot_lex initial rule lexbuf =
+  try
+    save_current_pos ();
+    Buffer.clear buf;
+    rule lexbuf
+  with Parsing.Parse_error ->
+    let source = Lexing.lexeme_start_p lexbuf in
+    Kernel.warning ~wkey:Kernel.wkey_annot_error ~source "skipping annotation";
+    initial lexbuf
+
+let make_annot default lexbuf s =
   let start = snd !annot_start_pos in
-  let stop, token = Logic_lexer.annot (start, s) in
-  lexbuf.Lexing.lex_curr_p <-
+  match Logic_lexer.annot (start, s) with
+  | Some (stop, token) ->
+    lexbuf.Lexing.lex_curr_p <-
     Lexing.{ stop with
              pos_cnum = stop.pos_cnum + start.pos_cnum;
              pos_bol = if stop.pos_lnum <> start.pos_lnum then stop.pos_bol + start.pos_cnum else start.pos_bol };
-  (* The filename has already been normalized, so we must reuse it "as is". *)
-  E.setCurrentFile ~normalize:false stop.Lexing.pos_fname;
-  match token with
+    (* The filename has already been normalized, so we must reuse it "as is". *)
+    E.setCurrentFile ~normalize:false stop.Lexing.pos_fname;
+    (match token with
+
     | Logic_ptree.Adecl d -> DECL d
     | Logic_ptree.Aspec -> SPEC (start,s)
         (* At this point, we only have identified a function spec. Complete
@@ -408,7 +424,9 @@ let make_annot lexbuf s =
     | Logic_ptree.Aattribute_annot (loc,a) -> ATTRIBUTE_ANNOT (a, loc)
     | Logic_ptree.Aliteral_annot s -> LITERAL_NAME s
     | Logic_ptree.Amodulo_op_annot -> MODULO_OP
-    | Logic_ptree.Acustom(loc,id, a) -> CUSTOM_ANNOT(a, id, loc)
+    | Logic_ptree.Acustom(loc,id, a) -> CUSTOM_ANNOT(a, id, loc))
+  | None -> (* error occured and annotation is discarded. Find a normal token. *)
+    default lexbuf
 
 }
 
@@ -468,29 +486,16 @@ let no_parse_pragma =
 
 
 rule initial = parse
-| "/*" | "/*@{" | "/*@}" (* Skip special doxygen comments. Use of '@' instead
-                            of '!annot_char' is intentional *)
+| "/*" ("" | "@{" | "@}" as suf) (* Skip special doxygen comments. Use of '@'
+                                    instead of '!annot_char' is intentional *)
       {
-        let s = Lexing.lexeme lexbuf in
-        let first_string =
-          if String.length s > 2 then
-            String.sub s 2 (String.length s - 2)
-          else ""
-        in
-	do_lex_comment ~first_string comment lexbuf ;
+        do_lex_comment ~first_string:suf comment lexbuf ;
         initial lexbuf
       }
 
 | "/*" ([^ '*' '\n'] as c)
     { if c = !annot_char then begin
-      try
-        save_current_pos ();
-	Buffer.clear buf;
-	annot_first_token lexbuf
-      with Parsing.Parse_error when Kernel.ContinueOnAnnotError.get () ->
-        let source = Lexing.lexeme_start_p lexbuf in
-        Kernel.debug ~source "skipping annotation";
-	initial lexbuf
+        annot_lex initial annot_first_token lexbuf
       end else
 	begin
 	  do_lex_comment ~first_string:(String.make 1 c) comment lexbuf ;
@@ -509,15 +514,9 @@ rule initial = parse
         E.parse_error "Invalid symbol"
     }
 
-| "//" | "//@{" | "//@}" (* See comment for "/*@{" above *)
+| "//" ("" | "@{" | "@}" as suf) (* See comment for "/*@{" above *)
     { 
-      let s = Lexing.lexeme lexbuf in
-      let first_string =
-        if String.length s > 2 then
-          String.sub s 2 (String.length s - 2)
-        else ""
-      in
-      do_lex_comment ~first_string onelinecomment lexbuf ;
+      do_lex_comment ~first_string:suf onelinecomment lexbuf ;
       E.newline();
       if is_oneline_ghost () then begin
         exit_oneline_ghost ();
@@ -529,14 +528,7 @@ rule initial = parse
 
 | "//" ([^ '\n'] as c)
     { if c = !annot_char then begin
-      try
-        save_current_pos ();
-	Buffer.clear buf;
-	annot_one_line lexbuf
-      with Parsing.Parse_error when Kernel.ContinueOnAnnotError.get () ->
-        let source = Lexing.lexeme_start_p lexbuf in
-        Kernel.debug ~source "skipping annotation";
-        initial lexbuf
+        annot_lex initial annot_one_line lexbuf
       end else
 	begin
 	  do_lex_comment ~first_string:(String.make 1 c) onelinecomment lexbuf;
@@ -573,17 +565,30 @@ rule initial = parse
 |		'#'			{ hash lexbuf}
 |		"%:"			{ hash lexbuf}
 |               "_Pragma" 	        { PRAGMA (currentLoc ()) }
-|		'\''			{ CST_CHAR (chr lexbuf, currentLoc ())}
-|		"L'"			{ CST_WCHAR (chr lexbuf, currentLoc ()) }
+|		'\''			{
+      let start = Lexing.lexeme_start_p lexbuf in
+      let content = chr lexbuf in
+      let last = Lexing.lexeme_end_p lexbuf in
+      CST_CHAR (content, (start,last))
+    }
+|		"L'"			{
+      let start = Lexing.lexeme_start_p lexbuf in
+      let content = chr lexbuf in
+      let last = Lexing.lexeme_end_p lexbuf in
+      CST_WCHAR (content, (start,last))
+    }
 |		'"'			{  
-(* matth: BUG:  this could be either a regular string or a wide string.
- *  e.g. if it's the "world" in
- *     L"Hello, " "world"
- *  then it should be treated as wide even though there's no L immediately
- *  preceding it.  See test/small1/wchar5.c for a failure case. *)
-                                          CST_STRING (str lexbuf, currentLoc())}
-|		"L\""			{ (* weimer: wchar_t string literal *)
-                                          CST_WSTRING(str lexbuf, currentLoc())}
+      let start = Lexing.lexeme_start_p lexbuf in
+      let content = str lexbuf in
+      let last = Lexing.lexeme_end_p lexbuf in
+      CST_STRING (content, (start,last))
+    }
+|		"L\""			{
+      let start = Lexing.lexeme_start_p lexbuf in
+      let content = str lexbuf in
+      let last = Lexing.lexeme_end_p lexbuf in
+      CST_WSTRING(content, (start,last))
+    }
 |		floatnum		{CST_FLOAT (Lexing.lexeme lexbuf, currentLoc ())}
 |		binarynum               { (* GCC Extension for binary numbers *) 
                                           CST_INT (Lexing.lexeme lexbuf, currentLoc ())}
@@ -620,6 +625,17 @@ rule initial = parse
                     { if is_ghost_code () then might_end_ghost lexbuf
                       else
                         STAR (currentLoc ())}
+| "/" ([^ '\n'] as c)
+   { if c = !annot_char then
+       if is_ghost_code () || is_oneline_ghost () then begin
+         enter_ghost_annot();
+         annot_lex initial annot_first_token lexbuf
+       end else
+         E.parse_error "This kind of annotation is valid only inside ghost code"
+     else begin
+       lexbuf.Lexing.lex_curr_pos <- lexbuf.Lexing.lex_curr_pos - 1;
+       SLASH
+     end }
 |		'/'			{SLASH}
 |		'%'			{PERCENT}
 |		'!'			{EXCLAM (currentLoc ())}
@@ -669,6 +685,7 @@ rule initial = parse
     end
     else EOF
   }
+
 |		'@'			{if is_ghost_code () then
 					   initial lexbuf
 					 else
@@ -685,6 +702,13 @@ and comment buffer = parse
   | _           { lex_comment comment buffer lexbuf }
 
 and onelinecomment buffer = parse
+  | "*/"        { if is_ghost_code () then
+                      (* end of multiline comment *)
+                      lexbuf.Lexing.lex_curr_pos <-
+                          lexbuf.Lexing.lex_curr_pos - 2
+                  else
+                      lex_comment onelinecomment buffer lexbuf
+                }
   | '\n'|eof    {  }
   | _           { lex_comment onelinecomment buffer lexbuf }
 
@@ -733,16 +757,11 @@ and file =  parse
 |	blank			{file lexbuf}
 (* The //-ending file directive is a GCC extension that provides the CWD of the
    preprocessor when the file was preprocessed. *)
-|       '"' [^ '\012' '\t' '"']* '/' '/' '"' {
-                                 let n = Lexing.lexeme lexbuf in
-				 let n1 = String.sub n 1 ((String.length n) - 4) in
-                                 E.setCurrentWorkingDirectory n1;
+|       '"' ([^ '\012' '\t' '"']* as d) "//\"" {
+        E.setCurrentWorkingDirectory d;
                                  endline lexbuf }
-|	'"' [^ '\012' '\t' '"']* '"' 	{  (* '"' *)
-                                   let n = Lexing.lexeme lexbuf in
-                                   let n1 = String.sub n 1
-                                       ((String.length n) - 2) in
-                                   E.setCurrentFile n1;
+|	'"' ([^ '\012' '\t' '"']* as f) '"' {
+                                 E.setCurrentFile f;
 				 endline lexbuf}
 
 |	_			{endline lexbuf}
@@ -807,15 +826,23 @@ and annot_first_token = parse
 and annot_token = parse
   | "@/" { if is_ghost_code () then
              let s = Buffer.contents buf in
-             make_annot lexbuf s
+             make_annot initial lexbuf s
            else
              (Buffer.add_string buf "@/"; annot_token lexbuf) }
-  | "*/" { let s = Buffer.contents buf in
-           make_annot lexbuf s }
+  | "*/" { if is_ghost_annot () then
+             E.parse_error "Ghost multi-line annotation not terminated";
+	   let s = Buffer.contents buf in
+           make_annot initial lexbuf s }
   | eof  { E.parse_error "Unterminated annotation" }
   | '\n' {E.newline(); Buffer.add_char buf '\n'; annot_token lexbuf }
-  | _ as c { Buffer.add_char buf c; annot_token lexbuf }
-
+  | _ as c { if is_ghost_annot () && c = !annot_char then
+               might_end_ghost_annot lexbuf
+             else (Buffer.add_char buf c; annot_token lexbuf) }
+and might_end_ghost_annot = parse
+  | '/' { exit_ghost_annot ();
+          let s = Buffer.contents buf in
+          make_annot initial lexbuf s }
+  | "" { Buffer.add_char buf !annot_char; annot_token lexbuf }
 and annot_one_line = parse
   | "ghost" {
       if is_oneline_ghost () then E.parse_error "nested ghost code";
@@ -824,7 +851,7 @@ and annot_one_line = parse
   | ' '|'@'|'\t'|'\r' as c { Buffer.add_char buf c; annot_one_line lexbuf }
   | "" { annot_one_line_logic lexbuf }
 and annot_one_line_logic = parse
-  | '\n' { Buffer.add_char buf '\n'; make_annot lexbuf (Buffer.contents buf) }
+  | '\n' { Buffer.add_char buf '\n'; make_annot initial lexbuf (Buffer.contents buf) }
   | _ as c { Buffer.add_char buf c; annot_one_line_logic lexbuf }
 
 {

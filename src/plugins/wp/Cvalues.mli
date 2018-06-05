@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,10 +26,12 @@
 
 open Cil_types
 open Ctypes
-open Memory
+open Sigs
 open Lang.F
 
-(** {2 Int-As-Boolans} *)
+val equation : Sigs.equation -> pred
+
+(** {2 Int-As-Booleans} *)
 
 val bool_val : unop
 val bool_eq : binop
@@ -56,6 +58,13 @@ val has_ltype : logic_type -> term -> pred
 val cdomain : typ -> (term -> pred) option
 val ldomain : logic_type -> (term -> pred) option
 
+(** {2 Volatile Access} *)
+
+val volatile : ?warn:string -> unit -> bool
+(** Check if a volatile access must be properly modelled or ignored.
+    In case the volatile attribute comes to be ignored,
+    the provided warning is emitted, if any. *)
+
 (** {2 ACSL Equality} *)
 
 val equal_object : c_object -> term -> term -> pred
@@ -74,28 +83,33 @@ val constant_term : Cil_types.term -> term
 
 (** {2 Lifting Operations over Memory Values} *)
 
-val map_sloc : ('a -> 'b) -> 'a Memory.sloc -> 'b Memory.sloc
-val map_value : ('a -> 'b) -> 'a Memory.value -> 'b Memory.value
-val map_logic : ('a -> 'b) -> 'a Memory.logic -> 'b Memory.logic
-val plain : logic_type -> term -> 'a Memory.logic
+val map_sloc : ('a -> 'b) -> 'a Sigs.sloc -> 'b Sigs.sloc
+val map_value : ('a -> 'b) -> 'a Sigs.value -> 'b Sigs.value
+val map_logic : ('a -> 'b) -> 'a Sigs.logic -> 'b Sigs.logic
+val plain : logic_type -> term -> 'a Sigs.logic
 
 (** {2 ACSL Utilities} *)
 
+(** positive goal
+    negative hypothesis
+*)
 type polarity = [ `Positive | `Negative | `NoPolarity ]
 val negate : polarity -> polarity
 
-module Logic(M : Memory.Model) :
+module Logic(M : Sigs.Model) :
 sig
 
   open M
-  type logic = M.loc Memory.logic
+  type logic = M.loc Sigs.logic
+  type segment = c_object * loc Sigs.sloc
+  type region = loc Sigs.region
 
   (** {3 Projections} *)
 
   val value : logic -> term
   val loc   : logic -> loc
   val vset  : logic -> Vset.set
-  val sloc  : logic -> loc sloc list
+  val region : c_object -> logic -> region
   val rdescr : loc sloc -> var list * loc * pred
 
   (** {3 Morphisms} *)
@@ -123,11 +137,10 @@ sig
   val subset : logic_type -> logic -> logic_type -> logic -> pred
   
   (** {3 Regions} *)
-
-  type region = loc sloc list
-
-  val separated : (c_object * region) list -> pred
-  val included : c_object -> region -> c_object -> region -> pred
-  val valid : Sigma.t -> acs -> c_object -> region -> pred
+  
+  val separated : region list -> pred
+  val included : segment -> segment -> pred
+  val valid : Sigma.t -> acs -> segment -> pred
+  val invalid : Sigma.t -> segment -> pred
 
 end

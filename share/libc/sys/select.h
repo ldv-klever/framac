@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,7 +22,12 @@
 
 #ifndef __FC_SYS_SELECT_H__
 #define __FC_SYS_SELECT_H__
+#include "features.h"
+__PUSH_FC_STDLIB
+__BEGIN_DECLS
 
 #include "__fc_select.h"
 
+__END_DECLS
+__POP_FC_STDLIB
 #endif

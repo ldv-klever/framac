@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -100,7 +100,7 @@ let assigns_from_prototype kf =
       match findAttribute "arraylen" (typeAttr typ) with
         | [AInt length] -> TBinOp (PlusPI, t, make_range (Some length)), true
         | _ ->
-          if Cil.isCharPtrType typ
+          if Cil.isAnyCharPtrType typ
           then TBinOp (PlusPI, t, make_range None), true
           else t.term_node, false
     in
@@ -191,7 +191,7 @@ let populate_funspec_aux kf spec =
   | [] -> 
     (* case 1: there is no initial specification -> use generated_behavior *)
     if not (is_frama_c_builtin name) then begin
-      Kernel.warning ~once:true ~current:true
+      Kernel.warning ~once:true ~current:true ~wkey:Kernel.wkey_missing_spec
         "Neither code nor specification for function %a, \
 generating default assigns from the prototype"
         Kernel_function.pretty kf;
@@ -209,7 +209,7 @@ generating default assigns from the prototype"
     in
     if bhv.b_assigns = WritesAny then
       (* case 2.2 : some assigns have to be generated *)
-      (* step 2.1: looks at ungarded behaviors and then at complete
+      (* step 2.1: looks at unguarded behaviors and then at complete
 	 behaviors *)
       let warn_if_not_builtin explicit_name name orig_name =
 	if not (is_frama_c_builtin name) then

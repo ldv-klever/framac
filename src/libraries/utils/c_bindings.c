@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -53,24 +53,6 @@
 typedef enum {
   FE_ToNearest, FE_Upward, FE_Downward, FE_TowardZero
 } c_rounding_mode_t;
-
-#if defined(__i386__) 
-#define GETCOUNTER(low,high)						\
-  __asm__ volatile ("rdtsc" : "=a" (low), "=d" (high));
-#else
-#if  defined(__x86_64__)
-#define GETCOUNTER(low,high)						\
-{ \
-     unsigned int __a,__d; \
-     asm volatile("rdtsc" : "=a" (__a), "=d" (__d)); \
-     low = ((unsigned long)__a) | (((unsigned long)__d)<<32); \
-     high = 0; \
-}
-#else
-#define GETCOUNTER(low,high)						\
-  { low = 0; high = 0; }
-#endif
-#endif
 
 value c_round(value d)
 {
@@ -129,20 +111,34 @@ value c_sqrtf(value d)
   return caml_copy_double(res);
 }
 
-value getperfcount1024(value dum)
+value c_fmodf(value x, value y)
 {
-  unsigned long l,h,acc;
-  GETCOUNTER(l,h);
-  acc = (l >> 10) | (h << 22);
-  return (acc | 1);
+  float fx = Double_val(x);
+  float fy = Double_val(y);
+  volatile float res = fmodf(fx, fy); // see remarks above
+  return caml_copy_double(res);
 }
 
-value getperfcount(value dum)
+value c_cosf(value x)
 {
-  unsigned long l, h;
-  GETCOUNTER(l,h);
-  (void) h;
-  return (l | 1);
+  float f = Double_val(x);
+  volatile float res = cosf(f); // see remarks above
+  return caml_copy_double(res);
+}
+
+value c_sinf(value x)
+{
+  float f = Double_val(x);
+  volatile float res = sinf(f); // see remarks above
+  return caml_copy_double(res);
+}
+
+value c_atan2f(value x, value y)
+{
+  float fx = Double_val(x);
+  float fy = Double_val(y);
+  volatile float res = atan2f(fx, fy); // see remarks above
+  return caml_copy_double(res);
 }
 
 value compare_strings(value v1, value v2, value vlen) {
@@ -234,16 +230,25 @@ value float_is_negative(value v)
   return (Val_int((int)((uv.i) >> 63)));
 }
 
-/* Some compilers apply the C90 standard stricly and do not
+/* Some compilers apply the C90 standard strictly and do not
    prototype strtof() although it is available in the C library. */
 float strtof(const char *, char **);
 
 value single_precision_of_string(value str)
 {
+  const char *s = (const char *)str;
+  const char *s_end = s + caml_string_length(str);
   char *end;
-  float f = strtof((const char *)str, &end);
-  if (end != (char *)str + caml_string_length(str))
-    caml_failwith("single_precision_of_string");
+  float f = strtof(s, &end);
+  if (end != s_end) {
+    // Because strtof does not consider optional floating-point suffixes
+    // (f, F, l, L), we have to test if they are the cause of the difference,
+    // and if so, ignore it.
+    if (end + 1 != s_end ||
+        (*end != 'f' && *end != 'F' && *end != 'l' && *end == 'L')) {
+      caml_failwith("single_precision_of_string");
+    }
+  }
   double d = f;
   return caml_copy_double(d);
 }

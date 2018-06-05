@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -22,17 +22,33 @@
 
 #ifndef __FC_SYS_STAT_H
 #define __FC_SYS_STAT_H
+#include "features.h"
+__PUSH_FC_STDLIB
+__BEGIN_DECLS
 
 #include "../__fc_define_stat.h"
+#include "../__fc_string_axiomatic.h"
 
-int    chmod(const char *, mode_t);
-int    fchmod(int, mode_t);
-int    fstat(int, struct stat *);
-int    lstat(const char *, struct stat *);
-int    mkdir(const char *, mode_t);
-int    mkfifo(const char *, mode_t);
-int    mknod(const char *, mode_t, dev_t);
-int    stat(const char *, struct stat *);
-mode_t umask(mode_t);
+extern int    chmod(const char *, mode_t);
+extern int    fchmod(int, mode_t);
+extern int    fstat(int, struct stat *);
+extern int    lstat(const char *, struct stat *);
+extern int    mkdir(const char *, mode_t);
+extern int    mkfifo(const char *, mode_t);
+extern int    mknod(const char *, mode_t, dev_t);
 
+/*@ //missing: assigns \from 'filesystem'
+  requires valid_pathname: valid_read_string(pathname);
+  requires valid_buf: \valid(buf);
+  assigns \result, *buf \from pathname[0..];
+  ensures result_ok_or_error: \result == 0 || \result == -1;
+  ensures init_on_success:initialization:buf:
+    \result == 0 ==> \initialized(buf);
+*/
+extern int    stat(const char *pathname, struct stat *buf);
+
+extern mode_t umask(mode_t);
+
+__END_DECLS
+__POP_FC_STDLIB
 #endif

@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/call_3.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -6,7 +5,7 @@
 [value:initial-state] Values of globals at initialization
   GG ∈ {0}
 [value] computing for function f <- main.
-        Called from tests/value/call_3.i:13.
+  Called from tests/value/call_3.i:13.
 [value] Recording results for f
 [value] Done for function f
 [value] Recording results for main
@@ -26,7 +25,7 @@
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function f:
   GG FROM \nothing
   \result FROM \nothing
@@ -35,10 +34,10 @@
   \result FROM \nothing
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function f:
-          GG; G; __retres
+    GG; G; __retres
 [inout] Inputs for function f:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main:
-          GG; lm; res_f; __retres
+    GG; lm; res_f; __retres
 [inout] Inputs for function main:
-          \nothing
+    \nothing

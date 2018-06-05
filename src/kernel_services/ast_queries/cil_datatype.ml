@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -129,23 +129,26 @@ let rank_term = function
 (** {3 Cabs types} *)
 (**************************************************************************)
 
-module Cabs_file =
-  Make
+module Cabs_file = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make
     (struct
       type t = Cabs.file
       let name = "Cabs_file"
       let reprs = [ "", []; "", [ true, Cabs.GLOBANNOT [] ] ]
       let varname (s, _) = "cabs_" ^ s
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty fmt cabs = !pretty_ref fmt cabs
      end)
+end
 
 (**************************************************************************)
 (** {3 C types} *)
 (**************************************************************************)
 
-module Position =
-  Make_with_collections
+module Position =  struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
       type t = Lexing.position
       let name = "Position"
@@ -161,6 +164,7 @@ module Position =
           (pos.Lexing.pos_cnum - pos.Lexing.pos_bol)
       let varname _ = "pos"
      end)
+end
 
 module Location = struct
   let unknown = Lexing.dummy_pos, Lexing.dummy_pos
@@ -218,6 +222,7 @@ module Instr = struct
      end)
 
   let loc = function
+    | Local_init (_,_,l) -> l
     | Skip l
     | Set (_,_,l)
     | Call (_,_,_,l)
@@ -323,7 +328,10 @@ module Kinstr = struct
 	      (Stmt.internal_pretty_code Type.Call) s
 	  in
 	  Type.par p Type.Call fmt pp
-      let pretty = Datatype.from_pretty_code
+      let pretty fmt = function
+	| Kglobal ->
+	  Format.fprintf fmt "Kglobal"
+	| Kstmt s -> Stmt.pretty fmt s
       let varname _ = "ki"
      end)
 
@@ -576,12 +584,25 @@ struct
      end)
 end
 
-module Typ=
+module Typ= struct
+include
   MakeTyp
     (struct
       let config = { by_name = false; logic_type = false; unroll = true; }
       let name = "Typ"
      end)
+let toplevel_attr = function
+  | TVoid a -> a
+  | TInt (_, a) -> a
+  | TFloat (_, a) -> a
+  | TNamed (_, a) -> a
+  | TPtr (_, a) -> a
+  | TArray (_, _, _,a) -> a
+  | TComp (_, _, a) -> a
+  | TEnum (_, a) -> a
+  | TFun (_, _, _, a) -> a
+  | TBuiltin_va_list a -> a
+end
 
 module TypByName =
   MakeTyp
@@ -630,15 +651,16 @@ module Exp = struct
      end)
 end
 
-module Label =
-  Make_with_collections
+module Label = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
       type t = label
       let name = "Label"
       let reprs =
 	[ Label("", Location.unknown, false); Default Location.unknown ]
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = !pretty_ref
       let varname = Datatype.undefined
       let hash = function
         | Default _ -> 7
@@ -664,6 +686,7 @@ module Label =
       let equal = Datatype.from_compare
       let copy = Datatype.undefined
      end)
+end
 
 module Varinfo_Id = struct
   let pretty_ref = ref (fun _ _ -> assert false)
@@ -717,8 +740,9 @@ module Varinfo = struct
   let () = clear_caches := Hptset.clear_caches :: !clear_caches
 end
 
-module Compinfo =
-  Make_with_collections
+module Compinfo = struct
+  let pretty_ref = Extlib.mk_fun "Cil_datatype.Compinfo.pretty_ref"
+  include Make_with_collections
     (struct
       type t = compinfo
       let name = "compinfo"
@@ -736,9 +760,10 @@ module Compinfo =
       let equal v1 v2 = v1.ckey = v2.ckey
       let copy = Datatype.undefined
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty fmt f = !pretty_ref fmt f                               
       let varname = Datatype.undefined
      end)
+end
 
 module Fieldinfo = struct
   let pretty_ref = Extlib.mk_fun "Cil_datatype.Fieldinfo.pretty_ref"
@@ -782,8 +807,9 @@ module Fieldinfo = struct
      end)
 end
 
-module Enuminfo =
-  Make_with_collections
+module Enuminfo = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
        include Datatype.Undefined
        type t = enuminfo
@@ -798,10 +824,13 @@ module Enuminfo =
        let compare v1 v2 = String.compare v1.ename v2.ename
        let hash v = Hashtbl.hash v.ename
        let equal v1 v2 = v1.ename = v2.ename
+       let pretty fmt v = !pretty_ref fmt v               
      end)
+end
 
-module Enumitem =
-  Make_with_collections
+module Enumitem = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
       include Datatype.Undefined
       type t = enumitem
@@ -819,7 +848,9 @@ module Enumitem =
       let compare v1 v2 = String.compare v1.einame v2.einame
       let hash v = Hashtbl.hash v.einame
       let equal v1 v2 = v1.einame = v2.einame
+      let pretty fmt v = !pretty_ref fmt v
      end)
+end
 
 let compare_constant c1 c2 = match c1, c2 with
   | CInt64(v1,k1,_), CInt64(v2,k2,_) ->
@@ -1009,7 +1040,8 @@ module Block = struct
       type t = block
       let name = "Block"
       let reprs =
-	[ { battrs = []; blocals = Varinfo.reprs; bstmts = Stmt.reprs } ]
+        [{battrs=[]; blocals=Varinfo.reprs; bstatics = [];
+          bstmts=Stmt.reprs; bscoping=true}]
       let internal_pretty_code = Datatype.undefined
       let pretty fmt b = !pretty_ref fmt b
       let varname = Datatype.undefined
@@ -1149,7 +1181,9 @@ module Logic_var = struct
             lv_kind = kind;
 	    lv_id = -1;
 	    lv_type = Linteger;
-	    lv_origin = v }
+	    lv_origin = v;
+            lv_attr = [];
+          }
 	in
 	dummy None
 	:: List.map (fun v -> dummy (Some v)) Varinfo.reprs
@@ -1163,8 +1197,9 @@ module Logic_var = struct
      end)
 end
 
-module Builtin_logic_info =
-  Make_with_collections
+module Builtin_logic_info = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
       type t = builtin_logic_info
       let name = "Builtin_logic_info"
@@ -1179,27 +1214,32 @@ module Builtin_logic_info =
       let equal i1 i2 = i1.bl_name = i2.bl_name
       let copy = Datatype.identity (* works only if an AST is never modified *)
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = !pretty_ref
       let varname = Datatype.undefined
      end)
+end
 
-module Logic_type_info =
-  Make_with_collections
+module Logic_type_info = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
       type t = logic_type_info
       let name = "Logic_type_info"
-      let reprs = [ { lt_name = ""; lt_params = []; lt_def = None } ]
+      let reprs =
+        [ { lt_name = ""; lt_params = []; lt_def = None; lt_attr=[] } ]
       let compare t1 t2 = String.compare t1.lt_name t2.lt_name
       let equal t1 t2 = t1.lt_name = t2.lt_name
       let hash t = Hashtbl.hash t.lt_name
       let copy = Datatype.identity (* works only if an AST is never modified *)
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = !pretty_ref
       let varname = Datatype.undefined
      end)
+end
 
-module Logic_ctor_info =
-  Make_with_collections
+module Logic_ctor_info = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
       type t = logic_ctor_info
       let name = "Logic_ctor_info"
@@ -1212,12 +1252,14 @@ module Logic_ctor_info =
       let hash t = Hashtbl.hash t.ctor_name
       let copy = Datatype.identity (* works only if an AST is never modified *)
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = !pretty_ref
       let varname = Datatype.undefined
      end)
+end
 
-module Initinfo =
-  Make
+module Initinfo = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make
     (struct
       type t = initinfo
       let name = "Initinfo"
@@ -1225,12 +1267,14 @@ module Initinfo =
 	{ init = None } ::
 	  List.map (fun t -> { init = Some (CompoundInit(t, [])) }) Typ.reprs
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = !pretty_ref
       let varname = Datatype.undefined
      end)
+end
 
-module Logic_info =
-  Make_with_collections
+module Logic_info = struct
+  let pretty_ref = ref (fun fmt f -> Logic_var.pretty fmt f.l_var_info)
+  include  Make_with_collections
     (struct
       type t = logic_info
       let name = "Logic_info"
@@ -1249,9 +1293,10 @@ module Logic_info =
       let hash i = Logic_var.hash i.l_var_info
       let copy = Datatype.undefined
       let internal_pretty_code = Datatype.undefined
-      let pretty fmt f = Logic_var.pretty fmt f.l_var_info
+      let pretty = !pretty_ref
       let varname _ = "logic_varinfo"
      end)
+end
 
 let rec compare_logic_type config v1 v2 =
   let rank = function
@@ -1354,6 +1399,7 @@ module Model_info = struct
               mi_base_type = base;
               mi_field_type = field;
               mi_decl = Location.unknown;
+              mi_attr = [];
             })
           Typ.reprs
           Logic_type.reprs
@@ -1370,6 +1416,7 @@ module Model_info = struct
           mi_base_type = Typ.copy mi.mi_base_type;
           mi_field_type = Logic_type.copy mi.mi_field_type;
           mi_decl = Location.copy mi.mi_decl;
+          mi_attr = List.map Attribute.copy mi.mi_attr
         }
       let pretty fmt t = !pretty_ref fmt t
     end)
@@ -1431,7 +1478,7 @@ let rec compare_term t1 t2 =
     | Tapp(f1,labs1,ts1) , Tapp(f2,labs2,ts2) ->
       let cf = Logic_info.compare f1 f2 in
       if cf <> 0 then cf else
-	let cl = compare_list compare_logic_label_pair labs1 labs2 in
+	let cl = compare_list compare_logic_label labs1 labs2 in
 	if cl <> 0 then cl else compare_list compare_term ts1 ts2
     | Tlambda(q1,t1) , Tlambda(q2,t2) ->
       let cq = compare_list Logic_var.compare q1 q2 in
@@ -1525,20 +1572,12 @@ and compare_toffset off1 off2 =
   | TModel _, (TField _ | TNoOffset)
   | TIndex _, (TModel _ | TField _ | TNoOffset) -> 1
 
-and compare_logic_label_pair (x1,p1) (x2,p2) =
-  let c1 = compare_logic_label x1 x2 in
-  if c1 <> 0 then c1 else compare_logic_label p1 p2
-
 and compare_logic_label l1 l2 = match l1, l2 with
   | StmtLabel s1 , StmtLabel s2 -> Stmt.compare !s1 !s2
-  | LogicLabel (None,l1), LogicLabel (None,l2) -> String.compare l1 l2
-  | LogicLabel (Some s1,l1), LogicLabel (Some s2,l2) ->
-    let cl = String.compare l1 l2 in
-    if cl <> 0 then cl else Stmt.compare s1 s2
-  | (StmtLabel _ , LogicLabel _
-	| LogicLabel (None,_),LogicLabel (Some _,_)) -> (-1)
-  | ( LogicLabel _ , StmtLabel _
-	| LogicLabel (Some _,_),LogicLabel (None,_)) -> 1
+  | FormalLabel s1, FormalLabel s2 -> String.compare s1 s2
+  | BuiltinLabel l1, BuiltinLabel l2 -> Pervasives.compare l1 l2
+  | (StmtLabel _ | FormalLabel _), (FormalLabel _ | BuiltinLabel _) -> -1
+  | (BuiltinLabel _ | FormalLabel _), (StmtLabel _ | FormalLabel _) -> 1
 
 and compare_ctor c1 c2 = String.compare c1.ctor_name c2.ctor_name
 
@@ -1564,7 +1603,8 @@ let hash_logic_constant = function
 let hash_label x =
   match x with
       StmtLabel r -> 2*(Stmt.hash !r)
-    | LogicLabel(_,l) -> 2*(Hashtbl.hash l) + 1
+    | BuiltinLabel l -> 2*(Hashtbl.hash l) + 1
+    | FormalLabel s -> 2*(Hashtbl.hash s) + 3
 
 let rec hash_term (acc,depth,tot) t =
   if tot <= 0 || depth <= 0 then raise (StopRecursion acc)
@@ -1591,9 +1631,9 @@ let rec hash_term (acc,depth,tot) t =
       | TStartOf lv -> hash_tlval (acc+209,depth-1,tot-1) lv
       | Tapp (li,labs,apps) ->
         let hash1 = acc + 228 + Logic_info.hash li in
-        let hash_lb (acc,tot) (_,lb) =
+        let hash_lb (acc,tot) l =
           if tot = 0 then raise (StopRecursion acc)
-          else (acc + hash_label lb,tot - 1)
+          else (acc + hash_label l,tot - 1)
         in
         let hash_one_term (acc,tot) t = hash_term (acc,depth-1,tot) t in
         let res = List.fold_left hash_lb (hash1,tot-1) labs in
@@ -1712,8 +1752,9 @@ and hash_toffset (acc, depth, tot) t =
 
 let hash_fct f t = try fst (f (0,10,100) t) with StopRecursion n -> n
 
-module Logic_constant =
-  Make_with_collections
+module Logic_constant = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include  Make_with_collections
     (struct
       type t = logic_constant
       let name = "Logic_constant"
@@ -1723,9 +1764,10 @@ module Logic_constant =
       let hash = hash_logic_constant
       let copy = Datatype.undefined
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = !pretty_ref
       let varname _ = "lconst"
      end)
+end
 
 module Term = struct
   let pretty_ref = ref (fun _ _ -> assert false)
@@ -1751,8 +1793,9 @@ module Term = struct
      end)
 end
 
-module Identified_term =
-  Make_with_collections
+module Identified_term = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
         type t = identified_term
         let name = "Identified_term"
@@ -1765,12 +1808,14 @@ module Identified_term =
           { it_id = x.it_id; it_content = Term.copy x.it_content }
         let hash x = x.it_id
         let internal_pretty_code = Datatype.undefined
-        let pretty = Datatype.undefined
+        let pretty = !pretty_ref
         let varname _ = "id_term"
      end)
+end
 
-module Term_lhost =
-  Make_with_collections
+module Term_lhost = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
       type t = term_lhost
       let name = "Term_lhost"
@@ -1788,9 +1833,10 @@ module Term_lhost =
       let hash = hash_fct hash_tlhost
       let copy = Datatype.undefined
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = !pretty_ref
       let varname = Datatype.undefined
      end)
+end
 
 module Term_offset = struct
   let pretty_ref = ref (fun _ _ -> assert false)
@@ -1825,7 +1871,7 @@ module Logic_label = struct
         type t = logic_label
         let name = "Logic_label"
         let reprs =
-          (LogicLabel (None,"Pre"))
+          (BuiltinLabel Pre)
           :: List.map (fun x -> StmtLabel (ref x)) Stmt.reprs
         let compare = compare_logic_label
         let equal = Datatype.from_compare
@@ -1838,14 +1884,14 @@ module Logic_label = struct
 end
 
 module Global_annotation = struct
-
+  let pretty_ref = ref (fun _ -> assert false)
   include Make_with_collections
     (struct
       type t = global_annotation
       let name = "Global_annotation"
-      let reprs = List.map (fun l -> Daxiomatic ("", [], l)) Location.reprs
+      let reprs = List.map (fun l -> Daxiomatic ("", [],[], l)) Location.reprs
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty fmt v = !pretty_ref fmt v
       let varname = Datatype.undefined
 
       let rec compare g1 g2 =
@@ -1853,20 +1899,23 @@ module Global_annotation = struct
           | Dfun_or_pred (l1,_), Dfun_or_pred(l2,_) -> Logic_info.compare l1 l2
           | Dfun_or_pred _,_ -> -1
           | _, Dfun_or_pred _ -> 1
-          | Dvolatile (it1,_,_,_), Dvolatile(it2,_,_,_) ->
-            compare_list Identified_term.compare it1 it2
+          | Dvolatile (it1,_,_,attr1,_), Dvolatile(it2,_,_,attr2,_) ->
+            let res = compare_list Identified_term.compare it1 it2 in
+            if res = 0 then Attributes.compare attr1 attr2 else res
           | Dvolatile _,_ -> -1
           | _,Dvolatile _ -> 1
-          | Daxiomatic (_,g1,_), Daxiomatic (_,g2,_) ->
+          | Daxiomatic (_,g1,attr1,_), Daxiomatic (_,g2,attr2,_) ->
             (* ACSL does not require the name to be unique. *)
-            compare_list compare g1 g2
+            let res = compare_list compare g1 g2 in
+            if res = 0 then Attributes.compare attr1 attr2 else res
           | Daxiomatic _, _ -> -1
           | _, Daxiomatic _ -> 1
           | Dtype(t1,_), Dtype(t2,_) -> Logic_type_info.compare t1 t2
           | Dtype _, _ -> -1
           | _, Dtype _ -> 1
-          | Dlemma (l1,_,_,_,_,_), Dlemma(l2,_,_,_,_,_) ->
-            Datatype.String.compare l1 l2
+          | Dlemma (l1,_,_,_,_,attr1,_), Dlemma(l2,_,_,_,_,attr2,_) ->
+            let res = Datatype.String.compare l1 l2 in
+            if res = 0 then Attributes.compare attr1 attr2 else res
           | Dlemma _, _ -> -1
           | _, Dlemma _ -> 1
           | Dinvariant (l1,_), Dinvariant (l2,_) -> Logic_info.compare l1 l2
@@ -1878,50 +1927,64 @@ module Global_annotation = struct
           | Dmodel_annot(l1,_), Dmodel_annot(l2,_) -> Model_info.compare l1 l2
 	  | Dmodel_annot _, _ -> -1
           | _, Dmodel_annot _ -> 1
-	  | Dcustom_annot(_, n1, _), Dcustom_annot(_, n2, _) -> Datatype.String.compare n1 n2
+          | Dcustom_annot(_, n1, attr1, _),
+            Dcustom_annot(_, n2, attr2, _) ->
+            let res = Datatype.String.compare n1 n2 in
+            if res = 0 then Attributes.compare attr1 attr2 else res
 
       let equal = Datatype.from_compare
 
       let rec hash g = match g with
         | Dfun_or_pred (l,_) -> 2 * Logic_info.hash l
-        | Dvolatile ([],_,_,(_source,_)) ->
+        | Dvolatile ([],_,_,_,(_source,_)) ->
           Cmdline.Kernel_log.fatal
             "Empty location list for volatile annotation@."
-        | Dvolatile (t::_,_,_,_) -> 3 * Identified_term.hash t
-        | Daxiomatic (_,[],_) -> 5
+        | Dvolatile (t::_,_,_,_,_) -> 3 * Identified_term.hash t
+        | Daxiomatic (_,[],_,_) -> 5
         (* Empty axiomatic is weird but authorized. *)
-        | Daxiomatic (_,g::_,_) -> 5 * hash g
+        | Daxiomatic (_,g::_,_,_) -> 5 * hash g
         | Dtype (t,_) -> 7 * Logic_type_info.hash t
-        | Dlemma(n,_,_,_,_,_) -> 11 * Datatype.String.hash n
+        | Dlemma(n,_,_,_,_,_,_) -> 11 * Datatype.String.hash n
         | Dinvariant(l,_) -> 13 * Logic_info.hash l
         | Dtype_annot(l,_) -> 17 * Logic_info.hash l
         | Dmodel_annot(l,_) -> 19 * Model_info.hash l
-        | Dcustom_annot(_,n,_) -> 23 * Datatype.String.hash n
+        | Dcustom_annot(_,n,_,_) -> 23 * Datatype.String.hash n
 
       let copy = Datatype.undefined
      end)
 
   let loc = function
     | Dfun_or_pred(_, loc)
-    | Daxiomatic(_, _, loc)
+    | Daxiomatic(_, _, _, loc)
     | Dtype (_, loc)
-    | Dlemma(_, _, _, _, _, loc)
+    | Dlemma(_, _, _, _, _, _, loc)
     | Dinvariant(_, loc)
     | Dtype_annot(_, loc) -> loc
     | Dmodel_annot(_, loc) -> loc
-    | Dvolatile(_, _, _, loc) -> loc
-    | Dcustom_annot(_,_,loc) -> loc
+    | Dvolatile(_, _, _, _,loc) -> loc
+    | Dcustom_annot(_,_,_,loc) -> loc
+
+  let attr = function
+    | Dfun_or_pred({ l_var_info = { lv_attr }}, _) -> lv_attr
+    | Daxiomatic(_, _, attr, _) -> attr
+    | Dtype ({lt_attr}, _) -> lt_attr
+    | Dlemma(_, _, _, _, _, attr, _) -> attr
+    | Dinvariant({ l_var_info = { lv_attr }}, _) -> lv_attr
+    | Dtype_annot({ l_var_info = { lv_attr}}, _) -> lv_attr
+    | Dmodel_annot({ mi_attr }, _) -> mi_attr
+    | Dvolatile(_, _, _, attr, _) -> attr
+    | Dcustom_annot(_,_,attr,_) -> attr
 end
 
 module Global = struct
-
+  let pretty_ref = ref (fun _ -> assert false)
   include Make_with_collections
     (struct
       type t = global
       let name = "Global"
       let reprs = [ GText "" ]
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty fmt v = !pretty_ref fmt v
       let varname = Datatype.undefined
 
       let compare g1 g2 =
@@ -1998,6 +2061,15 @@ module Global = struct
     | GPragma(_, l)
     | GAnnot (_, l) -> l
     | GText _ -> Location.unknown
+
+  let attr = function
+  | GVar (vi,_,_) | GFun ({svar = vi},_) | GVarDecl (vi,_) | GFunDecl (_,vi,_)->
+    vi.vattr
+  | GType (t,_) -> Typ.toplevel_attr t.ttype
+  | GCompTag(ci,_) | GCompTagDecl(ci,_) -> ci.cattr
+  | GEnumTag(ei,_) | GEnumTagDecl(ei,_) -> ei.eattr
+  | GAnnot (g,_) -> Global_annotation.attr g
+  | _ -> []
 
 end
 
@@ -2108,8 +2180,9 @@ module Code_annotation = struct
 
 end
 
-module Predicate =
-  Make
+module Predicate = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make
     (struct
       type t = predicate
       let name = "Predicate"
@@ -2118,12 +2191,14 @@ module Predicate =
             pred_loc = Location.unknown;
             pred_content = Pfalse } ]
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty fmt x = !pretty_ref fmt x
       let varname _ = "p"
      end)
+end
 
-module Identified_predicate =
-  Make_with_collections
+module Identified_predicate = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Make_with_collections
     (struct
         type t = identified_predicate
         let name = "Identified_predicate"
@@ -2134,9 +2209,10 @@ module Identified_predicate =
         let copy = Datatype.undefined
         let hash x = x.ip_id
         let internal_pretty_code = Datatype.undefined
-        let pretty = Datatype.undefined
+        let pretty fmt x = !pretty_ref fmt x
         let varname _ = "id_predyes"
      end)
+end
 
 module Funbehavior =
   Datatype.Make
@@ -2152,12 +2228,13 @@ module Funbehavior =
 	       List.map (fun x -> Normal, x) Identified_predicate.reprs;
 	     b_assigns = WritesAny;
 	     b_allocation = FreeAllocAny;
-	     b_extended = [ "toto", Ext_preds Predicate.reprs ]; } ]
+	     b_extended = []; } ]
       let mem_project = Datatype.never_any_project
      end)
 
-module Funspec =
-  Datatype.Make
+module Funspec = struct
+  let pretty_ref = ref (fun _ _ -> assert false)
+  include Datatype.Make
     (struct
       include Datatype.Serializable_undefined
       type t = funspec
@@ -2168,17 +2245,20 @@ module Funspec =
 	    spec_terminates = None;
 	    spec_complete_behaviors = [];
 	    spec_disjoint_behaviors = [] } ]
+      let pretty fmt x = !pretty_ref fmt x
       let mem_project = Datatype.never_any_project
      end)
+end
 
 module Fundec = struct 
+  let pretty_ref = ref (fun _ _ -> assert false)
 
   let make_dummy vi fs = { 
     svar = vi; 
     sformals = [];
     slocals = [];
     smaxid = 0;
-    sbody = { battrs = [] ; blocals = []; bstmts = [] };
+    sbody = List.hd (Block.reprs);
     smaxstmtid = None;
     sallstmts = [];
     sspec = fs ;
@@ -2213,15 +2293,14 @@ end
     Sorted by alphabetic order. *)
 (**************************************************************************)
 
-module Lexpr =
-  Make
+module Lexpr = Make
     (struct
       open Logic_ptree
       type t = lexpr
       let name = "Lexpr"
       let reprs = [ { lexpr_node = PLvar ""; lexpr_loc = Location.unknown } ]
       let internal_pretty_code = Datatype.undefined
-      let pretty = Datatype.undefined
+      let pretty = Datatype.undefined (* TODO *)
       let varname = Datatype.undefined
      end)
 
@@ -2251,6 +2330,37 @@ module Localisation =
 	| VFormal kf -> pp "Cil_types.VFormal" kf
       let mem_project = Datatype.never_any_project
      end)
+
+module Syntactic_scope =
+  Datatype.Make_with_collections
+    (struct
+      include Datatype.Serializable_undefined
+      type t = syntactic_scope
+      let name = "Syntactic_scope"
+      let reprs = [ Program ]
+      let compare s1 s2 =
+        match s1, s2 with
+        | Program, Program -> 0
+        | Program, _ -> 1
+        | _, Program -> -1
+        | Translation_unit s1, Translation_unit s2 ->
+          Datatype.String.compare s1 s2
+        | Translation_unit _, _ -> 1
+        | _, Translation_unit _ -> -1
+        | Block_scope s1, Block_scope s2 -> Stmt_Id.compare s1 s2
+      let equal = Datatype.from_compare
+      let hash s =
+        match s with
+        | Program -> 5
+        | Translation_unit s -> 7 * Datatype.String.hash s + 11
+        | Block_scope s -> 13 * Stmt_Id.hash s  + 17
+      let pretty fmt = function
+        | Program -> Format.pp_print_string fmt "<Whole Program>"
+        | Translation_unit s -> Format.fprintf fmt "File %s" s
+        | Block_scope s ->
+          Format.fprintf fmt "Statement at %a:@\n@[%a@]"
+            Location.pretty (Stmt.loc s) Stmt.pretty s
+    end)
 
 (* -------------------------------------------------------------------------- *)
 (* --- Internal                                                           --- *)

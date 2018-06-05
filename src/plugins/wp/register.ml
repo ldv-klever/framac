@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -86,36 +86,33 @@ let wp_iter_model ?ip ?index job =
     Fmap.iter (fun kf ms -> Models.iter (fun m -> job kf m) ms) !pool
   end
 
-let wp_print_separation fmt =
+let wp_print_separation kf m sep fmt =
   begin
-    Format.fprintf fmt "//-------------------------------------------@\n" ;
-    Format.fprintf fmt "//--- Separation Hypotheses@\n" ;
-    Format.fprintf fmt "//-------------------------------------------@\n" ;
-    let k = ref 0 in
     let printer = new Printer.extensible_printer () in
     let pp_vdecl = printer#without_annot printer#vdecl in
+    Format.fprintf fmt
+      "@[<hv 0>@[<hv 3>/*@@@ behavior %s:" (Model.get_id m) ;
+    List.iter
+      (fun clause ->
+         Format.fprintf fmt "@ @[<hov 2>requires %a;@]"
+           Separation.pp_clause clause
+      ) sep ;
+    let vkf = Kernel_function.get_vi kf in
+    Format.fprintf fmt "@ @]*/@]@\n@[<hov 2>%a;@]@\n"
+      pp_vdecl vkf ;
+  end
+
+let wp_warn_separation () =
+  begin
     wp_iter_model
-      (fun kf m ->
-         let sep = Separation.requires (Model.get_separation m kf) in
-         let vkf = Kernel_function.get_vi kf in
-         if sep <> [] then
-           begin
-             incr k ;
-             Format.fprintf fmt
-               "@[<hv 0>(*@ behavior %s:" (Model.get_id m) ;
-             List.iter
-               (fun clause ->
-                  Format.fprintf fmt "@ @[<hov 2>requires %a;@]"
-                    Separation.pp_clause clause
-               ) sep ;
-             Format.fprintf fmt "@ *)@\n%a;@]@\n" pp_vdecl vkf ;
-             Format.fprintf fmt "//-------------------------------------------@." ;
-           end
-      ) ;
-    if !k>1 then
-      begin
-        Format.fprintf fmt "/* (%d hypotheses) */@\n" !k ;
-        Format.fprintf fmt "//-------------------------------------------@." ;
+      begin fun kf m ->
+        let sep = Separation.filter (Model.get_separation m kf) in
+        if sep <> [] then
+          Wp_parameters.warning
+            ~current:false
+            "@[<hv 0>Separation hypotheses for function '%s':@ %t@]"
+            (Kernel_function.get_name kf)
+            (wp_print_separation kf m sep)
       end
   end
 
@@ -150,18 +147,17 @@ let do_wp_report () =
     if rfiles <> [] then
       begin
         let stats = WpReport.fcstat () in
+        let jfile = Wp_parameters.ReportJson.get () in
+        if jfile <> "" then WpReport.export_json stats jfile ;
         List.iter (WpReport.export stats) rfiles ;
       end ;
     if Wp_parameters.Separation.get () then
-      Log.print_on_output wp_print_separation ;
+      wp_warn_separation ()
   end
-    
+
 (* ------------------------------------------------------------------------ *)
 (* ---  Wp Results                                                      --- *)
 (* ------------------------------------------------------------------------ *)
-
-let already_valid goal =
-  List.exists (fun (_,r) -> Wpo.is_valid r) (Wpo.get_results goal)
 
 let pp_warnings fmt wpo =
   let ws = Wpo.warnings wpo in
@@ -187,7 +183,7 @@ let launch task =
   Task.launch server
 
 (* ------------------------------------------------------------------------ *)
-(* ---  Feedback                                                        --- *)
+(* ---  Prover Stats                                                    --- *)
 (* ------------------------------------------------------------------------ *)
 
 let do_wpo_display goal =
@@ -261,11 +257,11 @@ let add_time s t =
     end
 
 let do_list_scheduled iter_on_goals =
-  if not (Wp_parameters.has_dkey "no-goals-info") then
+  if not (Wp_parameters.has_dkey VCS.dkey_no_goals_info) then
     begin
       clear_scheduled () ;
       iter_on_goals
-        (fun goal -> if not (already_valid goal) then
+        (fun goal ->
             begin
               incr scheduled ;
               if !spy then session := GOALS.add goal !session ;
@@ -276,22 +272,25 @@ let do_list_scheduled iter_on_goals =
       else Wp_parameters.feedback "%d goal scheduled" n ;
     end
 
+let dkey_prover = Wp_parameters.register_category "prover"
+
 let do_wpo_start goal =
   begin
     incr exercised ;
-    if Wp_parameters.has_dkey "prover" then
+    if Wp_parameters.has_dkey dkey_prover then
       Wp_parameters.feedback "[Qed] Goal %s preprocessing" (Wpo.get_gid goal) ;
   end
 
 let do_wpo_wait () =
   Wp_parameters.feedback ~ontty:`Transient "[wp] Waiting provers..."
 
-let do_wpo_prover goal _prover =
+let do_progress goal msg =
   begin
     if !scheduled > 0 then
       let pp = int_of_float (100.0 *. float !exercised /. float !scheduled) in
       let pp = max 0 (min 100 pp) in
-      Wp_parameters.feedback ~ontty:`Transient "[%02d%%] %s" pp goal.Wpo.po_sid ;
+      Wp_parameters.feedback ~ontty:`Transient "[%02d%%] %s (%s)"
+        pp goal.Wpo.po_sid msg ;
   end
 
 let do_wpo_stat goal prover res =
@@ -305,13 +304,14 @@ let do_wpo_stat goal prover res =
   | Failed ->
       s.failed <- succ s.failed
   | Valid ->
-      proved := GOALS.add goal !proved ;
+      if not (Wpo.is_tactic goal) then
+        proved := GOALS.add goal !proved ;
       s.proved <- succ s.proved ;
       add_step s res.prover_steps ;
       add_time s res.prover_time ;
       if prover <> Qed then
         add_time (get_pstat Qed) res.solver_time
-          
+
 let do_wpo_result goal prover res =
   if VCS.is_verdict res then
     begin
@@ -324,7 +324,7 @@ let do_wpo_result goal prover res =
             VCS.pp_prover prover (Wpo.get_gid goal)
             VCS.pp_result res ;
         end ;
-      if prover = VCS.Qed then do_wpo_prover goal prover ;
+      if prover = VCS.Qed then do_progress goal "Qed" ;
       do_wpo_stat goal prover res ;
     end
 
@@ -358,7 +358,7 @@ let do_wpo_success goal s =
                     List.iter
                       (fun (p,r) ->
                          Format.fprintf fmt "@\n%8s: @[<hv>%a@]"
-                           (VCS.name_of_prover p) VCS.pp_result r
+                           (VCS.title_of_prover p) VCS.pp_result r
                       ) pres ;
                   end
           end
@@ -367,8 +367,46 @@ let do_wpo_success goal s =
           Wp_parameters.feedback ~ontty:`Silent
             "[%a] Goal %s : Valid" VCS.pp_prover prover (Wpo.get_gid goal)
 
-let do_list_scheduled_result () =
-  if not (Wp_parameters.has_dkey "no-goals-info") then
+let do_report_prover_stats pp_prover fmt (p,s) =
+  begin
+    let name = VCS.title_of_prover p in
+    Format.fprintf fmt "%a %4d " pp_prover name s.proved ;
+    begin
+      if s.n_time > 0 &&
+         s.u_time > Rformat.epsilon &&
+         not (Wp_parameters.has_dkey VCS.dkey_no_time_info)
+      then
+        let mean = s.a_time /. float s.n_time in
+        let epsilon = 0.05 *. mean in
+        let delta = s.u_time -. s.d_time in
+        if delta < epsilon then
+          Format.fprintf fmt " (%a)" Rformat.pp_time mean
+        else
+          let middle = (s.u_time +. s.d_time) *. 0.5 in
+          if abs_float (middle -. mean) < epsilon then
+            Format.fprintf fmt " (%a-%a)"
+              Rformat.pp_time s.d_time
+              Rformat.pp_time s.u_time
+          else
+            Format.fprintf fmt " (%a-%a-%a)"
+              Rformat.pp_time s.d_time
+              Rformat.pp_time mean
+              Rformat.pp_time s.u_time
+    end ;
+    if s.steps > 0  &&
+       not (Wp_parameters.has_dkey VCS.dkey_no_step_info) then
+      Format.fprintf fmt " (%d)" s.steps ;
+    if s.interrupted > 0 then
+      Format.fprintf fmt " (interrupted: %d)" s.interrupted ;
+    if s.unknown > 0 then
+      Format.fprintf fmt " (unknown: %d)" s.unknown ;
+    if s.failed > 0 then
+      Format.fprintf fmt " (failed: %d)" s.failed ;
+    Format.fprintf fmt "@\n" ;
+  end
+
+let do_report_scheduled () =
+  if not (Wp_parameters.has_dkey VCS.dkey_no_goals_info) then
     if Wp_parameters.Generate.get () then
       let plural = if !exercised > 1 then "s" else "" in
       Wp_parameters.result "%d goal%s generated" !exercised plural
@@ -378,68 +416,66 @@ let do_list_scheduled_result () =
         Wp_parameters.result "%t"
           (fun fmt ->
              Format.fprintf fmt "Proved goals: %4d / %d@\n" proved !scheduled ;
-             let ptab p = String.length (VCS.name_of_prover p) in
-             let ntab = PM.fold (fun p _ s -> max (ptab p) s) !provers 12 in
-             PM.iter
-               (fun p s ->
-                  let name = VCS.name_of_prover p in
-                  let tabs = String.make (ntab - String.length name) ' ' in
-                  Format.fprintf fmt "%s:%s %4d " name tabs s.proved ;
-                  begin
-                    if s.n_time > 0 &&
-                       s.u_time > Rformat.epsilon &&
-                       not (Wp_parameters.has_dkey "no-time-info")
-                    then
-                      let mean = s.a_time /. float s.n_time in
-                      let epsilon = 0.05 *. mean in
-                      let delta = s.u_time -. s.d_time in
-                      if delta < epsilon then
-                        Format.fprintf fmt " (%a)" Rformat.pp_time mean
-                      else
-                        let middle = (s.u_time +. s.d_time) *. 0.5 in
-                        if abs_float (middle -. mean) < epsilon then
-                          Format.fprintf fmt " (%a-%a)"
-                            Rformat.pp_time s.d_time
-                            Rformat.pp_time s.u_time
-                        else
-                          Format.fprintf fmt " (%a-%a-%a)"
-                            Rformat.pp_time s.d_time
-                            Rformat.pp_time mean
-                            Rformat.pp_time s.u_time
-                  end ;
-                  if s.steps > 0  &&
-                     not (Wp_parameters.has_dkey "no-step-info") then
-                    Format.fprintf fmt " (%d)" s.steps ;
-                  if s.interrupted > 0 then
-                    Format.fprintf fmt " (interrupted: %d)" s.interrupted ;
-                  if s.unknown > 0 then
-                    Format.fprintf fmt " (unknown: %d)" s.unknown ;
-                  if s.failed > 0 then
-                    Format.fprintf fmt " (failed: %d)" s.failed ;
-                  Format.fprintf fmt "@\n" ;
-               ) !provers
-          ) ;
-      end ;
-  clear_scheduled ()
+             Pretty_utils.pp_items
+               ~min:12 ~align:`Left
+               ~title:(fun (prover,_) -> VCS.title_of_prover prover)
+               ~iter:(fun f -> PM.iter (fun p s -> f (p,s)) !provers)
+               ~pp_title:(fun fmt a -> Format.fprintf fmt "%s:" a)
+               ~pp_item:do_report_prover_stats fmt) ;
+      end
+
+let do_list_scheduled_result () =
+  begin
+    do_report_scheduled () ;
+    clear_scheduled () ;
+  end
 
 (* ------------------------------------------------------------------------ *)
 (* ---  Proving                                                         --- *)
 (* ------------------------------------------------------------------------ *)
 
-let spawn_wp_proofs_iter ~provers iter_on_goals =
-  if provers<>[] then
+type mode = {
+  mutable why3ide : bool ;
+  mutable tactical : bool ;
+  mutable update : bool ;
+  mutable depth : int ;
+  mutable width : int ;
+  mutable backtrack : int ;
+  mutable auto : Strategy.heuristic list ;
+  mutable provers : (VCS.mode * VCS.prover) list ;
+}
+
+let spawn_wp_proofs_iter ~mode iter_on_goals =
+  if mode.tactical || mode.provers<>[] then
     begin
       let server = ProverTask.server () in
       ignore (Wp_parameters.Share.dir ()); (* To prevent further errors *)
       iter_on_goals
         (fun goal ->
-           if not (already_valid goal) then
-             Prover.spawn goal
-               ~start:do_wpo_start
-               ~callin:do_wpo_prover
-               ~callback:do_wpo_result
+           if  mode.tactical
+            && not (Wpo.is_trivial goal)
+            && (mode.auto <> [] || ProofSession.exists goal)
+           then
+                 ProverScript.spawn
+                   ~failed:false
+               ~auto:mode.auto
+               ~depth:mode.depth
+               ~width:mode.width
+               ~backtrack:mode.backtrack
+               ~provers:(List.map snd mode.provers)
+                   ~start:do_wpo_start
+               ~progress:do_progress
+               ~result:do_wpo_result
                ~success:do_wpo_success
-               provers
+                   goal
+               else
+                 Prover.spawn goal
+               ~delayed:false
+                   ~start:do_wpo_start
+               ~progress:do_progress
+               ~result:do_wpo_result
+                   ~success:do_wpo_success
+               mode.provers
         ) ;
       Task.on_server_wait server do_wpo_wait ;
       Task.launch server
@@ -448,30 +484,134 @@ let spawn_wp_proofs_iter ~provers iter_on_goals =
 let get_prover_names () =
   match Wp_parameters.Provers.get () with [] -> [ "alt-ergo" ] | pnames -> pnames
 
-let compute_provers why3ide () =
-  List.fold_right
+let compute_provers ~mode =
+  mode.provers <- List.fold_right
     (fun pname prvs ->
-       match Wpo.prover_of_name pname with
+       match VCS.prover_of_name pname with
        | None -> prvs
-       | Some VCS.Why3ide -> why3ide := true; prvs
-       | Some prover -> (VCS.mode_of_prover_name pname , prover) :: prvs)
+       | Some VCS.Why3ide ->
+           mode.why3ide <- true; prvs
+       | Some VCS.Tactical ->
+           mode.tactical <- true ;
+           if pname = "tip" then mode.update <- true ;
+           prvs
+       | Some prover ->
+           (VCS.mode_of_prover_name pname , prover) :: prvs)
     (get_prover_names ()) []
 
+let dump_strategies =
+  let once = ref true in
+  fun () ->
+    if !once then
+    ( once := false ;
+      Wp_parameters.result "Registered strategies for -wp-auto:%t"
+        (fun fmt ->
+           Strategy.iter (fun h ->
+               Format.fprintf fmt "@\n  '%s': %s" h#id h#title
+             )))
+
+let default_mode () = {
+  why3ide = false ; tactical = false ; update=false ; provers = [] ;
+  depth=0 ; width = 0 ; auto=[] ; backtrack = 0 ;
+}
+
+let compute_auto ~mode =
+  mode.auto <- [] ;
+  mode.width <- Wp_parameters.AutoWidth.get () ;
+  mode.depth <- Wp_parameters.AutoDepth.get () ;
+  mode.backtrack <- max 0 (Wp_parameters.BackTrack.get ()) ;
+  let auto = Wp_parameters.Auto.get () in
+  if mode.depth <= 0 || mode.width <= 0 then
+    ( if auto <> [] then
+        Wp_parameters.feedback
+          "Auto-search deactivated because of 0-depth or 0-width" )
+  else
+    begin
+      List.iter
+        (fun id ->
+           if id = "?" then dump_strategies ()
+           else
+             try mode.auto <- Strategy.lookup ~id :: mode.auto
+             with Not_found ->
+               Wp_parameters.error ~current:false
+                 "Strategy -wp-auto '%s' unknown (ignored)." id
+        ) auto ;
+      mode.auto <- List.rev mode.auto ;
+      if mode.auto <> [] then
+        ( mode.tactical <- true ; mode.update <- true ) ;
+    end
+
+let do_update_session mode iter =
+  if mode.update then
+    begin
+      let removed = ref 0 in
+      let updated = ref 0 in
+      let invalid = ref 0 in
+      iter
+        begin fun goal ->
+          let results = Wpo.get_results goal in
+          let autoproof (p,r) =
+            (p=VCS.Qed) || (VCS.is_auto p && VCS.is_valid r && VCS.autofit r) in
+          if List.exists autoproof results then
+            begin
+              if ProofSession.exists goal then
+                (incr removed ; ProofSession.remove goal)
+            end
+          else
+            let scripts = ProofEngine.script (ProofEngine.proof ~main:goal) in
+            if scripts <> [] then
+              begin
+                let keep = function
+                  | ProofScript.Prover(p,r) -> VCS.is_auto p && VCS.is_valid r
+                  | ProofScript.Tactic(n,_,_) -> n=0
+                  | ProofScript.Error _ -> false in
+                let strategy = List.filter keep scripts in
+                if strategy <> [] then
+                  begin
+                    incr updated ;
+                    ProofSession.save goal (ProofScript.encode strategy)
+                  end
+                else
+                if not (ProofSession.exists goal) then
+                  begin
+                    incr invalid ;
+                    ProofSession.save goal (ProofScript.encode scripts)
+                  end
+              end
+        end ;
+      let r = !removed in
+      let u = !updated in
+      let f = !invalid in
+      ( if r = 0 && u = 0 && f = 0 then
+          Wp_parameters.result "No updated script." ) ;
+      ( if r > 0 then
+          let s = if r > 1 then "s" else "" in
+          Wp_parameters.result "Updated session with %d new automated proof%s." r s );
+      ( if u > 0 then
+          let s = if u > 1 then "s" else "" in
+          Wp_parameters.result "Updated session with %d new valid script%s." u s ) ;
+      ( if f > 0 then
+          let s = if f > 1 then "s" else "" in
+          Wp_parameters.result "Updated session with %d new script%s to complete." f s );
+    end
+
 let do_wp_proofs_iter iter =
-  let do_why3_ide = ref false in
-  let provers = compute_provers do_why3_ide () in
-  let spawned = !do_why3_ide || provers <> [] in
+  let mode = default_mode () in
+  compute_provers ~mode ;
+  compute_auto ~mode ;
+  let spawned = mode.why3ide || mode.tactical || mode.provers <> [] in
   begin
     if spawned then do_list_scheduled iter ;
-    if !do_why3_ide
-    then launch (ProverWhy3ide.prove ~callback:do_why3_result ~iter) ;
-    spawn_wp_proofs_iter ~provers iter ;
-    if spawned then do_list_scheduled_result ()
+    if mode.why3ide then
+      launch (ProverWhy3ide.prove ~callback:do_why3_result ~iter) ;
+    spawn_wp_proofs_iter ~mode iter ;
+    if spawned then
+      begin
+        do_list_scheduled_result () ;
+        do_update_session mode iter ;
+      end
     else if not (Wp_parameters.Print.get ()) then
-      iter
-        (fun goal ->
-           if not (already_valid goal) then
-             do_wpo_display goal)
+      iter do_wpo_display 
   end
 
 let do_wp_proofs () = do_wp_proofs_iter (fun f -> Wpo.iter ~on_goal:f ())
@@ -513,27 +653,32 @@ let deprecated_wp_clear () =
 (* ---  Command-line Entry Points                                       --- *)
 (* ------------------------------------------------------------------------ *)
 
+let dkey_logicusage = Wp_parameters.register_category "logicusage"
+let dkey_refusage = Wp_parameters.register_category "refusage"
+let dkey_builtins = Wp_parameters.register_category "builtins"
+
 let cmdline_run () =
   let wp_main fct =
     Wp_parameters.feedback ~ontty:`Feedback "Running WP plugin...";
     Ast.compute ();
     Dyncall.compute ();
-    if Wp_parameters.has_dkey "logicusage" then
+    if Wp_parameters.has_dkey dkey_logicusage then
       begin
         LogicUsage.compute ();
         LogicUsage.dump ();
       end ;
-    if Wp_parameters.has_dkey "refusage" then
+    if Wp_parameters.has_dkey dkey_refusage then
       begin
         RefUsage.compute ();
         RefUsage.dump ();
       end ;
-    if Wp_parameters.has_dkey "builtins" then
+    if Wp_parameters.has_dkey dkey_builtins then
       begin
         LogicBuiltins.dump ();
       end ;
     let bhv = Wp_parameters.Behaviors.get () in
     let prop = Wp_parameters.Properties.get () in
+    (** TODO entry point *)
     let computer = computer () in
     Generator.compute_selection computer ~fct ~bhv ~prop ()
   in
@@ -658,13 +803,17 @@ let pp_wp_parameters fmt =
       Format.pp_print_string fmt " -warn-signed-downcast" ;
     if Kernel.UnsignedDowncast.get () then
       Format.pp_print_string fmt " -warn-unsigned-downcast" ;
+    if not (Wp_parameters.Volatile.get ()) then
+      Format.pp_print_string fmt " -wp-no-volatile" ;
     Format.pp_print_string fmt " [...]" ;
     Format.pp_print_newline fmt () ;
   end
 
+let dkey_shell = Wp_parameters.register_category "shell"
+
 let () = Cmdline.run_after_setting_files
     (fun _ ->
-       if Wp_parameters.has_dkey "shell" then
+       if Wp_parameters.has_dkey dkey_shell then
          Log.print_on_output pp_wp_parameters)
 
 let do_prover_detect () =
@@ -721,15 +870,21 @@ let rec try_sequence jobs () = match jobs with
   | head :: tail ->
       Extlib.try_finally ~finally:(try_sequence tail) head ()
 
+let dkey_raised = Wp_parameters.register_category "raised"
+
 let sequence jobs () =
-  if Wp_parameters.has_dkey "raised"
+  if Wp_parameters.has_dkey dkey_raised
   then List.iter (fun f -> f ()) jobs
   else try_sequence jobs ()
 
 let tracelog () =
-  if Datatype.String.Set.is_empty (Wp_parameters.Debug_category.get ()) then
-    Wp_parameters.debug
-      "Logging keys: %s." (Wp_parameters.Debug_category.As_string.get ())
+  let active_keys = Wp_parameters.get_debug_keys () in
+  if active_keys <> [] then begin
+    let pp_sep fmt () = Format.pp_print_string fmt "," in
+    Wp_parameters.(
+      debug "Logging keys: %a."
+        (Format.pp_print_list ~pp_sep pp_category) active_keys)
+  end
 
 let main = sequence [
     (fun () -> Wp_parameters.debug ~dkey:job_key "Start WP plugin...@.") ;

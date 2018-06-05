@@ -1,5 +1,5 @@
 /* run.config
-   OPT: -slice-return main -slice-undef-functions -journal-disable -then-on 'Slicing export' -set-project-as-default -print -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i
+   OPT: -val-show-progress -slice-return main -slice-undef-functions -journal-disable -then-on 'Slicing export' -set-project-as-default -print -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i
 */
 
 int x,y,z;
@@ -11,8 +11,8 @@ int X, Y ;
 int f(int a) { y = x; return x; }
 
 /*@ 
-    requires a > 0;
-    requires b > 0;
+    requires a: a > 0;
+    requires b: b > 0;
     assigns \result \from a;
     assigns Y \from b;
 */

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,7 +21,6 @@
 (**************************************************************************)
 
 open Cil_types
-open Abstract_interp
 open Cvalue
 
 let is_bitfield typlv =
@@ -37,11 +36,6 @@ let bitfield_size_attributes attrs =
   | [AInt size] -> Some size
   | _ -> None
 
-let bitfield_size typlv =
-  match Cil.unrollType typlv with
-  | TInt (_, attrs) | TEnum (_, attrs) -> bitfield_size_attributes attrs
-  | _ -> None
-
 let sizeof_lval_typ typlv =
   match Cil.unrollType typlv with
     | TInt (_, attrs) | TEnum (_, attrs) as t ->
@@ -49,33 +43,6 @@ let sizeof_lval_typ typlv =
            | [AInt i] -> Int_Base.Value i
            | _ -> Bit_utils.sizeof t)
     | t -> Bit_utils.sizeof t
-
-(* TODO: this should probably be also put directly in reinterpret_int *)
-let cast_lval_if_bitfield typlv size v =
-  match size with
-    | Int_Base.Top -> v (* Bitfields have known sizes *)
-    | Int_Base.Value size ->
-      if is_bitfield typlv then begin
-        try
-          ignore (V.project_ival_bottom v);
-          let signed = Bit_utils.is_signed_int_enum_pointer typlv in
-          let v, _ok = Cvalue.V.cast ~size ~signed v in
-          v (* TODO: handle not ok case as a downcast *)
-        with
-        | V.Not_based_on_null (* from [project_ival] *) ->
-          (* [v] is a pointer: check there are enough bits in
-             the bit-field to contain it. *)
-          if Int.ge size (Int.of_int (Bit_utils.sizeofpointer ())) ||
-            V.is_imprecise v
-          then v
-          else begin
-            Value_parameters.result
-              "casting address to a bit-field of %s bits: \
-                this is smaller than sizeof(void*)" (Int.to_string size);
-            V.topify_arith_origin v
-          end
-      end
-      else v
 
 let offsetmap_matches_type typ_lv o =
   let aux typ_matches = match V_Offsetmap.single_interval_value o with
@@ -105,17 +72,13 @@ type fct_pointer_compatibility =
   | Incompatible
   | Incompatible_but_accepted
 
-let compatible_functions ~typ_pointed ~typ_fun =
-  let really_compatible t1 t2 =
-    try ignore (Cabs2cil.compatibleTypes t1 t2); true
-    with Failure _ -> false
-  in
+let is_compatible_function ~typ_pointed ~typ_fun =
   (* our own notion of weak compatibility:
      - attributes and qualifiers are always ignored
      - all pointers types are considered compatible
      - enums and integer types with the same signedness and size are equal *)
   let weak_compatible t1 t2 =
-    really_compatible t1 t2 ||
+    Cabs2cil.areCompatibleTypes t1 t2 ||
       match Cil.unrollType t1, Cil.unrollType t2 with
       | TVoid _, TVoid _ -> true
       | TPtr _, TPtr _ -> true
@@ -128,7 +91,7 @@ let compatible_functions ~typ_pointed ~typ_fun =
         Cil_datatype.Compinfo.equal ci1 ci2
       | _ -> false
   in
-  if really_compatible typ_pointed typ_fun then Compatible
+  if Cabs2cil.areCompatibleTypes typ_fun typ_pointed then Compatible
   else
     let continue = match Cil.unrollType typ_pointed, Cil.unrollType typ_fun with
       | TFun (ret1, args1, var1, _), TFun (ret2, args2, var2, _) ->
@@ -156,28 +119,28 @@ let compatible_functions ~typ_pointed ~typ_fun =
     in
     if continue then Incompatible_but_accepted else Incompatible
 
-let resolve_functions ~typ_pointer v =
-  let warn = ref false in
-  let aux base offs acc =
-    match base with
-    | Base.String (_,_) | Base.Null | Base.CLogic_Var _ | Base.Allocated _ ->
-      warn := true; acc
-    | Base.Var (v,_) ->
-      if Cil.isFunctionType v.vtype then (
-        if Ival.contains_non_zero offs then warn := true;
-        if Ival.contains_zero offs then
-          let compatible = compatible_functions typ_pointer v.vtype in
-          if compatible <> Compatible then warn := true;
-          if compatible = Incompatible then acc
-          else Kernel_function.Hptset.add (Globals.Functions.get v) acc
-        else (warn := true; acc)
-      ) else (warn := true; acc)
+let refine_fun_ptr typ args =
+  match Cil.unrollType typ, args with
+  | TFun (_, Some _, _, _), _ | _, None -> typ
+  | TFun (ret, None, var, attrs), Some l ->
+    let ltyps = List.map (fun arg -> "", Cil.typeOf arg, []) l in
+    TFun (ret, Some ltyps, var, attrs)
+  | _ -> assert false
+
+(* Filters the list of kernel function [kfs] to only keep functions compatible
+   with the type [typ_pointer]. *)
+let compatible_functions typ_pointer ?args kfs =
+  let typ_pointer = refine_fun_ptr typ_pointer args in
+  let check_pointer (list, alarm) kf =
+    let typ = Kernel_function.get_type kf in
+    if Cil.isFunctionType typ then
+      match is_compatible_function typ_pointer typ with
+      | Compatible -> kf :: list, alarm
+      | Incompatible_but_accepted -> kf :: list, true
+      | Incompatible -> list, true
+    else list, true
   in
-  try
-    let acc_init = Kernel_function.Hptset.empty in
-    let kfs = Locations.Location_Bytes.fold_topset_ok aux v acc_init in
-    `Value kfs, !warn
-  with Locations.Location_Bytes.Error_Top -> `Top, true
+  List.fold_left check_pointer ([], false) kfs
 
 
 let rec expr_contains_volatile expr =
@@ -252,10 +215,10 @@ let ik_attrs_range ik attrs =
 
 let range_inclusion r1 r2 =
   match r1.i_signed, r2.i_signed with
-  | true, true -> let r = r1.i_bits <= r2.i_bits in (r, r)
-  | false, false -> (true,  r1.i_bits <= r2.i_bits)
-  | true, false ->  (false, r1.i_bits <= r2.i_bits+1)
-  | false, true ->  (true,  r1.i_bits <= r2.i_bits-1)
+  | true, true
+  | false, false -> r1.i_bits <= r2.i_bits
+  | true, false ->  false
+  | false, true ->  r1.i_bits <= r2.i_bits-1
 
 let range_lower_bound r =
   if r.i_signed then Cil.min_signed_number r.i_bits else Integer.zero

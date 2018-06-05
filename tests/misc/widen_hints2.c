@@ -1,5 +1,5 @@
 /* run.config
-   STDOPT: #"-kernel-msg-key widen-hints"
+   STDOPT: #"-value-msg-key widen-hints"
    OPT: -print
  */
 
@@ -41,7 +41,6 @@ void g() {
 int y; // used to force renaming of local variable
 
 int main() {
-  int k;
   int y;
   int m = 10;
   /*@ widen_hints global:m, N; // useless, just syntactic test

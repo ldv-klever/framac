@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Aorai plug-in of Frama-C.                        *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -430,10 +430,8 @@ module Computer(I: Init) = struct
       Some (res,loops)
     end
 
-  let doInstr s i (state,loops as d) =
-    match i with
-      | Call (_,{ enode = Lval(Var v,NoOffset) },args,_) ->
-        let kf = Globals.Functions.get v in
+  let do_call s f args (state,loops as d) =
+    let kf = Globals.Functions.get f in
         if Data_for_aorai.isIgnoredFunction (Kernel_function.get_name kf) 
         then d (* we simply skip ignored functions. *)
         else begin
@@ -441,14 +439,14 @@ module Computer(I: Init) = struct
           Aorai_option.debug
             ~dkey:forward_dkey "Call to %a from state:@\n  @[%a@]"
             Kernel_function.pretty kf Data_for_aorai.pretty_state state;
-          let prms = Kernel_function.get_formals (Globals.Functions.get v) in
+      let prms = Kernel_function.get_formals (Globals.Functions.get f) in
           let rec bind acc prms args =
             match prms, args with
               (* in case of variadics, we can have more args than prms *)
               | [],_ -> acc
               | _,[] -> 
                 Aorai_option.fatal 
-                  "too few arguments in call to %a" Printer.pp_varinfo v
+            "too few arguments in call to %a" Printer.pp_varinfo f
               | p::prms, a::args ->
                 let lv = Logic_const.tvar (Cil.cvar_to_lvar p) in
                 let la = Logic_utils.expr_to_term ~cast:false a in
@@ -461,7 +459,6 @@ module Computer(I: Init) = struct
           in
           let args = bind Cil_datatype.Term.Map.empty prms args in
           let init_states = extract_current_states state in
-          let kf = Globals.Functions.get v in
           let init_trans = make_start_transition kf init_states in
           let end_state = !compute_func I.stack (Kstmt s) kf init_trans in
           let new_state = compose_states ~args state end_state in
@@ -469,12 +466,24 @@ module Computer(I: Init) = struct
             Data_for_aorai.pretty_state new_state;
           (new_state,loops)
         end
+
+  let doInstr s i d =
+    match i with
+      | Call (_,{ enode = Lval(Var v,NoOffset) },args,_) ->
+        do_call s v args d
       | Call (_,e,_,_) ->
         Aorai_option.not_yet_implemented
           "Indirect call to %a is not handled yet" Printer.pp_exp e
+      | Local_init (v, ConsInit(f,args,kind),_) ->
+        let args =
+          match kind with
+          | Plain_func -> args
+          | Constructor -> Cil.mkAddrOfVi v :: args
+        in
+        do_call s f args d
+      | Local_init (_, AssignInit _, _)
       | Set _ | Asm _ | Skip _ | Code_annot _ -> d
         
-
   let doGuard _ _ _ = (GDefault, GDefault)
 
   let doStmt _ (state,_) =
@@ -747,16 +756,13 @@ struct
       | Return _ -> Dataflow2.Done Reach.end_state
       | _ -> Dataflow2.Default
 
-  let doInstr s instr state =
-    match instr with
-      | Call (_,{ enode = Lval(Var v,NoOffset) },_,_) ->
-        let kf = Globals.Functions.get v in
+  let do_call s f state =
+    let kf = Globals.Functions.get f in
         if Data_for_aorai.isIgnoredFunction (Kernel_function.get_name kf) 
         then Dataflow2.Default (* we simply skip ignored functions. *)
         else begin
           try
             let call_state = Call_state.find s in
-            let kf = Globals.Functions.get v in
             let treat_one_state state map acc =
               let current_states = set_of_map map in
               let before_state =
@@ -786,9 +792,15 @@ struct
             (* Not attained by forward analysis: this code is dead anyway. *)
             Done Data_for_aorai.Aorai_state.Map.empty
         end
+
+  let doInstr s instr state =
+    match instr with
+      | Call (_,{ enode = Lval(Var f,NoOffset) },_,_) -> do_call s f state
       | Call (_,e,_,_) ->
         Aorai_option.not_yet_implemented
           "Indirect call to %a is not handled yet" Printer.pp_exp e
+      | Local_init (_,ConsInit(f,_,_),_) -> do_call s f state
+      | Local_init (_,AssignInit _,_)
       | Set _ | Asm _ | Skip _ | Code_annot _ -> Dataflow2.Default
 
   let filterStmt _ _ = true

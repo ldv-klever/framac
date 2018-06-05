@@ -627,7 +627,7 @@ struct
 
 
 (** Helper utility that finds all of the statements of a function.
-  It also lists the return statments (including statements that
+  It also lists the return statements (including statements that
   fall through the end of a void function).  Useful when you need an
   initial set of statements for BackwardsDataFlow.compute. *)
 let sinkFinder sink_stmts all_stmts = object

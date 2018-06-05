@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,8 +36,128 @@ module P = Plugin.Register
      let help = "General options provided by the Frama-C kernel"
    end)
 
-include (P: Plugin.S)
+include (P: Plugin.S_no_log)
 include Cmdline.Kernel_log
+
+let dkey_alpha = register_category "alpha"
+
+let dkey_alpha_undo = register_category "alpha:undo"
+
+let dkey_asm_contracts = register_category "asm:contracts"
+
+let dkey_ast = register_category "ast"
+
+let dkey_check = register_category "check"
+
+let dkey_comments = register_category "parser:comments"
+
+let dkey_dataflow = register_category "dataflow"
+
+let dkey_dataflow_scc = register_category "dataflow:scc"
+
+let dkey_dominators = register_category "dominators"
+
+let dkey_emitter = register_category "emitter"
+let dkey_emitter_clear = register_category "emitter:clear"
+
+let dkey_exn_flow = register_category "exn_flow"
+
+let dkey_file_annot = register_category "file:annotation"
+
+let dkey_file_print_one = register_category "file:print-one"
+
+let dkey_file_transform = register_category "file:transformation"
+
+let dkey_filter = register_category "filter"
+
+let dkey_globals = register_category "globals"
+
+let dkey_kf_blocks = register_category "kf:blocks"
+
+let dkey_linker = register_category "linker"
+
+let dkey_linker_find = register_category "linker:find"
+
+let dkey_loops = register_category "natural-loops"
+
+let dkey_parser = register_category "parser"
+let dkey_rmtmps = register_category "parser:rmtmps"
+
+let dkey_pp = register_category "pp"
+let dkey_compilation_db = register_category "pp:compilation-db"
+
+let dkey_print_bitfields = register_category "printer:bitfields"
+
+let dkey_print_builtins = register_category "printer:builtins"
+
+let dkey_print_logic_coercions = register_category "printer:logic-coercions"
+
+let dkey_print_logic_types = register_category "printer:logic-types"
+
+let dkey_print_sid = register_category "printer:sid"
+
+let dkey_print_unspecified = register_category "printer:unspecified"
+
+let dkey_print_vid = register_category "printer:vid"
+
+let dkey_prop_status = register_category "prop-status"
+
+let dkey_prop_status_emit = register_category "prop-status:emit"
+
+let dkey_prop_status_merge = register_category "prop-status:merge"
+
+let dkey_prop_status_reg = register_category "prop-status:register"
+
+let dkey_prop_status_graph = register_category "prop-status:graph"
+
+let dkey_task = register_category "task"
+
+let dkey_typing_global = register_category "typing:global"
+
+let dkey_typing_init = register_category "typing:initializer"
+
+let dkey_typing_chunk = register_category "typing:chunk"
+
+let dkey_typing_cast = register_category "typing:cast"
+
+let dkey_typing_pragma = register_category "typing:pragma"
+
+let dkey_ulevel = register_category "ulevel"
+
+let dkey_visitor = register_category "visitor"
+
+let wkey_annot_error = register_warn_category "annot-error"
+let () = set_warn_status wkey_annot_error Log.Wabort
+
+let wkey_drop_unused = register_warn_category "linker:drop-conflicting-unused"
+
+let wkey_implicit_conv_void_ptr =
+  register_warn_category "typing:implicit-conv-void-ptr"
+
+let wkey_incompatible_types_call =
+  register_warn_category "typing:incompatible-types-call"
+
+let wkey_incompatible_pointer_types =
+  register_warn_category "typing:incompatible-pointer-types"
+
+let wkey_cert_exp_46 = register_warn_category "CERT:EXP:46"
+
+let wkey_cert_msc_38 = register_warn_category "CERT:MSC:38"
+let () = set_warn_status wkey_cert_msc_38 Log.Werror
+
+let wkey_check_volatile = register_warn_category "check:volatile"
+
+let wkey_jcdb = register_warn_category "pp:compilation-db"
+
+let wkey_implicit_function_declaration = register_warn_category
+    "typing:implicit-function-declaration"
+
+let wkey_no_proto = register_warn_category "typing:no-proto"
+
+let wkey_missing_spec = register_warn_category "annot:missing-spec"
+
+let wkey_decimal_float = register_warn_category "parser:decimal-float"
+let () = set_warn_status wkey_decimal_float Log.Wonce
 
 (* ************************************************************************* *)
 (** {2 Specialised functors for building kernel parameters} *)
@@ -109,6 +229,13 @@ module String_list(X: Input_with_arg) =
       let () = Parameter_customize.set_module_name X.module_name 
       include X 
      end)
+
+module Kernel_function_set(X: Input_with_arg) =
+  P.Kernel_function_set
+    (struct
+      let () = Parameter_customize.set_module_name X.module_name
+      include X
+    end)
 
 (* ************************************************************************* *)
 (** {2 Installation Information} *)
@@ -202,6 +329,17 @@ module PrintPluginPath =
      end)
 
 let () = Parameter_customize.set_group help
+let () = Parameter_customize.set_cmdline_stage Cmdline.Exiting
+let () = Parameter_customize.set_negative_option_name ""
+module PrintMachdep =
+  False
+    (struct
+      let module_name = "PrintMachdep"
+      let option_name = "-print-machdep"
+      let help = "pretty print selected machdep"
+     end)
+
+let () = Parameter_customize.set_group help
 let () = Parameter_customize.set_negative_option_name ""
 module DumpDependencies =
   P.Empty_string
@@ -215,6 +353,23 @@ let () =
     (fun () ->
        if not (DumpDependencies.is_default ()) then
          State_dependency_graph.dump (DumpDependencies.get ()))
+
+let () = Parameter_customize.set_group help
+let () = Parameter_customize.set_cmdline_stage Cmdline.Exiting
+let () = Parameter_customize.do_not_journalize ()
+let () = Parameter_customize.set_negative_option_name ""
+module AutocompleteHelp =
+  False
+    (struct
+      let option_name = "-autocomplete"
+      let help = "displays all plugin options. Used for zsh autocompletion"
+      let module_name = "AutocompleteHelp"
+     end)
+let run_list_all_plugin_options () =
+  if AutocompleteHelp.get () then
+    Cmdline.list_all_plugin_options ~print_invisible:true
+  else Cmdline.nop
+let () = Cmdline.run_after_exiting_stage run_list_all_plugin_options
 
 (* ************************************************************************* *)
 (** {2 Output Messages} *)
@@ -314,7 +469,7 @@ module Unicode = struct
        let help = "use utf8 in messages"
      end)
   (* This function behaves nicely with the Gui, that detects if command-line
-     arguments have been set by the user at some point. One possible improvment
+     arguments have been set by the user at some point. One possible improvement
      would be to bypass journalization entirely, but this requires an API
      change in Plugin *)
   let without_unicode f arg =
@@ -355,32 +510,6 @@ module Time =
        let help = "append process time and timestamp to <filename> at exit"
      end)
 
-let () = Parameter_customize.is_invisible ()
-let () = Parameter_customize.set_negative_option_name "-do-not-collect-messages"
-let () = Parameter_customize.do_not_projectify ()
-module Collect_messages = (* TODO: remove in Silicon *)
-  Bool
-    (struct
-      let module_name = "Collect_messages"
-      let option_name = "-collect-messages"
-      let help = "collect warning and error messages for displaying them in \
-                  the GUI (set by default iff the GUI is launched)"
-      let default = !Fc_config.is_gui
-      (* ok: Config.is_gui already initialised by Gui_init *)
-    end)
-let () =
-  Collect_messages.add_set_hook
-    (fun _ b ->
-       match b, !Fc_config.is_gui with
-       | true, false ->
-         warning "option -collect-messages is obsolete; messages are always \
-                  collected"
-       | false, true ->
-         error "option -do-not-collect-messages is obsolete and no longer has \
-                an effect"
-       | _ -> ())
-
-
 let () = Parameter_customize.set_group messages
 let () = Parameter_customize.do_not_projectify ()
 module SymbolicPath =
@@ -418,6 +547,27 @@ module PrintComments =
       let module_name = "PrintComments"
       let option_name = "-keep-comments"
       let help = "try to keep comments in C code"
+     end)
+
+let () = Parameter_customize.set_group inout_source
+let () = Parameter_customize.do_not_projectify ()
+module PrintLibc =
+  Bool
+    (struct
+      let module_name = "PrintLibc"
+      let option_name = "-print-libc"
+      let help = "when pretty-printing C code, keep prototypes coming \
+                  from Frama-C standard library"
+      let default = !Fc_config.is_gui (* always print by default on the GUI *)
+     end)
+
+let () = Parameter_customize.set_group inout_source
+module PrintReturn =
+  False
+    (struct
+      let module_name = "PrintReturn"
+      let option_name = "-print-return"
+      let help = "inline gotos to return statement"
      end)
 
 module CodeOutput = struct
@@ -579,16 +729,27 @@ module LoadModule =
        let arg_name = "SPEC,..."
        let help = "Dynamically load plug-ins, modules and scripts. \
                    Each <SPEC> can be an OCaml source or object file, with \
-                   or without extension, or a directory of object OCaml \
-                   files to load, or a Findlib package. \
+                   or without extension, or a Findlib package. \
                    Loading order is preserved and \
                    additional dependencies can be listed in *.depend files."
     end)
 let () = LoadModule.add_aliases [ "-load-script" ]
 
+let () = Parameter_customize.set_group saveload
+let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
+let () = Parameter_customize.do_not_projectify ()
+module AutoLoadPlugins =
+  True
+    (struct
+       let option_name = "-autoload-plugins"
+       let module_name = "AutoLoadPlugins"
+       let help = "Automatically load all plugins in FRAMAC_PLUGIN."
+    end)
+
 let bootstrap_loader () =
   begin
-    Dynamic.load_plugin_path (AddPath.get()) ;
+    Dynamic.set_module_load_path (AddPath.get ());
+    if AutoLoadPlugins.get () then Dynamic.load_plugin_path () ;
     List.iter Dynamic.load_module (LoadModule.get()) ;
   end
 
@@ -680,22 +841,6 @@ module Machdep =
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
-module CustomAnnot =
-  P.Empty_string(
-      struct
-        let option_name = "-custom-annot-char"
-        let help = "use a custom character <c> for starting ACSL annotations"
-        let arg_name = "c"
-      end)
-let () = CustomAnnot.add_set_hook 
-           (fun _ s ->
-            if CamlString.length s <> 1 then
-              abort
-                "-custom-annot expects a single character. Invalid argument %s"
-                s)
-
-let () = Parameter_customize.set_group parsing
-let () = Parameter_customize.do_not_reset_on_copy ()
 module ReadAnnot =
   True(struct
          let module_name = "ReadAnnot"
@@ -711,7 +856,7 @@ module PreprocessAnnot =
           let option_name = "-pp-annot"
           let help =
             "pre-process annotations (if they are read). Set by default if \
-             the pre-processor is GNU-like (see option -cpp-gnu-like)"
+             the pre-processor is GNU-like (see option -cpp-frama-c-compliant)"
         end)
 
 let () = Parameter_customize.set_group parsing
@@ -748,7 +893,7 @@ module CppGnuLike =
   True
     (struct
       let module_name = "CppGnuLike"
-      let option_name = "-cpp-gnu-like"
+      let option_name = "-cpp-frama-c-compliant"
       let help = 
         "indicates that a custom pre-processor (see option -cpp-command) \
          accepts the same set of options as GNU cpp. Set it to false if you \
@@ -776,7 +921,7 @@ module FramaCStdLib =
       let option_name = "-frama-c-stdlib"
       let help =
         "adds -I$FRAMAC_SHARE/libc to the options given to the cpp command. \
-         If -cpp-gnu-like is not false, also adds -nostdinc to prevent \
+         If -cpp-frama-c-compliant is not false, also adds -nostdinc to prevent \
          inconsistent mix of system and Frama-C header files"
     end)
 
@@ -786,10 +931,19 @@ module ContinueOnAnnotError =
   False(struct
           let module_name = "ContinueOnAnnotError"
           let option_name = "-continue-annot-error"
-          let help = "When an annotation fails to type-check, emit \
-                         a warning and discard the annotation instead of \
-                         generating an error (errors in C are still fatal)"
+          let help =
+            "[DEPRECATED: Use -kernel-warn-error=-annot-error instead] \
+             When an annotation fails to type-check, emit a warning \
+             and discard the annotation instead of generating an error \
+             (errors in C are still fatal)"
         end)
+let () =
+  ContinueOnAnnotError.add_set_hook
+    (fun _ f ->
+       warning ~once:true
+         "-continue-annot-error is deprecated. \
+          Use -kernel-warn-error=-annot-error (or similar option) instead";
+       set_warn_status wkey_annot_error (if f then Log.Wactive else Log.Wabort))
 
 let () = Parameter_customize.set_group parsing
 module Orig_name =
@@ -805,12 +959,30 @@ module ImplicitFunctionDeclaration =
   String(struct
     let option_name = "-implicit-function-declaration"
     let arg_name = "action"
-    let help = "Warn or abort when a function is called before it has been declared \
+    let help =
+      "[DEPRECATED: Use \
+       -kernel-warn-error typing:implicit-function-declaration instead] \
+       Warn or abort when a function is called before it has been declared \
                 (non-C99 compliant); action must be ignore, warn, or error"
     let default = "warn"
     let module_name = "ImplicitFunctionDeclaration"
   end)
 let () = ImplicitFunctionDeclaration.set_possible_values ["ignore"; "warn"; "error"]
+let () =
+  ImplicitFunctionDeclaration.add_set_hook
+    (fun _ s ->
+       warning ~once:true
+         "-implicit-function-declaration is deprecated, \
+          use '-kernel-warn-key typing:implicit-function-declaration' \
+          (or similar options) instead.";
+       let status =
+         if s = "ignore" then Log.Winactive else
+         if s = "warn" then Log.Wactive else
+         if s = "error" then Log.Wabort
+         else fatal "invalid value: %s" s
+       in
+       set_warn_status wkey_implicit_function_declaration status)
+
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
@@ -818,12 +990,23 @@ module WarnDecimalFloat =
   String(struct
     let option_name = "-warn-decimal-float"
     let arg_name = "freq"
-    let help = "Warn when floating-point constants cannot be exactly \
+    let help = "[DEPRECATED: Use -kernel-warn-key decimal-float \
+                (and similar options) instead] \
+                Warn when floating-point constants cannot be exactly \
               represented; freq must be one of none, once or all"
     let default = "once"
     let module_name = "WarnDecimalFloat"
   end)
 let () = WarnDecimalFloat.set_possible_values ["none"; "once"; "all"]
+let () = WarnDecimalFloat.add_set_hook
+    (fun _ s ->
+       let status =
+         if s = "none" then Log.Winactive
+         else if s = "once" then Log.Wonce
+         else if s = "all" then Log.Wactive
+         else fatal "invalid value: %s" s
+       in
+       set_warn_status wkey_decimal_float status)
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
@@ -833,6 +1016,50 @@ module C11 =
     let help = "allow C11 constructs (experimental; partial support only)"
     let module_name = "C11"
   end)
+
+let () = Parameter_customize.set_group parsing
+let () = Parameter_customize.do_not_reset_on_copy ()
+module JsonCompilationDatabaseOption =
+  String
+    (struct
+      let module_name = "JsonCompilationDatabaseOption"
+      let option_name = "-json-compilation-database"
+      let default = ""
+      let arg_name = "path"
+      let help =
+        if Fc_config.has_yojson then
+          "when set, preprocessing of each file will include corresponding \
+           flags (e.g. -I, -D) from the JSON compilation database \
+           specified by <path>. If <path> is a directory, use \
+           '<path>/compile_commands.json'. Disabled by default. \
+           NOTE: this requires Frama-C to be compiled with yojson support."
+        else
+          "Unsupported: recompile Frama-C with Yojson library to enable it"
+    end)
+
+(* This module holds the real value of the option. It is only updated
+   if Yojson support has been compiled. Otherwise, attempt to use
+   -json-compilation-database results in a warning.
+*)
+module JsonCompilationDatabase =
+  State_builder.Ref(Datatype.String)
+    (struct
+      let name = "JsonCompilationDatabase"
+      let dependencies = [ JsonCompilationDatabaseOption.self ]
+      let default () = ""
+    end)
+
+let () =
+  if Fc_config.has_yojson then
+    JsonCompilationDatabaseOption.add_set_hook
+      (fun _ new_opt -> JsonCompilationDatabase.set new_opt)
+  else begin
+      JsonCompilationDatabaseOption.add_set_hook
+        (fun _ _ ->
+           warning ~once:true
+             "trying to set -json-compilation-database even though Yojson \
+              is not available. Ignoring argument.")
+    end
 
 (* ************************************************************************* *)
 (** {2 Customizing Normalization} *)
@@ -862,6 +1089,21 @@ module UnrollingForce =
        let help =
          "ignore UNROLL loop pragmas disabling unrolling."
      end)
+
+let () = Parameter_customize.set_group normalisation
+let () = Parameter_customize.do_not_reset_on_copy ()
+let () = Parameter_customize.is_invisible ()
+module LogicalOperators =
+  Bool
+    (struct
+      let module_name = "LogicalOperators"
+      let option_name = "-keep-logical-operators"
+      let default = false
+      let help =
+        " UNSUPPORTED :  use it only if you really know what you are doing. \
+         Use logical operators (&& and ||) instead of conversion into \
+         conditional statements when possible."
+    end)
 
 let () = Parameter_customize.set_group normalisation
 let () = Parameter_customize.do_not_reset_on_copy ()
@@ -1025,28 +1267,11 @@ module ForceEnumIntCasts =
                    underlying integer type."
   end)
 
-let () = Parameter_customize.set_group normalisation
-module ForceRLArgEval =
-  False(struct
-    let option_name = "-force-rl-arg-eval"
-    let module_name = "ForceRLArgEval"
-    let help = "Force right to left evaluation order for \
-                              arguments of function calls"
-  end)
+let normalization_parameters () =
+  let norm = Cmdline.Group.name normalisation in
+  let kernel = Plugin.get_from_name "" in
+  Hashtbl.find kernel.Plugin.p_parameters norm
 
-let normalization_parameters = [
-  ForceRLArgEval.parameter;
-  UnrollingLevel.parameter;
-  Machdep.parameter;
-  CppCommand.parameter;
-  CppExtraArgs.parameter;
-  SimplifyCfg.parameter;
-  KeepSwitch.parameter;
-  Keep_unused_specified_functions.parameter;
-  Constfold.parameter;
-  AllowDuplication.parameter;
-  DoCollapseCallCast.parameter;
-]
 
 (* ************************************************************************* *)
 (** {2 Analysis Options} *)
@@ -1090,7 +1315,7 @@ module UnspecifiedAccess =
   False(struct
          let module_name = "UnspecifiedAccess"
          let option_name = "-unspecified-access"
-         let help = "do not assume that read/write accesses occuring \
+         let help = "do not assume that read/write accesses occurring \
 between sequence points are separated"
        end)
 
@@ -1166,17 +1391,35 @@ module UnsignedDowncast =
 destination range"
      end)
 
+
+(* Not finite floats are ok, but might not always be a behavior the programmer
+   wants. *)
+let () = Parameter_customize.set_group analysis_options
+let () = Parameter_customize.do_not_reset_on_copy ()
+module SpecialFloat =
+  String
+    (struct
+      let module_name = "SpecialFloat"
+      let option_name = "-warn-special-float"
+      let default = "non-finite"
+      let arg_name = "none|nan|non-finite"
+      let help = "generate alarms when special floats are produced: \
+                  infinite floats or NaN (by default), only on NaN or never."
+    end)
+let () = SpecialFloat.set_possible_values ["none"; "nan"; "non-finite"]
+
+
 (* ************************************************************************* *)
 (** {2 Sequencing options} *)
 (* ************************************************************************* *)
 
-let misc = add_group "Sequencing Options"
+let seq = add_group "Sequencing Options"
 
 let () =
   Cmdline.add_option_without_action
     "-then"
     ~plugin:""
-    ~group:(misc :> Cmdline.Group.t)
+    ~group:seq
     ~help:"parse options before `-then' and execute Frama-C \
 accordingly, then parse options after `-then' and re-execute Frama-C"
     ~visible:true
@@ -1187,7 +1430,7 @@ let () =
   Cmdline.add_option_without_action
     "-then-last"
     ~plugin:""
-    ~group:(misc :> Cmdline.Group.t)
+    ~group:seq
     ~help:"like `-then', but the second group of actions is executed \
 on the last project created by a program transformer."
     ~visible:true
@@ -1198,7 +1441,7 @@ let () =
   Cmdline.add_option_without_action
     "-then-replace"
     ~plugin:""
-    ~group:(misc :> Cmdline.Group.t)
+    ~group:seq
     ~help:"like `-then-last', but also remove the previous current project."
     ~visible:true
     ~ext_help:""
@@ -1209,7 +1452,7 @@ let () =
     "-then-on"
     ~plugin:""
     ~argname:"p"
-    ~group:(misc :> Cmdline.Group.t)
+    ~group:seq
     ~help:"like `-then', but the second group of actions is executed \
 on project <p>"
     ~visible:true
@@ -1220,9 +1463,9 @@ on project <p>"
 (** {2 Project-related options} *)
 (* ************************************************************************* *)
 
-let misc = add_group "Project-related Options"
+let project = add_group "Project-related Options"
 
-let () = Parameter_customize.set_group misc
+let () = Parameter_customize.set_group project
 let () = Parameter_customize.do_not_projectify ()
 module Set_project_as_default =
   False(struct
@@ -1232,7 +1475,7 @@ module Set_project_as_default =
 (and so future '-then' sequences are applied on it)"
   end)
 
-let () = Parameter_customize.set_group misc
+let () = Parameter_customize.set_group project
 let () = Parameter_customize.do_not_projectify ()
 module Remove_projects =
   P.Make_set
@@ -1260,7 +1503,7 @@ let _ =
     (object
       method fold: 'a. (Project.t -> 'a -> 'a) -> 'a -> 'a =
         fun f acc -> Project.fold_on_projects (fun acc p -> f p acc) acc
-      method mem _p = true (* impossible to build an unregistred project *)
+      method mem _p = true (* impossible to build an unregistered project *)
      end)
 
 let _ =
@@ -1311,7 +1554,7 @@ module NoObj =
        let help = ""
      end)
 
-let () = Parameter_customize.set_group misc
+let () = Parameter_customize.set_group project
 let () = Parameter_customize.set_negative_option_name ""
 let () = Parameter_customize.set_cmdline_stage Cmdline.Early
 module Deterministic =
@@ -1358,7 +1601,6 @@ module TypeCheck =
           let option_name = "-typecheck"
           let help = "forces typechecking of the source files"
         end)
-
 
 (*
 Local Variables:

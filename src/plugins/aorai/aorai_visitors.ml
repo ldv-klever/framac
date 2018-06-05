@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Aorai plug-in of Frama-C.                        *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -451,7 +451,7 @@ let get_unchanged_aux_var loc current_state =
   Data_for_aorai.Aorai_state.Map.fold treat_one_pre_state current_state []
 
 (**
-   This visitor adds a specification to each fonction and to each loop,
+   This visitor adds a specification to each function and to each loop,
    according to specifications stored into Data_for_aorai.
 *)
 class visit_adding_pre_post_from_buch treatloops =
@@ -1096,45 +1096,8 @@ object(self)
       ChangeDoChildrenPost(stmt,after)
 
   method! vinst = function
-  | Call _ -> self#call (); DoChildren
+  | Call _ | Local_init (_, ConsInit _, _) -> self#call (); DoChildren
   | _ -> DoChildren
-
-end
-
-
-
-
-
-(****************************************************************************)
-(**
-  This visitor computes the list of ignored functions.
-  A function is ignored if its call is present in the C program,
-  while its definition is not available.
-*)
-class visit_computing_ignored_functions () =
-  let declaredFunctions = Data_for_aorai.getFunctions_from_c () in
-  let isDeclaredInC fname =
-    List.exists
-      (fun s -> (String.compare fname s)=0)
-      declaredFunctions
-  in
-object (*(self)*)
-
-  inherit Visitor.frama_c_inplace
-
-  method! vfunc _f = DoChildren
-
-  method! vstmt_aux stmt =
-    match stmt.skind with
-      | Instr(Call (_,funcexp,_,_)) ->
-          let name = get_call_name funcexp in
-          (* If the called function is neither ignored, nor declared,
-             then it has to be added to ignored functions. *)
-          if (not (Data_for_aorai.isIgnoredFunction name))
-            && (not (isDeclaredInC name)) then
-                (Data_for_aorai.addIgnoredFunction name);
-          DoChildren
-      | _ -> DoChildren
 
 end
 
@@ -1163,11 +1126,6 @@ let add_pre_post_from_buch file treatloops  =
 
 let add_sync_with_buch file  =
   let visitor = new visit_adding_code_for_synchronisation in
-  Cil.visitCilFile (visitor :> Cil.cilVisitor) file
-
-(* Call of the visitor *)
-let compute_ignored_functions file =
-  let visitor = new visit_computing_ignored_functions () in
   Cil.visitCilFile (visitor :> Cil.cilVisitor) file
 
 (*

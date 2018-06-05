@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/for_loops.c (with preprocessing)
 [value] Analyzing a complete application starting at main_4
 [value] Computing initial state
@@ -6,12 +5,14 @@
 [value:initial-state] Values of globals at initialization
   Frama_C_entropy_source ∈ [--..--]
   x ∈ {0}
-tests/value/for_loops.c:50:[value] entering loop for the first time
-tests/value/for_loops.c:52:[value] entering loop for the first time
-[value] Called Frama_C_show_each_F({0}, {0})
-[value] Called Frama_C_show_each_F({0; 1}, [0..2147483647])
-[value] Called Frama_C_show_each_F({0; 1; 2}, [0..2147483647])
-[value] Called Frama_C_show_each_F({0; 1; 2; 3; 4; 5}, [0..2147483647])
+[value] tests/value/for_loops.c:50: entering loop for the first time
+[value] tests/value/for_loops.c:52: entering loop for the first time
+[value] tests/value/for_loops.c:55: Frama_C_show_each_F: {0}, {0}
+[value] tests/value/for_loops.c:55: Frama_C_show_each_F: {0; 1}, [0..2147483647]
+[value] tests/value/for_loops.c:55: 
+  Frama_C_show_each_F: {0; 1; 2}, [0..2147483647]
+[value] tests/value/for_loops.c:55: 
+  Frama_C_show_each_F: {0; 1; 2; 3; 4; 5}, [0..2147483647]
 [value] Recording results for main_4
 [value] done for function main_4
 [value] ====== VALUES COMPUTED ======
@@ -21,11 +22,11 @@ tests/value/for_loops.c:52:[value] entering loop for the first time
 [from] Computing for function main_4
 [from] Done for function main_4
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function main_4:
   NO EFFECTS
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main_4:
-          j; v
+    j; v
 [inout] Inputs for function main_4:
-          \nothing
+    \nothing

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,20 +30,21 @@ module Computer
     (* Abstract domain with partitioning. *)
     (Domain: Abstract_domain.External)
     (* Set of states of abstract domain. *)
-    (States : Partitioning.StateSet with type state = Domain.t)
+    (States : Powerset.S with type state = Domain.t)
     (* Transfer functions for statement on the abstract domain. *)
     (Transfer : Transfer_stmt.S with type state = Domain.t
-                                 and type value = Domain.value
-                                 and type return = Domain.return)
+                                 and type value = Domain.value)
+    (* Initialization of local variables. *)
+    (Init: Initialization.S with type state := Domain.state)
     (* Transfer functions for the logic on the abstract domain. *)
     (Logic : Transfer_logic.S with type state = Domain.t
                                and type states = States.t)
+    (Spec: sig val treat_statement_assigns: assigns -> Domain.t -> Domain.t end)
   : sig
 
     val compute:
       kernel_function -> kinstr -> Domain.t ->
-      (Domain.t, Domain.return, Domain.value) call_result
-      * Value_types.cacheable
+      Domain.t list or_bottom * Value_types.cacheable
 
   end
 

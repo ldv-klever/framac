@@ -47,6 +47,7 @@ let x86_16 = {
   version          = 
     "x86 16 bits mode (gcc like compiler) with big or huge memory model";
   compiler = "generic";
+  cpp_arch_flags   = ["-m16"];
   sizeof_short     = 2;
   sizeof_int       = 2;
   sizeof_long      = 4;
@@ -56,7 +57,7 @@ let x86_16 = {
   sizeof_double    = 8;
   sizeof_longdouble  = 16;
   sizeof_void      = 1;
-  sizeof_fun       = 1;
+  sizeof_fun       = -1;
   size_t = "unsigned int";
   wchar_t = "int";
   ptrdiff_t = "int";
@@ -69,7 +70,7 @@ let x86_16 = {
   alignof_double = 8;
   alignof_longdouble = 16;
   alignof_str = 1;
-  alignof_fun = 1;
+  alignof_fun = -1;
   alignof_aligned= 8;
          (* I don't know if attribute aligned is supported by any 16bits 
             compiler. *)
@@ -81,11 +82,15 @@ let x86_16 = {
   __thread_is_keyword = true;
 }
 
-let gcc_x86_16 = { x86_16 with compiler = "gcc" }
+let gcc_x86_16 = { x86_16 with
+                   compiler = "gcc";
+                   sizeof_fun = 1; alignof_fun = 1;
+                 }
 
 let x86_32 = {
   version          = "gcc 4.0.3 - X86-32bits mode";
   compiler         = "generic";
+  cpp_arch_flags   = ["-m32"];
   sizeof_short     = 2;
   sizeof_int       = 4;
   sizeof_long      = 4;
@@ -95,7 +100,7 @@ let x86_32 = {
   sizeof_double    = 8;
   sizeof_longdouble  = 12;
   sizeof_void      = 1;
-  sizeof_fun       = 1;
+  sizeof_fun       = -1;
   size_t = "unsigned int";
   wchar_t = "int";
   ptrdiff_t = "int";
@@ -108,7 +113,7 @@ let x86_32 = {
   alignof_double = 4;
   alignof_longdouble = 4;
   alignof_str = 1;
-  alignof_fun = 1;
+  alignof_fun = -1;
   alignof_aligned= 16;
   char_is_unsigned = false;
   const_string_literals = true;
@@ -118,11 +123,15 @@ let x86_32 = {
   __thread_is_keyword = true;
 }
 
-let gcc_x86_32 = { x86_32 with compiler = "gcc" }
+let gcc_x86_32 = { x86_32 with
+                   compiler = "gcc";
+                   sizeof_fun = 1; alignof_fun = 1;
+                 }
 
 let x86_64 = {
   version          = "gcc 4.0.3 AMD64";
   compiler         = "generic";
+  cpp_arch_flags   = ["-m64"];
   sizeof_short     = 2;
   sizeof_int       = 4;
   sizeof_long      = 8;
@@ -132,7 +141,7 @@ let x86_64 = {
   sizeof_double    = 8;
   sizeof_longdouble  = 16;
   sizeof_void      = 1;
-  sizeof_fun       = 1;
+  sizeof_fun       = -1;
   size_t = "unsigned long";
   wchar_t = "int";
   ptrdiff_t = "long";
@@ -145,7 +154,7 @@ let x86_64 = {
   alignof_double = 8;
   alignof_longdouble = 16;
   alignof_str = 1;
-  alignof_fun = 1;
+  alignof_fun = -1;
   alignof_aligned= 16;
   char_is_unsigned = false;
   const_string_literals = true;
@@ -155,11 +164,15 @@ let x86_64 = {
   __thread_is_keyword = true;
 }
 
-let gcc_x86_64 = { x86_64 with compiler = "gcc" }
+let gcc_x86_64 = { x86_64 with
+                   compiler = "gcc";
+                   sizeof_fun = 1; alignof_fun = 1;
+                 }
 
 let ppc_32 = {
   version          = "4.0.1 (Apple Computer, Inc. build 5367)";
   compiler         = "standard";
+  cpp_arch_flags   = ["-m32"];
   sizeof_short     = 2;
   sizeof_int       = 4;
   sizeof_long      = 4;
@@ -195,6 +208,7 @@ let ppc_32 = {
 let msvc_x86_64 = {
   version          = "MSVC - X86-64bits mode";
   compiler         = "msvc";
+  cpp_arch_flags   = ["-m64"];
   sizeof_short     = 2;
   sizeof_int       = 4;
   sizeof_long      = 4;
@@ -204,7 +218,7 @@ let msvc_x86_64 = {
   sizeof_double    = 8;
   sizeof_longdouble  = 8;
   sizeof_void      = 0;
-  sizeof_fun       = 0; (* sizeof(f) results in a compilation error *)
+  sizeof_fun       = -1;
   size_t = "unsigned long long"; (* defined as 'unsigned __int64' *)
   wchar_t = "unsigned short";
   ptrdiff_t = "long long"; (* defined as '__int64' *)
@@ -218,7 +232,7 @@ let msvc_x86_64 = {
   alignof_longdouble = 8;
   alignof_str = 1; (* __alignof("a") results in compilation error C2059:
                       syntax error: 'string' *)
-  alignof_fun = 8;
+  alignof_fun = -1;
   alignof_aligned= 1; (* MSVC does not seem to have an 'align' attribute
                          equivalent to GCC's *)
   char_is_unsigned = false;

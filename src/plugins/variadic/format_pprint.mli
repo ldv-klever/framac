@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -35,7 +35,7 @@ val pp_f_format : Format.formatter -> f_format -> unit
 val pp_s_format : Format.formatter -> s_format -> unit
 val pp_format : Format.formatter -> format -> unit
 
-(** Réécrit le format sous sa forme de chaîne de caractères *)
+(** Rewrites the format as its string representation. *)
 val f_format_to_cstring : f_format -> string
 val s_format_to_cstring : s_format -> string
 val format_to_cstring : format -> string

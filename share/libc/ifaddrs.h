@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -23,6 +23,7 @@
 #ifndef FC_IFADDRS
 #define FC_IFADDRS
 #include "features.h"
+__PUSH_FC_STDLIB
 
 #include "__fc_define_sockaddr.h"
 
@@ -30,13 +31,23 @@ __BEGIN_DECLS
 
 /* Linux header */
 struct ifaddrs {
-	struct ifaddrs  *ifa_next;
-	char		*ifa_name;
-	unsigned int	 ifa_flags;
-	struct sockaddr	*ifa_addr;
-	struct sockaddr	*ifa_netmask;
-	struct sockaddr	*ifa_dstaddr;
-	void		*ifa_data;
+  struct ifaddrs  *ifa_next;
+  char *ifa_name;
+  unsigned int ifa_flags;
+  struct sockaddr *ifa_addr;
+  struct sockaddr *ifa_netmask;
+  struct sockaddr *ifa_dstaddr;
+  union {
+    struct sockaddr *ifu_broadaddr;
+    struct sockaddr *ifu_dstaddr;
+  } ifa_ifu;
+# ifndef ifa_broadaddr
+#  define ifa_broadaddr  ifa_ifu.ifu_broadaddr
+# endif
+# ifndef ifa_dstaddr
+#  define ifa_dstaddr    ifa_ifu.ifu_dstaddr
+# endif
+  void *ifa_data;
 };
 
 struct ifmaddrs {
@@ -46,11 +57,12 @@ struct ifmaddrs {
 	struct sockaddr	*ifma_lladdr;
 };
 
-int getifaddrs(struct ifaddrs **);
-void freeifaddrs(struct ifaddrs *);
-int getifmaddrs(struct ifmaddrs **);
-void freeifmaddrs(struct ifmaddrs *);
+extern int getifaddrs(struct ifaddrs **);
+extern void freeifaddrs(struct ifaddrs *);
+extern int getifmaddrs(struct ifmaddrs **);
+extern void freeifmaddrs(struct ifmaddrs *);
 
 __END_DECLS
 
+__POP_FC_STDLIB
 #endif

@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -35,7 +35,6 @@ endif
 
 PLUGIN_DIR ?=.
 PLUGIN_ENABLE:=yes
-PLUGIN_DYNAMIC:=yes
 PLUGIN_NAME:=Nonterm
 PLUGIN_CMO:= nonterm_run
 PLUGIN_DISTRIBUTED:=$(PLUGIN_ENABLE)

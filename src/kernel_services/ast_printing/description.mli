@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,7 +34,7 @@ val pp_kinstr : bool -> Format.formatter -> kinstr -> unit
 val pp_idpred : bool -> Format.formatter -> identified_predicate -> unit
 (** prints the "'<labels>'" or the "(<location>)" of the predicate *)
 
-val pp_region : bool -> Format.formatter -> identified_term from list -> unit
+val pp_region : bool -> Format.formatter -> from list -> unit
 (** prints message "nothing" or the "'<names>'" or the "(<location>)" of the
     relation *) 
 
@@ -45,7 +45,7 @@ val pp_for : Format.formatter -> string list -> unit
 (** prints nothing or " for 'b1,...,bn'" *)
 
 val pp_bhv : Format.formatter -> funbehavior -> unit
-(** prints nothing for default behavior, and " for 'b'" otherwize *)
+(** prints nothing for default behavior, and " for 'b'" otherwise *)
 
 val pp_property : Format.formatter -> Property.t -> unit
 (** prints an identified property *)

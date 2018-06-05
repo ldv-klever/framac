@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -222,9 +222,6 @@ module Binary(* :BINARY_SEMILATTICE *) = struct
     | Unknown, Unknown -> Unknown
     | _,_ -> Unknown
 
-  (* let pretty _ = assert false *)
-  (* let join_and_is_included _ = assert false *)
-  (* let is_included _ = assert false *)
 end
 
 
@@ -301,6 +298,10 @@ module Store(* (B:sig *)
       -> (Varinfo.Map.add vi (B.transfer_exp exp (load value)) value, conds)
     | Set _ -> (value,conds)
     (* | Set((Var(vi),NoOffset),exp,_) -> assert false *)
+    | Local_init (vi, AssignInit (SingleInit e), _) ->
+      (Varinfo.Map.add vi (B.transfer_exp e (load value)) value, conds)
+    | Local_init (_, AssignInit (CompoundInit _), _) -> (value,conds)
+    | Local_init (_,ConsInit _,_) -> (value,conds)
     | Call _ -> (value,conds)
     | Asm _ ->  (value,conds)
     | Code_annot _ -> (value,conds)
@@ -448,6 +449,7 @@ module Store(* (B:sig *)
             Printer.pp_varinfo vi pretty_int divident
             Printer.pp_varinfo vi pretty_increment increment
         else
+          try
           let value = (Integer.to_int (Integer.c_div bound_offset increment)) in
           let adjusted_value =
             if (binop = Cil_types.Le && Integer.(equal remainder zero))
@@ -460,6 +462,8 @@ module Store(* (B:sig *)
               success := true;
               add_loop_bound stmt adjusted_value
             end
+          with Failure _ -> (* overflow in Integer.to_int *)
+            ()
       (* TODO: check if this is useful and does not cause false alarms
          else
          if Kernel.UnsignedOverflow.get() then

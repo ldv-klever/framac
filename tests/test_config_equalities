@@ -1,2 +1,2 @@
-MACRO: VALUECONFIG -eva-equality-domain -no-val-malloc-returns-null
+MACRO: VALUECONFIG -val-show-progress -no-autoload-plugins -load-module from,inout,value,scope,variadic -eva-equality-domain
 OPT: -val @VALUECONFIG@ -journal-disable -out -input -deps

@@ -6,7 +6,7 @@
 int a,b,d,e,f,g,h;
 unsigned int ua,ub,uc,ud,ue,uf;
 
-void printf(const char* c,...);
+
 
 char t[10];
 volatile v;
@@ -45,7 +45,7 @@ int main(int c, int z, int zz) {
   ua >>= 2 ;
   ub = (unsigned int)(-3000);
   ub >>= 2;
-  printf("ua:%u\nub:%u\n",ua,ub);
+  Frama_C_show_each("ua:%u\nub:%u\n",ua,ub);
 
   if (z & 32)
   {
@@ -53,7 +53,10 @@ int main(int c, int z, int zz) {
     r += (long)t << 8;
   }
 
-  unsigned int shl = 2U << 31; // "Unsigned overflow."
+  unsigned int shl = 1;
+  if (v) {
+    shl = 2U << 31; // "Unsigned overflow."
+  }
 
   return b;
 }

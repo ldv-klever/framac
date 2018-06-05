@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,6 +30,7 @@ open Cil_datatype
 module WpLog = Wp_parameters
 
 type c_int =
+  | Bool
   | UInt8
   | SInt8
   | UInt16
@@ -42,16 +43,19 @@ type c_int =
 let compare_c_int : c_int -> c_int -> _ = Extlib.compare_basic
 
 let signed  = function
+  | Bool -> false
   | UInt8 | UInt16 | UInt32 | UInt64 -> false
   | SInt8 | SInt16 | SInt32 | SInt64 -> true
 
 let i_bits = function
+  | Bool -> 1
   | UInt8  | SInt8  -> 8
   | UInt16 | SInt16 -> 16
   | UInt32 | SInt32 -> 32
   | UInt64 | SInt64 -> 64
 
 let i_bytes = function
+  | Bool -> 1
   | UInt8  | SInt8  -> 1
   | UInt16 | SInt16 -> 2
   | UInt32 | SInt32 -> 4
@@ -62,19 +66,19 @@ let make_c_int signed = function
   | 2 -> if signed then SInt16 else UInt16
   | 4 -> if signed then SInt32 else UInt32
   | 8 -> if signed then SInt64 else UInt64
-  | size -> WpLog.not_yet_implemented "%d-bits integers" size
+  | size -> WpLog.not_yet_implemented "%d-bytes integers" size
 
 let is_char = function
   | UInt8 -> Cil.theMachine.Cil.theMachine.char_is_unsigned
   | SInt8 -> not Cil.theMachine.Cil.theMachine.char_is_unsigned
   | UInt16 | SInt16
   | UInt32 | SInt32
-  | UInt64 | SInt64 -> false
-
+  | UInt64 | SInt64 | Bool -> false
+    
 let c_int ikind =
   let mach = Cil.theMachine.Cil.theMachine in
   match ikind with
-  | IBool -> make_c_int false mach.sizeof_int
+  | IBool -> if Wp_parameters.BoolRange.get () then Bool else UInt8
   | IChar -> if mach.char_is_unsigned then UInt8 else SInt8
   | ISChar -> SInt8
   | IUChar -> UInt8
@@ -87,32 +91,10 @@ let c_int ikind =
   | ILongLong -> make_c_int true mach.sizeof_longlong
   | IULongLong -> make_c_int false mach.sizeof_longlong
 
-(* Bounds of an integer according to c_int ti :
-   An integer i : i \in [c_int_bounds ti] if
-    [c_int_bounds ti] = (min,max) then min <=i<max.*)
-let c_int_bounds =
-  let uint8  = Integer.zero, Integer.of_string "256"
-  and sint8  = Integer.of_string "-128", Integer.of_string "128"
-  and uint16 = Integer.zero, Integer.of_string "65536"
-  and sint16 = Integer.of_string "-32768", Integer.of_string "32768"
-  and uint32 = Integer.zero, Integer.of_string "4294967296"
-  and sint32 = Integer.of_string "-2147483648", Integer.of_string "2147483648"
-  and uint64 = Integer.zero, Integer.of_string "18446744073709551616"
-  and sint64 = Integer.of_string "-9223372036854775808", Integer.of_string "9223372036854775808"
-  in function
-    | UInt8  -> uint8
-    | SInt8  -> sint8
-    | UInt16 -> uint16
-    | SInt16 -> sint16
-    | UInt32 -> uint32
-    | SInt32 -> sint32
-    | UInt64 -> uint64
-    | SInt64 -> sint64
-
 let c_int_all =
   [ UInt8 ; SInt8 ; UInt16 ; SInt16 ; UInt32 ; SInt32 ; UInt64 ; SInt64 ]
 
-let c_bool () = c_int IInt
+let c_bool () = c_int IBool
 let c_char () = c_int IChar
 let c_ptr () =
   make_c_int false Cil.theMachine.Cil.theMachine.sizeof_ptr
@@ -147,15 +129,15 @@ let c_float fkind =
   | FDouble -> make_c_float mach.sizeof_double
   | FLongDouble -> make_c_float mach.sizeof_longdouble
 
-let sub_c_float f1 f2 = f_bits f1 <= f_bits f2
+let equal_float f1 f2 = f_bits f1 = f_bits f2
 
 (* Array objects, with both the head view and the flatten view. *)
 
 type arrayflat = {
   arr_size     : int ;  (* number of elements in the array *)
-  arr_dim      : int ;   (* number of dimensions in the array *)
-  arr_cell     : typ ;   (* type of elementary cells of the flatten array *)
-  arr_cell_nbr : int ; (* number of elementary cells in the flatten array *)
+  arr_dim      : int ;  (* number of dimensions in the array *)
+  arr_cell     : typ ;  (* type of elementary cells of the flatten array *)
+  arr_cell_nbr : int ;  (* number of elementary cells in the flatten array *)
 }
 
 type arrayinfo = {
@@ -184,9 +166,10 @@ let idx = function
   | SInt32 -> 5
   | UInt64 -> 6
   | SInt64 -> 7
+  | Bool -> 8
 
-let imemo f =
-  let m = Array.make 8 None in
+let i_memo f =
+  let m = Array.make 9 None in
   fun i ->
     let k = idx i in
     match m.(k) with
@@ -197,7 +180,7 @@ let fdx = function
   | Float32 -> 0
   | Float64 -> 1
 
-let fmemo f =
+let f_memo f =
   let m = Array.make 2 None in
   fun z ->
     let k = fdx z in
@@ -205,18 +188,33 @@ let fmemo f =
     | Some r -> r
     | None -> let r = f z in m.(k) <- Some r ; r
 
-let iiter f =
-  List.iter f [UInt8;SInt8;UInt16;SInt16;UInt32;SInt32;UInt64;SInt64]
+let i_iter f =
+  List.iter f [Bool;UInt8;SInt8;UInt16;SInt16;UInt32;SInt32;UInt64;SInt64]
 
-let fiter f =
+let f_iter f =
   List.iter f [Float32;Float64]
+
+(* -------------------------------------------------------------------------- *)
+(* --- Bounds                                                             --- *)
+(* -------------------------------------------------------------------------- *)
+
+let i_bounds i =
+  if signed i then
+    let m = Integer.two_power_of_int (i_bits i - 1) in
+    Integer.neg m , Integer.pred m
+  else
+    let m = Integer.two_power_of_int (i_bits i) in
+    Integer.zero , Integer.pred m
+
+let bounds i = i_memo i_bounds i
 
 (* -------------------------------------------------------------------------- *)
 (* --- Pretty Printers                                                    --- *)
 (* -------------------------------------------------------------------------- *)
 
-let pp_int fmt i = Format.fprintf fmt "%cint%d"
-    (if signed i then 's' else 'u') (i_bits i)
+let pp_int fmt i =
+  if i = Bool then Format.pp_print_string fmt "bool"
+  else Format.fprintf fmt "%cint%d" (if signed i then 's' else 'u') (i_bits i)
 
 let pp_float fmt f = Format.fprintf fmt "float%d" (f_bits f)
 
@@ -409,16 +407,6 @@ let rec object_of_logic_pointed t =
            "@[<hov 2>pointed of logic type@ (%a)@]"
            Printer.pp_logic_type t
 
-let array_dim arr =
-  match arr.arr_flat with
-  | Some f -> object_of f.arr_cell , f.arr_dim - 1
-  | None ->
-      let rec collect_dim arr n =
-        match object_of arr.arr_element with
-        | C_array arr -> collect_dim arr (succ n)
-        | te -> te,n
-      in collect_dim arr 1
-
 let rec array_dimensions a =
   let te = object_of a.arr_element in
   let d = match a.arr_flat with None -> None | Some f -> Some f.arr_size in
@@ -451,6 +439,11 @@ let get_array_size = function
   | C_array a -> array_size a
   | _ -> None
 
+let get_array_dim = function
+  | C_array { arr_flat=Some a } -> a.arr_dim
+  | C_array _ -> 1
+  | _ -> 0
+
 let get_array = function
   | C_array a -> Some( object_of a.arr_element, array_size a )
   | _ -> None
@@ -459,14 +452,11 @@ let get_array = function
 (* --- Sizeof                                                             --- *)
 (* -------------------------------------------------------------------------- *)
 
-let int64_max a b =
-  if Int64.compare a b < 0 then b else a
-
 let sizeof_defined = function
   | C_array { arr_flat = None } -> false
   | _ -> true
 
-let rec sizeof_object = function
+let sizeof_object = function
   | C_int i -> i_bytes i
   | C_float f -> f_bytes f
   | C_pointer _ty -> i_bytes (c_ptr())
@@ -485,8 +475,6 @@ let rec sizeof_object = function
           else
             WpLog.fatal ~current:true "Sizeof unknown-size array"
 
-let sizeof_typ t = Cil.bitsSizeOf t / 8
-
 let field_offset fd =
   let ctype = TComp(fd.fcomp,Cil.empty_size_cache(),[]) in
   let offset = Field(fd,NoOffset) in
@@ -503,7 +491,7 @@ let field_offset fd =
 (*   domain(signed)                 *)
 (*   then convert to signed         *)
 (* Otherwise:                       *)
-(*   both are converted to unsiged  *)
+(*   both are converted to unsigned *)
 (*                                  *)
 (* Case 2 is actually the negative  *)
 (* of Case 1, and both simplifies   *)
@@ -522,12 +510,6 @@ let promote a1 a2 =
   | C_float _ , C_int _ -> a1
   | _ -> WpLog.not_yet_implemented
            "promotion between arithmetics and pointer types"
-
-let merge a b =
-  match a,b with
-  | C_int i, C_int i' -> if sub_c_int i' i then a else b
-  | C_float f , C_float f' -> if sub_c_float f' f then a else b
-  | _ -> assert (equal a b) ; a
 
 let rec basename = function
   | C_int i -> Format.asprintf "%a" pp_int i

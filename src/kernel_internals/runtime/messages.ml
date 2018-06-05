@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,7 +30,7 @@ module DatatypeMessages =
        let reprs =
          [ { evt_kind = Failure;
              evt_plugin = "";
-             evt_dkey = None;
+             evt_category = None;
              evt_source = None;
              evt_message = "" } ]
        let mem_project = Datatype.never_any_project
@@ -43,7 +43,7 @@ module Messages =
   State_builder.List_ref
     (DatatypeMessages)
     (struct
-       let name = "message_table"
+       let name = "Messages.message_table"
        let dependencies = [ Ast.self ]
      end)
 let () = Ast.add_monotonic_state Messages.self
@@ -92,7 +92,7 @@ module OnceTable =
     (struct
       let size = 37
       let dependencies = [ Ast.self ]
-      let name = "Message.OnceTable"
+      let name = "Messages.OnceTable"
      end)
 
 let check_not_yet evt =

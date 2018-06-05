@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -74,7 +74,7 @@ module type S = sig
     ?valuation:Valuation.t -> for_writing:bool ->
     state -> lval -> (Valuation.t * loc * typ) evaluated
 
-  (** [reduce ~valuation state expr positive] evaluates the expresssion [expr]
+  (** [reduce ~valuation state expr positive] evaluates the expression [expr]
       in the state [state], and then reduces the [valuation] such that
       the expression [expr] evaluates to a zero or a non-zero value, according
       to [positive]. By default, the empty valuation is used. *)
@@ -94,11 +94,6 @@ module type S = sig
     ?valuation:Valuation.t ->
     state -> exp -> value -> Valuation.t or_bottom
 
-
-  val loc_size: loc -> Int_Base.t
-  val reinterpret: exp -> typ -> value -> value evaluated
-  val do_promotion: src_typ:typ -> dst_typ: typ -> exp -> value -> value evaluated
-
   (* Sorts a list of states by the evaluation of an expression, according to
      a list of expected integer values.
      [split_by_evaluation expr expected_values states] returns two list
@@ -114,13 +109,12 @@ module type S = sig
     exp -> Integer.t list -> state list ->
     (Integer.t * state list * bool) list * state list
 
-  val check_copy_lval: (lval * loc) -> (lval * loc) -> bool evaluated
-
   val check_non_overlapping:
     state -> lval list -> lval list -> unit evaluated
 
   val eval_function_exp:
-    exp -> state -> (Kernel_function.t * Valuation.t) list evaluated
+    exp -> ?args:exp list -> state ->
+    (Kernel_function.t * Valuation.t) list evaluated
     (** Evaluation of the function argument of a [Call] constructor *)
 
 end

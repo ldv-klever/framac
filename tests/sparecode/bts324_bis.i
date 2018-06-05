@@ -1,7 +1,7 @@
 /* run.config
-   OPT: -sparecode-analysis -sparecode-debug 1 -journal-disable
-   OPT: -sparecode-analysis -sparecode-debug 1 -main main_bis -journal-disable
-   OPT: -sparecode-analysis -sparecode-debug 1 -sparecode-no-annot -journal-disable
+   OPT: -sparecode-analysis -val-show-progress -sparecode-debug 1 -journal-disable
+   OPT: -sparecode-analysis -val-show-progress -sparecode-debug 1 -main main_bis -journal-disable
+   OPT: -sparecode-analysis -val-show-progress -sparecode-debug 1 -sparecode-no-annot -journal-disable
 */
 
 int ki[2], k ;
@@ -38,7 +38,7 @@ void main (int c) {
   if (is_ok)
     while (1) {
       loop_body () ;
-      // note: sparecode conserve les pragmas de slicing et par conséquent ce
+      // note: sparecode conserve les pragmas de slicing et par consÃ©quent ce
       // qui calcule "s0", l'option -sparecode-no-annot ni change rien
       //@ impact pragma expr s0;
       //@ slice pragma expr s1;

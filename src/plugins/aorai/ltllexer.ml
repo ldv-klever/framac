@@ -39,7 +39,7 @@
 
 # 41 "src/plugins/aorai/ltllexer.ml"
 let __ocaml_lex_tables = {
-  Lexing.lex_base = 
+  Lexing.lex_base =
    "\000\000\215\255\216\255\077\000\152\000\219\255\002\000\162\000\
     \237\000\227\255\228\255\229\255\231\255\232\255\016\000\056\001\
     \235\255\003\000\071\001\031\000\001\000\011\000\033\000\075\000\
@@ -51,7 +51,7 @@ let __ocaml_lex_tables = {
     \239\008\058\009\133\009\208\009\027\010\102\010\177\010\252\010\
     \071\011\146\011\221\011\040\012\131\000\252\255\253\255\254\255\
     \012\000\255\255";
-  Lexing.lex_backtrk = 
+  Lexing.lex_backtrk =
    "\255\255\255\255\255\255\038\000\037\000\255\255\035\000\038\000\
     \038\000\255\255\255\255\255\255\255\255\255\255\022\000\021\000\
     \255\255\016\000\038\000\008\000\029\000\040\000\015\000\040\000\
@@ -63,7 +63,7 @@ let __ocaml_lex_tables = {
     \038\000\038\000\038\000\038\000\038\000\038\000\032\000\038\000\
     \038\000\038\000\038\000\031\000\255\255\255\255\255\255\255\255\
     \003\000\255\255";
-  Lexing.lex_default = 
+  Lexing.lex_default =
    "\001\000\000\000\000\000\255\255\255\255\000\000\255\255\255\255\
     \255\255\000\000\000\000\000\000\000\000\000\000\255\255\255\255\
     \000\000\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
@@ -75,7 +75,7 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\077\000\000\000\000\000\000\000\
     \255\255\000\000";
-  Lexing.lex_trans = 
+  Lexing.lex_trans =
    "\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\006\000\005\000\006\000\006\000\006\000\006\000\006\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
@@ -498,7 +498,7 @@ let __ocaml_lex_tables = {
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\000\
     \000\000";
-  Lexing.lex_check = 
+  Lexing.lex_check =
    "\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\000\000\000\000\006\000\000\000\000\000\006\000\006\000\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
@@ -921,22 +921,22 @@ let __ocaml_lex_tables = {
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\255\
     \255\255";
-  Lexing.lex_base_code = 
+  Lexing.lex_base_code =
    "";
-  Lexing.lex_backtrk_code = 
+  Lexing.lex_backtrk_code =
    "";
-  Lexing.lex_default_code = 
+  Lexing.lex_default_code =
    "";
-  Lexing.lex_trans_code = 
+  Lexing.lex_trans_code =
    "";
-  Lexing.lex_check_code = 
+  Lexing.lex_check_code =
    "";
-  Lexing.lex_code = 
+  Lexing.lex_code =
    "";
 }
 
 let rec token lexbuf =
-    __ocaml_lex_token_rec lexbuf 0
+   __ocaml_lex_token_rec lexbuf 0
 and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1147,11 +1147,11 @@ and __ocaml_lex_token_rec lexbuf __ocaml_lex_state =
     )
 # 1149 "src/plugins/aorai/ltllexer.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_token_rec lexbuf __ocaml_lex_state
 
 and comment lexbuf =
-    __ocaml_lex_comment_rec lexbuf 76
+   __ocaml_lex_comment_rec lexbuf 76
 and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
   match Lexing.engine __ocaml_lex_tables __ocaml_lex_state lexbuf with
       | 0 ->
@@ -1174,7 +1174,7 @@ and __ocaml_lex_comment_rec lexbuf __ocaml_lex_state =
          ( comment lexbuf )
 # 1176 "src/plugins/aorai/ltllexer.ml"
 
-  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf; 
+  | __ocaml_lex_state -> lexbuf.Lexing.refill_buff lexbuf;
       __ocaml_lex_comment_rec lexbuf __ocaml_lex_state
 
 ;;

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,3 +25,7 @@
 val inset_string : unit -> string
 
 val emptyset_string : unit -> string
+
+val top_string: unit -> string
+val bottom_string: unit -> string
+val union_string: unit -> string

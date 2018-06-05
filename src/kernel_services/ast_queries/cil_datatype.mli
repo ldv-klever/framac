@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -47,7 +47,7 @@ end
 
 (** Single position in a file.
     @since Nitrogen-20111001 *)
-module Position: S_with_collections with type t = Lexing.position
+module Position: S_with_collections_pretty with type t = Lexing.position
 
 (** Cil locations. *)
 module Location: sig
@@ -63,11 +63,14 @@ end
 
 module Localisation: Datatype.S with type t = localisation
 
+module Syntactic_scope:
+  Datatype.S_with_collections with type t = syntactic_scope
+
 (**************************************************************************)
 (** {3 Cabs types} *)
 (**************************************************************************)
 
-module Cabs_file: S with type t = Cabs.file
+module Cabs_file: S_with_pretty with type t = Cabs.file
 
 (**************************************************************************)
 (** {3 C types}
@@ -77,9 +80,9 @@ module Cabs_file: S with type t = Cabs.file
 module Block: S_with_pretty with type t = block
 (* Blocks cannot compared or hashed, so collections are not available *)
 
-module Compinfo: S_with_collections with type t = compinfo
-module Enuminfo: S_with_collections with type t = enuminfo
-module Enumitem: S_with_collections with type t = enumitem
+module Compinfo: S_with_collections_pretty with type t = compinfo
+module Enuminfo: S_with_collections_pretty with type t = enuminfo
+module Enumitem: S_with_collections_pretty with type t = enumitem
 
 (**
    @since Fluorine-20130401
@@ -105,11 +108,13 @@ module Fieldinfo: S_with_collections_pretty with type t = fieldinfo
 module File: S with type t = file
 
 module Global: sig
-  include S_with_collections with type t = global
+  include S_with_collections_pretty with type t = global
   val loc: t -> location
+  val attr: t -> attributes
+  (** @since Phosphorus-20170501-beta1 *)
 end
 
-module Initinfo: S with type t = initinfo
+module Initinfo: S_with_pretty with type t = initinfo
 
 module Instr: sig
   include S_with_pretty with type t = instr
@@ -124,7 +129,7 @@ module Kinstr: sig
   val loc: t -> location
 end
 
-module Label: S_with_collections with type t = label
+module Label: S_with_collections_pretty with type t = label
 
 (** Note that the equality is based on eid (for sub-expressions). 
     For structural equality, use {!LvalStructEq} *)
@@ -161,7 +166,13 @@ module Attributes: S_with_collections with type t = attributes
 
 
 (** Types, with comparison over struct done by key and unrolling of typedefs. *)
-module Typ: S_with_collections_pretty with type t = typ
+module Typ: sig
+  include S_with_collections_pretty with type t = typ
+  val toplevel_attr: t -> attributes
+    (** returns the attributes associated to the toplevel type, without adding
+        attributes from compinfo, enuminfo or typeinfo. Use {!Cil.typeAttrs}
+        to retrieve the complete set of attributes. *)
+end
 
 (** Types, with comparison over struct done by name and no unrolling. *)
 module TypByName: S_with_collections_pretty with type t = typ
@@ -205,7 +216,7 @@ end
     Sorted by alphabetic order. *)
 (**************************************************************************)
 
-module Builtin_logic_info: S_with_collections with type t = builtin_logic_info
+module Builtin_logic_info: S_with_collections_pretty with type t = builtin_logic_info
 
 module Code_annotation: sig
   include S_with_collections_pretty with type t = code_annotation
@@ -214,20 +225,25 @@ end
 
 module Funbehavior: S with type t = funbehavior
 
-module Funspec: S with type t = funspec
+module Funspec: S_with_pretty with type t = funspec
 
 (** @since Fluorine-20130401 *)
-module Fundec: S_with_collections with type t = fundec
+module Fundec: S_with_collections_pretty with type t = fundec
 
 module Global_annotation: sig
-  include S_with_collections with type t = global_annotation
+  include S_with_collections_pretty with type t = global_annotation
   val loc: t -> location
-end
-module Identified_term: S_with_collections with type t = identified_term
 
-module Logic_ctor_info: S_with_collections with type t = logic_ctor_info
-module Logic_info: S_with_collections with type t = logic_info
-module Logic_constant: S_with_collections with type t = logic_constant
+  val attr: t -> attributes
+  (** attributes tied to the global annotation.
+      @since Phosphorus-20170501-beta1 *)
+end
+
+module Identified_term: S_with_collections_pretty with type t = identified_term
+
+module Logic_ctor_info: S_with_collections_pretty with type t = logic_ctor_info
+module Logic_info: S_with_collections_pretty with type t = logic_info
+module Logic_constant: S_with_collections_pretty with type t = logic_constant
 
 module Logic_label: S_with_collections_pretty with type t = logic_label
 
@@ -237,7 +253,7 @@ module Logic_type: S_with_collections_pretty with type t = logic_type
 module Logic_type_ByName: S_with_collections_pretty with type t = logic_type
 module Logic_type_NoUnroll: S_with_collections_pretty with type t = logic_type
 
-module Logic_type_info: S_with_collections with type t = logic_type_info
+module Logic_type_info: S_with_collections_pretty with type t = logic_type_info
 
 module Logic_var: S_with_collections_pretty with type t = logic_var
 
@@ -246,13 +262,13 @@ module Model_info: S_with_collections_pretty with type t = model_info
 
 module Term: S_with_collections_pretty with type t = term
 
-module Term_lhost: S_with_collections with type t = term_lhost
+module Term_lhost: S_with_collections_pretty with type t = term_lhost
 module Term_offset: S_with_collections_pretty with type t = term_offset
 module Term_lval: S_with_collections_pretty with type t = term_lval
 
-module Predicate: S with type t = predicate
+module Predicate: S_with_pretty with type t = predicate
 module Identified_predicate: 
-  S_with_collections with type t = identified_predicate
+  S_with_collections_pretty with type t = identified_predicate
 (** @since Neon-20140301 *)
 
 (**************************************************************************)
@@ -261,6 +277,7 @@ module Identified_predicate:
 (**************************************************************************)
 
 module Lexpr: S with type t = Logic_ptree.lexpr
+(** Beware: no pretty-printer is available. *)
 
 (**/**)
 (* ****************************************************************************)
@@ -271,10 +288,8 @@ module Lexpr: S with type t = Logic_ptree.lexpr
 val drop_non_logic_attributes : (attributes -> attributes) ref
 val constfoldtoint : (exp -> Integer.t option) ref
 val punrollType: (typ -> typ) ref
-(**/**)
 
 val clear_caches: unit -> unit
-
 
 (**/**)
 

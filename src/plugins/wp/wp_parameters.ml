@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,6 +23,7 @@
 module Fc_config = Config
 module STRING = String
 let () = Plugin.is_share_visible ()
+let () = Plugin.is_session_visible ()
 include Plugin.Register
     (struct
       let name = "WP"
@@ -32,14 +33,14 @@ include Plugin.Register
 
 (* localize all warnings inside WP *)
 
-let warning ?current = match current with
-  | None -> warning ~current:true
-  | Some b -> warning ~current:b
+let warning ?wkey ?current = match current with
+  | None -> warning ?wkey ~current:true
+  | Some b -> warning ?wkey ~current:b
 
 let resetdemon = ref []
 let on_reset f = resetdemon := f :: !resetdemon
 let reset () = List.iter (fun f -> f ()) !resetdemon
-let has_dkey k = Datatype.String.Set.mem k (Debug_category.get())
+let has_dkey (k:category) = is_debug_key_enabled k
 
 (* ------------------------------------------------------------------------ *)
 (* ---  WP Generation                                                   --- *)
@@ -161,15 +162,15 @@ module Model =
     (struct
       let option_name = "-wp-model"
       let arg_name = "model+..."
-      let help = "Memory model selection. Available selectors:\n \
-                  * 'Hoare' logic variables only\n \
-                  * 'Typed' typed pointers only\n \
-                  * '+nocast' no pointer cast\n \
-                  * '+cast' unsafe pointer casts\n \
-                  * '+raw' no logic variable\n \
-                  * '+ref' by-reference-style pointers detection\n \
-                  * '+nat/+rg/+int' natural, no-range or machine-integers arithmetics\n \
-                  * '+real/+float' real or IEEE floatting point arithmetics"
+      let help = "Memory model selection. Available selectors:\n\
+                  * 'Hoare' logic variables only\n\
+                  * 'Typed' typed pointers only\n\
+                  * '+nocast' no pointer cast\n\
+                  * '+cast' unsafe pointer casts\n\
+                  * '+raw' no logic variable\n\
+                  * '+ref' by-reference-style pointers detection\n\
+                  * '+nat/+int' natural / machine-integers arithmetics\n\
+                  * '+real/+float' real / IEEE floating point arithmetics"
     end)
 
 let () = Parameter_customize.set_group wp_model
@@ -223,10 +224,33 @@ module ExtEqual =
   end)
 
 let () = Parameter_customize.set_group wp_model
+module BoolRange =
+  False(struct
+    let option_name = "-wp-bool-range"
+    let help = "Assumes _Bool values have no trap representations."
+  end)
+
+let () = Parameter_customize.set_group wp_model
+module Overflows =
+  False(struct
+    let option_name = "-wp-overflows"
+    let help = "Collect hypotheses for absence of overflow and downcast\n\
+                (incompatible with RTE generator plug-in)"
+  end)
+
+let () = Parameter_customize.set_group wp_model
 module Literals =
   False(struct
     let option_name = "-wp-literals"
     let help = "Export content of string literals."
+  end)
+
+let () = Parameter_customize.set_group wp_model
+module Volatile =
+  True(struct
+    let option_name = "-wp-volatile"
+    let help = "Sound modeling of volatile access.\n\
+                Use -wp-no-volatile to ignore volatile attributes."
   end)
 
 (* ------------------------------------------------------------------------ *)
@@ -240,6 +264,12 @@ module Init =
   False(struct
     let option_name = "-wp-init-const"
     let help = "Use initializers for global const variables."
+  end)
+
+module InitAlias =
+  False(struct
+    let option_name = "-wp-init-alias"
+    let help = "Use initializers for aliasing propagation."
   end)
 
 let () = Parameter_customize.set_group wp_strategy
@@ -264,10 +294,20 @@ module Split =
   end)
 
 let () = Parameter_customize.set_group wp_strategy
-module Invariants =
+module UnfoldAssigns =
   False(struct
-    let option_name = "-wp-invariants"
-    let help = "Handle generalized invariants inside loops."
+    let option_name = "-wp-unfold-assigns"
+    let help = "Unfold aggregates in assigns."
+  end)
+
+let () = Parameter_customize.set_group wp_strategy
+module SplitDepth =
+  Int(struct
+    let option_name = "-wp-split-depth"
+    let default = 0
+    let arg_name = "p"
+    let help = "Set depth of exploration for splitting conjunctions into sub-goals.\n\
+Value `-1` means an unlimited depth."
   end)
 
 let () = Parameter_customize.set_group wp_strategy
@@ -319,10 +359,38 @@ module Clean =
   end)
 
 let () = Parameter_customize.set_group wp_simplifier
+module Ground =
+  True(struct
+    let option_name = "-wp-ground"
+    let help = "Use aggressive ground simplifications."
+  end)
+
+let () = Parameter_customize.set_group wp_simplifier
+module Reduce =
+  True(struct
+    let option_name = "-wp-reduce"
+    let help = "Reduce function equalities with precedence to constructors."
+  end)
+
+let () = Parameter_customize.set_group wp_simplifier
 module Filter =
   True(struct
     let option_name = "-wp-filter"
     let help = "Use variable filtering."
+  end)
+
+let () = Parameter_customize.set_group wp_simplifier
+module Parasite =
+  True(struct
+    let option_name = "-wp-parasite"
+    let help = "Use singleton-variable filtering."
+  end)
+
+let () = Parameter_customize.set_group wp_simplifier
+module Prenex =
+  False(struct
+    let option_name = "-wp-prenex"
+    let help = "Normalize nested foralls into prenex-form"
   end)
 
 let () = Parameter_customize.set_group wp_simplifier
@@ -336,7 +404,14 @@ let () = Parameter_customize.set_group wp_simplifier
 module SimplifyIsCint =
   True(struct
     let option_name = "-wp-simplify-is-cint"
-    let help = "Remove redondant machine integer range hypothesis."
+    let help = "Remove redundant machine integer range hypothesis."
+  end)
+
+let () = Parameter_customize.set_group wp_simplifier
+module SimplifyLandMask =
+  True(struct
+    let option_name = "-wp-simplify-land-mask"
+    let help = "Tight logical masks on unsigned integers."
   end)
 
 let () = Parameter_customize.set_group wp_simplifier
@@ -354,14 +429,6 @@ module SimplifyType =
   end)
 
 let () = Parameter_customize.set_group wp_simplifier
-module QedChecks =
-  String_set(struct
-    let option_name = "-wp-qed-checks"
-    let arg_name = "qed-key,..."
-    let help = "Check internal simplifications."
-  end)
-
-let () = Parameter_customize.set_group wp_simplifier
 module InitWithForall =
   True(struct
     let option_name = "-wp-init-summarize-array"
@@ -372,9 +439,17 @@ let () = Parameter_customize.set_group wp_simplifier
 module BoundForallUnfolding =
   Int(struct
     let option_name = "-wp-bound-forall-unfolding"
-    let help = "Instanciate up to <n> forall-integers hypotheses."
+    let help = "Instantiate up to <n> forall-integers hypotheses."
     let arg_name="n"
     let default = 1000
+  end)
+
+let () = Parameter_customize.set_group wp_simplifier
+module QedChecks =
+  String_set(struct
+    let option_name = "-wp-qed-checks"
+    let arg_name = "qed-key,..."
+    let help = "Check internal simplifications."
   end)
 
 (* ------------------------------------------------------------------------ *)
@@ -391,15 +466,14 @@ module Provers = String_list
       let help =
         "Submit proof obligations to external prover(s):\n\
          - 'none' to skip provers\n\
-         Directly supported provers:\n\
+         - 'script' (session scripts only)\n\
+         - 'tip' (failed scripts only)\n\
          - 'alt-ergo' (default)\n\
          - 'altgr-ergo' (gui)\n\
          - 'coq', 'coqide' (see also -wp-script)\n\
          - 'why3:<dp>' or '<dp>' (why3 prover, see -wp-detect)\n\
          - 'why3ide' (why3 gui)"
     end)
-
-let () = Provers.add_aliases [ "-wp-proof" ] (* Deprecated *)
 
 let () = Parameter_customize.set_group wp_prover
 module Generate = False
@@ -456,6 +530,31 @@ module Timeout =
   end)
 
 let () = Parameter_customize.set_group wp_prover
+module TimeExtra =
+  Int(struct
+    let option_name = "-wp-time-extra"
+    let default = 5
+    let arg_name = "n"
+    let help =
+      Printf.sprintf
+        "Set extra-time (in seconds) for proof replay (default: %d)." default
+  end)
+
+let () = Parameter_customize.set_group wp_prover
+module TimeMargin =
+  Int(struct
+    let option_name = "-wp-time-margin"
+    let default = 2
+    let arg_name = "n"
+    let help =
+      Printf.sprintf
+        "Set margin-time (in seconds) for considering a proof automatic.\n\
+         When using the 'tip' prover, scripts are created or cancelled\n\
+         if the proof time is greater or lower than (timeout - margin).\n\
+         (default: %d)." default
+  end)
+
+let () = Parameter_customize.set_group wp_prover
 module Procs =
   Int(struct
     let option_name = "-wp-par"
@@ -479,6 +578,50 @@ module ProofTrace =
 (* ------------------------------------------------------------------------ *)
 
 let wp_prover_options = add_group "Prover Options"
+
+let () = Parameter_customize.set_group wp_prover
+module Auto = String_list
+    (struct
+      let option_name = "-wp-auto"
+      let arg_name = "s"
+      let help =
+        "Activate auto-search with strategy <s>.\n\
+         Implies -wp-prover 'tip'.\n\
+         Use '-wp-prover ?' for listing strategies."
+    end)
+
+let () = Parameter_customize.set_group wp_prover
+module AutoDepth = Int
+    (struct
+      let option_name = "-wp-auto-depth"
+      let arg_name = "n"
+      let default = 5
+      let help =
+        "Depth of auto-search (-wp-auto only, default 5).\n\
+          Limits the number of nested level in strategies."
+    end)
+
+let () = Parameter_customize.set_group wp_prover
+module AutoWidth = Int
+    (struct
+      let option_name = "-wp-auto-width"
+      let arg_name = "n"
+      let default = 10
+      let help =
+        "Width of auto-search (-wp-auto only, default 10).\n\
+          Limits the number of pending goals in strategies."
+    end)
+
+let () = Parameter_customize.set_group wp_prover
+module BackTrack = Int
+    (struct
+      let option_name = "-wp-auto-backtrack"
+      let arg_name = "n"
+      let default = 0
+      let help =
+        "Backtracking limit (-wp-auto only, de-activated by default).\n\
+         Limits backtracking when applying strategies."
+    end)
 
 let () = Parameter_customize.set_group wp_prover_options
 module Script =
@@ -665,7 +808,11 @@ module TruncPropIdFileName =
     let option_name = "-wp-filename-truncation"
     let default = 60
     let arg_name = "n"
-    let help = "Truncate basename of proof obligation files after <n> characters. Since numbers can be added as suffixes to make theses names unique, filename lengths can be highter to <n>. No truncation is performed when the value equals to zero (defaut: 60)."
+    let help =
+      "Truncate basename of proof obligation files after <n> characters.\n\
+       Since numbers can be added as suffixes to make theses names unique,\n\
+       filename lengths can be highter to <n>. No truncation is performed\n\
+       when the value equals to zero (default: 60)."
   end)
 
 
@@ -690,21 +837,36 @@ module Report =
 
 let () = Parameter_customize.set_group wp_po
 let () = Parameter_customize.do_not_save ()
+module ReportJson =
+  String
+    (struct
+      let option_name = "-wp-report-json"
+      let arg_name = "file.json"
+      let default = ""
+      let help =
+        "Output report in json format into given file.\n\
+          If the file already exists, it is used for\n\
+          stabilizing range of steps in other reports."
+    end)
+
+let () = Parameter_customize.set_group wp_po
+let () = Parameter_customize.do_not_save ()
 module ReportName =
   String(struct
     let option_name = "-wp-report-basename"
     let arg_name = "file"
     let default = "wp-report"
-    let help = Printf.sprintf "Basename of generated reports (default %S)" default
+    let help = Printf.sprintf
+        "Basename of generated reports (default %S)" default
   end)
 
 let () = Parameter_customize.set_group wp_po
 let () = Parameter_customize.do_not_save ()
 module Separation =
-  False
+  True
     (struct
-      let option_name = "-wp-print-separation"
-      let help = "Print Separation Hypotheses"
+      let option_name = "-wp-warn-separation"
+      let help = "Warn Against Separation Hypotheses"
     end)
 
 let () = Parameter_customize.set_group wp_po
@@ -809,8 +971,17 @@ let base_output () =
               | dir ->
                   make_output_dir dir ; dir in
       base_output := Some output;
+      Filepath.add_symbolic_dir "WPOUT" output ;
       output
   | Some output -> output
+
+
+let get_session () = Session.dir ~error:false ()
+
+let get_session_dir d =
+  let base = get_session () in
+  let path = Printf.sprintf "%s/%s" base d in
+  make_output_dir path ; path
 
 let get_output () =
   let base = base_output () in
@@ -838,13 +1009,18 @@ let get_includes () =
 
 let cat_print_generated = register_category "print-generated"
 
-let has_print_generated () = has_dkey "print-generated"
+let has_print_generated () = has_dkey cat_print_generated
 
-let print_generated file =
-  debug ~dkey:cat_print_generated
-    "%a@."
-    (fun fmt file ->
-       Command.read_lines file (fun s ->
-           Format.pp_print_string fmt s;
-           Format.pp_print_newline fmt ()))
-    file;
+let print_generated ?header file =
+  let header = match header with
+    | None -> Filepath.pretty file
+    | Some head -> head in
+  debug ~dkey:cat_print_generated "%S@\n%t@." header
+    begin fun fmt ->
+      if not (Sys.file_exists file) then
+        Format.pp_print_string fmt "<missing file>"
+      else
+        Command.read_lines file (fun s ->
+            Format.pp_print_string fmt s;
+            Format.pp_print_newline fmt ())
+    end

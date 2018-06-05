@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -58,7 +58,7 @@ val mk_labeled_fun: string -> 'a
     @raise Unregistered_function when not properly initialized *)
 
 val mk_fun: string -> ('a -> 'b) ref
-  (** Build a reference to an unitialized function
+  (** Build a reference to an uninitialized function
       @raise Unregistered_function when not properly initialized *)
 
 (* ************************************************************************* *)
@@ -183,6 +183,10 @@ val opt_conv: 'a -> 'a option -> 'a
   (** [opt_conv default v] returns [default] if [v] is [None] and [a] if
       [v] is [Some a] *)
 
+val opt_if: bool -> 'a -> 'a option
+(** [opt_if cond v] returns [Some v] if [cond] is [true] and
+    [None] otherwise *)
+
 val may_map: ('a -> 'b) -> ?dft:'b -> 'a option -> 'b
   (** [may_map f ?dft x] applies [f] to the value of [x] if exists. Otherwise
       returns the default value [dft].
@@ -280,19 +284,16 @@ val make_unique_name:
       derived from [(s,sep,start)] and [(mem new_string)=false] and [n<>0] 
       @since Oxygen-20120901 *)
 
+val html_escape: string -> string
+
 (* ************************************************************************* *)
 (** {2 Performance} *)
 (* ************************************************************************* *)
 
 (* replace "noalloc" with [@@noalloc] for OCaml version >= 4.03.0 *)
 [@@@ warning "-3"]
-external getperfcount: unit -> int = "getperfcount" "noalloc"
-external getperfcount1024: unit -> int = "getperfcount1024" "noalloc"
 external address_of_value: 'a -> int = "address_of_value" "noalloc"
 [@@@ warning "+3"]
-
-val time: ?msg:string -> ('a -> 'b) -> 'a -> 'b
-val time1024: ?msg:string -> ('a -> 'b) -> 'a -> 'b
 
 (* ************************************************************************* *)
 (** {2 Exception catcher} *)

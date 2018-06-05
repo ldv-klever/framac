@@ -42,6 +42,7 @@
 *.check_mli_exists
 
 # Generated files and dirs
+_build
 .settings
 .project
 .paths
@@ -58,6 +59,7 @@ config.log
 config.status
 configure
 bin/frama-c-config
+bin/fc-config
 doc/code/docgen.ml
 lib/
 ptests/ptests_config.ml

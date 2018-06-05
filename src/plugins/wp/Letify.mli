@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,27 @@
 (* -------------------------------------------------------------------------- *)
 
 open Lang.F
+
+module Ground :
+sig
+  
+  type subst = pred -> pred
+  val singleton : pred -> subst
+  val compute : pred array -> subst array * subst
+
+  type env
+  val pretty : Format.formatter -> env -> unit
+  val top : unit -> env
+  val copy : env -> env
+
+  val e_apply : env -> term -> term
+  val p_apply : env -> pred -> pred
+
+  val forward : env -> pred -> pred
+  val backward : env -> pred -> pred
+  val branch : env -> pred -> pred * env * env
+  
+end
 
 module Sigma :
 sig
@@ -62,7 +83,7 @@ val add_definitions : Sigma.t -> Defs.t -> Vars.t -> pred list -> pred list
     definitions of variables [xs] from [sigma] that comes from [defs].
     They are added to [ps]. *)
 
-(** Pruning strategy ; selects most occuring literals to split cases. *)
+(** Pruning strategy ; selects most occurring literals to split cases. *)
 module Split :
 sig
 

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,12 +32,12 @@ val framac_icon: GdkPixbuf.pixbuf option
     @since Carbon-20101201 *)
 module Icon: sig
 
-  type kind = Frama_C | Unmark
+  type kind = Frama_C | Unmark | Fold | Unfold
             | Custom of string
             | Feedback of Property_status.Feedback.t
   (** Generic icons available in every proper install of Frama-C.
       To be able to use [Custom s] you must have called
-      [register ~name:s ~file] orelse you will get an generic icon
+      [register ~name:s ~file], otherwise you will get a generic icon
       placeholder. *)
 
   val register: name:string -> file:string -> unit
@@ -55,6 +55,10 @@ module Icon: sig
 
   val default: unit -> GdkPixbuf.pixbuf
 
+  val clear: unit -> unit
+  (** Reloads the builtin icons from the theme specified in the configuration.
+      Used when the theme is changed.
+      @since Chlorine-20180501 *)
 end
 
 (** Configuration module for the GUI: all magic visual constants should
@@ -144,7 +148,7 @@ module Configuration: sig
   val config_string : key:string -> default:string -> string #selector -> unit
   val config_values : key:string -> default:'a ->
     values:('a * string) list -> 'a #selector -> unit
-  (** The [values] field is used as a dictionnary of available values. 
+  (** The [values] field is used as a dictionary of available values. 
       They are compared with [Pervasives.(=)]. *)
   
 end
@@ -171,10 +175,6 @@ val cleanup_all_tags : GSourceView2.source_buffer -> unit
 val make_formatter: ?flush:(unit -> unit) -> #GText.buffer -> Format.formatter
 (** Build a formatter that redirects its output to the given buffer.
     [flush] is called whenever the formatter is flushed. *)
-
-val channel_redirector:  Unix.file_descr -> (string -> bool) -> unit
-(** Redirects all strings written to the file descriptor
-    and call the given function on each. *)
 
 val log_redirector: ?flush:(unit->unit) -> (string -> unit) -> unit
 (** Redirects all strings written to the terminal and call the given function
@@ -409,6 +409,12 @@ module MAKE_CUSTOM_LIST(A : sig type t end)
       title:string ->
       GTree.view_column
   end
+
+(** Copied from lablgtk [GToolbox.input_string]. See the lablgtk API for more
+    details. *)
+val input_string :
+    parent: GWindow.window -> title:string ->
+    ?ok:string -> ?cancel:string -> ?text:string -> string -> string option
 
 (** Create a new window displaying a graph.
     @plugin development guide *)

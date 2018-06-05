@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -191,7 +191,7 @@ module Usable_emitters_of_emitter =
     (Datatype.Pair
        (Datatype.Ref(Usable_emitter)) (* current usable emitter with the 
         				 current parameter values *)
-       (Datatype.Ref(Usable_emitter.Set))) (* existing usables emitters with
+       (Datatype.Ref(Usable_emitter.Set))) (* existing usable emitters with
         				      the old parameter values *)
     (struct 
       let name = "Emitter.Usable_emitters_of_emitter" 
@@ -355,7 +355,7 @@ let register_tuning_parameter name p =
            the previous session but not in the current one. In this case, there
            is nothing to do.
 
-           Additionnally, even if it still exists, it could be not yet restored
+           Additionally, even if it still exists, it could be not yet restored
            since the project library does not ensure that it restores the table
            of emitters before the states of parameters. In such a case, it is
            also possible to do nothing since the right table in the right state
@@ -421,17 +421,23 @@ let update_table tbl =
         !all_usable_e);
   (* register new stuff *)
   Datatype.String.Hashtbl.iter
-    (fun e_name (_, all_usable_e) -> 
+    (fun e_name (_, all_usable_e) ->
       Usable_emitter.Set.iter
-	(fun e -> 
-	  Datatype.String.Map.iter
-	    (fun p _ -> register_correctness_parameter p e.u_name e.u_kinds)
-	    e.correctness_values;
-	  Datatype.String.Map.iter
-	    (fun p _ -> 
-	      register_tuning_parameter e_name (Typed_parameter.get p))
-	    e.tuning_values)
-	!all_usable_e)
+        (fun e ->
+          Datatype.String.Map.iter
+            (fun p _ -> register_correctness_parameter p e.u_name e.u_kinds)
+            e.correctness_values;
+          Datatype.String.Map.iter
+            (fun p _ ->
+              try
+                let ty_p = Typed_parameter.get p in
+                register_tuning_parameter e_name ty_p
+              with Not_found ->
+                (* the parameter could not exist anymore in multi-sessions mode
+                   (e.g. save/load): just ignore it in that case *)
+                ())
+            e.tuning_values)
+        !all_usable_e)
     tbl
 
 let () = Usable_emitters_of_emitter.add_hook_on_update update_table
@@ -529,8 +535,6 @@ struct
 
   module H_datatype = H.Make(Tbl)
 
-  let dkey = Kernel.register_category "emitter"
-
   (* standard projectified hashtbl, but an ad-hoc function 'clear' *)
   include State_builder.Register
   (H_datatype)
@@ -542,14 +546,14 @@ struct
        (*       Kernel.feedback "SELECT: %a" State_selection.pretty sel;*)
        if must_clear_all sel then begin
 	 (* someone explicitly requires to fully reset the table *)
-	 Kernel.debug ~dkey ~level:3 "FULL CLEAR of %s in %a" 
+	 Kernel.debug ~dkey:Kernel.dkey_emitter_clear "FULL CLEAR of %s in %a" 
 	   Info.name Project.pretty (Project.current ());
 	 H.clear tbl
        end else 
 	 (* AST is unchanged *)
 	 if must_local_clear sel then begin
 	   (* one have to clear the table, but we have to keep the keys *)
-	   Kernel.debug ~dkey ~level:3 "LOCAL CLEAR of %s in %a"
+	   Kernel.debug ~dkey:Kernel.dkey_emitter_clear "LOCAL CLEAR of %s in %a"
 	     Info.name Project.pretty (Project.current ());
 	   H.iter 
 	     (fun k h ->
@@ -578,7 +582,8 @@ struct
 	     (fun (k, e, x) -> 
 	       try 
 		 let h = H.find tbl k in
-		 Kernel.debug ~dkey ~level:3 "CLEARING binding %a of %s in %a" 
+		 Kernel.debug ~dkey:Kernel.dkey_emitter_clear
+                   "CLEARING binding %a of %s in %a" 
 		   ED.pretty (E.get e)
 		   Info.name
 		   Project.pretty (Project.current ());

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -58,6 +58,8 @@ let join join x y = match x, y with
   | `Bottom, (`Value _ as v)
   | (`Value _ as v), `Bottom
   | (`Bottom as v), `Bottom -> v
+
+let join_list j l = List.fold_left (join j) `Bottom l
 
 let narrow narrow x y = match x, y with
   | `Value vx, `Value vy    -> narrow vx vy
@@ -122,12 +124,6 @@ module Bound_Lattice
   let bottom = `Bottom
   let join = join Lattice.join
   let is_included = is_included Lattice.is_included
-  let join_and_is_included a b = match a, b with
-    | `Bottom, _ -> b, true
-    | _, `Bottom -> a, false
-    | `Value a, `Value b ->
-        let joined, is_included = Lattice.join_and_is_included a b in
-        `Value joined, is_included
 end
 
 

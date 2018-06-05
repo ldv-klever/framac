@@ -44,7 +44,7 @@
 (* Modified by TrustInSoft *)
 
 (*
- * CIL: An intermediate language for analyzing C progams.
+ * CIL: An intermediate language for analyzing C programs.
  *
  * Version Tue Dec 12 15:21:52 PST 2000
  * Scott McPeak, George Necula, Wes Weimer
@@ -196,7 +196,7 @@ module TheMachine =
     (struct
        let name = "theMachine"
        let unique_name = name
-       let dependencies = [ Kernel.Machdep.self ]
+       let dependencies = [ Kernel.Machdep.self; Kernel.LogicalOperators.self ]
      end)
 
 let selfMachine = TheMachine.self
@@ -261,7 +261,9 @@ let rec addOffset (toadd: offset) (off: offset) : offset =
   | Index(e, offset) -> Index(e, addOffset toadd offset)
 
 let mkBlock (slst: stmt list) : block =
-  { battrs = []; bstmts = slst; blocals = []}
+  { battrs = []; bstmts = slst; blocals = []; bstatics = []; bscoping = true }
+
+let mkBlockNonScoping l = let b = mkBlock l in b.bscoping <- false; b
 
 let mkStmt ?(ghost=false) ?(valid_sid=false) (sk: stmtkind) : stmt =
   { skind = sk;
@@ -278,11 +280,8 @@ let mkStmt ?(ghost=false) ?(valid_sid=false) (sk: stmtkind) : stmt =
    | [] -> Instr (Skip loc)
    | [i] -> Instr i
    | il ->
-       let b = mkBlock (List.map (fun i -> mkStmt (Instr i)) il) in
-       match b.bstmts with
-       | [] -> Instr (Skip loc)
-       | [s] when b.battrs = [] -> s.skind
-       | _ -> Block b
+     let b = mkBlockNonScoping (List.map (fun i -> mkStmt (Instr i)) il) in
+     Block b
 
  (**** Utility functions ******)
 
@@ -503,7 +502,7 @@ type attributeClass =
      [ "section"; "constructor"; "destructor"; "unused"; "used"; "weak";
        "no_instrument_function"; "alias"; "no_check_memory_usage";
        "exception"; "model"; (* "restrict"; *)
-       "aconst"; "__asm__" (* Gcc uses this to specifiy the name to be used in
+       "aconst"; "__asm__" (* Gcc uses this to specify the name to be used in
 			    * assembly for a global  *)];
    (* Now come the MSVC declspec attributes *)
    List.iter (fun a -> Hashtbl.add table a (AttrName true))
@@ -564,7 +563,6 @@ type attributeClass =
 
  (* Make a varinfo. Used mostly as a helper function below  *)
  let makeVarinfo ?(source=true) ?(temp=false) global formal name typ =
-   (* Strip const from type for locals *)
    let vi =
      { vorig_name = name;
        vname = name;
@@ -573,8 +571,7 @@ type attributeClass =
        vdefined = false;
        vformal = formal;
        vtemp = temp;
-       vtype = if formal || global then typ
-       else typeRemoveAttributes ["const"] typ;
+       vtype = typ;
        vdecl = Location.unknown;
        vinline = false;
        vattr = [];
@@ -596,7 +593,7 @@ type attributeClass =
      (Varinfo.Hashtbl)
      (Datatype.List(Varinfo))
      (struct
-	let name = "FormalsDecl"
+	let name = "Cil.FormalsDecl"
 	let dependencies = [] (* depends on Ast.self; see below *)
 	let size = 47
       end)
@@ -832,6 +829,35 @@ type visitor_behavior =
       set_orig_logic_var: logic_var -> logic_var -> unit;
       set_orig_kernel_function: kernel_function -> kernel_function -> unit;
       set_orig_fundec: fundec -> fundec -> unit;
+
+      unset_varinfo: varinfo -> unit;
+      unset_compinfo: compinfo -> unit;
+      unset_enuminfo: enuminfo -> unit;
+      unset_enumitem: enumitem -> unit;
+      unset_typeinfo: typeinfo -> unit;
+      unset_stmt: stmt -> unit;
+      unset_logic_info: logic_info -> unit;
+      unset_logic_type_info: logic_type_info -> unit;
+      unset_fieldinfo: fieldinfo -> unit;
+      unset_model_info: model_info -> unit;
+      unset_logic_var: logic_var -> unit;
+      unset_kernel_function: kernel_function -> unit;
+      unset_fundec: fundec -> unit;
+
+      unset_orig_varinfo: varinfo -> unit;
+      unset_orig_compinfo: compinfo -> unit;
+      unset_orig_enuminfo: enuminfo -> unit;
+      unset_orig_enumitem: enumitem -> unit;
+      unset_orig_typeinfo: typeinfo -> unit;
+      unset_orig_stmt: stmt -> unit;
+      unset_orig_logic_info: logic_info -> unit;
+      unset_orig_logic_type_info: logic_type_info -> unit;
+      unset_orig_fieldinfo: fieldinfo -> unit;
+      unset_orig_model_info: model_info -> unit;
+      unset_orig_logic_var: logic_var -> unit;
+      unset_orig_kernel_function: kernel_function -> unit;
+      unset_orig_fundec: fundec -> unit;
+
       (* copy fields that can referenced in other places of the AST*)
       memo_stmt: stmt -> stmt;
       memo_varinfo: varinfo -> varinfo;
@@ -991,6 +1017,34 @@ let set_orig_logic_var b = b.set_orig_logic_var
 let set_orig_kernel_function b= b.set_orig_kernel_function
 let set_orig_fundec b = b.set_orig_fundec
 
+let unset_varinfo b = b.unset_varinfo
+let unset_compinfo b = b.unset_compinfo
+let unset_fieldinfo b = b.unset_fieldinfo
+let unset_model_info b = b.unset_model_info
+let unset_enuminfo b = b.unset_enuminfo
+let unset_enumitem b = b.unset_enumitem
+let unset_stmt b = b.unset_stmt
+let unset_typeinfo b = b.unset_typeinfo
+let unset_logic_info b = b.unset_logic_info
+let unset_logic_type_info b = b.unset_logic_type_info
+let unset_logic_var b = b.unset_logic_var
+let unset_kernel_function b = b.unset_kernel_function
+let unset_fundec b = b.unset_fundec
+
+let unset_orig_varinfo b = b.unset_orig_varinfo
+let unset_orig_compinfo b = b.unset_orig_compinfo
+let unset_orig_fieldinfo b = b.unset_orig_fieldinfo
+let unset_orig_model_info b = b.unset_model_info
+let unset_orig_enuminfo b = b.unset_orig_enuminfo
+let unset_orig_enumitem b = b.unset_orig_enumitem
+let unset_orig_stmt b = b.unset_orig_stmt
+let unset_orig_typeinfo b = b.unset_orig_typeinfo
+let unset_orig_logic_info b = b.unset_orig_logic_info
+let unset_orig_logic_type_info b = b.unset_orig_logic_type_info
+let unset_orig_logic_var b = b.unset_orig_logic_var
+let unset_orig_kernel_function b= b.unset_orig_kernel_function
+let unset_orig_fundec b = b.unset_orig_fundec
+
 let iter_visitor_varinfo b = b.iter_visitor_varinfo
 let iter_visitor_compinfo b = b.iter_visitor_compinfo
 let iter_visitor_enuminfo b = b.iter_visitor_enuminfo
@@ -1105,6 +1159,32 @@ let inplace_visit () =
     set_orig_logic_var = alphabetaunit;
     set_orig_kernel_function = alphabetaunit;
     set_orig_fundec = alphabetaunit;
+    unset_varinfo = alphaunit;
+    unset_compinfo = alphaunit;
+    unset_enuminfo = alphaunit;
+    unset_enumitem = alphaunit;
+    unset_typeinfo = alphaunit;
+    unset_logic_info = alphaunit;
+    unset_logic_type_info = alphaunit;
+    unset_stmt = alphaunit;
+    unset_fieldinfo = alphaunit;
+    unset_model_info = alphaunit;
+    unset_logic_var = alphaunit;
+    unset_kernel_function = alphaunit;
+    unset_fundec = alphaunit;
+    unset_orig_varinfo = alphaunit;
+    unset_orig_compinfo = alphaunit;
+    unset_orig_enuminfo = alphaunit;
+    unset_orig_enumitem = alphaunit;
+    unset_orig_typeinfo = alphaunit;
+    unset_orig_logic_info = alphaunit;
+    unset_orig_logic_type_info = alphaunit;
+    unset_orig_stmt = alphaunit;
+    unset_orig_fieldinfo = alphaunit;
+    unset_orig_model_info = alphaunit;
+    unset_orig_logic_var = alphaunit;
+    unset_orig_kernel_function = alphaunit;
+    unset_orig_fundec = alphaunit;
     reset_behavior_varinfo = unitunit;
     reset_behavior_compinfo = unitunit;
     reset_behavior_enuminfo = unitunit;
@@ -1179,6 +1259,12 @@ let copy_visit_gen fresh prj =
   let temp_set_orig_logic_var new_x x =
       Cil_datatype.Logic_var.Hashtbl.add orig_logic_vars new_x x
   in
+  let temp_unset_logic_var x =
+    Cil_datatype.Logic_var.Hashtbl.remove logic_vars x
+  in
+  let temp_unset_orig_logic_var new_x =
+    Cil_datatype.Logic_var.Hashtbl.remove orig_logic_vars new_x
+  in
   let temp_memo_logic_var x =
 (*    Format.printf "search for %s#%d@." x.lv_name x.lv_id;*)
     let res =
@@ -1206,6 +1292,19 @@ let copy_visit_gen fresh prj =
       | Some new_lx, Some lx ->
         Cil_datatype.Logic_var.Hashtbl.add orig_logic_vars new_lx lx
   in
+  let temp_unset_varinfo x =
+    Cil_datatype.Varinfo.Hashtbl.remove varinfos x;
+    match x.vlogic_var_assoc with
+    | None -> ()
+    | Some lx -> Cil_datatype.Logic_var.Hashtbl.remove logic_vars lx
+  in
+  let temp_unset_orig_varinfo new_x =
+    Cil_datatype.Varinfo.Hashtbl.remove orig_varinfos new_x;
+    match new_x.vlogic_var_assoc with
+      | None -> ()
+      | Some new_lx ->
+        Cil_datatype.Logic_var.Hashtbl.remove orig_logic_vars new_lx
+  in
   let temp_memo_varinfo x =
     try Cil_datatype.Varinfo.Hashtbl.find varinfos x
     with Not_found ->
@@ -1227,6 +1326,12 @@ let copy_visit_gen fresh prj =
   in
   let temp_set_orig_fundec new_f f =
     Cil_datatype.Varinfo.Hashtbl.add orig_fundecs new_f.svar f
+  in
+  let temp_unset_fundec f =
+    Cil_datatype.Varinfo.Hashtbl.remove fundecs f.svar
+  in
+  let temp_unset_orig_fundec new_f =
+    Cil_datatype.Varinfo.Hashtbl.remove orig_fundecs new_f.svar
   in
   let temp_memo_fundec f =
     try Cil_datatype.Varinfo.Hashtbl.find fundecs f.svar
@@ -1254,6 +1359,18 @@ let copy_visit_gen fresh prj =
         temp_set_orig_varinfo new_vi vi
       | Definition (new_fundec,_), Definition(fundec,_) ->
         temp_set_orig_fundec new_fundec fundec
+  in
+  let temp_unset_kernel_function kf =
+    Cil_datatype.Kf.Hashtbl.remove kernel_functions kf;
+    match kf.fundec with
+      | Declaration(_,vi,_,_) -> temp_unset_varinfo vi
+      | Definition (fundec,_) -> temp_unset_fundec fundec
+  in
+  let temp_unset_orig_kernel_function new_kf =
+    Cil_datatype.Kf.Hashtbl.remove orig_kernel_functions new_kf;
+    match new_kf.fundec with
+      | Declaration(_,new_vi,_,_) -> temp_unset_orig_varinfo new_vi
+      | Definition (new_fundec,_) -> temp_unset_orig_fundec new_fundec
   in
   let temp_memo_kernel_function kf =
     try Cil_datatype.Kf.Hashtbl.find kernel_functions kf
@@ -1283,6 +1400,18 @@ let copy_visit_gen fresh prj =
         (fun new_f f ->
           Cil_datatype.Fieldinfo.Hashtbl.add orig_fieldinfos new_f f)
         new_c.cfields c.cfields
+  in
+  let temp_unset_compinfo c =
+    Cil_datatype.Compinfo.Hashtbl.remove compinfos c;
+    List.iter
+      (fun f -> Cil_datatype.Fieldinfo.Hashtbl.remove fieldinfos f) c.cfields
+  in
+  let temp_unset_orig_compinfo new_c =
+    Cil_datatype.Compinfo.Hashtbl.remove orig_compinfos new_c;
+      List.iter
+        (fun new_f ->
+          Cil_datatype.Fieldinfo.Hashtbl.remove orig_fieldinfos new_f)
+        new_c.cfields
   in
   let temp_memo_compinfo c =
     try Cil_datatype.Compinfo.Hashtbl.find compinfos c
@@ -1518,7 +1647,7 @@ let copy_visit_gen fresh prj =
          try Cil_datatype.Fieldinfo.Hashtbl.find fieldinfos x
          with Not_found ->
            let _ = temp_memo_compinfo x.fcomp in
-           (* memo_compinfo fills the field correspondance table as well *)
+           (* memo_compinfo fills the field correspondence table as well *)
            let new_x = Cil_datatype.Fieldinfo.Hashtbl.find fieldinfos x in
            Cil_datatype.Fieldinfo.Hashtbl.add fieldinfos x new_x;
            Cil_datatype.Fieldinfo.Hashtbl.add orig_fieldinfos new_x x;
@@ -1566,6 +1695,40 @@ let copy_visit_gen fresh prj =
     set_orig_logic_var = temp_set_orig_logic_var;
     set_orig_kernel_function = temp_set_orig_kernel_function;
     set_orig_fundec = temp_set_orig_fundec;
+
+    unset_varinfo = temp_unset_varinfo;
+    unset_compinfo = temp_unset_compinfo;
+    unset_enuminfo = Cil_datatype.Enuminfo.Hashtbl.remove enuminfos;
+    unset_enumitem = Cil_datatype.Enumitem.Hashtbl.remove enumitems;
+    unset_typeinfo = Cil_datatype.Typeinfo.Hashtbl.remove typeinfos;
+    unset_logic_info = Cil_datatype.Logic_info.Hashtbl.remove logic_infos;
+    unset_logic_type_info =
+      Cil_datatype.Logic_type_info.Hashtbl.remove logic_type_infos;
+    unset_stmt = Cil_datatype.Stmt.Hashtbl.remove stmts;
+    unset_fieldinfo = Cil_datatype.Fieldinfo.Hashtbl.remove fieldinfos;
+    unset_model_info = Cil_datatype.Model_info.Hashtbl.remove model_infos;
+    unset_logic_var = temp_unset_logic_var;
+    unset_kernel_function = temp_unset_kernel_function;
+    unset_fundec = temp_unset_fundec;
+
+    unset_orig_varinfo = temp_unset_orig_varinfo;
+    unset_orig_compinfo = temp_unset_orig_compinfo;
+    unset_orig_enuminfo = Cil_datatype.Enuminfo.Hashtbl.remove orig_enuminfos;
+    unset_orig_enumitem = Cil_datatype.Enumitem.Hashtbl.remove orig_enumitems;
+    unset_orig_typeinfo = Cil_datatype.Typeinfo.Hashtbl.remove orig_typeinfos;
+    unset_orig_logic_info =
+      Cil_datatype.Logic_info.Hashtbl.remove orig_logic_infos;
+    unset_orig_logic_type_info =
+      Cil_datatype.Logic_type_info.Hashtbl.remove orig_logic_type_infos;
+    unset_orig_stmt = Cil_datatype.Stmt.Hashtbl.remove orig_stmts;
+    unset_orig_fieldinfo =
+      Cil_datatype.Fieldinfo.Hashtbl.remove orig_fieldinfos;
+    unset_orig_model_info =
+      Cil_datatype.Model_info.Hashtbl.remove orig_model_infos;
+    unset_orig_logic_var = temp_unset_orig_logic_var;
+    unset_orig_kernel_function = temp_unset_orig_kernel_function;
+    unset_orig_fundec = temp_unset_orig_fundec;
+
     iter_visitor_varinfo = 
       (fun f -> Cil_datatype.Varinfo.Hashtbl.iter f varinfos);
     iter_visitor_compinfo =
@@ -1679,12 +1842,12 @@ class type cilVisitor = object
      * variable use *)
 
   method vexpr: exp -> exp visitAction
-    (** Invoked on each expression occurence. The subtrees are the
+    (** Invoked on each expression occurrence. The subtrees are the
      * subexpressions, the types (for a [Cast] or [SizeOf] expression) or the
      * variable use. *)
 
   method vlval: lval -> lval visitAction
-    (** Invoked on each lvalue occurence *)
+    (** Invoked on each lvalue occurrence *)
 
   method voffs: offset -> offset visitAction
     (** Invoked on each offset occurrence that is *not* as part
@@ -1712,6 +1875,9 @@ class type cilVisitor = object
                                                 (** Initializers for globals,
                                                  * pass the global where this
                                                  * occurs, and the offset *)
+
+  method vlocal_init: varinfo -> local_init -> local_init visitAction
+
   method vtype: typ -> typ visitAction          (** Use of some type. Note
                                                  * that for structure/union
                                                  * and enumeration types the
@@ -1734,7 +1900,7 @@ class type cilVisitor = object
     (** Attribute parameters. *)
 
     (** Add here instructions while visiting to queue them to
-     * preceede the current statement or instruction being processed *)
+     * precede the current statement being processed *)
   method queueInstr: instr list -> unit
 
     (** Gets the queue of instructions and resets the queue *)
@@ -1800,26 +1966,26 @@ class type cilVisitor = object
   method vspec: funspec -> funspec visitAction
 
   method vassigns:
-    identified_term assigns -> identified_term assigns visitAction
+    assigns -> assigns visitAction
 
   method vfrees:
     identified_term list -> identified_term list visitAction
   method vallocates:
     identified_term list -> identified_term list visitAction
   method vallocation:
-    identified_term allocation -> identified_term allocation visitAction
+    allocation -> allocation visitAction
 
-  method vloop_pragma: term loop_pragma -> term loop_pragma visitAction
+  method vloop_pragma: loop_pragma -> loop_pragma visitAction
 
-  method vslice_pragma: term slice_pragma -> term slice_pragma visitAction
-  method vimpact_pragma: term impact_pragma -> term impact_pragma visitAction
-  method vjessie_pragma: term jessie_pragma -> term jessie_pragma visitAction
+  method vslice_pragma: slice_pragma -> slice_pragma visitAction
+  method vimpact_pragma: impact_pragma -> impact_pragma visitAction
+  method vjessie_pragma: jessie_pragma -> jessie_pragma visitAction
 
   method vdeps:
-    identified_term deps -> identified_term deps visitAction
+    deps -> deps visitAction
 
   method vfrom:
-    identified_term from -> identified_term from visitAction
+    from -> from visitAction
 
   method vcode_annot: code_annotation -> code_annotation visitAction
 
@@ -1875,6 +2041,7 @@ end
    method vfunc (_f:fundec) = DoChildren
    method vglob (_g:global) = DoChildren
    method vinit (_forg: varinfo) (_off: offset) (_i:init) = DoChildren
+   method vlocal_init _ _ = DoChildren
    method vtype (_t:typ) = DoChildren
    method vcompinfo _ = DoChildren
    method venuminfo _ = DoChildren
@@ -1985,6 +2152,82 @@ let assertEmptyQueue vis =
       "Visitor's instruction queue is not empty.@\n\
        You should only use queueInstr inside a function body!";
   ()
+
+let vis_tmp_attr = "FRAMAC_VIS_TMP_ATTR"
+
+let transient_block b =
+  if b.blocals <> [] then
+    Kernel.fatal
+      "Attempting to mark as transient a block that declares local variables";
+  b.battrs <- addAttribute (Attr (vis_tmp_attr,[])) b.battrs; b
+
+let block_of_transient b =
+  if hasAttribute vis_tmp_attr b.battrs then begin
+    if b.blocals <> [] then
+      Kernel.fatal
+        "Block that is supposed to be transient declares local variabels";
+    b.battrs <- dropAttribute vis_tmp_attr b.battrs;
+    b.bscoping <- false
+  end;
+  b
+
+let is_transient_block b = hasAttribute vis_tmp_attr b.battrs
+
+let flatten_transient_sub_blocks b =
+  let prev = ref None in
+  let previous_is_annot () =
+    match !prev with
+    | None -> false
+    | Some {
+        skind =
+          Instr (Code_annot ({ annot_content = AStmtSpec _ | APragma _}, _))}
+      -> true
+    | Some _ -> false
+  in
+  let treat_one_stmt s =
+    match s.skind with
+    | Block b when is_transient_block b ->
+      if previous_is_annot () then begin
+        s.skind <- Block (block_of_transient b);
+        prev := Some s;
+        [ s ]
+      end else begin
+        match s.labels, b.bstmts with
+        | [], _ -> prev:= None; b.bstmts
+        | _, [] ->
+          (* Empty block, but we have a label attached to the statement, so
+             that it is difficult to get rid of it (see below). Replace with
+             a Skip.
+          *)
+          s.skind <- Instr (Skip (Cil_datatype.Stmt.loc s));
+          prev:=Some s;
+          [s]
+        | _, s'::tl when s'.labels = [] ->
+          (* res is the target of a label (either goto or case). Removing the
+             block would imply updating the origin of the jump, which is
+             quite complicated at this point. On the other hand, since s' is
+             not referred to elsewhere, we can just put its skind in place of
+             the block, and return the list. *)
+          s.skind <- s'.skind;
+          prev:=None;
+          s :: tl
+        | _ ->
+          (* both the block and the first statement have labels. Just keep
+             the block. *)
+          s.skind <- Block (block_of_transient b);
+          prev:=Some s;
+          [s]
+       end
+     | _ -> prev:= Some s; [ s ]
+  in
+  b.bstmts <- List.concat (List.map treat_one_stmt b.bstmts);
+  b
+
+let stmt_of_instr_list_visitor ?loc l =
+  let res =  stmt_of_instr_list ?loc l in
+  match res with
+  | Block b -> Block (transient_block b)
+  | _ -> res
 
 (*** Define the visiting engine ****)
 (* visit all the nodes in a Cil expression *)
@@ -2114,7 +2357,8 @@ let copy_logic_label is_copy l =
   if is_copy then begin
     match l with
       | StmtLabel s -> StmtLabel (ref !s)
-      | LogicLabel(_,s) -> LogicLabel(None,s) 
+      | FormalLabel s -> FormalLabel s
+      | BuiltinLabel s -> BuiltinLabel s
           (* we don't copy the associated statement. It will be recomputed
              if needed. *)
   end else l
@@ -2182,7 +2426,7 @@ and childrenTermNode vis tn =
     | Tapp(li,labels,args) ->
         let li' = vLogicInfo li in
         let labels' = 
-          mapNoCopy (visitCilLogicLabelApp vis) labels in
+          mapNoCopy (visitCilLogicLabel vis) labels in
 (*
 	Format.eprintf "Cil.children_term_node: li = %s(%d), li' = %s(%d)@."
 	  li.l_var_info.lv_name li.l_var_info.lv_id
@@ -2291,12 +2535,7 @@ and visitCilLogicLabel vis l =
 and childrenLogicLabel vis l = 
   match l with
       StmtLabel s -> s := vis#behavior.get_stmt !s; l
-    | LogicLabel _ -> l
-
-and visitCilLogicLabelApp vis (l1,l2 as p) =
-  let l1' = visitCilLogicLabel vis l1 in
-  let l2' = visitCilLogicLabel vis l2 in
-  if l1 != l1' || l2 != l2' then (l1',l2') else p
+    | FormalLabel _ | BuiltinLabel _ -> l
 
  and visitCilTermLval vis tl =
    doVisitCil vis id vis#vterm_lval childrenTermLval tl
@@ -2425,9 +2664,10 @@ and visitCilLogicLabelApp vis (l1,l2 as p) =
    let ctor_type = doVisitCil vis vis#behavior.get_logic_type_info
      vis#vlogic_type_info_use alphabetabeta ctor.ctor_type
    in
-   let ctor_params = mapNoCopy (visitCilLogicType vis) ctor.ctor_params in
-   if ctor_type != ctor.ctor_type || ctor_params != ctor.ctor_params then
-     { ctor with ctor_type = ctor_type; ctor_params = ctor_params }
+   let ctor_params = ctor.ctor_params in
+   let ctor_params' = mapNoCopy (visitCilLogicType vis) ctor_params in
+   if ctor_type != ctor.ctor_type || ctor_params != ctor_params' then
+     { ctor with ctor_type = ctor_type; ctor_params = ctor_params' }
    else ctor
 
  and visitCilLogicType vis t =
@@ -2466,7 +2706,13 @@ and visitCilLogicLabelApp vis (l1,l2 as p) =
 
  and visitCilLogicVarUse vis lv =
    if vis#behavior.is_copy_behavior &&
-     Logic_env.is_builtin_logic_function lv.lv_name then begin
+      (* In a copy visitor, there's always a project. Furthermore, if
+         we target the current project, builtins are by definition already
+         tied to logic_infos and should not be copied.
+      *)
+      not (Project.is_current (Extlib.the vis#project)) &&
+      Logic_env.is_builtin_logic_function lv.lv_name
+   then begin
        (* Do as if the variable has been declared.
 	  We'll fill the logic info table of the new project at the end.
 	  Behavior's logic_var table is filled as a side effect.
@@ -2478,17 +2724,13 @@ and visitCilLogicLabelApp vis (l1,l2 as p) =
 	*)
        Queue.add
 	 (fun () ->
-	    (* Add them to env only once *)
-	    List.iter
-	      (fun x ->
-		 if not (Logic_env.Logic_builtin_used.mem x) then begin
+             if not (Logic_env.Logic_builtin_used.mem lv.lv_name) then begin
  (*                  Format.printf
 		     "Adding info for %s#%d@."
 		     x.l_var_info.lv_name x.l_var_info.lv_id; *)
-		   Logic_env.Logic_builtin_used.add x;
-		   Logic_env.Logic_info.add x.l_var_info.lv_name x
+	       List.iter (Logic_env.Logic_builtin_used.add lv.lv_name) siblings';
+	       List.iter (Logic_env.Logic_info.add lv.lv_name) siblings'
 		 end)
-	      siblings')
 	 vis#get_filling_actions;
    end;
    doVisitCil vis vis#behavior.get_logic_var vis#vlogic_var_use
@@ -2533,7 +2775,7 @@ and visitCilLogicLabelApp vis (l1,l2 as p) =
        Pfalse | Ptrue -> p
      | Papp (pred,labels,args) ->
 	 let pred' = vLogicInfo pred in
-         let labels' = mapNoCopy (visitCilLogicLabelApp vis) labels in
+         let labels' = mapNoCopy (visitCilLogicLabel vis) labels in
 	 let args' = mapNoCopy vTerm args in
 	 if pred' != pred || labels' != labels || args' != args then
 	   Papp(pred',labels',args')
@@ -2713,13 +2955,14 @@ and childrenBehavior vis b =
    b.b_extended <- mapNoCopy (visitCilExtended vis) b.b_extended;
    b
 
-and visitCilExtended vis (s,p as orig) =
+and visitCilExtended vis (i,s,p as orig) =
   let visit =
     try Hashtbl.find visitor_tbl s
     with Not_found -> (fun _ _ -> DoChildren)
   in
   let p' = doVisitCil vis id (visit vis) childrenCilExtended p in
-  if p == p' then orig else (s,p')
+  if is_fresh_behavior vis#behavior then Logic_const.new_acsl_extension s p
+  else if p == p' then orig else (i,s,p')
 
 and childrenCilExtended vis p =
   match p with
@@ -2787,14 +3030,18 @@ and childrenSpec vis s =
  and childrenModelInfo vis m =
   let field_type = visitCilLogicType vis m.mi_field_type in
   let base_type = visitCilType vis m.mi_base_type in
-  if field_type != m.mi_field_type || base_type != m.mi_base_type then
+  let mi_attr = visitCilAttributes vis m.mi_attr in
+  if
+    field_type != m.mi_field_type || base_type != m.mi_base_type
+  then
       {
         mi_name = m.mi_name;
         mi_field_type = field_type;
         mi_base_type = base_type;
         mi_decl = Cil_datatype.Location.copy m.mi_decl;
+        mi_attr;
       }
-  else m
+  else begin m.mi_attr <- mi_attr; m end
 
  and visitCilModelInfo vis m =
   let oldloc = CurrentLoc.get () in
@@ -2836,9 +3083,12 @@ and childrenSpec vis s =
 		Logic_env.add_logic_type ti'.lt_name ti')
 	     vis#get_filling_actions;
 	 if ti' != ti then Dtype (ti',loc) else a
-     | Dlemma(s,is_axiom,labels,tvars,p,loc) ->
+     | Dlemma(s,is_axiom,labels,tvars,p,attr,loc) ->
 	 let p' = visitCilPredicate vis p in
-	 if p' != p then Dlemma(s,is_axiom,labels,tvars,p',loc) else a
+       let attr' = visitCilAttributes vis attr in
+       if p' != p || attr != attr' then
+         Dlemma(s,is_axiom,labels,tvars,p',attr',loc)
+       else a
      | Dinvariant (p,loc) ->
 	 let p' = visitCilLogicInfo vis p in
 	 if vis#behavior.is_copy_behavior then
@@ -2859,21 +3109,24 @@ and childrenSpec vis s =
 	   Queue.add (fun () -> Logic_env.add_model_field mfi')
 	     vis#get_filling_actions;
 	 if mfi' != mfi then Dmodel_annot (mfi',loc) else a
-     | Dcustom_annot(_c,_n,_loc) -> 
-       a
-     | Dvolatile(tset,rvi,wvi,loc) ->
+     | Dcustom_annot(c,n,attr,loc) ->
+       let attr' = visitCilAttributes vis attr in
+       if attr != attr' then Dcustom_annot(c,n,attr',loc) else a
+     | Dvolatile(tset,rvi,wvi,attr,loc) ->
          let tset' = mapNoCopy (visitCilIdTerm vis) tset in
          let rvi' = optMapNoCopy (visitCilVarUse vis) rvi in
          let wvi' = optMapNoCopy (visitCilVarUse vis) wvi in
-         if tset' != tset || rvi' != rvi || wvi' != wvi then
-           Dvolatile(tset',rvi',wvi',loc)
+         let attr' = visitCilAttributes vis attr in
+         if tset' != tset || rvi' != rvi || wvi' != wvi || attr' != attr then
+           Dvolatile(tset',rvi',wvi',attr',loc)
          else a
-     | Daxiomatic(id,l,loc) ->
+     | Daxiomatic(id,l,attr,loc) ->
  (*
 	 Format.eprintf "cil.visitCilAnnotation on axiomatic %s@." id;
  *)
 	 let l' = mapNoCopy (visitCilAnnotation vis) l in
-	 if l' != l then Daxiomatic(id,l',loc) else a
+       let attr' = visitCilAttributes vis attr in
+       if l' != l || attr != attr' then Daxiomatic(id,l',attr',loc) else a
 
  and visitCilCodeAnnotation vis ca =
    doVisitCil
@@ -3042,15 +3295,26 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
  and visitCilInitOffset (vis: cilVisitor) (off: offset) : offset =
    doVisitCil vis id vis#vinitoffs childrenOffset off
 
+ and visitCilLocal_init (vis: cilVisitor) vi li =
+  doVisitCil vis id (vis#vlocal_init vi) (childrenLocal_init vi) li
+
+ and childrenLocal_init vi (vis: cilVisitor) li =
+   match li with
+   | AssignInit i ->
+     let i' = visitCilInit vis vi NoOffset i in
+     if i != i' then AssignInit i' else li
+   | ConsInit(f,args, k) ->
+     let f' = visitCilVarUse vis f in
+     let args' = mapNoCopy (visitCilExpr vis) args in
+     if f' != f || args' != args then ConsInit(f',args',k) else li
+
  and visitCilInstr (vis: cilVisitor) (i: instr) : instr list =
    let oldloc = CurrentLoc.get () in
    CurrentLoc.set (Cil_datatype.Instr.loc i);
-   assertEmptyQueue vis;
    let res =
      doVisitListCil vis id vis#vinst childrenInstr i in
    CurrentLoc.set oldloc;
-   (* See if we have accumulated some instructions *)
-   vis#unqueueInstr () @ res
+   res
 
  and childrenInstr (vis: cilVisitor) (i: instr) : instr =
    let fExp = visitCilExpr vis in
@@ -3058,6 +3322,12 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
    match i with
    | Skip _l ->
        i
+   | Local_init (vi, li, l) ->
+       let vi' = visitCilVarUse vis vi in
+       let li' = visitCilLocal_init vis vi' li in
+       if vi' != vi || li' != li then
+         Local_init(vi', li', l)
+       else i
    | Set(lv,e,l) ->
        let lv' = fLval lv in let e' = fExp e in
        if lv' != lv || e' != e then Set(lv',e',l) else i
@@ -3070,17 +3340,31 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
        if lv' != lv || fn' != fn || args' != args
        then Call(Some lv', fn', args', l) else i
 
-   | Asm(sl,isvol,outs,ins,clobs,labels,l) ->
-       let outs' = mapNoCopy (fun ((id,s,lv) as pair) ->
-                                let lv' = fLval lv in
-                                if lv' != lv then (id,s,lv') else pair) outs in
-       let ins'  = mapNoCopy (fun ((id,s,e) as pair) ->
-                                let e' = fExp e in
-                                if e' != e then (id,s,e') else pair) ins in
-       if outs' != outs || ins' != ins then
-         Asm(sl,isvol,outs',ins',clobs,labels,l) else i
+   | Asm(sl,isvol,asm_outputs_pre,asm_inputs_pre,asm_clobs,asm_gotos_pre,l) ->
+       let asm_outputs =
+         mapNoCopy
+           (fun ((id,s,lv) as pair) ->
+              let lv' = fLval lv in
+              if lv' != lv then (id,s,lv') else pair) asm_outputs_pre
+       in
+       let asm_inputs =
+         mapNoCopy
+           (fun ((id,s,e) as pair) ->
+              let e' = fExp e in
+              if e' != e then (id,s,e') else pair) asm_inputs_pre
+       in
+       let asm_gotos =
+         if vis#behavior.is_copy_behavior then
+           List.map (fun s -> ref (vis#behavior.memo_stmt !s)) asm_gotos_pre
+         else asm_gotos_pre
+       in
+       if asm_outputs != asm_outputs_pre
+       || asm_inputs != asm_inputs_pre
+       || asm_gotos != asm_gotos_pre
+       then Asm(sl,isvol,asm_outputs,asm_inputs,asm_clobs,asm_gotos,l)
+       else i
    | Code_annot (a,l) ->
-       let a' = visitCilCodeAnnotation vis a in 
+       let a' = visitCilCodeAnnotation vis a in
 	 if a != a' then Code_annot(a',l) else i
 
  (* visit all nodes in a Cil statement tree in preorder *)
@@ -3098,11 +3382,14 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
    (match !toPrepend with
      [] -> () (* Return the same statement *)
    | _ ->
+     let b =
+       mkBlockNonScoping
+         ((List.map (fun i -> mkStmt (Instr i)) !toPrepend)
+          @ [mkStmt res.skind])
+     in
+     b.battrs <- addAttribute (Attr (vis_tmp_attr, [])) b.battrs;
        (* Make our statement contain the instructions to prepend *)
-       res.skind <-
-	 Block (mkBlock
-		 ((List.map (fun i -> mkStmt (Instr i)) !toPrepend) @
-			  [ mkStmt res.skind ] )));
+     res.skind <- Block b);
    CurrentLoc.set oldloc;
    vis#pop_stmt s;
    res
@@ -3122,6 +3409,9 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
 	   mapNoCopy
 	     (function (stmt,modified,writes,reads,calls) as orig->
 		let stmt' = visitCilStmt vis stmt in
+                (match stmt'.skind with
+                  | Block b -> b.battrs <- dropAttribute vis_tmp_attr b.battrs;
+                  | _ -> ());
 		(* might make sense for the default to be
 		   to just copy the varinfo when using the copy visitor,
 		   and not apply vvrbl, i.e. not using vis but generic_visitor ?
@@ -3194,7 +3484,7 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
      | Instr i ->
 	 begin match fInst i with
 	   | [i'] when i' == i -> s.skind
-	   | il -> stmt_of_instr_list ~loc:(Cil_datatype.Instr.loc i) il
+	   | il -> stmt_of_instr_list_visitor ~loc:(Cil_datatype.Instr.loc i) il
 	 end
      | Block b ->
 	 let b' = fBlock b in
@@ -3267,15 +3557,32 @@ and childrenExp (vis: cilVisitor) (e: exp) : exp =
       if v != v' || l != l' then Catch_exn(v',l') else cb
     | Catch_all -> cb
  and visitCilBlock (vis: cilVisitor) (b: block) : block =
-   doVisitCil vis vis#behavior.cblock vis#vblock childrenBlock b
+   let b' = vis#behavior.cblock b in
+   if vis#behavior.is_copy_behavior then begin
+     (* in case we are the main block of the current function,
+        update immediately the sbody, so that makeLocalVar can be used
+        seamlessly by the underlying visitor and associate the
+        local variable to the appropriate sbody when no inner block is present.
+     *)
+     match vis#current_func with
+     | Some fd when fd.sbody == b ->
+       (get_fundec vis#behavior fd).sbody <- b'
+     | Some _ | None -> ()
+   end;
+   doVisitCil vis id vis#vblock childrenBlock b'
  and childrenBlock (vis: cilVisitor) (b: block) : block =
    let fStmt s = visitCilStmt vis s in
-   let stmts' = mapNoCopy fStmt b.bstmts in
+   (* first visit locals and update the field. This way, statements visitors
+      that wish to create a local into the innermost scope can simply append
+      it to the current block.
+   *)
    let locals' = mapNoCopy (vis#behavior.get_varinfo) b.blocals in
-   if stmts' != b.bstmts || locals' != b.blocals then
-     { battrs = b.battrs; bstmts = stmts'; blocals = locals' }
-   else b
-
+   let statics' = mapNoCopy (vis#behavior.get_varinfo) b.bstatics in
+   b.blocals <- locals';
+   b.bstatics <- statics';
+   let stmts' = mapNoCopy fStmt b.bstmts in
+   b.bstmts <- stmts';
+   flatten_transient_sub_blocks b
 
  and visitCilType (vis : cilVisitor) (t : typ) : typ =
    doVisitCil vis id vis#vtype childrenType t
@@ -3912,13 +4219,13 @@ let parseIntAux (str:string) =
     if octalhexbin && l >= 2 then 
       (match String.get str 1 with 
       | 'x' | 'X' (* Hexadecimal number *) -> 
-        toInt Integer.small_nums.(16) Integer.zero 2
+        toInt Integer.(of_int 16) Integer.zero 2
       | 'b' | 'B' ->  (* Binary number *)
-        toInt Integer.small_nums.(2) Integer.zero 2
+        toInt Integer.(of_int 2) Integer.zero 2
       | _ -> (* Octal number *)
-	toInt Integer.small_nums.(8) Integer.zero 1)
+	toInt Integer.(of_int 8) Integer.zero 1)
     else
-      toInt Integer.small_nums.(10) Integer.zero 0
+      toInt Integer.(of_int 10) Integer.zero 0
   in
   i,kinds
 
@@ -4077,7 +4384,7 @@ let parseIntExp ~loc repr =
      body
 
  let block_from_unspecified_sequence us =
-   { battrs = []; bstmts = List.map (fun (x,_,_,_,_) ->x) us; blocals = [] }
+   mkBlock (List.map (fun (x,_,_,_,_) ->x) us)
 
  let rec stripCasts (e: exp) =
    match e.enode with CastE(_, _, e') -> stripCasts e' | _ -> e
@@ -4143,9 +4450,14 @@ let map_under_info f e = match e.enode with
      TPtr(tau,_) when isVoidType tau -> true
    | _ -> false
 
- let isCharType t =
+ let isAnyCharType t =
    match unrollTypeSkel t with
      | TInt((IChar|ISChar|IUChar),_) -> true
+     | _ -> false
+
+ let isCharType t =
+   match unrollTypeSkel t with
+     | TInt(IChar,_) -> true
      | _ -> false
 
 let isShortType t =
@@ -4153,9 +4465,19 @@ let isShortType t =
     | TInt((IUShort|IShort),_) -> true
     | _ -> false
 
+let isAnyCharPtrType t =
+  match unrollTypeSkel t with
+    TPtr(tau,_) when isAnyCharType tau -> true
+  | _ -> false
+
 let isCharPtrType t =
   match unrollTypeSkel t with
     TPtr(tau,_) when isCharType tau -> true
+  | _ -> false
+
+let isCharConstPtrType t =
+  match unrollTypeSkel t with
+    TPtr(tau,attrs) when isCharType tau -> hasAttribute "const" attrs
   | _ -> false
 
  let isIntegralType t =
@@ -4363,12 +4685,12 @@ let isCharPtrType t =
 
  and typeTermOffset basetyp =
    let blendAttributes baseAttrs t =
-     let (_, _, contageous) =
+     let (_, _, contagious) =
        partitionAttributes ~default:(AttrName false) baseAttrs in
      let putAttributes =
        function
          | Ctype typ ->
-	   Ctype (typeAddAttributes contageous typ)
+	   Ctype (typeAddAttributes contagious typ)
          | Linteger | Lreal -> 
            Kernel.fatal ~current:true
 	     "typeTermOffset: Attribute on a logic type"
@@ -4437,7 +4759,7 @@ let isCharPtrType t =
      typeHasQualifier attr t || (* ill-formed type *) hasAttribute attr a
    | _ -> hasAttribute attr (typeAttrs typ)
 
- let typeHasAttributeDeep a (ty:typ): bool =
+ let typeHasAttributeMemoryBlock a (ty:typ): bool =
    let f attrs = if hasAttribute a attrs then raise Exit in
    let rec visit (t: typ) : unit =
     match t with
@@ -4456,6 +4778,25 @@ let isCharPtrType t =
    try visit ty; false
    with Exit -> true
 
+ (**** Check for const attribute ****)
+
+ let isConstType typ_lval = typeHasAttributeMemoryBlock "const" typ_lval
+
+ (**** Check for volatile attribute ****)
+
+ let isVolatileType typ_lval = typeHasAttributeMemoryBlock "volatile" typ_lval
+
+ let rec isVolatileLogicType = function
+  | Ctype typ -> isVolatileType typ
+  | Linteger | Lreal | Lvar _ | Larrow _ -> false
+  | Ltype( { lt_def } ,_) ->
+      match lt_def with
+      | None | Some (LTsum _) -> false
+      | Some (LTsyn lt) -> isVolatileLogicType lt
+
+ let isVolatileLval lv = isVolatileType (typeOfLval lv)
+ let isVolatileTermLval lv =
+  Logic_const.plain_or_set isVolatileLogicType (typeOfTermLval lv)
  
  (**
   **
@@ -4556,7 +4897,7 @@ let isCharPtrType t =
 (* Hack to prevent infinite recursion in alignments *)
 let ignoreAlignmentAttrs = ref false
 
- (* Get the minimum aligment in bytes for a given type *)
+ (* Get the minimum alignment in bytes for a given type *)
 let rec bytesAlignOf t = 
   let alignOfType () = match t with 
   | TInt((IChar|ISChar|IUChar|IBool), _) -> 1
@@ -4580,7 +4921,7 @@ let rec bytesAlignOf t =
     (* On GCC the zero-width fields do not contribute to the alignment. On
      * MSVC only those zero-width that _do_ appear after other
      * bitfields contribute to the alignment. So we drop those that
-     * do not occur after othe bitfields *)
+     * do not occur after other bitfields *)
     (* This is not correct for Diab-C compiler. *)
     let rec dropZeros (afterbitfield: bool) = function
       | f :: rest when f.fbitfield = Some 0 && not afterbitfield ->
@@ -4601,23 +4942,35 @@ let rec bytesAlignOf t =
   | TFun _ as t -> raise (SizeOfError ("Undefined sizeof on a function.", t))
   | TVoid _ as t -> raise (SizeOfError ("Undefined sizeof(void).", t))
   in
-  process_aligned_attribute
+  process_aligned_attribute ~may_reduce:false
     (fun fmt -> !pp_typ_ref fmt t)
     (typeAttrs t) alignOfType
 
-(* alignment of a possibly-packed or aligned struct field. *)
+(* Alignment of a possibly-packed or aligned struct field.
+   From the GCC manual (https://gcc.gnu.org/onlinedocs/gcc/Common-Type-Attributes.html):
+   "Specifying the packed attribute for struct and union types is equivalent
+    to specifying the packed attribute on each of the structure or union members."
+   Note that is not the case for the aligned attribute, which behaves
+   differently when put into a struct, or in each of its fields.
+ *)
 and alignOfField (fi: fieldinfo) =
   let fieldIsPacked = hasAttribute "packed" fi.fattr 
     || hasAttribute "packed" fi.fcomp.cattr
   in
   if fieldIsPacked then begin
     if hasAttribute "aligned" fi.fattr then
-      Kernel.warning
-	"packed attribute overrules aligned attributes for file %s"
-	fi.fname ;
+      (* field is packed and aligned => process alignment *)
+      let field_alignment = process_aligned_attribute ~may_reduce:true
+          (fun fmt -> Format.fprintf fmt "field %s" fi.fname)
+          fi.fattr
+          (fun () -> bytesAlignOf fi.ftype)
+      in
+      field_alignment
+    else
+      (* packed and without minimum alignment => align on 1 *)
     1
   end else
-    process_aligned_attribute
+    process_aligned_attribute ~may_reduce:false
       (fun fmt -> Format.fprintf fmt "field %s" fi.fname)
       fi.fattr
       (fun () -> bytesAlignOf fi.ftype)
@@ -4625,9 +4978,22 @@ and alignOfField (fi: fieldinfo) =
 and intOfAttrparam (a:attrparam) : int option =
   let rec doit a : int =
     match a with
-    |  AInt(n) -> Integer.to_int n
-    | ABinOp(Shiftlt _, a1, a2) -> (doit a1) lsl (doit a2)
+    | AInt(n) -> Integer.to_int n
+    | ABinOp(PlusA _, a1, a2) -> doit a1 + doit a2
+    | ABinOp(MinusA _, a1, a2) -> doit a1 - doit a2
+    | ABinOp(Mult _, a1, a2) -> doit a1 * doit a2
     | ABinOp(Div _, a1, a2) -> (doit a1) / (doit a2)
+    | ABinOp(Shiftlt _, a1, a2) -> (doit a1) lsl (doit a2)
+    | ABinOp(Lt, a1, a2) -> if doit a1 < doit a2 then 1 else 0
+    | ABinOp(Gt, a1, a2) -> if doit a1 > doit a2 then 1 else 0
+    | ABinOp(Le, a1, a2) -> if doit a1 <= doit a2 then 1 else 0
+    | ABinOp(Ge, a1, a2) -> if doit a1 >= doit a2 then 1 else 0
+    | ABinOp(Eq, a1, a2) -> if doit a1 = doit a2 then 1 else 0
+    | ABinOp(Ne, a1, a2) -> if doit a1 <> doit a2 then 1 else 0
+    | ABinOp(BAnd, a1, a2) -> doit a1 land doit a2
+    | ABinOp(BXor, a1, a2) -> doit a1 lxor doit a2
+    | ABinOp(BOr, a1, a2) -> doit a1 lor doit a2
+    | AQuestion(c,a1,a2) -> if doit c <> 0 then doit a1 else doit a2
     | ASizeOf(t) ->
       let bs = bitsSizeOf t in
       bs / 8
@@ -4649,23 +5015,29 @@ and intOfAttrparam (a:attrparam) : int option =
   with Failure _ | SizeOfError _ -> (* Can't compile *)
     ignoreAlignmentAttrs := false;
     None
-and process_aligned_attribute (pp:Format.formatter->unit) attrs default_align = 
+and process_aligned_attribute (pp:Format.formatter->unit) ~may_reduce attrs default_align =
+  (* [may_reduce] indicates if we can reduce the alignment
+     (e.g. a "packed" attribute is present).
+     According to GCC's doc
+     (https://gcc.gnu.org/onlinedocs/gcc/Common-Type-Attributes.html):
+     "The aligned attribute can only increase alignment.
+      Alignment can be decreased by specifying the packed attribute." *)
   match filterAttributes "aligned" attrs with
   | [] -> 
       (* no __aligned__ attribute, so get the default alignment *)
       default_align ()
   | _ when !ignoreAlignmentAttrs -> 
-    Kernel.warning "ignoring recursive align attributes on %t" 
+    Kernel.warning ~current:true "ignoring recursive align attributes on %t"
       pp;
     default_align ()
   | (Attr(_, [a]) as at)::rest -> begin
     if rest <> [] then
-      Kernel.warning "ignoring duplicate align attributes on %t" 
+      Kernel.warning ~current:true "ignoring duplicate align attributes on %t"
         pp;
     match intOfAttrparam a with
-      Some n -> n
+    | Some n -> if may_reduce then n else max n (default_align ())
     | None -> 
-      Kernel.warning "alignment attribute \"%a\" not understood on %t" 
+      Kernel.warning ~current:true "alignment attribute \"%a\" not understood on %t"
         !pp_attribute_ref at pp;
       default_align ()
   end
@@ -4673,11 +5045,11 @@ and process_aligned_attribute (pp:Format.formatter->unit) attrs default_align =
        (* aligned with no arg means a power of two at least as large as
           any alignment on the system.*)
     if rest <> [] then
-      Kernel.warning "ignoring duplicate align attributes on %t" 
+      Kernel.warning ~current:true "ignoring duplicate align attributes on %t"
         pp;
     theMachine.theMachine.alignof_aligned
   | at::_ ->
-    Kernel.warning "alignment attribute \"%a\" not understood on %t" 
+    Kernel.warning ~current:true "alignment attribute \"%a\" not understood on %t"
       !pp_attribute_ref at pp;
     default_align ()
 
@@ -4927,8 +5299,7 @@ and offsetOfFieldAcc_GCC last (fi: fieldinfo) (sofar: offsetAcc) : offsetAcc =
 	    end)
    | TVoid _ -> 8 * theMachine.theMachine.sizeof_void
    | TFun _ ->
-       if not (msvcMode ()) then
-         (* On GCC the size of a function is defined *)
+       if theMachine.theMachine.sizeof_fun >= 0 then
          8 * theMachine.theMachine.sizeof_fun
        else
          raise (SizeOfError ("Undefined sizeof on a function.", t))
@@ -5206,19 +5577,19 @@ and constFoldBinOp ~loc (machdep: bool) bop e1 e2 tres =
         when Integer.equal one Integer.one -> e1''
       | Div _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           begin
-            try kinteger64 ~loc ~kind:tk (Integer.div i1 i2)
+            try kinteger64 ~loc ~kind:tk (Integer.c_div i1 i2)
             with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
       | Div _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_))
           when bytesSizeOfInt ik1 = bytesSizeOfInt ik2 -> begin
-            try kinteger64 ~loc ~kind:tk (Integer.div i1 i2)
+            try kinteger64 ~loc ~kind:tk (Integer.c_div i1 i2)
             with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
       | Div _, _, Const(CInt64(one,_,_)) 
          when Integer.equal one Integer.one -> e1''
       | Mod _, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
           begin
-            try kinteger64 ~loc ~kind:tk (Integer.rem i1 i2)
+            try kinteger64 ~loc ~kind:tk (Integer.c_rem i1 i2)
             with Division_by_zero -> new_exp ~loc (BinOp(bop, e1', e2', tres))
           end
       | BAnd, Const(CInt64(i1,ik1,_)),Const(CInt64(i2,ik2,_)) when ik1 = ik2 ->
@@ -5301,6 +5672,13 @@ and constFoldToInt ?(machdep=true) e =
   end
   | _ -> None
 
+let bitsSizeOfBitfield typlv =
+  match unrollType typlv with
+  | TInt (_, attrs) | TEnum (_, attrs) as t ->
+    (match findAttribute bitfield_attribute_name attrs with
+     | [AInt i] -> Integer.to_int i
+     | _ -> bitsSizeOf t)
+  | t -> bitsSizeOf t
 
 let () = constfoldtoint := constFoldToInt ~machdep:true
 
@@ -5317,7 +5695,7 @@ let intTypeIncluded kind1 kind2 =
  (* CEA: moved from cabs2cil.ml. See cil.mli for infos *)
  (* Weimer
   * multi-character character constants
-  * In MSCV, this code works:
+  * In MSVC, this code works:
   *
   * long l1 = 'abcd';  // note single quotes
   * char * s = "dcba";
@@ -5805,7 +6183,7 @@ let init_builtins () =
    }
 
 let spare_attributes_for_c_cast =
-  "declspec"::"arraylen"::qualifier_attributes
+  "declspec"::"arraylen"::"fc_stdlib"::qualifier_attributes
 
 let type_remove_attributes_for_c_cast =
   typeRemoveAttributes spare_attributes_for_c_cast
@@ -5830,64 +6208,6 @@ let need_cast ?(force=false) oldt newt =
              ik <> e.ekind
          | _ -> true)
 
-(* Strip the "const" from the type. It is unfortunate that const variables can
-   only be set in initialization. Once we decided to move all declarations to
-   the top of the functions, we have no way of setting a "const"
-   variable. Furthermore, if the type of the variable is an array or a struct
-   we must recursively strip the "const" from fields and array elements. *)
- let rec stripConstLocalType (t: typ) : typ =
-   let dc a =
-     if hasAttribute "const" a then
-       dropAttribute "const" a
-     else a
-   in
-   match t with
-   | TPtr (bt, a) ->
-      (* We want to be able to detect by pointer equality if the type has
-       * changed. So, don't realloc the type unless necessary. *)
-      let a' = dc a in if a != a' then TPtr(bt, a') else t
-  | TInt (ik, a) ->
-      let a' = dc a in if a != a' then TInt(ik, a') else t
-  | TFloat(fk, a) ->
-      let a' = dc a in if a != a' then TFloat(fk, a') else t
-  | TNamed (ti, a) ->
-      (* We must go and drop the consts from the typeinfo as well ! *)
-      let t' = stripConstLocalType ti.ttype in
-      if t != t' then begin
-        (* ignore (warn "Stripping \"const\" from typedef %s\n" ti.tname); *)
-        ti.ttype <- t'
-      end;
-      let a' = dc a in if a != a' then TNamed(ti, a') else t
-
-  | TEnum (ei, a) ->
-      let a' = dc a in if a != a' then TEnum(ei, a') else t
-
-  | TArray(bt, leno, _, a) ->
-      (* We never assign to the array. So, no need to change the const. But
-       * we must change it on the base type *)
-      let bt' = stripConstLocalType bt in
-      if bt' != bt then TArray(bt', leno, empty_size_cache (), a) else t
-
-  | TComp(ci, _, a) ->
-      (* Must change both this structure as well as its fields *)
-      List.iter
-        (fun f ->
-          let t' = stripConstLocalType f.ftype in
-          if t' != f.ftype then begin
-            Kernel.debug ~level:3 "Stripping \"const\" from field %s of %s\n"
-              f.fname (compFullName ci) ;
-            f.ftype <- t'
-          end)
-        ci.cfields;
-      let a' = dc a in if a != a' then TComp(ci, empty_size_cache (), a') else t
-
-    (* We never assign functions either *)
-  | TFun(_rt, _args, _va, _a) -> t
-  | TVoid _ -> (* this may happen with temporary used only for their sizeof. *)
-      t
-  | TBuiltin_va_list a ->
-      let a' = dc a in if a != a' then TBuiltin_va_list a' else t
-
  let cvar_to_lvar vi = match vi.vlogic_var_assoc with
    | None ->
      let lv =
@@ -5895,6 +6215,7 @@ let need_cast ?(force=false) oldt newt =
 	 lv_id = vi.vid;
          lv_kind = LVC;
 	 lv_type = Ctype vi.vtype ;
+         lv_attr = [];
 	 lv_origin = Some vi}
      in 
      vi.vlogic_var_assoc <- Some lv; lv
@@ -5922,6 +6243,9 @@ let need_cast ?(force=false) oldt newt =
      end else
        current_name
 
+ let refresh_local_name fdec vi =
+   let new_name = findUniqueName fdec vi.vname in vi.vname <- new_name
+
  let makeLocal ?(temp=false) ?(formal=false) fdec name typ =
    (* a helper function *)
    let name = findUniqueName fdec name in
@@ -5931,8 +6255,8 @@ let need_cast ?(force=false) oldt newt =
 
  (* Make a local variable and add it to a function *)
  let makeLocalVar fdec ?scope ?(temp=false) ?(insert = true) name typ =
-   let typ = stripConstLocalType typ in
    let vi = makeLocal ~temp fdec name typ in
+   refresh_local_name fdec vi;
    if insert then
      begin
        fdec.slocals <- fdec.slocals @ [vi];
@@ -6022,16 +6346,20 @@ let need_cast ?(force=false) oldt newt =
  let makeGlobalVar ?source ?temp name typ =
    makeVarinfo ?source ?temp true false name typ
 
- let mkPureExpr ?(ghost:bool = false) ~(fundec:fundec) ?(loc=Location.unknown)
-     (e : exp) : stmt =
+ let mkPureExprInstr ~fundec ~scope ?loc e =
+   let loc = match loc with None -> e.eloc | Some l -> l in
    let typ = typeOf e in
    let descr = Format.asprintf "%a" !pp_exp_ref e in
-   let scope = mkBlock [] in
-   let temp = true in
-   let tmp = makeLocalVar ~temp ~scope fundec "tmp" typ in
+   let tmp = makeLocalVar ~temp:true ~scope fundec "tmp" typ in
    tmp.vdescr <- Some descr;
-   scope.bstmts <- [ mkStmtOneInstr ~ghost (Set(var tmp, e, loc)) ];
-   mkStmt (Block scope)
+   tmp.vdefined <- true;
+   Local_init(tmp, AssignInit (SingleInit e), loc)
+
+ let mkPureExpr ?ghost ?valid_sid ~(fundec:fundec) ?loc (e : exp) : stmt =
+   let scope = mkBlock [] in
+   let instr = mkPureExprInstr ~fundec ~scope ?loc e in
+   scope.bstmts <- [ mkStmtOneInstr ?ghost ?valid_sid instr];
+   mkStmt ?ghost ?valid_sid (Block scope)
 
  let emptyFunctionFromVI vi =
    let r =
@@ -6187,11 +6515,11 @@ let childrenFileSameGlobals vis f =
   iterGlobals f
     (fun g ->
        match fGlob g with
-           [g'] when g' == g || Cil_datatype.Global.equal g' g -> ()
-             (* Try to do the pointer check first *)
+           [g'] when g' == g -> ()
          | gl ->
              Kernel.fatal ~current:true
-	       "You used visitCilFileSameGlobals but the global got changed:\n %a\nchanged to %a\n"
+	       "You used visitCilFileSameGlobals but \
+                the global got physically changed:\n %a\nchanged to %a\n"
 	       !pp_global_ref g
 	       (Pretty_utils.pp_list ~sep:"@\n" !pp_global_ref) gl ;
     );
@@ -6389,7 +6717,7 @@ let childrenFileSameGlobals vis f =
      ss
 
  (* Process two statements and possibly replace them both *)
- let rec peepHole2 ~agressive (dotwo: stmt * stmt -> stmt list option) (ss: stmt list) =
+ let rec peepHole2 ~aggressive (dotwo: stmt * stmt -> stmt list option) (ss: stmt list) =
    let rec doStmtList acc (il: stmt list) : stmt list =
      match il with
        [] -> List.rev acc
@@ -6399,7 +6727,7 @@ let childrenFileSameGlobals vis f =
 	   match dotwo (i1,i2) with
 	     None -> process i1; doStmtList (i1::acc) rest2
 	   | Some sl -> 
-             if agressive then
+             if aggressive then
                doStmtList acc (sl @ rest) 
              else 
                doStmtList (List.rev_append sl acc) rest
@@ -6415,44 +6743,44 @@ let childrenFileSameGlobals vis f =
 	       | Some [] -> doUnspecifiedStmtList rest
 	       | Some (hd::tl) ->
 		   let call s = match s.skind with
-		     | Instr(Call _ ) -> [ref s]
+		     | Instr(Call _ | Local_init (_, ConsInit _, _)) -> [ref s]
 		     | _ -> []
 		   in
 		   let res =
 		     (hd, m1@m2, w1 @ w2, r1 @ r2,call hd) ::
 		       (List.map (fun x -> x,[],[],[],call x) tl)
 		   in
-		   if agressive then doUnspecifiedStmtList (res @ rest)
+		   if aggressive then doUnspecifiedStmtList (res @ rest)
 		   else res @ doUnspecifiedStmtList rest
 	   end
    and process s =
      match s.skind with
 	 Instr _i -> ()
        | If (_e, tb, eb, _) ->
-	   tb.bstmts <- peepHole2 ~agressive dotwo tb.bstmts;
-	   eb.bstmts <- peepHole2 ~agressive dotwo eb.bstmts
-       | Switch (_e, b, _, _) -> b.bstmts <- peepHole2 ~agressive dotwo b.bstmts
-       | Loop (_, b, _l, _, _) -> b.bstmts <- peepHole2 ~agressive dotwo b.bstmts
+	   tb.bstmts <- peepHole2 ~aggressive dotwo tb.bstmts;
+	   eb.bstmts <- peepHole2 ~aggressive dotwo eb.bstmts
+       | Switch (_e, b, _, _) -> b.bstmts <- peepHole2 ~aggressive dotwo b.bstmts
+       | Loop (_, b, _l, _, _) -> b.bstmts <- peepHole2 ~aggressive dotwo b.bstmts
        | Block b -> b.bstmts <- doStmtList [] b.bstmts
        | TryCatch (b,l,_) ->
-         b.bstmts <- peepHole2 ~agressive dotwo b.bstmts;
+         b.bstmts <- peepHole2 ~aggressive dotwo b.bstmts;
          List.iter 
            (fun (_,b) ->
-             b.bstmts <-  peepHole2 ~agressive dotwo b.bstmts)
+             b.bstmts <-  peepHole2 ~aggressive dotwo b.bstmts)
            l
        | TryFinally (b, h, _l) ->
-         b.bstmts <- peepHole2 ~agressive dotwo b.bstmts;
-	 b.bstmts <- peepHole2 ~agressive dotwo h.bstmts
+         b.bstmts <- peepHole2 ~aggressive dotwo b.bstmts;
+	 b.bstmts <- peepHole2 ~aggressive dotwo h.bstmts
        | TryExcept (b, (_il, _e), h, _l) ->
-	   b.bstmts <- peepHole2 ~agressive dotwo b.bstmts;
-	   h.bstmts <- peepHole2 ~agressive dotwo h.bstmts;
+	   b.bstmts <- peepHole2 ~aggressive dotwo b.bstmts;
+	   h.bstmts <- peepHole2 ~aggressive dotwo h.bstmts;
 	   () (*s.skind <- TryExcept (b, (doInstrList il, e), h, l)*)
 
        | UnspecifiedSequence seq ->
 	   s.skind <- UnspecifiedSequence (doUnspecifiedStmtList seq)
        | Return _ | Goto _ | AsmGoto _ | Break _ | Continue _ | Throw _ -> ()
    in
-   if agressive then List.iter process ss;
+   if aggressive then List.iter process ss;
    doStmtList [] ss
 
   (* Make an AddrOf. Given an lval of type T will give back an expression of
@@ -6500,6 +6828,47 @@ let childrenFileSameGlobals vis f =
 	     d_plainexp addr d_plainoffset off d_plainexp res); *)
    res
 
+ let treat_constructor_as_func action v f args kind loc =
+   let lv, args =
+     match kind with
+     | Plain_func -> Some (var v), args
+     | Constructor -> None, mkAddrOfVi v :: args
+   in
+   action lv (evar f) args loc
+
+ let fold_local_init b f acc =
+   let rec find_stmt acc s =
+     match s.skind with
+     | Instr(Local_init(v',i,l)) -> f s (v',i,l) acc
+     | UnspecifiedSequence l -> List.fold_left find_stmt_seq acc l
+     | Block b when not b.bscoping -> List.fold_left find_stmt acc b.bstmts
+     | _ -> acc
+   and find_stmt_seq acc (s, _, _, _, _) = find_stmt acc s
+   in
+   List.fold_left find_stmt acc b.bstmts
+
+ let find_def_stmt b v =
+   if not (v.vdefined && List.exists (Cil_datatype.Varinfo.equal v) b.blocals)
+   then Kernel.fatal "inconsistent arguments for find_def_stmt";
+   let module M = struct exception Found of stmt end in
+   let action s (v',_,_) () =
+     if Cil_datatype.Varinfo.equal v v' then raise (M.Found s) else ()
+   in
+   try
+     fold_local_init b action ();
+     Kernel.fatal ~source:(fst v.vdecl)
+       "inconsistent AST: local variable %a is supposed to be initialized, \
+        but no initialization statement found." Cil_datatype.Varinfo.pretty v
+   with M.Found s -> s
+
+ let has_extern_local_init b =
+   (* a scoping block defines all the locals inside it.*)
+   if b.bscoping then false
+   else begin
+     let action _ _ () = raise Exit in
+     try fold_local_init b action (); false with Exit -> true
+   end
+
  let splitFunctionType (ftype: typ)
      : typ * (string * typ * attributes) list option * bool * attributes =
    match unrollType ftype with
@@ -6513,24 +6882,30 @@ let childrenFileSameGlobals vis f =
      TFun (rt, args, isva, a) -> rt, args, isva, a
    | _ -> Kernel.abort "Function %s invoked on a non function type" fvi.vname
 
- let rec integralPromotion ?(forComparison=false) (t : typ) : typ = (* c.f. ISO 6.3.1.1 *)
+ let remove_attributes_for_integral_promotion a =
+   dropAttributes (bitfield_attribute_name :: spare_attributes_for_c_cast) a
+
+ let rec integralPromotion t = (* c.f. ISO 6.3.1.1 *)
    match unrollType t with
-   | TInt ((IShort|ISChar|IBool), a) -> TInt(IInt, a)
+   | TInt ((IShort|ISChar|IBool), a) ->
+     let a = remove_attributes_for_integral_promotion a in
+     TInt(IInt, a)
    | TInt (IUChar|IUShort as k, a) -> 
+     let a = remove_attributes_for_integral_promotion a in
      if bitsSizeOfInt k < bitsSizeOf intType then 
        TInt(IInt, a)
      else
        TInt(IUInt,a)
    | TInt (IChar,a) ->
      let k = if isSigned IChar then ISChar else IUChar in
-     integralPromotion ~forComparison (TInt (k, a))
+     integralPromotion (TInt (k, a))
    | TInt (k,a) ->
      begin match findAttribute bitfield_attribute_name a with
      | [AInt size] ->
        (* This attribute always fits in int. *)
        let size = Integer.to_int size in
        let sizeofint = bitsSizeOf intType in
-       let attrs = dropAttribute bitfield_attribute_name a in
+       let attrs = remove_attributes_for_integral_promotion a in
        let kind =
          if size < sizeofint then IInt
          else if size = sizeofint then
@@ -6542,16 +6917,9 @@ let childrenFileSameGlobals vis f =
      | [] -> t
      | _ -> assert false
      end
-   | TEnum (ei, a) -> let r = integralPromotion (TInt(ei.ekind, a)) in
-	 if forComparison then
-	   (match r with
-	     | TInt(kind,_) -> if kind <> ei.ekind then r else t
-	     | t -> Kernel.fatal ~current:true "integralPromotion: not expecting %a" !pp_typ_ref t)  
-	 else r
-   (* gcc packed enums can be < int *)
+   | TEnum (ei, a) -> (* gcc packed enums can be < int *)
+     integralPromotion (TInt(ei.ekind, a))
    | t -> Kernel.fatal ~current:true "integralPromotion: not expecting %a" !pp_typ_ref t
-
- let integralPromotion (t : typ) : typ = integralPromotion t
 
  let arithmeticConversion t1 t2 = (* c.f. ISO 6.3.1.8 *)
   let checkToInt _ = () in  (* dummies for now *)
@@ -6604,6 +6972,10 @@ let childrenFileSameGlobals vis f =
 let isArrayType t = match unrollTypeSkel t with
    | TArray _ -> true
    | _ -> false
+
+let isAnyCharArrayType t = match unrollTypeSkel t with
+  | TArray(tau,_,_,_) when isAnyCharType tau -> true
+  | _ -> false
 
 let isCharArrayType t = match unrollTypeSkel t with
   | TArray(tau,_,_,_) when isCharType tau -> true
@@ -6660,10 +7032,13 @@ let mkCastTLoc ?(force=false) ?(overflow=Check) ~(e: exp) ?(loc=e.eloc) ~(oldt: 
     (match e.enode with | Const(CEnum _) -> false | _ -> true)
   in *)
   if need_cast ~force oldt newt then begin
+    let target_type =
+      match newt with
+      | TNamed _ -> newt
+      | _ -> type_remove_attributes_for_c_cast newt
+    in
     let mk_cast exp = (* to new type [newt] *)
-      new_exp
-        ~loc
-        (CastE((type_remove_attributes_for_c_cast newt), overflow, exp))
+      new_exp ~loc (CastE(target_type, overflow, exp))
     in
     (* Watch out for constants and cast of cast to pointer *)
     match unrollType newt, e.enode with
@@ -6716,6 +7091,19 @@ let mkCastTLoc ?(force=false) ?(overflow=Check) ~(e: exp) ?(loc=e.eloc) ~(oldt: 
      else 
        Kernel.fatal ~current:true "mkBinOp: %a" !pp_exp_ref (dummy_exp(BinOp(op,e1,e2,intType)))
    in
+   let compare_pointer op ?cast1 ?cast2 e1 e2 =
+     let do_cast e = function
+       | None -> e
+       | Some t' -> mkCastT ~force:false ~overflow:Check ~e ~oldt:(typeOf e) ~newt:t'
+     in
+     let e1, e2 =
+       if need_cast ~force:true (typeOf e1) (typeOf e2) then
+         do_cast e1 cast1, do_cast e2 cast2
+       else
+         e1, e2
+     in
+     constFoldBinOp ~loc machdep op e1 e2 intType
+   in
    match op with
        (Mult _|Div _) -> doArithmetic ()
      | (Mod _|BAnd|BOr|BXor|LAnd|LOr) -> doIntegralArithmetic ()
@@ -6739,29 +7127,38 @@ let mkCastTLoc ?(force=false) ?(overflow=Check) ~(e: exp) ?(loc=e.eloc) ~(oldt: 
      | (Eq|Ne|Lt|Le|Ge|Gt)
          when isArithmeticType t1 && isArithmeticType t2 ->
        doArithmeticComp ()
-     | (Le|Lt|Ge|Gt|Eq|Ne) when isPointerType t1 && isPointerType t2 ->
-       constFoldBinOp ~loc machdep op
-         (mkCastT e1 t1 theMachine.upointType)
-         (mkCastT e2 t2 theMachine.upointType)
-         intType
      | (Eq|Ne) when isPointerType t1 && isZero e2 ->
-       constFoldBinOp ~loc machdep op
-         e1 (mkCastT (zero ~loc)theMachine.upointType t1) intType
+       compare_pointer ~cast2:t1 op e1 (zero ~loc)
      | (Eq|Ne) when isPointerType t2 && isZero e1 ->
-       constFoldBinOp ~loc machdep op
-         (mkCastT (zero ~loc)theMachine.upointType t2) e2 intType
+       compare_pointer ~cast1:t2 op (zero ~loc) e2
      | (Eq|Ne) when isVariadicListType t1 && isZero e2 ->
        Kernel.debug ~level:3 "Comparison of va_list and zero";
-       constFoldBinOp ~loc machdep op e1
-         (mkCastT (zero ~loc)theMachine.upointType t1) intType
+       compare_pointer ~cast2:t1 op e1 (zero ~loc)
      | (Eq|Ne) when isVariadicListType t2 && isZero e1 ->
        Kernel.debug ~level:3 "Comparison of zero and va_list";
-       constFoldBinOp ~loc machdep op
-         (mkCastT (zero ~loc)theMachine.upointType t2) e2 intType
+       compare_pointer ~cast1:t2 op (zero ~loc) e2
+     | (Le|Lt|Ge|Gt|Eq|Ne) when isPointerType t1 && isPointerType t2 ->
+       compare_pointer ~cast1:theMachine.upointType ~cast2:theMachine.upointType
+         op e1 e2
      | _ ->
        Kernel.fatal ~current:true "mkBinOp: %a" 
 	 !pp_exp_ref (dummy_exp(BinOp(op,e1,e2,intType)))
 
+ let mkBinOp_safe_ptr_cmp ~loc op e1 e2 =
+   let e1, e2 =
+     match op with
+     | (Eq | Ne | Lt | Le | Ge | Gt) ->
+       let t1 = typeOf e1 in
+       let t2 = typeOf e2 in
+       if isPointerType t1 && isPointerType t2
+          && not (isZero e1) && not (isZero e2)
+       then begin
+         mkCast ~force:true ~overflow:Check ~e:e1 ~newt:theMachine.upointType,
+         mkCast ~force:true ~overflow:Check ~e:e2 ~newt:theMachine.upointType
+       end else e1, e2
+     | _ -> e1, e2
+   in
+   mkBinOp ~loc op e1 e2
 
  type existsAction =
      ExistsTrue                          (* We have found it *)
@@ -6828,7 +7225,7 @@ let mkCastTLoc ?(force=false) ?(overflow=Check) ~(e: exp) ?(loc=e.eloc) ~(oldt: 
      end
  let lenOfArray eo = Integer.to_int (lenOfArray64 eo)
 
-(*** Make an initializer for zeroe-ing a data type ***)
+(*** Make an initializer for zeroing a data type ***)
 let rec makeZeroInit ~loc (t: typ) : init =
   match unrollType t with
     TInt (ik, _) ->
@@ -6847,18 +7244,12 @@ let rec makeZeroInit ~loc (t: typ) : init =
       in
       CompoundInit (t', inits)
   | TComp (comp, _, _) when not comp.cstruct ->
-      let fstfield, _rest =
-        match comp.cfields with
-          f :: rest -> f, rest
-        | [] -> Kernel.fatal ~current:true "Cannot create init for empty union"
-      in
-      let fieldToInit =
+    (match comp.cfields with
+     | [] -> CompoundInit(t, []) (* tolerate empty initialization. *)
+     | f :: _rest ->
           (* ISO C99 [6.7.8.10] says that the first field of the union
              is the one we should initialize. *)
-          fstfield
-      in
-      CompoundInit(t, [(Field(fieldToInit, NoOffset),
-                        makeZeroInit ~loc fieldToInit.ftype)])
+       CompoundInit(t, [(Field(f, NoOffset), makeZeroInit ~loc f.ftype)]))
   | TArray(bt, Some len, _, _) as t' ->
       let n =
         match constFoldToInt len with
@@ -6961,8 +7352,10 @@ let rec makeZeroInit ~loc (t: typ) : init =
 
  let rec isCompleteType ?(isLastField=false) ?(allowZeroSizeArrays=false) t =
    match unrollType t with
-   | TArray(_t, None, _, _) -> isLastField && allowZeroSizeArrays
-   | TArray(_t, Some z, _, _) when isZero z -> allowZeroSizeArrays
+   | TVoid _ -> false (* void is an incomplete type by definition (6.2.5§19) *)
+   | TArray(t, None, _, _) -> isLastField && allowZeroSizeArrays && isCompleteType t
+   | TArray(t, Some z, _, _) when isZero z -> allowZeroSizeArrays && isCompleteType t
+   | TArray(t, Some _, _, _) -> isCompleteType t
    | TComp (comp, _, _) -> (* Struct or union *)
        comp.cdefined &&
        let last = if comp.cfields <> [] then Some (Extlib.last comp.cfields) else None in
@@ -6975,6 +7368,12 @@ let rec makeZeroInit ~loc (t: typ) : init =
          comp.cfields
    | _ -> true
 
+ let is_modifiable_lval lv =
+   let t = typeOfLval lv in
+   match unrollType t with
+   | TArray _ -> false
+   | TFun _ -> false
+   | _ -> not (isConstType t) && isCompleteType t
 
  (* makes sure that the type of a C variable and the type of its associated
    logic variable -if any- stay synchronized. See bts 1538 *)
@@ -6987,9 +7386,7 @@ let rec makeZeroInit ~loc (t: typ) : init =
  (** Uniquefy the variable names *)
  let uniqueVarNames (f: file) : unit =
    (* Setup the alpha conversion table for globals *)
-   let gAlphaTable
-       : (string, location Alpha.alphaTableData ref) Hashtbl.t 
-       = Hashtbl.create 113 in
+   let gAlphaTable = Hashtbl.create 113 in
    (* Keep also track of the global names that we have used. Map them to the
       variable ID. We do this only to check that we do not have two globals
       with the same name. *)
@@ -7108,8 +7505,7 @@ let initCIL ~initLogicBuiltins machdep =
     theMachine.ptrdiffType <- TInt(theMachine.ptrdiffKind, []);
     theMachine.underscore_name <-
       theMachine.theMachine.Cil_types.underscore_name;
-    theMachine.useLogicalOperators <- false (* do not use lazy LAND and LOR *);
-
+    theMachine.useLogicalOperators <- Kernel.LogicalOperators.get() (* do not use lazy LAND and LOR *);
     (*nextGlobalVID <- 1 ;
     nextCompinfoKey <- 1;*)
 
@@ -7142,7 +7538,7 @@ let initCIL ~initLogicBuiltins machdep =
 let pullTypesForward = true
 
 
-    (* Scan a type and collect the variables that are refered *)
+    (* Scan a type and collect the variables that are referred *)
 class getVarsInGlobalClass (pacc: varinfo list ref) = object
   inherit nopCilVisitor
   method! vvrbl (vi: varinfo) =
@@ -7168,7 +7564,7 @@ let pushGlobal (g: global)
     variables := g :: !variables
   else
     begin
-      (* Collect a list of variables that are refered from the type. Return
+      (* Collect a list of variables that are referred from the type. Return
        * Some if the global should go with the types and None if it should go
        * to the variables. *)
       let varsintype : (varinfo list * location) option =
@@ -7190,7 +7586,18 @@ let pushGlobal (g: global)
           let aux acc v =
             if isFunctionType v.vtype
             then GFunDecl (empty_funspec (),v, loc) :: acc
-            else GVarDecl (v, loc) :: acc
+            else begin
+             let is_same_decl = function
+                | GVarDecl(v',_) -> Cil_datatype.Varinfo.equal v v'
+                | _ -> false
+              in
+              if List.exists is_same_decl !types then acc
+              else begin
+                variables :=
+                  List.filter (fun x -> not (is_same_decl x)) !variables;
+                GVarDecl (v, loc) :: acc
+              end
+            end
           in
           g :: (List.fold_left aux !types vl)
   end
@@ -7472,50 +7879,36 @@ let extract_free_logicvars_from_term t =
 let extract_free_logicvars_from_predicate p =
   free_vars_predicate Logic_var.Set.empty p
 
+class extract_labels = object
+  inherit nopCilVisitor
+  val mutable labels = Logic_label.Set.empty;
+  method labels = labels
+  method! vlogic_label label =
+    labels <- Logic_label.Set.add label labels;
+    SkipChildren
+end
+
 let extract_labels_from_annot annot =
-  let visitor = object
-    inherit nopCilVisitor
-    val mutable labels = Logic_label.Set.empty;
-    method labels = labels
-    method! vlogic_label (label:logic_label) =
-      labels <- Logic_label.Set.add label labels;
-      SkipChildren
-  end
-  in ignore (visitCilCodeAnnotation (visitor :> nopCilVisitor) annot) ;
+  let visitor = new extract_labels in
+  ignore (visitCilCodeAnnotation (visitor :> nopCilVisitor) annot) ;
     visitor#labels
 
 let extract_labels_from_term term =
-  let visitor = object
-    inherit nopCilVisitor
-    val mutable labels = Logic_label.Set.empty;
-    method labels = labels
-    method! vlogic_label (label:logic_label) =
-      labels <- Logic_label.Set.add label labels;
-      SkipChildren
-  end
-  in ignore (visitCilTerm (visitor :> nopCilVisitor) term) ;
+  let visitor = new extract_labels in
+  ignore (visitCilTerm (visitor :> nopCilVisitor) term) ;
     visitor#labels
 
 let extract_labels_from_pred pred =
-  let visitor = object
-    inherit nopCilVisitor
-    val mutable labels = Logic_label.Set.empty;
-    method labels = labels
-    method! vlogic_label (label:logic_label) =
-      labels <- Logic_label.Set.add label labels;
-      SkipChildren
-  end
-  in ignore (visitCilPredicate (visitor :> nopCilVisitor) pred) ;
+  let visitor = new extract_labels in
+  ignore (visitCilPredicate (visitor :> nopCilVisitor) pred) ;
     visitor#labels
-
-
 
 let extract_stmts_from_labels labels =
   Logic_label.Set.fold 
     (fun l a -> match l with
        | StmtLabel (stmt) -> Stmt.Set.add !stmt a
-       | LogicLabel (Some (stmt), _str) -> Stmt.Set.add stmt a
-       | LogicLabel (None, _str) -> a)
+       | FormalLabel _ -> a
+       | BuiltinLabel _ -> a)
     labels Stmt.Set.empty
 
 let close_predicate p =
@@ -7647,18 +8040,22 @@ class dropAttributes ?select () = object
     | TComp _ | TEnum _ | TBuiltin_va_list _ -> DoChildren
 end
 
-let typeDeepDropAttributes select t =
-  let vis = new dropAttributes ~select () in
-  visitCilType vis t
-
 let typeDeepDropAllAttributes t =
   let vis = new dropAttributes () in
   visitCilType vis t
 
 (** {1 Deprecated} *)
 
-(* currently empty, but keep this section for future use. *)
+let typeDeepDropAttributes =
+  Kernel.deprecated "Cil.typeDeepDropAttributes"
+    ~now:"Cil.typeRemoveAttributesDeep"
+    (fun select t ->
+       let vis = new dropAttributes ~select () in visitCilType vis t)
 
+let typeHasAttributeDeep t =
+  Kernel.deprecated "Cil.typeHasAttributeDeep"
+    ~now:"Cil.typeHasAttributeMemoryBlock"
+    typeHasAttributeMemoryBlock t
 (*
 Local Variables:
 compile-command: "make -C ../../.."

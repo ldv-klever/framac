@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,15 @@
 (* --- Typed Memory Model                                                 --- *)
 (* -------------------------------------------------------------------------- *)
 
-include Memory.Model
+include Sigs.Model
 
 type pointer = NoCast | Fits | Unsafe
 val pointer : pointer Context.value
+val p_havoc : Lang.lfun
+val p_separated : Lang.lfun
+val p_included : Lang.lfun
+val p_valid_rd : Lang.lfun
+val p_valid_rw : Lang.lfun
+val p_invalid : Lang.lfun
+val a_base : Lang.F.term -> Lang.F.term
+val a_offset : Lang.F.term -> Lang.F.term

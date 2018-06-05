@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,6 +29,9 @@ open Eval
 module type S = sig
   include Datatype.S
 
+  val pretty_typ: typ option -> t Pretty_utils.formatter
+  (** Pretty the abstract value assuming it has the type given as argument. *)
+
   (** {3 Lattice Structure} *)
 
   val top : t
@@ -48,9 +51,9 @@ module type S = sig
 
   (** {3 Forward Operations } *)
 
-  (** Returns the abstract value of a litteral constants, and potentially some
-      alarms in case of floating point constants overflow. *)
-  val constant : exp -> constant -> t evaluated
+  (** Embeds C constants into value abstractions: returns an abstract value
+      for the given constant. The constant cannot be an enumeration constant. *)
+  val constant : exp -> constant -> t
 
   (** [forward_unop context typ unop v] evaluates the value [unop v], and the
       alarms resulting from the operations. See {eval.mli} for details on the
@@ -66,7 +69,7 @@ module type S = sig
 
   (** {3 Backward Operations } *)
 
-  (** For an unary forward operation F, the inverse backward opereror B tries to
+  (** For an unary forward operation F, the inverse backward operator B tries to
       reduce the argument values of the operation, given its result.
 
       It must satisfy:
@@ -107,25 +110,28 @@ module type S = sig
 
   (** {3 Reinterpret and Cast } *)
 
-  (** Read the given value with the given type. Also returns an alarm if the
-      type is floating-point type, and the value is not representable as
-      finite float. *)
-  val reinterpret : exp -> typ -> t -> t evaluated
+  (** [truncate_integer expr irange t] truncates the abstract value [t] to the
+      integer range [irange]. Produces overflow alarms if [t] does not already
+      fit into [irange], attached to the expression [expr]. *)
+  val truncate_integer: exp -> Eval_typ.integer_range -> t -> t evaluated
 
-  val do_promotion : src_typ:typ -> dst_typ: typ -> exp -> t -> t evaluated
+  (** [rewrap_integer irange t] wraps around the abstract value [t] to fit the
+      integer range [irange]. Does not produce any alarms. *)
+  val rewrap_integer: Eval_typ.integer_range -> t -> t
 
-  val resolve_functions :
-    typ_pointer:typ -> t -> Kernel_function.Hptset.t Eval.or_top * bool
-    (** [resolve_functions ~typ_pointer v] finds within [v] all the functions
-        with a type compatible with [typ_pointer]. The returned boolean
-        indicates the possibility of an alarm, i.e. that some of the values
-        represented by [v] do not correspond to functions, or to functions
-        with an incompatible type. It is always safe to return [`Top, true].
+  (** [restrict_float expr fkind t] removes NaN from the abstract value [t].
+      It also removes infinities if [remove_infinite] is set to true.
+      Produces is_nan_or_infinite alarms if necessary. *)
+  val restrict_float: remove_infinite:bool -> exp -> fkind -> t -> t evaluated
 
-        This function is used to resolve pointers calls. For consistency
-        between analyses, the function {!Eval_typ.compatible_functions}
-        should be used to determine whether the functions [v] may point to
-        are compatible with [typ_pointer]. *)
+  (** Abstract evaluation of casts operators from [scr_typ] to [dst_typ]. *)
+  val cast : src_typ:typ -> dst_typ: typ -> exp -> t -> t evaluated
+
+  val resolve_functions : t -> Kernel_function.t list or_top * bool
+  (** [resolve_functions v] returns the list of functions that may be pointed to
+      by the abstract value [v] (representing a function pointer). The returned
+      boolean must be [true] if some of the values represented by [v] do not
+      correspond to functions. It is always safe to return [`Top, true]. *)
 
 end
 

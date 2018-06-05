@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -35,18 +35,17 @@ endif
 
 PLUGIN_DIR ?= .
 PLUGIN_ENABLE := yes
-PLUGIN_DYNAMIC := yes
 PLUGIN_NAME := Variadic
 PLUGIN_CMI := format_types va_types
 PLUGIN_CMO := options extends va_build environment \
-              format_pprint format_typer format_parser \
+              format_string format_pprint format_typer format_parser \
               generic standard classify translate \
               register
 PLUGIN_DISTRIBUTED := $(PLUGIN_ENABLE)
 PLUGIN_DISTRIB_EXTERNAL:= Makefile.in configure.ac configure
 #PLUGIN_DISTRIB_BIN := no
 #PLUGIN_NO_DEFAULT_TEST := no
-PLUGIN_TESTS_DIRS := declared defined known
+PLUGIN_TESTS_DIRS := declared defined known erroneous
 
 ################
 # Generic part #

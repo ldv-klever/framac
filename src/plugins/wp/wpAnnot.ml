@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -76,14 +76,21 @@ let wp_unreachable =
     ~tuning:[] (* TBC *)
 
 let set_unreachable pid =
-  let emit p =
+  let emit = function
+    | Property.IPPredicate(Property.PKAssumes _ ,_,_,_) -> ()
+    | p ->
     debug "unreachable annotation %a@." Property.pretty p;
-    Property_status.emit wp_unreachable ~hyps:[] p Property_status.True in
+        Property_status.emit wp_unreachable ~hyps:[] p Property_status.True
+  in
   let pids = match WpPropId.property_of_id pid with
+    | Property.IPPredicate(Property.PKAssumes _ ,_,_,_) -> []
     | Property.IPBehavior(kf, kinstr, active, bhv) ->
         let active = Datatype.String.Set.elements active in
         (Property.ip_post_cond_of_behavior kf kinstr active bhv) @
         (Property.ip_requires_of_behavior kf kinstr bhv)
+    | Property.IPExtended _ -> []
+      (* Extended clauses might concern anything. Don't validate them
+         unless we know exactly what is going on. *)
     | p ->
         Wp_parameters.result "[CFG] Goal %a : Valid (Unreachable)"
           WpPropId.pp_propid pid ; [p]
@@ -243,7 +250,7 @@ type strategy_info = {
 }
 
 (*----------------------------------------------------------------------------*)
-(* Adding things in the stategy                                               *)
+(* Adding things in the strategy                                               *)
 (*----------------------------------------------------------------------------*)
 
 (* Select annotations to take as Hyp/Goal/... *)
@@ -363,20 +370,17 @@ let kind_to_select config kind id = match kind with
       Some (WpStrategy.AcallPre(goal,fct))
   | WpStrategy.Ahyp | WpStrategy.AcallHyp _ -> Some kind
 
-let add_prop_inv_establish config acc kind s ca p =
-  let id = WpPropId.mk_establish_id config.kf s ca in
-  match kind_to_select config kind id with None -> acc
-                                         | Some kind -> WpStrategy.add_prop_loop_inv acc kind s id p
-
-let add_prop_inv_preserve config acc kind s ca p =
-  let id = WpPropId.mk_preserve_id config.kf s ca in
-  match kind_to_select config kind id with None -> acc
-                                         | Some kind -> WpStrategy.add_prop_loop_inv acc kind s id p
+let add_prop_loop_inv ~established config acc kind s ca p =
+  let id = WpPropId.mk_loop_inv_id ~established config.kf s ca in
+  match kind_to_select config kind id with
+  | None -> acc
+  | Some kind -> WpStrategy.add_prop_loop_inv acc kind s ~established id p
 
 let add_prop_inv_fixpoint config acc kind s ca p =
   let id = WpPropId.mk_inv_hyp_id config.kf s ca in
-  match kind_to_select config kind id with None -> acc
-                                         | Some kind -> WpStrategy.add_prop_loop_inv acc kind s id p
+  match kind_to_select config kind id with
+  | None -> acc
+  | Some kind -> WpStrategy.add_prop_loop_inv acc kind s ~established:false id p
 
 (*----------------------------------------------------------------------------*)
 (* Add Assigns *)
@@ -401,7 +405,8 @@ let add_stmt_assigns_goal config s active acc b l_post = match b.b_assigns with
       | None -> acc
       | Some id ->
           if goal_to_select config id then
-            let labels = NormAtLabels.labels_stmt_assigns s l_post in
+            let kf = config.kf in
+            let labels = NormAtLabels.labels_stmt_assigns ~kf s l_post in
             let assigns = NormAtLabels.preproc_assigns labels assigns in
             let a_desc = WpPropId.mk_stmt_assigns_desc s assigns in
             WpStrategy.add_assigns acc WpStrategy.Agoal id a_desc
@@ -454,7 +459,7 @@ type test_behav_res =
 (** (see [test_behav_res] above).
  * If the annotation doesn't have "for" names, it is a bit complicated because
  * we have to know if the statement [s] is inside a stmt behavior or not. *)
-let is_annot_for_config config node s_annot bhv_name_list =
+let is_annot_for_config config ?(loopassigns=false) node s_annot bhv_name_list =
   let edges_before = Cil2cfg.pred_e config.cfg node in
   debug "[is_annot_for_config] at sid:%d for %a ? @."
     s_annot.sid (Wp_error.pp_string_list ~sep:" " ~empty:"<default>")
@@ -464,7 +469,7 @@ let is_annot_for_config config node s_annot bhv_name_list =
       | [] -> None
       | e::_ -> Cil2cfg.get_edge_next_stmt config.cfg e
     in match s_post with
-    | Some s_post when s_post.sid = s_annot.sid ->  TBRno
+    | Some s_post when s_post.sid = s_annot.sid && not loopassigns -> TBRno
     | _ -> TBRhyp
   in
   let res = match bhv_name_list with
@@ -561,13 +566,14 @@ let add_disjoint_behaviors_props config ki active spec acc =
   | [] -> acc
   | l ->
       let add_disj acc bhv_names =
-        let id = WpPropId.mk_disj_bhv_id (config.kf, ki, active, bhv_names) in
+        let kf = config.kf in
+        let id = WpPropId.mk_disj_bhv_id (kf, ki, active, bhv_names) in
         if goal_to_select config id then
           begin
             let prop = Ast_info.disjoint_behaviors spec bhv_names in
             let labels = match ki with
               | Kglobal -> NormAtLabels.labels_fct_pre
-              | Kstmt s -> NormAtLabels.labels_stmt_pre s in
+              | Kstmt s -> NormAtLabels.labels_stmt_pre ~kf s in
             let prop = WpStrategy.normalize id labels prop in
             WpStrategy.add_prop acc WpStrategy.Agoal id prop
           end
@@ -579,12 +585,13 @@ let add_complete_behaviors_props config ki active spec acc =
   | [] -> acc
   | l ->
       let mk_prop acc bhv_names =
-        let id = WpPropId.mk_compl_bhv_id (config.kf, ki, active, bhv_names) in
+        let kf = config.kf in
+        let id = WpPropId.mk_compl_bhv_id (kf, ki, active, bhv_names) in
         if goal_to_select config id then
           let prop = Ast_info.complete_behaviors spec bhv_names in
           let labels = match ki with
             | Kglobal -> NormAtLabels.labels_fct_pre
-            | Kstmt s -> NormAtLabels.labels_stmt_pre s in
+            | Kstmt s -> NormAtLabels.labels_stmt_pre ~kf s in
           let prop = WpStrategy.normalize id labels prop in
           WpStrategy.add_prop acc WpStrategy.Agoal id prop
         else acc
@@ -610,7 +617,7 @@ let add_behaviors_props config ki active spec acc =
  * Add [old(assumes) => ensures] for all the behaviors,
  * and also add an upper approximation of the merged assigns information. *)
 let add_stmt_spec_post_as_hyp config v s spec acc =
-  let l_post = Cil2cfg.get_post_logic_label config.cfg v in
+  let l_post = Cil2cfg.get_post_label config.cfg v in
   let add_bhv_post acc b =
     let assumes = Some (Ast_info.behavior_assumes b) in
     let add tk acc p =
@@ -632,7 +639,7 @@ let add_stmt_spec_post_as_hyp config v s spec acc =
  * - add the postconditions as goals.
 *)
 let add_stmt_bhv_as_goal config v s active b (b_acc, (p_acc, e_acc)) =
-  let l_post = Cil2cfg.get_post_logic_label config.cfg v in
+  let l_post = Cil2cfg.get_post_label config.cfg v in
   let assumes = None in (* [assumes] are used as separate hypotheses *)
   let add_pre_hyp acc p =
     WpStrategy.add_prop_stmt_pre acc WpStrategy.Ahyp config.kf s b ~assumes p
@@ -743,7 +750,7 @@ let add_call_annots config s kf l_post precond (before,(posts,exits)) =
   before , ( posts , exits )
 
 let get_call_annots config v s fct =
-  let l_post = Cil2cfg.get_post_logic_label config.cfg v in
+  let l_post = Cil2cfg.get_post_label config.cfg v in
   let empty = let e = WpStrategy.empty_acc in e,(e,e) in
   match fct with
 
@@ -772,20 +779,20 @@ let add_variant_annot config s ca var_exp loop_entry loop_back =
   let (vpos_id, vpos), (vdecr_id, vdecr) =
     WpStrategy.mk_variant_properties config.kf s ca var_exp
   in
-  let add acc kind id p =
-    WpStrategy.add_prop_loop_inv acc kind s id p
+  let add_variant acc kind id p =
+    WpStrategy.add_prop_loop_inv acc kind s ~established:false id p
   in
   let add_hyp acc =
-    let acc = add acc WpStrategy.Ahyp vdecr_id vdecr in
-    add acc WpStrategy.Ahyp vpos_id vpos
+    let acc = add_variant acc WpStrategy.Ahyp vdecr_id vdecr in
+    add_variant acc WpStrategy.Ahyp vpos_id vpos
   in
   let add_goal acc =
     let acc =
       if goal_to_select config vdecr_id then
-        add acc WpStrategy.Agoal vdecr_id vdecr
+        add_variant acc WpStrategy.Agoal vdecr_id vdecr
       else acc
     in if goal_to_select config vpos_id then
-      add acc WpStrategy.Agoal vpos_id vpos
+      add_variant acc WpStrategy.Agoal vpos_id vpos
     else acc
   in
   let loop_back =
@@ -803,41 +810,20 @@ let add_loop_invariant_annot config vloop s ca b_list inv acc =
   | TBRok
   | TBRpart (* TODO: PKPartial *)
     ->
-      if Wp_parameters.Invariants.get() then begin
-        let loop_core = add_prop_inv_fixpoint config loop_core
-            (WpStrategy.AcutB true) s ca inv
-        in assigns, loop_entry , loop_back , loop_core
-      end
-      else begin
-        let loop_entry = add_prop_inv_establish config loop_entry
+      begin
+        let loop_entry = add_prop_loop_inv ~established:true config loop_entry
             WpStrategy.Agoal s ca inv in
-        let loop_back = add_prop_inv_preserve config loop_back
+        let loop_back = add_prop_loop_inv ~established:false config loop_back
             WpStrategy.Agoal s ca inv in
         let loop_core = add_prop_inv_fixpoint config loop_core
             WpStrategy.Ahyp s ca inv in
         assigns, loop_entry , loop_back , loop_core
       end
-  | TBRhyp -> (* TODO : add more inv hyp ? *)
-      let kind =
-        if Wp_parameters.Invariants.get()
-        then (WpStrategy.AcutB false) else WpStrategy.Ahyp
-      in
-      let loop_core =
-        add_prop_inv_fixpoint config loop_core kind s ca inv
+  | TBRhyp ->
+      let kind = WpStrategy.Ahyp in
+      let loop_core = add_prop_inv_fixpoint config loop_core kind s ca inv
       in assigns, loop_entry , loop_back , loop_core
   | TBRno -> acc
-
-let add_stmt_invariant_annot config v s ca b_list inv ((b_acc, a_acc) as acc) =
-  let add_to_acc k =
-    let b_acc = add_prop_inv_fixpoint config b_acc k s ca inv in
-    (b_acc, a_acc)
-  in
-  let acc =
-    match is_annot_for_config config v s b_list with
-    | TBRok | TBRpart -> add_to_acc (WpStrategy.AcutB true)
-    | TBRhyp -> add_to_acc (WpStrategy.AcutB false)
-    | TBRno -> acc
-  in acc
 
 (** Returns the annotations for the three edges of the loop node:
  * - loop_entry : goals for the edge entering in the loop
@@ -868,7 +854,7 @@ let get_loop_annots config vloop s =
                 "At most one loop assigns can be associated to a behavior"
         in
         let assigns =
-          match is_annot_for_config config vloop s b_list with
+          match is_annot_for_config config ~loopassigns:true vloop s b_list with
           | TBRok | TBRpart ->
               check_assigns h_assigns (a,w),
               check_assigns g_assigns (a,w)
@@ -896,16 +882,16 @@ let get_loop_annots config vloop s =
 let get_stmt_annots config v s =
   let do_annot _ a ((b_acc, (a_acc, e_acc)) as acc) =
     match a.annot_content with
-    | AInvariant (b_list, loop_inv, inv) ->
+    | AInvariant (_blist, loop_inv, _inv) ->
         if loop_inv then (* see get_loop_annots *) acc
-        else if Wp_parameters.Invariants.get() then
-          add_stmt_invariant_annot config v s a b_list inv acc
-        else begin
-          Wp_parameters.warning ~once:true
-            "Ignored 'invariant' specification (use -wp-invariants option):@,  %a"
-            Printer.pp_code_annotation a;
-          acc
-        end
+        else
+          begin
+            Wp_parameters.warning ~once:true
+              "Unsupported generalized invariant, use loop invariant instead.\n\
+               Ignored invariant @[<hov 2>%a@]"
+              Printer.pp_code_annotation a;
+            acc
+          end
     | AAssert (b_list,p) ->
         let kf = config.kf in
         let acc = match is_annot_for_config config v s b_list with
@@ -925,10 +911,7 @@ let get_stmt_annots config v s =
     | AAssigns (_b_list, _assigns) ->
         (* loop assigns: see get_loop_annots *) acc
     | AVariant (_v, _rel) -> (* see get_loop_annots *) acc
-    | APragma _ ->
-        Wp_parameters.warning ~once:true "Ignored 'pragma' specification:@, %a"
-          Printer.pp_code_annotation a;
-        acc
+    | APragma _ -> acc
     | AStmtSpec (b_list, spec) ->
         if b_list <> [] then (* TODO ! *)
           Wp_parameters.warning ~once:true
@@ -1057,7 +1040,7 @@ let add_global_annotations annots =
   let rec do_global g =
     let (source,_) = Cil_datatype.Global_annotation.loc g in
     match g with
-    | Daxiomatic (_ax_name, globs,_) -> do_globals globs
+    | Daxiomatic (_ax_name, globs,_,_) -> do_globals globs
     | Dvolatile _ ->
         (* nothing to do *) ()
     | Dfun_or_pred _ ->
@@ -1074,7 +1057,7 @@ let add_global_annotations annots =
           "Model fields not handled yet (model field '%s' ignored)"
           mf.mi_name;
         ()
-    | Dcustom_annot (_c,_n,_) ->
+    | Dcustom_annot (_c,_n,_,_) ->
         Wp_parameters.warning ~source ~once:true
           "Custom annotation not handled (ignored)";
         ()
@@ -1083,7 +1066,7 @@ let add_global_annotations annots =
           "Global invariant not handled yet ('%s' ignored)"
           linfo.l_var_info.lv_name;
         ()
-    | Dlemma (name,_,_,_,_,_) ->
+    | Dlemma (name,_,_,_,_,_,_) ->
         WpStrategy.add_axiom annots (LogicUsage.logic_lemma name)
 
   and do_globals gs = List.iter do_global gs in
@@ -1118,12 +1101,11 @@ let build_bhv_strategy config =
   let annots = get_behavior_annots config in
   let annots = add_global_annotations annots in
   let desc = Format.asprintf "%a" pp_strategy_info config in
-  let new_loops = Wp_parameters.Invariants.get() in
   WpStrategy.mk_strategy desc config.cfg (behavior_name_of_config config)
-    new_loops WpStrategy.SKannots annots
+    WpStrategy.SKannots annots
 
 (* Visit the CFG to find all the internal statement specifications.
- * (see [HdefAnnotBhv] documentation for infomation about this table).
+ * (see [HdefAnnotBhv] documentation for information about this table).
 *)
 let internal_function_behaviors cfg =
   let def_annot_bhv = HdefAnnotBhv.create 42 in
@@ -1218,6 +1200,30 @@ let find_behaviors kf cfg ki bhv_names =
 (* Unreachable                                                                *)
 (*----------------------------------------------------------------------------*)
 
+class vexit kf acc =
+  object
+    inherit Visitor.frama_c_inplace
+    val mutable ips = acc
+    method acc = ips
+    method! vstmt_aux stmt =
+      Annotations.iter_code_annot
+        (fun _e ca ->
+           match ca.annot_content with
+           | AStmtSpec(_,spec) ->
+               List.iter
+                 (fun bhv ->
+                    List.iter
+                      (fun post ->
+                         if fst post = Exits then
+                           let ip = WpPropId.mk_stmt_post_id kf stmt bhv post in
+                           ips <- ip :: ips
+                      ) bhv.b_post_cond
+                 ) spec.spec_behavior
+           | _ -> ()
+        ) stmt ;
+      Cil.DoChildren
+  end
+
 let process_unreached_annots cfg =
   debug "collecting unreachable annotations@.";
   let unreached = Cil2cfg.unreachable_nodes cfg in
@@ -1242,12 +1248,17 @@ let process_unreached_annots cfg =
     | Cil2cfg.Vstart -> Wp_parameters.fatal "Start must be reachable"
     | Cil2cfg.VfctIn -> Wp_parameters.fatal "FctIn must be reachable"
     | Cil2cfg.VfctOut  -> List.fold_left (do_bhv Normal) acc spec.spec_behavior
-    | Cil2cfg.Vexit  -> List.fold_left (do_bhv Exits) acc spec.spec_behavior
+    | Cil2cfg.Vexit  ->
+        let acc = List.fold_left (do_bhv Exits) acc spec.spec_behavior in
+        let visitor = new vexit kf acc in
+        ignore Visitor.(visitFramacKf (visitor :> frama_c_visitor) kf) ;
+        visitor#acc
     | Cil2cfg.Vcall (s, _, call, _) ->
         Annotations.fold_code_annot (do_annot s) s acc @
         preconditions_at_call s call
     | Cil2cfg.Vstmt s
     | Cil2cfg.VblkIn (Cil2cfg.Bstmt s, _)
+    | Cil2cfg.VblkOut (Cil2cfg.Bstmt s, _)
     | Cil2cfg.Vtest (true, s, _) | Cil2cfg.Vloop (_, s) | Cil2cfg.Vswitch (s,_)
       -> Annotations.fold_code_annot (do_annot s) s acc
     | Cil2cfg.Vtest (false, _, _) | Cil2cfg.Vloop2 _
@@ -1274,7 +1285,7 @@ let build_configs assigns kf model behaviors ki property =
     | None -> ()
     | Some Kglobal ->
         debug
-          "[get_strategies] select in function properies@."
+          "[get_strategies] select in function properties@."
     | Some (Kstmt s) ->
         debug
           "[get_strategies] select stmt %d properties@." s.sid
@@ -1313,7 +1324,7 @@ let get_precond_strategies ~model p =
         else []
       in
       let call_sites = Kernel_function.find_syntactic_callsites kf in
-      let add_call_pre_stategy acc (kf_caller, stmt) =
+      let add_call_pre_strategy acc (kf_caller, stmt) =
         let asked = CallPre (stmt, Some p) in
         get_strategies NoAssigns kf_caller model [] None asked @ acc
       in
@@ -1322,7 +1333,7 @@ let get_precond_strategies ~model p =
            "No direct call sites for function '%a': cannot check pre-conditions"
            Kernel_function.pretty kf;
          strategies)
-      else List.fold_left add_call_pre_stategy strategies call_sites
+      else List.fold_left add_call_pre_strategy strategies call_sites
   | _ ->
       invalid_arg "[get_precond_strategies] not a function precondition"
 
@@ -1343,6 +1354,10 @@ let get_call_pre_strategies ~model stmt =
             let asked = CallPre (stmt, None) in
             get_strategies NoAssigns kf_caller model [] None asked
       in strategies
+  | Instr(Local_init(_, ConsInit _, _)) ->
+      let kf_caller = Kernel_function.find_englobing_kf stmt in
+      let asked = CallPre(stmt, None) in
+      get_strategies NoAssigns kf_caller model [] None asked
   | _ -> Wp_parameters.warning
            "[get_call_pre_strategies] this is not a call statement"; []
 

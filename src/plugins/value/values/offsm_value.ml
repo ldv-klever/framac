@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -63,7 +63,8 @@ let basic_paste ?(start=Int.zero) ~src ~size_src dst =
 let basic_find ?(start=Int.zero) ~size o =
   let validity = enough_validity ~start ~size in
   let offsets = Ival.inject_singleton start in
-  snd (V_Offsetmap.find ~validity ~offsets ~size o)
+  let _, v = V_Offsetmap.find ~validity ~offsets ~size o in
+  V_Or_Uninitialized.map (fun v -> V.reinterpret_as_int ~signed:false ~size v) v
 
 (* Paste [v] of size [size] at position [start] in [o] *)
 let basic_add ?(start=Int.zero) ~size v o =
@@ -92,8 +93,8 @@ let read_bit o bit =
     | false, false (* bottom *) -> `Zero
   with V.Not_based_on_null -> `ZeroOne
 
-(** Decompose the range [b..e] (inclusive) of [a] into ranges of consecutive
-    equal bits. Raise [NotConstant] if [o] is not constant on this range. *)
+(** Decompose the range [b..e] (inclusive) of [o] into ranges of consecutive
+    equal bits. *)
 let explode_range o (b, e) =
   (* result. only [b..e] will be modified *)
   let r = ref o in
@@ -128,7 +129,7 @@ let explode_range o (b, e) =
 let explode o =
   let r = ref o in
   let aux (e, b) _ =
-    r := explode_range o (Integer.to_int e, Integer.to_int b)
+    r := explode_range !r (Integer.to_int e, Integer.to_int b)
   in
   V_Offsetmap.iter aux o;
   List.rev (V_Offsetmap.fold (fun r v acc -> (r, v) :: acc) !r [])
@@ -388,6 +389,12 @@ module Offsm : Abstract_value.Internal with type t = offsm_or_top = struct
 
   let structure = Structure.Key_Value.Leaf offsm_key
 
+  let pretty_typ typ fmt = function
+    | Top as o -> pretty fmt o
+    | O o ->
+      Format.fprintf fmt "O @[%a@]"
+        (V_Offsetmap.pretty_generic ?typ ()) o
+
   let top = Top
 
   let is_included o1 o2 = match o1, o2 with
@@ -402,7 +409,7 @@ module Offsm : Abstract_value.Internal with type t = offsm_or_top = struct
   let narrow o1 o2 = match o1, o2 with
     | Top, o | o, Top -> `Value o
     | O o1, O o2 ->
-      V_Offsetmap.narrow o1 o2 >>-: (fun o -> O o)
+      V_Offsetmap.narrow_reinterpret o1 o2 >>-: (fun o -> O o)
 
   (* Simple values cannot be injected because we do not known their type
      (hence size in bits *)
@@ -419,16 +426,13 @@ module Offsm : Abstract_value.Internal with type t = offsm_or_top = struct
   let inject_address _ = Top
 
   let constant e _c =
-    let o =
       if store_redundant then
         match Cil.constFoldToInt e with
         | Some i -> inject_int (Cil.typeOf e) i
         | None -> Top
       else Top
-    in
-    `Value o, Alarmset.all
 
-  let resolve_functions ~typ_pointer:_ _ = `Top, true (* TODO: extract value *)
+  let resolve_functions _ = `Top, true (* TODO: extract value *)
 
   let forward_unop ~context:_ _typ op o =
     let o' = match o, op with
@@ -465,9 +469,11 @@ module Offsm : Abstract_value.Internal with type t = offsm_or_top = struct
   let backward_cast ~src_typ:_ ~dst_typ:_ ~src_val:_ ~dst_val:_ =
     `Value None
 
-  let reinterpret _e _typ o = `Value o, Alarmset.all
+  let truncate_integer _e _range o = `Value o, Alarmset.all
+  let rewrap_integer _range o = o
+  let restrict_float ~remove_infinite:_ _e _fkind o = `Value o, Alarmset.all
 
-  let do_promotion ~src_typ ~dst_typ _e o =
+  let cast ~src_typ ~dst_typ _e o =
     let o' =
       match o, ik_of_type src_typ, ik_of_type dst_typ with
       | Top, _, _ | _, None, _ | _, _, None -> Top
@@ -507,9 +513,9 @@ module CvalueOffsm : Abstract_value.Internal with type t = V.t * offsm_or_top
     | O o' ->
       let size = size typ in
       (* TODO: this should be done by the transfer function itself... *)
-      let v = Cvalue_forward.unsafe_reinterpret typ v in
+      let v = Cvalue_forward.reinterpret typ v in
       let v_o = V_Or_Uninitialized.get_v (basic_find ~size o') in
-      let v_o = Cvalue_forward.unsafe_reinterpret typ v_o in
+      let v_o = Cvalue_forward.reinterpret typ v_o in
       (V.narrow v v_o, o)
 
   let forward_unop ~context typ op p =
@@ -538,7 +544,7 @@ module CvalueOffsm : Abstract_value.Internal with type t = V.t * offsm_or_top
           let shiftn = if op = Shiftlt Check || op = Shiftlt Modulo then SLeft i else SRight (i, signed) in
           let o = shift (size typ) (to_offsm typ l) shiftn in
           Main_values.CVal.forward_binop ~context typ op v_l v_r >>=: fun v ->
-          strengthen_v typ (v, O o)
+          v, O o
         with V.Not_based_on_null | Ival.Not_Singleton_Int ->
           forward_binop ~context typ op l r
       end

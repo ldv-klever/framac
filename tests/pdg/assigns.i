@@ -1,11 +1,11 @@
 /* run.config
-  OPT: -journal-disable -pdg -pdg-print -calldeps -pdg-verbose 2
+  OPT: -journal-disable -val-show-progress -pdg -pdg-print -calldeps -pdg-verbose 2
 */
 
 unsigned int x, y;
 
 //@ assigns x \from x;
-void f();
+void f(void);
 
 int main() {
   x = 1U;

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,7 @@ type localizable =
   | PLval of (kernel_function option * kinstr * lval)
   | PExp of (kernel_function option * kinstr * exp)
   | PTermLval of (kernel_function option * kinstr * Property.t * term_lval)
-  | PVDecl of (kernel_function option * varinfo)
+  | PVDecl of (kernel_function option * kinstr * varinfo)
   | PGlobal of global
   | PIP of Property.t
 module Localizable =
@@ -51,7 +51,7 @@ module Localizable =
             Kinstr.equal ki1 ki2 && Property.equal pi1 pi2 &&
             Logic_utils.is_same_tlval lv1 lv2
         (* [JS 2008/01/21] term_lval are not shared: cannot use == *)
-        | PVDecl (_,v1), PVDecl (_,v2) -> Varinfo.equal v1 v2
+        | PVDecl (_,_,v1), PVDecl (_,_,v2) -> Varinfo.equal v1 v2
         | PExp (_,_,e1), PExp(_,_,e2) -> Cil_datatype.Exp.equal e1 e2
         | PIP ip1, PIP ip2 -> Property.equal ip1 ip2
         | PGlobal g1, PGlobal g2 -> Cil_datatype.Global.equal g1 g2
@@ -59,22 +59,25 @@ module Localizable =
           | PIP _ | PGlobal _), _
           ->  false
       let mem_project = Datatype.never_any_project
+      let pp_ki_loc fmt ki =
+        match ki with
+        | Kglobal -> (* no location, print 'global' *)
+          Format.fprintf fmt "global"
+        | Kstmt st ->
+          Format.fprintf fmt "%a" Cil_datatype.Location.pretty (Stmt.loc st)
       let pretty fmt = function
         | PStmt (_, s) -> Format.fprintf fmt "LocalizableStmt %d (%a)"
                             s.sid Printer.pp_location (Cil_datatype.Stmt.loc s)
         | PLval (_, ki, lv) ->
             Format.fprintf fmt "LocalizableLval %a (%a)"
-              Printer.pp_lval lv
-              Cil_datatype.Location.pretty (Cil_datatype.Kinstr.loc ki)
+              Printer.pp_lval lv pp_ki_loc ki
         | PExp (_, ki, lv) ->
             Format.fprintf fmt "LocalizableExp %a (%a)"
-              Printer.pp_exp lv
-              Cil_datatype.Location.pretty (Cil_datatype.Kinstr.loc ki)
+              Printer.pp_exp lv pp_ki_loc ki
         | PTermLval (_, ki, _pi, tlv) ->
             Format.fprintf fmt "LocalizableTermLval %a (%a)"
-              Printer.pp_term_lval tlv
-              Cil_datatype.Location.pretty (Cil_datatype.Kinstr.loc ki)
-        | PVDecl (_, vi) ->
+              Printer.pp_term_lval tlv pp_ki_loc ki
+        | PVDecl (_, _, vi) ->
             Format.fprintf fmt "LocalizableVDecl %a" Printer.pp_varinfo vi
         | PGlobal g ->
             Format.fprintf fmt "LocalizableGlobal %a" Printer.pp_global g
@@ -86,7 +89,7 @@ let kf_of_localizable loc = match loc with
   | PLval (kf_opt, _, _)
   | PExp (kf_opt,_,_)
   | PTermLval(kf_opt, _,_,_)
-  | PVDecl (kf_opt, _) -> kf_opt
+  | PVDecl (kf_opt, _, _) -> kf_opt
   | PStmt (kf, _) -> Some kf
   | PIP ip -> Property.get_kf ip
   | PGlobal (GFun ({svar = vi}, _)) -> Some (Globals.Functions.get vi)
@@ -95,8 +98,8 @@ let kf_of_localizable loc = match loc with
 let ki_of_localizable loc = match loc with
   | PLval (_, ki, _)
   | PExp (_, ki, _)
-  | PTermLval(_, ki,_,_) -> ki
-  | PVDecl (_, _) -> Kglobal
+  | PTermLval(_, ki,_,_)
+  | PVDecl (_, ki, _) -> ki
   | PStmt (_, st) -> Kstmt st
   | PIP ip -> Property.get_kinstr ip
   | PGlobal _ -> Kglobal
@@ -248,7 +251,7 @@ struct
       | ((pb,pe),Some v) -> ((pb,pe),v)
 
   (* find the next loc in array starting at index i
-     which satifies the predicate;
+     which satisfies the predicate;
      raises Not_found if none exists *)
   let find_next arr i predicate =
     let rec fnext i =
@@ -258,6 +261,19 @@ struct
     in fnext i
 
 end
+
+(* Set of callsite statements where preconditions must be unfolded. *)
+let unfold_preconds = Cil_datatype.Stmt.Hashtbl.create 8
+
+(* Fold or unfold the preconditions at callsite [stmt]. *)
+let fold_preconds_at_callsite stmt =
+  if Cil_datatype.Stmt.Hashtbl.mem unfold_preconds stmt
+  then Cil_datatype.Stmt.Hashtbl.remove unfold_preconds stmt
+  else Cil_datatype.Stmt.Hashtbl.replace unfold_preconds stmt ()
+
+let are_preconds_unfolded stmt =
+  Cil_datatype.Stmt.Hashtbl.mem unfold_preconds stmt
+
 
 module Tag = struct
   exception Wrong_decoder
@@ -337,8 +353,6 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
       | None -> None
       | Some fd -> Some (Globals.Functions.get fd)
 
-    val mutable localize_predicate = true (* wrap all identified predicates *)
-
     val mutable current_ca = None
 
     val mutable active_behaviors = []
@@ -350,7 +364,55 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
         Property.Id_contract (active ,Extlib.the self#current_behavior)
       | Some ca -> Property.Id_loop ca
 
+    (* When [stmt] is a call, this method "inlines" the preconditions of the
+       functions that may be called here, with some context. This way,
+       bullets are more precise, etc. *)
+    method private preconditions_at_call fmt stmt =
+      match stmt.skind with
+      | Instr (Call _)
+      | Instr (Local_init (_, ConsInit _, _)) ->
+        let extract_instance_predicate = function
+          | Property.IPPropertyInstance (_kf, _stmt, pred, _prop) -> pred
+          | _ -> assert false
+        in
+        let extract_predicate = function
+          | Property.IPPredicate (_, _, _, p) -> p
+          | _ -> assert false
+        in
+        (* Functons called at this point *)
+        let called = Statuses_by_call.all_functions_with_preconditions stmt in
+        let warn_missing = false in
+        let add_by_kf kf acc =
+          let ips =
+            Statuses_by_call.all_call_preconditions_at ~warn_missing kf stmt
+          in
+          if ips = [] then acc else (kf, ips) :: acc
+        in
+        let ips_all_kfs = Kernel_function.Hptset.fold add_by_kf called [] in
+        let pp_one fmt (original_p, p) =
+          match extract_instance_predicate p with
+          | Some pred -> Format.fprintf fmt "@[%a@]" self#requires_aux (p, pred)
+          | None ->
+            let pred = extract_predicate original_p in
+            (* Makes the original predicate non clickable, as it may involve
+               the formal parameters which are not in scope at the call site. *)
+            Format.fprintf fmt "@[Non transposable: %s@]"
+              (Format.asprintf "@[%a@]" self#requires_aux (original_p, pred))
+        in
+        let pp_by_kf fmt (kf, ips) =
+          Format.fprintf fmt "@[preconditions of %a:@]@ %a"
+            Kernel_function.pretty kf
+            (Pretty_utils.pp_list ~pre:"" ~sep:"@ " ~suf:"" pp_one) ips
+        in
+        if ips_all_kfs <> [] then
+          Pretty_utils.pp_list ~pre:"@[<v 3>/* " ~sep:"@ " ~suf:" */@]@ "
+            pp_by_kf fmt ips_all_kfs
+      | _ -> ()
+
+
     method! next_stmt next fmt current =
+      if Cil_datatype.Stmt.Hashtbl.mem unfold_preconds current
+      then self#preconditions_at_call fmt current;
       Format.fprintf fmt "@{<%s>%a@}"
         (Tag.create (PStmt (Extlib.the self#current_kf,current)))
         (super#next_stmt next) current
@@ -410,7 +472,7 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
 
     method! vdecl fmt vi =
       Format.fprintf fmt "@{<%s>%a@}"
-        (Tag.create (PVDecl (self#current_kf,vi)))
+        (Tag.create (PVDecl (self#current_kf, self#current_kinstr, vi)))
         super#vdecl vi
 
     method private tag_property p =
@@ -429,11 +491,9 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
               (Extlib.the self#current_stmt)
               ca
           in
-          localize_predicate <- false;
           Format.fprintf fmt "@{<%s>%a@}"
             (self#tag_property ip)
             super#code_annotation ca;
-          localize_predicate <- true
       | AStmtSpec (active,_) | AExtended(active,_) ->
           (* tags will be set in the inner nodes. *)
           active_behaviors <- active;
@@ -456,15 +516,25 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
             super#global
             g
 
-    method! requires fmt p =
-      localize_predicate <- false;
-      let b = Extlib.the self#current_behavior in
+    method! extended fmt (id,name, ext) =
       Format.fprintf fmt "@{<%s>%a@}"
         (self#tag_property
-           (Property.ip_of_requires
-              (Extlib.the self#current_kf) self#current_kinstr b p))
+           (Property.ip_of_extended
+              (Extlib.the self#current_kf) self#current_kinstr (id,name,ext)))
+        super#extended (id,name,ext);
+
+    method private requires_aux fmt (ip, p) =
+      Format.fprintf fmt "@{<%s>%a@}"
+        (self#tag_property ip)
         super#requires p;
-      localize_predicate <- true
+
+    method! requires fmt p =
+      let b = Extlib.the self#current_behavior in
+      let ip =
+        Property.ip_of_requires
+          (Extlib.the self#current_kf) self#current_kinstr b p
+      in
+      self#requires_aux fmt (ip, p)
 
     method! behavior fmt b =
       Format.fprintf fmt "@{<%s>%a@}"
@@ -476,22 +546,18 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
         super#behavior b
 
     method! decreases fmt t =
-      localize_predicate <- false;
       Format.fprintf fmt "@{<%s>%a@}"
         (self#tag_property
            (Property.ip_of_decreases
               (Extlib.the self#current_kf) self#current_kinstr t))
         super#decreases t;
-      localize_predicate <- true
 
     method! terminates fmt t =
-      localize_predicate <- false;
       Format.fprintf fmt "@{<%s>%a@}"
         (self#tag_property
            (Property.ip_of_terminates
               (Extlib.the self#current_kf) self#current_kinstr t))
         super#terminates t;
-      localize_predicate <- true
 
     method! complete_behaviors fmt t =
       Format.fprintf fmt "@{<%s>%a@}"
@@ -514,24 +580,20 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
         super#disjoint_behaviors t
 
     method! assumes fmt p =
-      localize_predicate <- false;
       let b = Extlib.the self#current_behavior in
       Format.fprintf fmt "@{<%s>%a@}"
         (self#tag_property
            (Property.ip_of_assumes
               (Extlib.the self#current_kf) self#current_kinstr b p))
         super#assumes p;
-      localize_predicate <- true
 
     method! post_cond fmt pc =
-      localize_predicate <- false;
       let b = Extlib.the self#current_behavior in
       Format.fprintf fmt "@{<%s>%a@}"
         (self#tag_property
            (Property.ip_of_ensures
               (Extlib.the self#current_kf) self#current_kinstr b pc))
         super#post_cond pc;
-      localize_predicate <- true
 
     method! assigns s fmt a =
       match
@@ -570,10 +632,8 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
       with
         None -> super#allocation ~isloop fmt a
       | Some ip ->
-          localize_predicate <- true;
           Format.fprintf fmt "@{<%s>%a@}"
             (Tag.create (PIP ip)) (super#allocation ~isloop) a;
-          localize_predicate <- false;
 
     method! stmtkind next fmt sk =
       (* Special tag denoting the start of the statement, WITHOUT any ACSL
@@ -583,17 +643,6 @@ module TagPrinterClassDeferred (X: Printer.PrinterClass) = struct
 
     initializer force_brace <- true
 
-    (* Not used anymore: all identified predicates are selectable somewhere up
-        - assert and loop invariants are PCodeAnnot
-        - contracts members have a dedicated tag.
-    *)
-    (* method pIdentified_predicate fmt ip =
-       if localize_predicate then
-         Format.fprintf fmt "@{<%s>%a@}"
-           (Tag.create (PPredicate (self#current_kf,self#current_kinstr,ip)))
-           super#identified_predicate ip
-       else super#identified_predicate fmt ip
-    *)
   end
 end
 
@@ -606,11 +655,14 @@ let equal_or_same_loc loc1 loc2 =
   Localizable.equal loc1 loc2 ||
   match loc1, loc2 with
   | PIP (Property.IPReachable (_, Kstmt s, _)), PStmt (_, s')
-  | PStmt (_, s'), PIP (Property.IPReachable (_, Kstmt s, _)) when
+  | PStmt (_, s'), PIP (Property.IPReachable (_, Kstmt s, _))
+  | PIP (Property.IPPropertyInstance (_, s, _, _)), PStmt (_, s')
+  | PStmt (_, s'), PIP (Property.IPPropertyInstance (_, s, _, _))
+    when
       Cil_datatype.Stmt.equal s s' -> true
   | PIP (Property.IPReachable (Some kf, Kglobal, _)),
-    (PVDecl (_, vi) | PGlobal (GFun ({ svar = vi }, _)))
-  | (PVDecl (_, vi) | PGlobal (GFun ({ svar = vi }, _))),
+    (PVDecl (_, _, vi) | PGlobal (GFun ({ svar = vi }, _)))
+  | (PVDecl (_, _, vi) | PGlobal (GFun ({ svar = vi }, _))),
     PIP (Property.IPReachable (Some kf, Kglobal, _))
     when Kernel_function.get_vi kf = vi
     -> true
@@ -636,7 +688,7 @@ let localizable_from_locs state ~file ~line =
                 None -> Location.unknown
               | Some kf -> Kernel_function.get_location kf)
          | Kstmt st -> Stmt.loc st)
-    | PVDecl (_,vi) -> vi.vdecl
+    | PVDecl (_,_,vi) -> vi.vdecl
     | PGlobal g -> Global.loc g
     | (PLval _ | PTermLval _ | PExp _) as localize ->
         (match kf_of_localizable localize with
@@ -894,20 +946,22 @@ class pos_to_localizable =
           match self#current_kf with
           | None -> (* should not happen*) ()
           | Some kf ->
-              self#add_range vi.vdecl (PVDecl (Some kf, vi));
+            self#add_range vi.vdecl (PVDecl (Some kf,self#current_kinstr,vi));
         end;
       Cil.DoChildren
 
     method! vglob_aux g =
       (match g with
        | GFun ({ svar = vi }, loc) ->
-           self#add_range loc (PVDecl (Some (Globals.Functions.get vi), vi))
+         self#add_range loc
+           (PVDecl (Some (Globals.Functions.get vi), Kglobal, vi))
        | GVar (vi, _, loc) ->
-           self#add_range loc (PVDecl (None, vi))
+         self#add_range loc (PVDecl (None, Kglobal, vi))
        | GFunDecl (_, vi, loc) ->
-           self#add_range loc (PVDecl (Some (Globals.Functions.get vi), vi))
+         self#add_range loc
+           (PVDecl (Some (Globals.Functions.get vi), Kglobal, vi))
        | GVarDecl (vi, loc) ->
-           self#add_range loc (PVDecl (None, vi))
+         self#add_range loc (PVDecl (None, Kglobal, vi))
        | _ -> self#add_range (Global.loc g) (PGlobal g)
       );
       Cil.DoChildren

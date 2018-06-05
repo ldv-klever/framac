@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -48,8 +48,10 @@ FRAMAC_PLUGINDIR ?=$(FRAMAC_LIBDIR)/plugins
 FRAMAC_DATADIR 	?=$(DATADIR)/frama-c
 EMACS_DATADIR	?=$(DATADIR)/emacs/site-lisp
 FRAMAC_DEFAULT_CPP ?=@FRAMAC_DEFAULT_CPP@
+FRAMAC_DEFAULT_CPP_ARGS ?= @FRAMAC_DEFAULT_CPP_ARGS@
 FRAMAC_GNU_CPP ?=@FRAMAC_GNU_CPP@
 DEFAULT_CPP_KEEP_COMMENTS?=@DEFAULT_CPP_KEEP_COMMENTS@
+DEFAULT_CPP_SUPPORTED_ARCH_OPTS?=@DEFAULT_CPP_SUPPORTED_ARCH_OPTS@
 CC =@CC@
 
 ###############
@@ -75,13 +77,16 @@ OCAMLLIB	?=@OCAMLLIB@
 # either opt or byte
 OCAMLBEST	?=@OCAMLBEST@
 OCAMLVERSION 	?=@OCAMLVERSION@
-NATIVE_DYNLINK  ?=@HAS_NATIVE_DYNLINK@
-USABLE_NATIVE_DYNLINK ?=@HAS_USABLE_NATIVE_DYNLINK@
 NATIVE_THREADS	?=@HAS_NATIVE_THREADS@
 OCAMLWIN32	?=@OCAMLWIN32@
 PTESTSBEST      ?=@PTESTSBEST@
 
 DEVELOPMENT	?=@DEVELOPMENT@
+
+# Compatibility across OCaml versions
+
+SPLIT_ON_CHAR ?= @SPLIT_ON_CHAR@
+STACK_FOLD ?= @STACK_FOLD@
 
 #############
 # Libraries #
@@ -98,13 +103,14 @@ HAS_GTKSOURCEVIEW ?=@HAS_GTKSOURCEVIEW@
 # lablgnomecanvas
 HAS_GNOMECANVAS	?=@HAS_GNOMECANVAS@
 
-# zarith
-HAS_ZARITH	?=@HAS_ZARITH@
-ZARITH_PATH	?=@ZARITH_PATH@
+# yojson
+HAS_YOJSON	?=@HAS_YOJSON@
 
 # apron
 HAS_APRON	?=@HAS_APRON@
-APRON_PATH	?=@APRON_PATH@
+
+# landmarks
+HAS_LANDMARKS	?=@HAS_LANDMARKS@
 
 ##########################
 # Miscellaneous commands #
@@ -153,28 +159,15 @@ ENABLE_SPARECODE                  ?=@ENABLE_SPARECODE@
 ENABLE_USERS	                  ?=@ENABLE_USERS@
 ENABLE_VALUE_ANALYSIS             ?=@ENABLE_VALUE_ANALYSIS@
 
-DYNAMIC_CALLGRAPH                 ?=@DYNAMIC_CALLGRAPH@
-DYNAMIC_CONSTANT_PROPAGATION      ?=@DYNAMIC_SEMANTIC_CONSTANT_FOLDING@
-DYNAMIC_FROM_ANALYSIS             ?=@DYNAMIC_FROM_ANALYSIS@
-#DYNAMIC_GUI: never dynamic
-DYNAMIC_IMPACT	                  ?=@DYNAMIC_IMPACT@
-DYNAMIC_INOUT                     ?=@DYNAMIC_INOUT@
-DYNAMIC_METRICS                   ?=@DYNAMIC_METRICS@
-DYNAMIC_OCCURRENCE                ?=@DYNAMIC_OCCURRENCE@
-DYNAMIC_PDG                       ?=@DYNAMIC_PDG@
-DYNAMIC_POSTDOMINATORS            ?=@DYNAMIC_POSTDOMINATORS@
-DYNAMIC_RTEGEN                    ?=@DYNAMIC_RTEGEN@
-DYNAMIC_SCOPE                     ?=@DYNAMIC_SCOPE@
-DYNAMIC_SLICING                   ?=@DYNAMIC_SLICING@
-DYNAMIC_SPARECODE                 ?=@DYNAMIC_SPARECODE@
-DYNAMIC_USERS                     ?=@DYNAMIC_USERS@
-DYNAMIC_VALUE_ANALYSIS            ?=@DYNAMIC_VALUE_ANALYSIS@
-
 #bytes is part of the stdlib, but is used as a transitional package.
-LIBRARY_NAMES := findlib ocamlgraph num unix str dynlink bytes
+LIBRARY_NAMES := findlib ocamlgraph unix str dynlink bytes zarith
 
-ifeq ($(HAS_ZARITH),yes)
-LIBRARY_NAMES += zarith
+ifeq ($(HAS_LANDMARKS),yes)
+LIBRARY_NAMES += landmarks landmarks.ppx
+endif
+
+ifeq ($(HAS_YOJSON),yes)
+LIBRARY_NAMES += yojson
 endif
 
 ifneq ($(ENABLE_GUI),no)

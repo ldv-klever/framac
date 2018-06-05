@@ -1,13 +1,13 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/pdg/annot.c (with preprocessing)
 [value] Analyzing a complete application starting at loop
 [value] Computing initial state
 [value] Initial state computed
 [value:initial-state] Values of globals at initialization
   G ∈ {0}
-tests/pdg/annot.c:22:[value] warning: loop invariant got status unknown.
-tests/pdg/annot.c:25:[value] entering loop for the first time
-tests/pdg/annot.c:26:[value] warning: signed overflow. assert s + 2 ≤ 2147483647;
+[value:alarm] tests/pdg/annot.c:22: Warning: loop invariant got status unknown.
+[value] tests/pdg/annot.c:25: entering loop for the first time
+[value:alarm] tests/pdg/annot.c:26: Warning: 
+  signed overflow. assert s + 2 ≤ 2147483647;
 [value] Recording results for loop
 [value] done for function loop
 [pdg] computing for function loop
@@ -20,7 +20,7 @@ tests/pdg/annot.c:26:[value] warning: signed overflow. assert s + 2 ≤ 21474836
    -[a--]-> 2
  {n4}: VarDecl : i
  {n5}: VarDecl : s
- {n6}: s = 0;
+ {n6}: int s = 0;
    -[-c-]-> 1
    -[a--]-> 5
  {n7}: i = 0;

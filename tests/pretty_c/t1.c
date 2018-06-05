@@ -1,3 +1,6 @@
+/*run.config
+  STDOPT: +"-no-val-alloc-returns-null"
+*/
 static int a;
 static int b = 4;
 
@@ -11,7 +14,7 @@ int main (int c) {
   a--;
   x = !!c;
   p = p + 1;
-  int * q = Frama_C_alloc_size(sizeof(int));
+  int * q = Frama_C_malloc_fresh(sizeof(int));
   *q = 12;
   Frama_C_dump_each();
   Frama_C_dump_assert_each(); 

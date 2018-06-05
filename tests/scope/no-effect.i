@@ -1,5 +1,5 @@
 /* run.config
-   OPT: -val -print -journal-disable -scope-verbose 1 -remove-redundant-alarms
+   OPT: -val-show-progress -val -print -journal-disable -scope-verbose 1 -remove-redundant-alarms
 */
 
 typedef struct {
@@ -7,8 +7,6 @@ typedef struct {
 } tt;
 
 void main (const tt *p1) {
-  int i;
-  int j;
   while(1) {
   switch ((p1+1)->v) {
   case 1:

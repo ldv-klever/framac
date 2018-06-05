@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,6 +48,11 @@ val accept_base :
     - a global
     - a formal or local of one of the callers of [kf]
     - a formal or local of [kf] and the corresponding argument is [true]. *)
+
+val nb_calls: unit -> int
+(** @return the number of function calls in the whole callgraph. It is not
+    (necessarily) equal to the number of graph edges (depending on the
+    underlying graph datastructure) *)
 
 (*
 Local Variables:

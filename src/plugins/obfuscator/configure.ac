@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -33,6 +33,6 @@ m4_ifndef([FRAMAC_M4_MACROS],
          [m4_include(FRAMAC_SHARE/configure.ac)]
         )
 
-check_plugin(obfuscator,PLUGIN_RELATIVE_PATH(plugin_file),[support for Obfuscator plug-in],yes,yes)
+check_plugin(obfuscator,PLUGIN_RELATIVE_PATH(plugin_file),[support for Obfuscator plug-in],yes)
 
 write_plugin_config(Makefile)

@@ -97,7 +97,29 @@ let adjust_assigns_clause loc var code_annot =
     | AStmtSpec (_,s) -> List.iter adjust_clause s.spec_behavior
     | _ -> ()
 
-let oneret (f: fundec) : unit =
+type returns_clause =
+  Cil_types.stmt * Cil_types.behavior * Cil_types.identified_predicate
+
+type goto_annot =
+  Cil_types.stmt * Cil_types.code_annotation
+
+type callback = returns_clause -> goto_annot list -> unit
+
+let collect_returns (ca : Cil_types.code_annotation) =
+  match ca.annot_content with
+  | AStmtSpec(_bhvs,spec) ->
+    List.fold_left
+      (fun acc bhv ->
+         List.fold_left
+           (fun acc (kind,predicate) ->
+              match kind with
+              | Returns -> (bhv,predicate) :: acc
+              | _ -> acc
+           ) acc bhv.b_post_cond
+      ) [] spec.spec_behavior
+  | _ -> []
+
+let oneret ?(callback: callback option) (f: fundec) : unit =
   let fname = f.svar.vname in
   (* Get the return type *)
   let retTyp =
@@ -135,7 +157,8 @@ let oneret (f: fundec) : unit =
   in
   let assert_of_returns ca =
     match ca.annot_content with
-      | AAssert _ | AInvariant _ | AVariant _ | AAssigns _ | AAllocation _ | APragma _ | AExtended _ -> ptrue
+      | AAssert _ | AInvariant _ | AVariant _
+      | AAssigns _ | AAllocation _ | APragma _ | AExtended _ -> ptrue
       | AStmtSpec (_bhvs,s) ->
         let res =
           List.fold_left
@@ -196,15 +219,19 @@ let oneret (f: fundec) : unit =
      TODO: split that into behaviors and generates for foo,bar: assert instead
      of plain assert.
    *)
-  let returns_clause_stack = Stack.create () in
-  let stmt_contract_stack = Stack.create () in
-  let rec popn n =
-    if n > 0 then begin
-      assert (not (Stack.is_empty returns_clause_stack));
-      ignore (Stack.pop returns_clause_stack);
-      ignore (Stack.pop stmt_contract_stack);
-      popn (n-1)
-    end
+  let returns_stack :
+    (Cil_types.predicate * Cil_types.stmt * Cil_types.code_annotation) Stack.t
+    = Stack.create () in
+  let popn n =
+    try for _ = 1 to n do ignore (Stack.pop returns_stack) done
+    with Stack.Empty -> assert false
+  in
+  let to_callback = Hashtbl.create 8 in
+  let do_callback cb = Hashtbl.iter (fun _ (ca,gs) -> cb ca gs) to_callback in
+  let register_goto (ca : returns_clause) (gc : goto_annot) =
+    let (_,_, { ip_id }) = ca in
+    let gs = try snd (Hashtbl.find to_callback ip_id) with Not_found -> [] in
+    Hashtbl.replace to_callback ip_id (ca,gc::gs)
   in
   (* Now scan all the statements. Know if you are the main body of the
    * function and be prepared to add new statements at the end.
@@ -253,35 +280,56 @@ let oneret (f: fundec) : unit =
           | None -> Instr (Skip loc)
       end;
       let returns_assert = ref ptrue in
-      Stack.iter (fun p -> returns_assert := pand ~loc (p, !returns_assert))
-        returns_clause_stack;
+      Stack.iter
+        (fun (p,_,_) -> returns_assert := pand ~loc (p, !returns_assert))
+        returns_stack;
       (match retval with
         | Some _ ->
+         let lvar = Cil.cvar_to_lvar (getRetVar()) in
             Stack.iter
-              (adjust_assigns_clause loc (Cil.cvar_to_lvar (getRetVar())))
-              stmt_contract_stack;
+           (fun (_,_,ca) -> adjust_assigns_clause loc lvar ca.annot_content)
+           returns_stack
         | None -> () (* There's no \result: no need to adjust it *)
       );
-      let add_assert res =
-        match !returns_assert with
-          | { pred_content = Ptrue } -> res
-          | p ->
-            let a =
-              Logic_const.new_code_annotation (AAssert ([],p))
-            in
-            mkStmt (Instr(Code_annot (a,loc))) :: res
-      in
-    (* See if this is the last statement in function *)
-      if mainbody && rests == [] then begin
-        popn popstack;
-        scanStmts (add_assert (s::acc)) mainbody 0 rests
+      (* See if this is the last statement in function, and we don't
+         have a statement contract above us. In that last case, it is best
+         to keep a small block with a goto the actual return statement, so
+         as to preserve the fact that we don't fall through the return
+         statement. In particular, the following contract holds, and so should
+         its normalization:
+
+         /*@ returns \true; ensures \false; */
+         returns 0;
+      *)
+      if mainbody && rests == [] && popstack = 0 then begin
+        (* last statement, no contract, we can just fall through. *)
+        scanStmts (s :: acc) mainbody 0 rests
       end else begin
-      (* Add a Goto *)
+      (* Add a Goto and put everything into a block on which
+         the statement contract(s) will apply.
+       *)
         let sgref = ref (getRetStmt ()) in
         let sg = mkStmt (Goto (sgref, loc)) in
         haveGoto := true;
+        let b_stmts =
+          match !returns_assert with
+          | { pred_content = Ptrue } -> [s; sg]
+          | p ->
+            let a = Logic_const.new_code_annotation (AAssert ([],p)) in
+            let sta = mkStmt (Instr (Code_annot (a,loc))) in
+            if callback<>None then
+              ( let gclause = sta , a in
+                Stack.iter
+                  (fun (_,str,ca) ->
+                     List.iter
+                       (fun (bhv,ret) -> register_goto (str,bhv,ret) gclause)
+                       (collect_returns ca)
+                  ) returns_stack ) ;
+            [ s; sta; sg ]
+        in
+        let s = mkStmt (Block (mkBlock b_stmts)) in
         popn popstack;
-        scanStmts (sg :: (add_assert (s::acc))) mainbody 0 rests
+        scanStmts (s :: acc) mainbody 0 rests
       end
 
     | ({skind=If(eb,t,e,l)} as s) :: rests ->
@@ -299,7 +347,14 @@ let oneret (f: fundec) : unit =
       s.skind <- Switch(e, scanBlock false b, cases, l);
       popn popstack;
       scanStmts (s::acc) mainbody 0 rests
-    | [{skind=Block b} as s] ->
+    | [{skind=Block b} as s] when popstack = 0 ->
+      (* if we have a statement contract just above (i.e popstack<>0),
+         don't consider that we are in the main body.
+         Depending on the semantics we want to give to ACSL contracts
+         wrt control flow that jumps in the middle of a block over which
+         a statement contract applies, this might lead to incorrect contract
+         in the end. For now, it's safer to ensure that the goto
+         is directed outside of such a block. *)
       s.skind <- Block (scanBlock mainbody b);
       popn popstack;
       List.rev (s::acc)
@@ -307,7 +362,8 @@ let oneret (f: fundec) : unit =
       s.skind <- Block (scanBlock false b);
       popn popstack;
       scanStmts (s::acc) mainbody 0 rests
-    | [{skind = UnspecifiedSequence seq} as s] ->
+    | [{skind = UnspecifiedSequence seq} as s] when popstack = 0 ->
+      (* see above. *)
       s.skind <-
         UnspecifiedSequence
         (List.concat
@@ -329,12 +385,14 @@ let oneret (f: fundec) : unit =
               seq));
       popn popstack;
       scanStmts (s::acc) mainbody 0 rests
-    | {skind=Instr(Code_annot (ca,_))} as s :: rests ->
+    | {skind=Instr(Code_annot ({ annot_content = AStmtSpec _ } as ca,_))} as s
+      :: rests ->
       let returns = assert_of_returns ca in
       let returns = Logic_utils.translate_old_label s returns in
-      Stack.push returns returns_clause_stack;
-      Stack.push ca.annot_content stmt_contract_stack;
+      Stack.push (returns,s,ca) returns_stack;
       scanStmts (s::acc) mainbody (popstack + 1) rests
+    | { skind = Instr (Code_annot _) } as s :: rests ->
+      scanStmts (s::acc) mainbody popstack rests
     | { skind = TryCatch(t,c,l) } as s :: rests ->
       let scan_one_catch (e,b) = (e,scanBlock false b) in
       let t = scanBlock false t in
@@ -356,7 +414,8 @@ let oneret (f: fundec) : unit =
     ignore (visitCilBlock dummyVisitor f.sbody) ; *)(* sets CurrentLoc *)
   (*CEA so, [scanBlock] will set [lastloc] when necessary
     lastloc := !currentLoc ;  *) (* last location in the function *)
-  f.sbody <- scanBlock true f.sbody
+  f.sbody <- scanBlock true f.sbody ;
+  Extlib.may do_callback callback
 
 (*
   Local Variables:

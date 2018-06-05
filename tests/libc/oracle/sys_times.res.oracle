@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/libc/sys_times.c (with preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -6,11 +5,16 @@
 [value:initial-state] Values of globals at initialization
   __fc_time ∈ [--..--]
   __fc_time_tm ∈ {0}
-  __p_fc_time_tm ∈ {{ &__fc_time_tm }}
+  __fc_p_time_tm ∈ {{ &__fc_time_tm }}
+  tzname[0] ∈ {{ NULL ; &S_0_tzname[0] }}
+        [1] ∈ {{ NULL ; &S_1_tzname[0] }}
+  S_0_tzname[0..1] ∈ [--..--]
+  S_1_tzname[0..1] ∈ [--..--]
 [value] computing for function times <- main.
-        Called from tests/libc/sys_times.c:6.
+  Called from tests/libc/sys_times.c:6.
 [value] using specification for function times
-share/libc/sys/times.h:36:[value] function times: precondition got status valid.
+[value] tests/libc/sys_times.c:6: 
+  function times: precondition 'valid_buffer' got status valid.
 [value] Done for function times
 [value] Recording results for main
 [value] done for function main

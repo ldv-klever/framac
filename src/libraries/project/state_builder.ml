@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -274,7 +274,11 @@ struct
           (* invariant: the found state is equal to the default one since it
              has been just created.
              Do not call Local_state.create to don't break sharing *)
-          (find p).state, false
+          try (find p).state, false
+          with Not_found ->
+            fatal "unknown project '%s' in state '%s'"
+              (Project.get_unique_name p)
+              !internal_name
       in
       change ~force:true p { state = s; computed = computed };
     end else begin
@@ -754,8 +758,6 @@ struct
       HW.clear t;
       add_initial_values t
 
-    let stats _ =
-      abort "Not implemented: stats for %s (Hashconsing_tbl_no_gc)" Info.name
     let fold f = HW.fold_sorted (fun v _ acc -> f v acc)
     let iter f = HW.iter_sorted (fun v _ -> f v)
     let mem = HW.mem

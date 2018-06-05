@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -55,13 +55,12 @@ and aggregator_type = EndedByNull
 and format_fun = {
   f_kind : Format_types.format_kind;
   f_buffer  : buffer;
-  f_additionnal_args : int list;
   f_format_pos : int;
-} 
+}
 
 and buffer =
 | StdIO (** Standard input/output (stdin/stdout/stderr) *)
-| Arg of int (* Position of the buffer argument *)
+| Arg of int * int option (* Position of the buffer and size arguments *)
 | Stream of int (* Position of the stream argument *)
 | File of int  (* Position of the file argument *)
 | Syslog (* Output to some system log *)
@@ -71,4 +70,7 @@ type variadic_function = {
   vf_decl: varinfo;
   vf_original_type: typ;
   vf_class: variadic_class;
+  mutable vf_specialization_count: int; (* The number of specializations of
+                                           this function built yet *)
 }
+

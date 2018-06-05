@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -27,9 +27,7 @@ ifndef FRAMAC_LIBDIR
 FRAMAC_LIBDIR :=$(shell frama-c-config -print-libpath)
 endif
 
-
 PLUGIN_ENABLE:=yes
-PLUGIN_DYNAMIC:=yes
 PLUGIN_DISTRIBUTED:=$(PLUGIN_ENABLE)
 
 PLUGIN_NAME:= LoopAnalysis
@@ -38,6 +36,16 @@ PLUGIN_DISTRIB_EXTERNAL:= Makefile.in configure.ac configure test.c test.oracle 
 PLUGIN_TESTS_DIRS:=loop_analysis
 
 include $(FRAMAC_SHARE)/Makefile.dynamic
+
+#####################################
+# Regenerating the Makefile on need #
+#####################################
+
+ifeq ("$(FRAMAC_INTERNAL)","yes")
+CONFIG_STATUS_DIR=$(FRAMAC_SRC)
+else
+CONFIG_STATUS_DIR=.
+endif
 
 $(LoopAnalysis_DIR)/Makefile: $(LoopAnalysis_DIR)/Makefile.in \
                          $(CONFIG_STATUS_DIR)/config.status

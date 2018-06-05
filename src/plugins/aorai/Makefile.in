@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Aorai plug-in of Frama-C.                        #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #    INRIA (Institut National de Recherche en Informatique et en         #
@@ -39,7 +39,6 @@ endif
 PLUGIN_DIR ?=.
 
 PLUGIN_ENABLE:=@ENABLE_AORAI@
-PLUGIN_DYNAMIC:=@DYNAMIC_AORAI@
 PLUGIN_NAME:=Aorai
 PLUGIN_GENERATED:= $(addprefix ${PLUGIN_DIR}/, \
 		promelalexer_withexps.ml promelaparser_withexps.ml \

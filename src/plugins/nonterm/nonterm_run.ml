@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -43,12 +43,16 @@ module Enabled =
 
 let () = Parameter_customize.argument_may_be_fundecl ()
 module Ignore =
-  Self.Kernel_function_set
+  Self.Filled_string_set
     (struct
       let option_name = "-nonterm-ignore"
       let arg_name = "f1,..,fn"
       let help = "ignore functions f1,..,fn and direct calls to them. \
-                  Calls via function pointers are not ignored."
+                  Functions prefixed with '-' are removed from the ignore \
+                  list. Calls via function pointers are never ignored. \
+                  By default, the following functions are ignored: \
+                  abort, exit"
+      let default = Datatype.String.Set.of_list ["abort"; "exit"]
     end)
 
 module DeadCode =
@@ -80,6 +84,8 @@ let pretty_stmt_kind fmt stmt =
   | Loop _ -> Format.fprintf fmt "loop"
   | Switch _ -> Format.fprintf fmt "switch"
   | Instr (Call _) -> Format.fprintf fmt "function call"
+  | Instr (Local_init(_,ConsInit _,_)) ->
+    Format.fprintf fmt "function call (initializer)"
   | _ -> Format.fprintf fmt "statement"
 
 let pp_numbered_stacks fmt callstacks =
@@ -236,14 +242,14 @@ let check_unreachable_statements kf ~to_ignore ~dead_code ~warned_kfs =
       via -val-use-spec.
    In case 2, the call is ignored because non-terminating statements inside
    it will already be reported. *)
-let ignore_kf name to_ignore =
+let ignore_kf name =
   try
     let kf = Globals.Functions.find_by_name name in
     let has_definition =
       try ignore (Kernel_function.get_definition kf); true
       with Kernel_function.No_Definition -> false
     in
-    match Kf.Set.mem kf to_ignore,
+    match Ignore.mem name,
           !Db.Value.use_spec_instead_of_definition kf,
           has_definition
     with
@@ -254,14 +260,15 @@ let ignore_kf name to_ignore =
 
 (* simple statement collector: accumulates a list of all
    statements, except calls to functions in [to_ignore]. *)
-class stmt_collector to_ignore = object
+class stmt_collector = object
   inherit Visitor.frama_c_inplace
   val instr_stmts = ref []
   method! vstmt stmt =
     begin
       match stmt.skind with
-      | Instr (Call (_, {enode = Lval (Var vi, _)}, _, _)) when
-          (ignore_kf vi.vname to_ignore) -> ()
+      | (Instr (Call (_, {enode = Lval (Var vi, _)}, _, _))
+        | Instr (Local_init (_, ConsInit(vi,_,_), _))) when
+          (ignore_kf vi.vname) -> ()
       | _ -> instr_stmts := stmt :: !instr_stmts
     end;
     Cil.DoChildren
@@ -277,8 +284,8 @@ let get_callstack_state ~after stmt cs =
     with Not_found -> None
 
 (* collects the list of non-terminating instructions *)
-let collect_nonterminating_statements fd to_ignore nonterm_stacks =
-  let vis = new stmt_collector to_ignore in
+let collect_nonterminating_statements fd nonterm_stacks =
+  let vis = new stmt_collector in
   ignore (Visitor.visitFramacFunction (vis :> Visitor.frama_c_visitor) fd);
   let new_nonterm_stmts = ref Stmt.Hptset.empty in
   let add_stack stmt cs =
@@ -291,45 +298,62 @@ let collect_nonterminating_statements fd to_ignore nonterm_stacks =
     Hashtbl.replace nonterm_stacks stmt (cs :: prev_stack_list)
   in
   List.iter (fun stmt ->
-      let source = fst (Stmt.loc stmt) in
-      Self.debug ~source "processing stmt:@ %a" Printer.pp_stmt stmt;
-      match Db.Value.get_stmt_state_callstack ~after:false stmt with
-      | None -> () (* unreachable stmt *)
-      | Some before_table ->
-        Value_types.Callstack.Hashtbl.iter
-          (fun cs before_state ->
-             try
-               match Db.Value.get_stmt_state_callstack ~after:true stmt with
-               | None -> (* no after table => non-terminating statement *)
+      match stmt.skind with
+      | Block _ -> (* do not compute; already done for the block stmts *) ()
+      | _ ->
+        let source = fst (Stmt.loc stmt) in
+        Self.debug ~source "processing stmt:@ %a" Printer.pp_stmt stmt;
+        match Db.Value.get_stmt_state_callstack ~after:false stmt with
+        | None -> () (* unreachable stmt *)
+        | Some before_table ->
+          Value_types.Callstack.Hashtbl.iter
+            (fun cs before_state ->
+               try
+                 match Db.Value.get_stmt_state_callstack ~after:true stmt with
+                 | None -> (* no after table => non-terminating statement *)
+                   add_stack stmt cs
+                 | Some after_table ->
+                   let after_state =
+                     Value_types.Callstack.Hashtbl.find after_table cs
+                   in
+                   if Cvalue.Model.is_reachable before_state then
+                     if not (Cvalue.Model.is_reachable after_state) then add_stack stmt cs
+                     else if match stmt.skind with Loop _ -> true | _ -> false then begin
+                       (* special treatment for loops: even if their after state
+                          is reachable, we must check that at least one outgoing
+                          edge is reachable *)
+                       let out_edges = Stmts_graph.get_all_stmt_out_edges stmt in
+                       let all_out_edges_unreachable =
+                         List.for_all (fun (_, out_stmt) ->
+                             match get_callstack_state ~after:false out_stmt cs with
+                             | None -> true
+                             | Some state -> not (Cvalue.Model.is_reachable state)
+                           ) out_edges
+                       in
+                       if all_out_edges_unreachable then add_stack stmt cs
+                     end
+               with
+               | Not_found ->
+                 (* in this callstack, the statement is non-terminating *)
                  add_stack stmt cs
-               | Some after_table ->
-                 let after_state =
-                   Value_types.Callstack.Hashtbl.find after_table cs
-                 in
-                 if Cvalue.Model.is_reachable before_state then
-                   if not (Cvalue.Model.is_reachable after_state) then add_stack stmt cs
-                   else if match stmt.skind with Loop _ -> true | _ -> false then begin
-                     (* special treatment for loops: even if their after state
-                        is reachable, we must check that at least one outgoing
-                        edge is reachable *)
-                     let out_edges = Stmts_graph.get_all_stmt_out_edges stmt in
-                     let all_out_edges_unreachable =
-                       List.for_all (fun (_, out_stmt) ->
-                           match get_callstack_state ~after:false out_stmt cs with
-                           | None -> true
-                           | Some state -> not (Cvalue.Model.is_reachable state)
-                         ) out_edges
-                     in
-                     if all_out_edges_unreachable then add_stack stmt cs
-                   end
-             with
-             | Not_found ->
-               (* in this callstack, the statement is non-terminating *)
-               add_stack stmt cs
-          ) before_table
+            ) before_table
     ) vis#get_instr_stmts;
   !new_nonterm_stmts
-;;
+
+let rec cmp_callstacks_aux cs1 cs2 =
+  match cs1, cs2 with
+  | [], [] -> 0
+  | [], _ -> -1
+  | _, [] -> 1
+  | (kf1, ki1) :: r1, (kf2, ki2) :: r2 ->
+    let c = Cil_datatype.Kinstr.compare ki1 ki2 in
+    if c <> 0 then c else
+      let c = Kernel_function.compare kf1 kf2 in
+      if c <> 0 then c else
+        cmp_callstacks_aux r1 r2
+
+let cmp_callstacks cs1 cs2 =
+  if cs1 == cs2 then 0 else cmp_callstacks_aux (List.rev cs1) (List.rev cs2)
 
 let run () =
   if not (Ast.is_computed ()) then
@@ -343,21 +367,23 @@ let run () =
   List.iter (fun glob ->
       match glob with
       | GFun (fd, _loc) ->
-        let kf = Globals.Functions.get fd.svar in
-        if Ignore.mem kf then
-          Self.debug "ignoring function: %a" Kernel_function.pretty kf
+        let fname = fd.svar.vorig_name in
+        if Ignore.mem fname then
+          Self.debug "ignoring function: %s" fname
         else begin
-          Self.debug "considering function: %a" Kernel_function.pretty kf;
+          Self.debug "considering function: %s" fname;
           let new_nonterm_stmts =
-            collect_nonterminating_statements fd (Ignore.get()) nonterm_stacks
+            collect_nonterminating_statements fd nonterm_stacks
           in
           let warned_kfs =
             Stmt.Hptset.fold (fun stmt acc ->
                 let cs = Hashtbl.find nonterm_stacks stmt in
+                let cs = List.sort cmp_callstacks cs in
                 warn_nonterminating_statement stmt cs;
                 Kernel_function.Set.add (Kernel_function.find_englobing_kf stmt) acc
               ) new_nonterm_stmts Kernel_function.Set.empty
           in
+          let kf = Globals.Functions.get fd.svar in
           check_unreachable_statements kf ~to_ignore:new_nonterm_stmts ~warned_kfs
             ~dead_code:(DeadCode.get());
         end

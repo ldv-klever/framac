@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -70,7 +70,7 @@ and dfun = {
 
 and definition =
   | Logic of tau (* return type of an abstract function *)
-  | Value of tau * recursion * term
+  | Function of tau * recursion * term
   | Predicate of recursion * pred
   | Inductive of dlemma list
 
@@ -141,8 +141,6 @@ module Lemma = Model.Index
     end)
 
 let touch c = c.c_age <- succ c.c_age
-let compare_symbol f g = Fun.compare f.d_lfun g.d_lfun
-let compare_lemma a b = String.compare a.l_name b.l_name
 
 let () =
   begin
@@ -156,9 +154,11 @@ let () =
          a.l_cluster.c_lemmas <- a :: a.l_cluster.c_lemmas) ;
   end
 
+let find_symbol = Symbol.find
 let define_symbol f = Symbol.define f.d_lfun f
 let update_symbol f = Symbol.update f.d_lfun f
 
+let find_name = Lemma.find
 let find_lemma l = Lemma.find l.lem_name
 let compile_lemma cc l = Lemma.compile (fun _name -> cc l) l.lem_name
 let define_lemma l = Lemma.define l.l_name l
@@ -171,7 +171,7 @@ let define_type c t =
 
 let parameters f =
   if Model.is_model_defined () then
-    try List.map Lang.F.sort_of_var (Symbol.find f).d_params
+    try List.map Lang.F.QED.sort_of_var (Symbol.find f).d_params
     with Not_found -> []
   else []
 
@@ -286,28 +286,25 @@ class virtual visitor main =
       if DC.mem c locals then true else
         (self#vcluster c ; false)
 
-    method private vtypedef = function
-      | None -> ()
-      | Some (LTsum cs) ->
-          List.iter (fun c -> self#vadt (Lang.atype c.ctor_type)) cs
-      | Some (LTsyn lt) -> self#vtau (Lang.tau_of_ltype lt)
-
+    method private vtau_of_ltype lt =
+      let tau = Lang.tau_of_ltype lt in
+      self#vtau tau ; tau
+      
     method vtype t =
       if not (DT.mem t types) then
         begin
           types <- DT.add t types ;
-          let c = section (LogicUsage.section_of_type t) in
-          if self#do_local c then
+          let cluster = section (LogicUsage.section_of_type t) in
+          if self#do_local cluster && not (Lang.is_builtin t) then
             begin
-              self#vtypedef t.lt_def ;
               let def = match t.lt_def with
                 | None -> Qed.Engine.Tabs
-                | Some (LTsyn lt) -> Qed.Engine.Tdef (Lang.tau_of_ltype lt)
+                | Some (LTsyn lt) -> Qed.Engine.Tdef (self#vtau_of_ltype lt)
                 | Some (LTsum cs) ->
                     let cases = List.map
-                        (fun ct ->
-                           Lang.CTOR ct ,
-                           List.map Lang.tau_of_ltype ct.ctor_params
+                        (fun c ->
+                           Lang.CTOR c ,
+                           List.map self#vtau_of_ltype c.ctor_params
                         ) cs in
                     Qed.Engine.Tsum cases
               in self#on_type t def ;
@@ -346,7 +343,7 @@ class virtual visitor main =
       | Data(a,ts) -> self#vadt a ; List.iter self#vtau ts
 
     method vparam x = self#vtau (tau_of_var x)
-        
+
     method private repr ~bool = function
       | Fun(f,_) -> self#vsymbol f
       | Rget(_,f) -> self#vfield f
@@ -356,10 +353,11 @@ class virtual visitor main =
       | True | False | Kint _ | Kreal _ | Bvar _
       | Times _ | Add _ | Mul _ | Div _ | Mod _
       | Aget _ | Aset _ | Apply _ -> ()
+      | Acst _ -> self#on_library "const"
       | Eq _ | Neq _ | Leq _ | Lt _
       | And _ | Or _ | Not _ | Imply _ | If _ ->
           if bool then self#on_library "bool"
-    
+
     method vterm t =
       if not (Tset.mem t terms) then
         begin
@@ -378,20 +376,20 @@ class virtual visitor main =
 
     method private vdefinition = function
       | Logic t -> self#vtau t
-      | Value(t,_,e) -> self#vtau t ; self#vterm e
+      | Function(t,_,e) -> self#vtau t ; self#vterm e
       | Predicate(_,p) -> self#vpred p
       | Inductive _ -> ()
 
     method private vproperties = function
-      | Logic _ | Value _ | Predicate _ -> ()
-      | Inductive cases -> List.iter self#vdlemma cases
+      | Logic _ | Function _ | Predicate _ -> ()
+      | Inductive cases -> List.iter (fun l -> self#vdlemma l) cases
 
     method private vdfun d =
       begin
         List.iter self#vparam d.d_params ;
         self#vdefinition d.d_definition ;
-        self#on_dfun d ;
         self#vproperties d.d_definition ;
+        self#on_dfun d ;
       end
 
     method private vlfun f =
@@ -437,7 +435,6 @@ class virtual visitor main =
           List.iter self#vparam a.l_forall ;
           List.iter (List.iter self#vtrigger) a.l_triggers ;
           self#vpred a.l_lemma ;
-          self#on_dlemma a ;
         end
 
     method vlemma lem =
@@ -447,7 +444,7 @@ class virtual visitor main =
           lemmas <- DS.add l lemmas ;
           try
             let a = Lemma.find l in
-            if self#do_local a.l_cluster then self#vdlemma a
+            if self#do_local a.l_cluster then (self#vdlemma a; self#on_dlemma a)
           with Not_found ->
             Wp_parameters.fatal "Lemma '%s' undefined" l
         end
@@ -490,12 +487,21 @@ class virtual visitor main =
             self#vpred prop ;
           end
 
+    method vtypes = (* Visit the types *)
+      rev_iter self#vcomp main.c_records ;
+      rev_iter self#vtype main.c_types
+
+    method vsymbols = (* Visit the definitions *)
+      rev_iter (fun d -> self#vsymbol d.d_lfun) main.c_symbols ;
+
+    method vlemmas = (* Visit the lemmas *)
+      rev_iter (fun l -> self#vdlemma l; self#on_dlemma l) main.c_lemmas ;
+
     method vself = (* Visit a cluster *)
       begin
-        rev_iter self#vcomp main.c_records ;
-        rev_iter self#vtype main.c_types ;
-        rev_iter (fun d -> self#vsymbol d.d_lfun) main.c_symbols ;
-        rev_iter (fun l -> self#vdlemma l) main.c_lemmas ;
+        self#vtypes ;
+        self#vsymbols ;
+        self#vlemmas ;
       end
 
     method virtual section : string -> unit

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,7 +36,7 @@ type pool = {
 }
 
 let pool () = { vars = Vars.empty ; mark = Tset.empty }
-let xmark p = p.vars
+let alloc_domain p = p.vars
                
 let rec walk p f e =
   if not (Tset.mem e p.mark) &&
@@ -49,22 +49,29 @@ let rec walk p f e =
       | _ -> F.lc_iter (walk p f) e
     end
 
-let xmark_e = walk
-let xmark_p pool f p = walk pool f (F.e_prop p)
+let alloc_e = walk
+let alloc_p pool f p = walk pool f (F.e_prop p)
+let alloc_xs pool f xs =
+  let ys = Vars.diff xs pool.vars in
+  if not (Vars.is_empty ys) then
+    begin
+      Vars.iter f ys ;
+      pool.vars <- Vars.union xs pool.vars ;
+    end
 
 (* -------------------------------------------------------------------------- *)
 (* --- Lang Pretty Printer                                                --- *)
 (* -------------------------------------------------------------------------- *)
 
-module E = Qed.Export.Make(Lang.F)
+module E = Qed.Export.Make(Lang.F.QED)
 module Env = E.Env
 
 type scope = Qed.Engine.scope
-type trigger = (var,Fun.t) Qed.Engine.ftrigger
+let sanitizer = Qed.Export.sanitize ~to_lowercase:false
 
 class engine =
   object(self)
-    inherit E.engine
+    inherit E.engine as super
     inherit Lang.idprinting
     method infoprover w = w.altergo
     
@@ -91,8 +98,19 @@ class engine =
     method e_true _ = "true"
     method e_false _ = "false"
     method pp_int _ = Integer.pretty ~hexa:false
-    method pp_cst = Qed.Numbers.pretty
-
+    method pp_real fmt q =
+      match Q.classify q with
+      | Q.ZERO -> Format.pp_print_string fmt ".0"
+      | Q.INF -> Format.pp_print_string fmt "(1/.0)"
+      | Q.MINF -> Format.pp_print_string fmt "(-1/.0)"
+      | Q.UNDEF -> Format.pp_print_string fmt "(.0/.0)"
+      | Q.NZERO ->
+          let { Q.num = num ; Q.den = den } = q in
+          if Z.equal den Z.one then
+            Format.fprintf fmt "%s.0" (Z.to_string num)
+          else
+            Format.fprintf fmt "(%s.0/%s)" (Z.to_string num) (Z.to_string den)
+            
     (* --- Atomicity --- *)
                       
     method callstyle = CallVar
@@ -106,7 +124,7 @@ class engine =
     
     (* --- Operators --- *)
 
-    method op_spaced = Qed.Export.is_ident
+    method op_spaced = Qed.Export.is_identifier
     method op_scope _ = None
     method op_real_of_int = Op "(R)"
     method op_add _ = Assoc "+"
@@ -138,6 +156,9 @@ class engine =
       end
     
     (* --- Arrays --- *)
+
+    method pp_array_cst fmt (_ : F.tau) v =
+      Format.fprintf fmt "@[<hov 2>[%a..]@]" self#pp_flow v
 
     method pp_array_get fmt a k =
       Format.fprintf fmt "@[<hov 2>%a@,[%a]@]" self#pp_atom a self#pp_flow k
@@ -174,6 +195,14 @@ class engine =
         fprintf fmt "@ }@]" ;
       end
 
+    (* --- Lists --- *)
+
+    method! pp_fun cmode fct ts =
+      if fct == Vlist.f_concat then Vlist.pretty self ts else
+      if fct == Vlist.f_elt then Vlist.elements self ts else
+      if fct == Vlist.f_repeat then Vlist.pprepeat self ts else
+        super#pp_fun cmode fct ts
+
     (* --- Higher Order --- *)
 
     method pp_apply (_:cmode) (_:term) (_:formatter) (_:term list) =
@@ -183,6 +212,8 @@ class engine =
       failwith "Qed: lambda abstraction"
 
     (* --- Binders --- *)
+
+    method! shareable e = super#shareable e && Vlist.shareable e
 
     method pp_forall tau fmt = function
       | [] -> ()
@@ -206,4 +237,3 @@ class engine =
     method pp_pred fmt p = self#pp_prop fmt (F.e_prop p)
     
   end
-

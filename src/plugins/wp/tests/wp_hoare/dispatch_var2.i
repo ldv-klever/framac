@@ -1,11 +1,11 @@
 /* run.config
-   OPT: -wp-model +ref -wp-no-let -wp-msg-key var_kind
-   OPT: -wp-model +ref -wp-let    -wp-msg-key var_kind
+   OPT: -wp-model +ref -wp-no-let
+   OPT: -wp-model +ref -wp-let
 */
 
 /* run.config_qualif
-   OPT: -wp -wp-proof alt-ergo -wp-par 1 -wp-model +ref -wp-no-let
-   OPT: -wp -wp-proof alt-ergo -wp-par 1 -wp-model +ref -wp-let
+   OPT: -wp-model +ref -wp-no-let
+   OPT: -wp-model +ref -wp-let
 */
 
 /*@ 

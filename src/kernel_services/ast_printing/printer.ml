@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,9 +23,6 @@
 (* Modified by TrustInSoft *)
 
 open Cil_types
-
-let debug_vid = Kernel.register_category "printer:vid"
-let debug_sid = Kernel.register_category "printer:sid"
 
 let compare_annotations la1 la2 =
   let total_order = Datatype.Int.compare la1.annot_id la2.annot_id in
@@ -122,25 +119,24 @@ class printer_with_annot () = object (self)
     let spec = Annotations.funspec ~populate:false kf in
     self#opt_funspec fmt spec
 
-  method! private has_annot =
-    super#has_annot
-  || match self#current_stmt with 
-    | None -> false
-    | Some s -> Annotations.has_code_annot s
+  method! private stmt_has_annot s = Annotations.has_code_annot s
 
-  method! private inline_block ?has_annot blk =
-    super#inline_block ?has_annot blk
+  method! private has_annot =
+    Extlib.may_map self#stmt_has_annot ~dft:false self#current_stmt
+
+  method! private inline_block ctxt blk =
+    super#inline_block ctxt blk
   && (match blk.bstmts with
   | [] -> true
   | [ s ] -> 
     not (Annotations.has_code_annot s && logic_printer_enabled)
     && (match s.skind with 
-    | Block blk -> self#inline_block blk 
+    | Block blk -> self#inline_block ctxt blk 
     | _ -> true)
   | _ :: _ -> false)
 
   method! varinfo fmt v =
-    if Kernel.is_debug_key_enabled debug_vid then begin
+    if Kernel.is_debug_key_enabled Kernel.dkey_print_vid then begin
       Format.fprintf fmt "/* vid:%d" v.vid;
       (match v.vlogic_var_assoc with
          None -> ()
@@ -151,7 +147,7 @@ class printer_with_annot () = object (self)
     super#varinfo fmt v;
 
   method! logic_var fmt v =
-    if Kernel.is_debug_key_enabled debug_vid then begin
+    if Kernel.is_debug_key_enabled Kernel.dkey_print_vid then begin
       Format.fprintf fmt "/* ";
       (match v.lv_origin with
          None -> ()
@@ -221,10 +217,9 @@ class printer_with_annot () = object (self)
        (let loc = fst (Cil_datatype.Stmt.loc s.skind) in
        Format.fprintf fmt "/*Loc=%s:%d*/" loc.Lexing.pos_fname
     loc.Lexing.pos_lnum); *)
-    Format.pp_open_hvbox fmt 2;
+    Format.pp_open_hvbox fmt 0;
     (* print the labels *)
     self#stmt_labels fmt s;
-    Format.pp_open_hvbox fmt 0;
     if Kernel.PrintComments.get () then begin
       let comments = Globals.get_comments_stmt s in
       if comments <> [] then
@@ -232,7 +227,7 @@ class printer_with_annot () = object (self)
 	  (fun fmt s -> Format.fprintf fmt "@[/* %s */@]" s)
           fmt comments
     end;
-    if verbose || Kernel.is_debug_key_enabled debug_sid then
+    if verbose || Kernel.is_debug_key_enabled Kernel.dkey_print_sid then
       Format.fprintf fmt "@[/* sid:%d */@]@\n" s.sid ;
     (* print the annotations *)
     if logic_printer_enabled then begin
@@ -272,9 +267,17 @@ class printer_with_annot () = object (self)
 	pGhost fmt s)
     end else
       self#stmtkind next fmt s.skind;
-    Format.pp_close_box fmt ();
     Format.pp_close_box fmt ()
-
+  
+  method! stmtkind (next: stmt) fmt skind =
+    super#stmtkind next fmt
+      begin
+        match skind with
+        | Goto({ contents = { skind = (Return _) as return }},_)
+          when Kernel.PrintReturn.get () -> return
+        | _ -> skind
+      end
+  
 end (* class printer_with_annot *)
 
 include Printer_builder.Make(struct class printer = printer_with_annot end)
@@ -293,14 +296,32 @@ let () = Cil_datatype.Block.pretty_ref := pp_block
 let () = Cil_datatype.Instr.pretty_ref := pp_instr
 let () = Cil_datatype.Logic_var.pretty_ref := pp_logic_var
 let () = Cil_datatype.Model_info.pretty_ref := pp_model_info
-let () = Cil_datatype.Logic_label.pretty_ref := pp_logic_label
 let () = Cil_datatype.Logic_type.pretty_ref := pp_logic_type
 let () = Cil_datatype.Term.pretty_ref := pp_term
 let () = Cil_datatype.Term_lval.pretty_ref := pp_term_lval
 let () = Cil_datatype.Term_offset.pretty_ref := pp_term_offset
 let () = Cil_datatype.Code_annotation.pretty_ref := pp_code_annotation
-let () =
-  Cil_datatype.Fieldinfo.pretty_ref := (fun fmt f -> pp_varname fmt f.fname)
+let () = Cil_datatype.Funspec.pretty_ref := pp_funspec
+  
+let () = Cil_datatype.Label.pretty_ref := pp_label
+let () = Cil_datatype.Compinfo.pretty_ref := pp_compinfo
+let () = Cil_datatype.Fieldinfo.pretty_ref := (fun fmt f -> pp_varname fmt f.fname)
+let () = Cil_datatype.Builtin_logic_info.pretty_ref := pp_builtin_logic_info                                         
+let () = Cil_datatype.Logic_type_info.pretty_ref := pp_logic_type_info
+let () = Cil_datatype.Logic_ctor_info.pretty_ref := pp_logic_ctor_info
+let () = Cil_datatype.Initinfo.pretty_ref := pp_initinfo
+let () = Cil_datatype.Logic_info.pretty_ref := pp_logic_info
+let () = Cil_datatype.Logic_constant.pretty_ref := pp_logic_constant
+let () = Cil_datatype.Identified_term.pretty_ref := pp_identified_term
+let () = Cil_datatype.Term_lhost.pretty_ref := pp_term_lhost
+let () = Cil_datatype.Logic_label.pretty_ref := pp_logic_label
+let () = Cil_datatype.Global_annotation.pretty_ref := pp_global_annotation
+let () = Cil_datatype.Global.pretty_ref := pp_global
+let () = Cil_datatype.Predicate.pretty_ref := pp_predicate
+let () = Cil_datatype.Identified_predicate.pretty_ref := pp_identified_predicate
+let () = Cil_datatype.Fundec.pretty_ref := pp_fundec
+                                               
+                                               
 
 (*
 Local Variables:

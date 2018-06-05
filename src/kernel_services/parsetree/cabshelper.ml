@@ -43,8 +43,6 @@
 
 open Cabs
 
-let dkey = Kernel.register_category "comments"
-
 let nextident = ref 0
 let getident () =
     nextident := !nextident + 1;
@@ -82,13 +80,14 @@ module Comments =
       MyState.set ((MyTable.add first ((last,comment)::acc)) state)
 
     let get (first,last) =
-      Kernel.debug ~dkey "Searching for comments between positions %a and %a@."
+      Kernel.debug ~dkey:Kernel.dkey_comments
+        "Searching for comments between positions %a and %a@."
         Cil_datatype.Position.pretty first
         Cil_datatype.Position.pretty last;
       if Cil_datatype.Position.equal first Lexing.dummy_pos ||
          Cil_datatype.Position.equal last Lexing.dummy_pos
       then begin
-        Kernel.debug ~dkey "skipping dummy position@.";
+        Kernel.debug ~dkey:Kernel.dkey_comments "skipping dummy position@.";
         []
       end else
         let r = MyTable.fold_range
@@ -105,7 +104,7 @@ module Comments =
             (MyState.get ())
             []
         in
-        Kernel.debug ~dkey "%d results@." (List.length r);
+        Kernel.debug ~dkey:Kernel.dkey_comments "%d results@." (List.length r);
         r
       
     let iter f =
@@ -224,7 +223,7 @@ let pop_attr_test () = ignore (Stack.pop state_stack)
 let is_attr_test () = Stack.top state_stack = Test
 
 let mk_behavior ?(name=Cil.default_behavior_name) ?(assumes=[]) ?(requires=[])
-    ?(post_cond=[]) ?(assigns=Cil_types.WritesAny) ?(allocation=Cil_types.FreeAllocAny)  ?(extended=[]) ()
+    ?(post_cond=[]) ?(assigns=Logic_ptree.WritesAny) ?(allocation=Logic_ptree.FreeAllocAny)  ?(extended=[]) ()
   =
   { Logic_ptree.b_name = name;
     b_assumes = assumes; (* must be always empty for default_behavior_name *)

@@ -1,9 +1,9 @@
 /* run.config
-   OPT:  -slice-calls printf1 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
-   OPT:  -slice-calls printf2 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
-   OPT:  -slice-calls printf3 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
-   OPT:  -slice-calls printf4 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
-   OPT:  -slice-calls printf5 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
+   OPT: -val-show-progress  -slice-calls printf1 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
+   OPT: -val-show-progress  -slice-calls printf2 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
+   OPT: -val-show-progress  -slice-calls printf3 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
+   OPT: -val-show-progress  -slice-calls printf4 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
+   OPT: -val-show-progress  -slice-calls printf5 -journal-disable -float-normal -remove-redundant-alarms -then-on 'Slicing export' -set-project-as-default -print  -then -print -ocode @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i -then @PTEST_DIR@/result/ocode_@PTEST_NUMBER@_@PTEST_NAME@.i  
    */
 /* Small example devired from examples given for UNRAVEL tool : */
 
@@ -31,7 +31,7 @@ main()
          scanf ("%d", &n);
          for ( i = 0 ; i < n ; i = i + 1)
          {
-           scanf ("%f", &x[i]);
+           scanf ("%f", (int*)&x[i]);
            t1 = t1 + x[i];
            ssq = ssq + x[i] * x[i];
           }

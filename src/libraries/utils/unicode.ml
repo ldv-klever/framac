@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,3 +25,12 @@ let inset_string () =
 
 let emptyset_string () =
   if Kernel.Unicode.get () then Utf8_logic.emptyset else "EMPTY_SET"
+
+let union_string () =
+  if Kernel.Unicode.get () then Utf8_logic.union else "U"
+
+let top_string () =
+  if Kernel.Unicode.get () then Utf8_logic.top else "TOP"
+
+let bottom_string () =
+  if Kernel.Unicode.get () then Utf8_logic.bottom else "BOTTOM"

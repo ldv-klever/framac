@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -50,8 +50,6 @@ module ProjectName: Parameter_sig.String
 
 (** @since Carbon-20110201 *)
 module ExportedProjectPostfix: Parameter_sig.String
-
-module Print: Parameter_sig.Bool
 
 val is_on: unit -> bool
 val set_off: unit -> unit

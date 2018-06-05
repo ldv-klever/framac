@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -91,8 +91,6 @@ module Make(X: Hptmap.Id_Datatype)
 
   let choose s = fst (min_binding s)
 
-  let filter f s = fold (fun x acc -> if f x then add x acc else acc) s empty
-
   let partition f s =
     fold
       (fun x (w, wo) -> if f x then add x w, wo else w, add x wo) s (empty, empty)
@@ -146,10 +144,6 @@ module Make(X: Hptmap.Id_Datatype)
       Pretty_utils.pp_iter
         ~pre:"@[<hov 1>{" ~sep:",@ " ~suf:"}@]" iter X.pretty
 
-  let split key t =
-    let l, pres, r = split key t in
-    l, pres <> None, r
-
   let intersects =
     let name = Format.asprintf "Hptset(%s).intersects" X.name in
     symmetric_binary_predicate
@@ -188,7 +182,7 @@ module Make(X: Hptmap.Id_Datatype)
 
   let from_shape m = from_shape (fun _ _ -> ()) m
 
-  (* Partial application is needed becauses of caches *)
+  (* Partial application is needed because of caches *)
   let fold2_join_heterogeneous ~cache ~empty_left ~empty_right ~both ~join ~empty =
     let both k () v = both k v in
     fold2_join_heterogeneous ~cache ~empty_left ~empty_right ~both ~join ~empty

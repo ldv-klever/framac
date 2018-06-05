@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -202,7 +202,7 @@ end = struct
           current_kf =
             { fundec =
                 (* do not use Cil.emptyFunction here since it changes the
-                   numerotation of variables *)
+                   numbering of variables *)
                 Declaration
                   (spec,
                    Cil_datatype.Varinfo.dummy,
@@ -438,7 +438,7 @@ module Component = struct
                 (* [TODO optimisation:]
                    en fait, regarder from_deep:
                    si vrai, faire pour chaque caller
-                   sinon, faire uniquement pour le caller d'o� on vient *)
+                   sinon, faire uniquement pour le caller d'où on vient *)
                 match kind, callstack_length with
                 | (Direct | Indirect_Backward), 0 ->
                     (* input of a deep security annotation: foreach call
@@ -595,7 +595,7 @@ Ignoring this function in the analysis (potentially incorrect results)."
                                 pdg from_stmt stmt called_pdg
                             with
                             | Db.Pdg.Top ->
-                              (* warning already emited in the previous fold *)
+                              (* warning already emitted in the previous fold *)
                               []
                             | Db.Pdg.Bottom | Not_found -> assert false
                           in

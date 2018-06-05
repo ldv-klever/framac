@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/bts335b.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -7,10 +6,11 @@
   X ∈ {0}
   Y ∈ {0}
 [value] computing for function f <- main.
-        Called from tests/slicing/bts335b.i:20.
-tests/slicing/bts335b.i:16:[value] warning: signed overflow. assert z + 1 ≤ 2147483647;
+  Called from tests/slicing/bts335b.i:20.
+[value:alarm] tests/slicing/bts335b.i:16: Warning: 
+  signed overflow. assert z + 1 ≤ 2147483647;
 [value] computing for function g <- f <- main.
-        Called from tests/slicing/bts335b.i:17.
+  Called from tests/slicing/bts335b.i:17.
 [value] Recording results for g
 [from] Computing for function g
 [from] Done for function g
@@ -19,17 +19,20 @@ tests/slicing/bts335b.i:16:[value] warning: signed overflow. assert z + 1 ≤ 21
 [from] Computing for function f
 [from] Done for function f
 [value] Done for function f
-tests/slicing/bts335b.i:21:[value] warning: signed overflow. assert j + 1 ≤ 2147483647;
+[value:alarm] tests/slicing/bts335b.i:21: Warning: 
+  signed overflow. assert j + 1 ≤ 2147483647;
 [value] computing for function g <- main.
-        Called from tests/slicing/bts335b.i:22.
+  Called from tests/slicing/bts335b.i:22.
 [value] Recording results for g
 [from] Computing for function g
 [from] Done for function g
 [value] Done for function g
-tests/slicing/bts335b.i:22:[value] warning: signed overflow. assert -2147483648 ≤ r + tmp_0;
-                                  (tmp_0 from g(2, w, b, j))
-tests/slicing/bts335b.i:22:[value] warning: signed overflow. assert r + tmp_0 ≤ 2147483647;
-                                  (tmp_0 from g(2, w, b, j))
+[value:alarm] tests/slicing/bts335b.i:22: Warning: 
+  signed overflow. assert -2147483648 ≤ r + tmp_0;
+                   (tmp_0 from g(2, w, b, j))
+[value:alarm] tests/slicing/bts335b.i:22: Warning: 
+  signed overflow. assert r + tmp_0 ≤ 2147483647;
+                   (tmp_0 from g(2, w, b, j))
 [value] Recording results for main
 [from] Computing for function main
 [from] Done for function main
@@ -53,8 +56,8 @@ tests/slicing/bts335b.i:22:[value] warning: signed overflow. assert r + tmp_0 �
   \result FROM v; b
 [from] ====== END OF CALLWISE DEPENDENCIES ======
 [slicing] slicing requests in progress...
-[slicing] making slicing project 'Slicing'...
-[slicing] done (making slicing project 'Slicing').
+[slicing] initializing slicing ...
+[slicing] done (initializing slicing).
 [slicing] interpreting slicing requests from the command line...
 [pdg] computing for function main
 [pdg] done for function main
@@ -114,17 +117,13 @@ int f_slice_1(int c, int x, int y, int z)
 
 int main(int v, int w, int a, int b, int i, int j)
 {
-  int r;
   int tmp_0;
-  r = f_slice_1(1,v,a,i);
+  int r = f_slice_1(1,v,a,i);
   j ++;
-  { /* sequence */
-    tmp_0 = g_slice_1(2,w,b,j);
-    r += tmp_0;
-  }
+  tmp_0 = g_slice_1(2,w,b,j);
+  r += tmp_0;
   return r;
 }
 
 
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/result/ocode_0_bts335b.i (no preprocessing)

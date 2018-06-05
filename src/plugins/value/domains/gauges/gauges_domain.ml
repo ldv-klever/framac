@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,6 +36,10 @@ type function_calls =
   (* Same as IntraproceduralAll, but only on non-global variables that
      are not referenced. Those variables cannot be modified by a callee,
      so this analysis is sound. Good for memexec. *)
+
+(* Silence warning *)
+let () = ignore
+    [FullInterprocedural; IntraproceduralAll; IntraproceduralNonReferenced]
 
 let function_calls_handling = ref IntraproceduralNonReferenced
 
@@ -90,15 +94,15 @@ module G = struct
     (* This function computes how much the bounds of [i2] have increased from
        those of [i1], i.e. [diff [1 .. 4]  [-2 .. 8]] is [-3 .. 4]
        and [diff [-2 .. 8] [1 .. 4]] is [-4 .. 3]. *)
-    let sub (i1: t) (i2: t) : t =
+    let delta (i1: t) (i2: t) : t =
       let min1, max1 = i1 in
       let min2, max2 = i2 in
-      let sub_min = opt2 Integer.sub min2 min1 in
-      let sub_max = opt2 Integer.sub max2 max1 in
+      let delta_min = opt2 Integer.sub min2 min1 in
+      let delta_max = opt2 Integer.sub max2 max1 in
       (* we may need to reorder the pointwise subtractions. See the second
          example above. *)
-      let min = opt2 Integer.min sub_min sub_max in
-      let max = opt2 Integer.max sub_min sub_max in
+      let min = opt2 Integer.min delta_min delta_max in
+      let max = opt2 Integer.max delta_min delta_max in
       min, max
 
     let join = lift Integer.min Integer.max
@@ -152,7 +156,7 @@ module G = struct
     let zero = Some Integer.zero, Some Integer.zero
 
     (* Widening between two bounds. Unstable bounds are widened to infty
-       agressively. This widening does not assumes that [is_included i1 i2]
+       aggressively. This widening does not assumes that [is_included i1 i2]
        holds, unlike the widening of Ival. *)
     let widen ?threshold (min1, max1: t) (min2, max2: t) : t =
       let widen_unstable_min b1 b2 =
@@ -268,7 +272,11 @@ module G = struct
   end
 
   (* A MV contains (usual) values for the different bases that are incremented
-     in a loop. For missing bases, no information is stored. *)
+     in a loop.
+     1. for missing bases, no information is stored (i.e. Top)
+     2. bases are mapped to an interger range, or to a pointer
+       2.1. bases can only be mapped to a pointer with a single base address
+  *)
   module MV = struct
 
     include Hptmap.Make(Base)(Cvalue.V)(Hptmap.Comp_unused)
@@ -277,59 +285,74 @@ module G = struct
 
     (* This function computes a pointwise union on two MVs assumed to have
        disjoint set of keys. *)
-    let join_disjoint =
-      let cache = cache_name "MV.join_disjoint" in
+    let merge_disjoint =
+      let cache = cache_name "MV.merge_disjoint" in
       let decide _ _ _ = assert false in
-      join ~cache ~symmetric:true ~idempotent:true ~decide
+      join ~cache ~symmetric:true ~idempotent:false ~decide
 
     let empty_wh = Integer.zero, (fun _ -> Ival.Widen_Hints.empty)
 
     let widen =
-      let cache = cache_name "widen" in
-      let decide _ b1 b2 = Cvalue.V.widen empty_wh b1 b2 in
-      join ~cache ~symmetric:false ~idempotent:true ~decide
+      let cache = cache_name "MV.widen" in
+      let decide _ b1 b2 = Some (Cvalue.V.widen empty_wh b1 b2) in
+      inter ~cache ~symmetric:false ~idempotent:true ~decide
 
     let is_included =
       let cache = cache_name "MV.is_included" in
       let decide_fst _b _v1 = true (* v2 is top *) in
       let decide_snd _b _v2 = false (* v1 is top, v2 is not *) in
       let decide_both _ v1 v2 = Cvalue.V.is_included v1 v2 in
-      let decide_fast s t = if s == t then PTrue else PUnknown
+      let decide_fast s t =
+        if s == t  || is_empty t (*all bases present in s but not in t
+                                   are implicitly bound to Top in t,
+                                   hence the inclusion holds *)
+        then PTrue
+        else PUnknown
     in
     binary_predicate cache UniversalPredicate
       ~decide_fast ~decide_fst ~decide_snd ~decide_both
 
   end
 
-  (* A MV contains, for interesting variables, the coefficient that is
+  (* A MC contains, for interesting variables, the coefficient that is
      associated to one lambda, represented as an integer interval.
-     Missign coefficients are 0. *)
+     Missing coefficients are 0. This is useful for variables that
+     are not incremented in one inner, but only in outemost one. *)
   module MC = struct
 
     include Hptmap.Make(Base)(Bounds)(Hptmap.Comp_unused)
       (struct let v = [] end)
       (struct let l = [Ast.self] end)
 
+    (* This function computes a pointwise union on two MCs assumed to have
+       disjoint set of keys. *)
+    let merge_disjoint =
+      let cache = cache_name "MC.merge_disjoint" in
+      let decide _ _ _ = assert false in
+      join ~cache ~symmetric:true ~idempotent:false ~decide
+
+
+    (* For the "standard" join and widen, keys present in one map but not
+       in the other are assumed to be 0. *)
+
+    let default = function None -> Bounds.zero | Some b -> b          
+
     let widen =
-      let cache = cache_name "Gauges.MC.widen" in
-      let decide _ b1 b2 = Bounds.widen b1 b2 in
-      join ~cache ~symmetric:true ~idempotent:true ~decide
+      let cache = cache_name "MC.widen" in
+      let decide _ b1 b2 = Bounds.widen (default b1) (default b2) in
+      generic_join ~cache ~symmetric:false ~idempotent:true ~decide
 
     let join =
-      let cache = cache_name "Gauges.MC.join" in
-      let decide _ b1 b2 = Bounds.join b1 b2 in
-      join ~cache ~symmetric:true ~idempotent:true ~decide
+      let cache = cache_name "MC.join" in
+      let decide _ b1 b2 = Bounds.join (default b1) (default b2) in
+      generic_join ~cache ~symmetric:true ~idempotent:true ~decide
 
     let is_included =
       let cache = cache_name "MC.is_included" in
       let decide_fst _b v1 = Bounds.(equal zero v1) in
       let decide_snd _b v2 = Bounds.(is_included zero v2) in
       let decide_both _ v1 v2 = Bounds.is_included v1 v2 in
-      let decide_fast s t =
-      if s == t || is_empty t (*all bases present in s but not in t
-                  are implicitly bound to Top in t, hence the inclusion holds *)
-      then PTrue
-      else PUnknown
+      let decide_fast s t = if s == t then PTrue else PUnknown
     in
     binary_predicate cache UniversalPredicate
       ~decide_fast ~decide_fst ~decide_snd ~decide_both
@@ -339,31 +362,31 @@ module G = struct
 
   (* This function computes how much the bounds of [v2] have increased from
      those of [v1]. On pointers, we return a result in bytes, and only if the
-     two variables point to the same base. *)
-  let sub_min_max_cvalue v1 v2 =
+     two variables point to the same base (invariant 2.1) *)
+  let delta_min_max_cvalue v1 v2 =
     try
       let b1, i1 = Cvalue.V.find_lonely_key v1 in
       let b2, i2 = Cvalue.V.find_lonely_key v2 in
       if Base.equal b1 b2
-      then Some (Bounds.sub (Ival.min_and_max i1) (Ival.min_and_max i2))
+      then Some (Bounds.delta (Ival.min_and_max i1) (Ival.min_and_max i2))
       else None
-    with Not_found -> None
+    with Not_found -> assert false (* invariant 2.1 of MV must already hold *)
 
   (* This function takes two mv, and 'subtracts' them for the [inc]
      operation of gauges. More precisely, for each base present in both maps,
-     we substract pointwise the min and max or their possible values.
+     we subtract pointwise the min and max or their possible values.
      This is used to compute the 'difference' during one loop iteration. *)
-  let sub_mv =
-    let cache = cache_name "sub_mv" in
+  let delta_mv =
+    let cache = cache_name "delta_mv" in
     let empty = MC.empty in
     let empty_left _ = empty in 
     let empty_right _ = empty in
     let both b v1 v2 =
-      match sub_min_max_cvalue v1 v2 with (* BIGTODO: remove b from ct *)
+      match delta_min_max_cvalue v1 v2 with
       | None -> MC.empty (* drop the base from the result *)
       | Some i -> MC.singleton b i
     in
-    let join = MC.join in
+    let join = MC.merge_disjoint in
     let f =
       MV.fold2_join_heterogeneous
         ~cache ~empty_left ~empty_right ~both ~join ~empty
@@ -375,18 +398,18 @@ module G = struct
     let cache = cache_name "mv_minus_mc" in
     let empty = MV.empty in
     let empty_left _ = empty in
-    let empty_right _ = empty in
+    let empty_right v = v in
     let both b v i =
-      (* BIGTODO: we do not check that are we are on the same base as in the
-         original computation of the coefficients. This requires a more
-         complicated iterator, though... *)
-      let bv, iv = Cvalue.V.find_lonely_key v in
-      let i'_min, i'_max = Bounds.sub i (Ival.min_and_max iv) in
+      let bv, iv =
+        try Cvalue.V.find_lonely_key v
+        with Not_found -> assert false (* invariant 2.1 of MV *)
+      in
+      let i'_min, i'_max = Bounds.delta i (Ival.min_and_max iv) in
       let i' = Ival.inject_range i'_min i'_max in
       let v' = Cvalue.V.inject bv i' in
       MV.singleton b v'
     in
-    let join = MV.join_disjoint in
+    let join = MV.merge_disjoint in
     let f =
       MV.fold2_join_heterogeneous
         ~cache ~empty_left ~empty_right ~both ~join ~empty
@@ -409,7 +432,7 @@ module G = struct
       let v' = Cvalue.V.add_untyped ~factor:Int_Base.one v p in
       MV.singleton b v'
     in
-    let join = MV.join_disjoint in
+    let join = MV.merge_disjoint in
     MV.fold2_join_heterogeneous
       ~cache ~empty_left ~empty_right ~both ~join ~empty mv (MC.shape mc)
 
@@ -422,7 +445,7 @@ module G = struct
       if c = 0 then MC.compare i1.coeffs i2.coeffs
       else c
 
-    let equal i1 i2 =
+    let _equal i1 i2 =
       Bounds.equal i1.nb i2.nb && MC.equal i1.coeffs i2.coeffs
 
     let hash i = Bounds.hash i.nb + 17 * MC.hash i.coeffs
@@ -437,11 +460,11 @@ module G = struct
 
     (* Widen [i1] and [i2]. The number of iterations is widened only if
        [widen_nb] holds. *)
-    let widen stmt ~widen_nb i1 i2 =
+    let widen _stmt ~widen_nb i1 i2 =
       let nb =
         if widen_nb then
           let threshold =
-            if false then LoopAnalysis.Loop_analysis.get_bounds stmt else None
+            None (* LoopAnalysis.Loop_analysis.get_bounds _stmt *)
           in
           let threshold = Extlib.opt_map Integer.of_int threshold in
           let (min, max as w) = Bounds.widen ?threshold i1.nb i2.nb in
@@ -451,6 +474,10 @@ module G = struct
           Bounds.join i1.nb i2.nb
       in
       { nb; coeffs = MC.widen i1.coeffs i2.coeffs }
+
+    (* Keep only the variables of [mi.coeffs] already present in [mv]. *)
+    let restrict mv mi =
+      { mi with coeffs = MC.inter_with_shape (MV.shape mv) mi.coeffs }
 
   end
 
@@ -492,6 +519,12 @@ module G = struct
       | MultipleIterations m1, MultipleIterations m2 ->
         Bounds.is_included m1.nb m2.nb &&
         MC.is_included m1.coeffs m2.coeffs
+
+    let restrict mv = function
+      | PreciseIteration _ as pi -> pi
+      | MultipleIterations mi ->
+        MultipleIterations (MultipleIterations.restrict mv mi)
+
   end
 
   (* type t = MV.t * (stmt * iteration_info) list *)
@@ -550,11 +583,17 @@ module G = struct
     in
     aux l ct
 
+  (* Remove from the coefficient maps the variables for which we have
+     no initial value, for canonicity purposes. This occurs for example when
+     a pointer points to multiple variables through multiple iterations. *)
+  let restrict mv l =
+    List.map (fun (s, mi) -> s, IterationInfo.restrict mv mi) l
+
   (* [l] is the number iteration in [s1], while it is [l+1] in [s2].
      Compute a slope, then remove [l] and [l+1] iterations from [ct1] and
      [ct2] accordingly. *)
   let join_consecutive_lambda l ct1 ct2 =
-    let coeffs = sub_mv ct1 ct2 in
+    let coeffs = delta_mv ct1 ct2 in
     coeffs,
     remove_coeffs coeffs l ct1,
     remove_coeffs coeffs (l+1) ct2
@@ -563,15 +602,14 @@ module G = struct
   let join_same_lambda =
     let cache = cache_name "join_same_lambda" in
     let decide _ v1 v2 =
-      (* Forbid muliple pointers in the result *)
+      (* Forbid multiple pointers in the result *)
       try
         let b1, _i1 = Cvalue.V.find_lonely_key v1 in
         let b2, _i2 = Cvalue.V.find_lonely_key v2 in
         if Base.equal b1 b2 then
           Some (Cvalue.V.join v1 v2)
         else None
-      with Not_found -> assert false (* this invariant should be already true
-                                        in the two states *)
+      with Not_found -> assert false (* invariant 2.1 of MV must already hold *)
     in
     MV.inter ~cache ~symmetric:true ~idempotent:true ~decide
 
@@ -614,7 +652,9 @@ module G = struct
           | -1 -> (** One more iteration in s2 *)
             let coeffs, ct1, ct2 = join_consecutive_lambda n1 ct1 ct2 in
             (ct1, ct2), MultipleIterations { nb; coeffs }, true
-          | _ -> (** difference > 1. Go to top *)
+          | _ -> (** difference > 1. This case does not happen with the
+                     current iteration engine, and requires a division function
+                     in module Bounds. Go to top *)
             (MV.empty, MV.empty),
             MultipleIterations { nb; coeffs = MC.empty }, true
         in
@@ -639,15 +679,22 @@ module G = struct
     try
       let ct1, ct2, q, _ = join_iterations s1 s2 in
       let ct = join_same_lambda ct1 ct2 in
-      ct, q
+      let q = restrict ct q in
+      let r = (ct, q) in
+      (* Kernel.result ~current:true "JOIN@.%a@.@.%a@.R@.%a"
+           pretty s1 pretty s2 pretty r; *)
+      r
     with MessyJoin -> empty
 
   let is_included (ct1, l1: t) (ct2, l2: t) =
     MV.is_included ct1 ct2 &&
     List.for_all2 (fun (_, i1) (_, i2) -> IterationInfo.is_included i1 i2) l1 l2
   
-  let join_and_is_included a b =
-    join a b, is_included a b
+  (* debug version *)
+  let _is_included s1 s2 =
+    let r = is_included s1 s2 in
+    Kernel.result ~current:true "INCL %b@.%a@.@.%a" r pretty s1 pretty s2;
+    r
 
   (* hypothesis from Value: s2 is supposed to happen 'after' s1. This widening
      function is full of heuristics to maintain some precision, i.e. do not
@@ -667,9 +714,9 @@ module G = struct
     (* Now we widen the bounds unstable between s1 and the join. We do so
        only if the coefficients are compatible enough, meaning that no
        precise iterations were generalized. This is to regain some precision,
-       but may theoretically endanger soundness. *)
+       but may theoretically endanger termination. *)
     let ct = if joined_iter then ctj else MV.widen ct1 ctj in
-    let rec widen_l _first l1 lj =
+    let rec widen_l l1 lj =
       match l1, lj with
       | [], [] -> []
       | [], _ | _, [] -> assert false
@@ -691,14 +738,17 @@ module G = struct
             MultipleIterations (MultipleIterations.widen stmt ~widen_nb i1 ij)
         in
         if IterationInfo.equal i ij then
-          (stmt', i) :: widen_l false q1 qj (* find something to widen deeper *)
+          (stmt', i) :: widen_l q1 qj (* find something to widen deeper *)
         else
           (stmt', i) :: qj
     in
-    (* Widen list if coefficients have not been widened only. Relies on the
-       fact that MV.widen goes to infty automatically. *)
-    let l = if MV.equal ctj ct2 then widen_l true l1 lj else lj in
+    (* Widen list if coefficients have not been widened only. This may help
+       precision, and should not endanger convergence. *)
+    let l = if MV.equal ctj ct2 then widen_l l1 lj else lj in
+    let l = restrict ct l in
     ct, l
+
+  let narrow x _y = `Value x
 
   let enter_loop stmt (ct, l: t) : t =
     ct, (stmt, PreciseIteration 0) :: l
@@ -750,14 +800,13 @@ module G = struct
       Format.fprintf fmt "@[(%a,@ %a)@]" Cvalue.V.pretty v
         (Pretty_utils.pp_list ~pre:"" ~suf:"" ~sep:",@ " Bounds.pretty) l
 
+    let _ = pretty (* silence warning *)
+
     (* assumes that [f x 0] = x *)
     let rec map2 f l1 l2 =
       match l1, l2 with
       | [], l | l, [] -> l (* all other coefficients are implicitly 0 *)
       | b1 :: l1, b2 :: l2 -> f b1 b2 :: map2 f l1 l2
-
-    let _join (ct1, l1: t) (ct2, l2: t) : t =
-      Cvalue.V.join ct1 ct2, map2 Bounds.join l1 l2
 
     let on_cvalue_ival f v =
       try
@@ -788,7 +837,7 @@ module G = struct
       with Cvalue.V.Not_based_on_null | Ival.Not_Singleton_Int ->
         raise Untranslatable
 
-    (* Check that [v] is an integer, or a single pointer. *)
+    (* Check that [v] is an integer, or a single pointer (invariant 2 of MV) *)
     let sanitize_v v =
       try
         let _b, i = Cvalue.V.find_lonely_key v in
@@ -937,7 +986,8 @@ module G = struct
   let translate_exp state to_loc to_v e =
     let ptr_size e =
       let typ_pointed = Cil.typeOf_pointed (Cil.typeOf e) in
-      Integer.of_int (Cil.bytesSizeOf typ_pointed)
+      try Integer.of_int (Cil.bytesSizeOf typ_pointed)
+      with Cil.SizeOfError _ -> raise Untranslatable
     in
     (* This function translates the expression as a precise gauge. For any
        expression that cannot be handled, [Untranslatable] is raised. *)
@@ -1007,9 +1057,7 @@ module G = struct
               if Ival.is_included i range then g else raise Untranslatable
             else
               g (* we consider pointers offsets never overflow *)
-          with Not_found ->
-            Kernel.abort "Imprecise pointer %a, v %a@.%a"
-              Gauge.pretty g Cvalue.V.pretty v pretty state
+          with Not_found -> assert false (* invariant 2.1 of MV *)
     in
     aux e
 
@@ -1046,8 +1094,10 @@ module G = struct
       let g = translate_exp state to_loc to_v e in
       store_gauge b g state
     with Untranslatable ->
+      try
       Locations.Location_Bits.fold_topset_ok
         (fun b _ state -> kill_base b state) loc.Locations.loc state
+      with Abstract_interp.Error_Top -> top state
   
 end
 
@@ -1064,7 +1114,10 @@ module D_Impl : Abstract_domain.S_with_Structure
 
   include G
 
+  let name = "Gauges domain"
+
   let structure = Abstract_domain.Void
+  let log_category = dkey
 
   let empty _ = G.empty
 
@@ -1078,20 +1131,11 @@ module D_Impl : Abstract_domain.S_with_Structure
     List.fold_left remove_variable state vars
 
   let leave_scope _kf vars state =
-    (* reverts implicity to Top *)
+    (* reverts implicitly to Top *)
     remove_variables vars state
 
 
   type origin = unit
-
-  type return = unit (* YYY: it may be useful to return a gauge here *)
-  module Return = Datatype.Unit
-
-  let top_return =
-    let top_value =
-      { v = `Value Cvalue.V.top; initialized = false; escaping = true }
-    in
-    Some (top_value, ())
 
   let approximate_call kf state =
     let post_state =
@@ -1105,28 +1149,10 @@ module D_Impl : Abstract_domain.S_with_Structure
         | IntraproceduralAll -> state (* unsound here *)
         | IntraproceduralNonReferenced -> state
     in
-    `Value [{ post_state; return = top_return }]
-
-  module Transfer (Valuation:
-                     Abstract_domain.Valuation with type value = value
-                                                and type origin = origin
-                                                and type loc = location)
-    : Abstract_domain.Transfer
-      with type state = state
-       and type return = unit
-       and type value = value
-       and type location = location
-       and type valuation = Valuation.t
-  = struct
-    type value = Cvalue.V.t
-    type state = G.t
-    type location = Precise_locs.precise_location
-    type return = unit
-    type valuation = Valuation.t
-
-    let update _valuation st = st (* TODO? *)
+    `Value [ post_state ]
 
     let kill loc state =
+    let loc = Precise_locs.imprecise_location loc in
       let loc = loc.Locations.loc in
       let aux_base b _ acc =
         try Base.to_varinfo b :: acc
@@ -1135,13 +1161,22 @@ module D_Impl : Abstract_domain.S_with_Structure
       let vars = Locations.Location_Bits.fold_topset_ok aux_base loc [] in
       remove_variables vars state
 
-    let imprecise_assign lv _value state =
-      let loc = Precise_locs.imprecise_location lv.lloc in
-      `Value (kill loc state)
+  module Transfer (Valuation:
+                     Abstract_domain.Valuation with type value = value
+                                                and type origin = origin
+                                                and type loc = location)
+    : Abstract_domain.Transfer
+      with type state := state
+       and type value := value
+       and type location := location
+       and type valuation := Valuation.t
+  = struct
+
+    let update _valuation st = st (* TODO? *)
 
     exception Unassignable
     
-    let assign _kinstr lv e assignment valuation (state:state) =
+    let assign _kinstr lv e _assignment valuation (state:state) =
       let to_loc lv =
         match Valuation.find_loc valuation lv with
         | `Value r -> Precise_locs.imprecise_location r.loc
@@ -1156,7 +1191,7 @@ module D_Impl : Abstract_domain.S_with_Structure
           | _ -> raise Unassignable
       in
       try `Value (G.assign to_loc to_val lv.lval e state)
-      with Unassignable -> imprecise_assign lv assignment state
+      with Unassignable -> `Value (kill lv.lloc state)
 
     let assume_exp valuation e r state =
       if r.reductness = Created || r.reductness = Reduced then
@@ -1182,8 +1217,6 @@ module D_Impl : Abstract_domain.S_with_Structure
     let assume _ _ _ valuation state =
       `Value (Valuation.fold (assume_exp valuation) valuation state)
 
-    let make_return _kf _stmt _assign _valuation _state = ()
-
     let finalize_call _stmt _call ~pre ~post =
       let state =
         match !function_calls_handling with
@@ -1192,9 +1225,6 @@ module D_Impl : Abstract_domain.S_with_Structure
         | IntraproceduralAll -> pre (* unsound here *)
       in
       `Value state
-
-    let assign_return _stmt lv _kf () value _valuation state =
-      imprecise_assign lv value state
 
     let start_call _stmt call valuation state =
       let state =
@@ -1222,30 +1252,16 @@ module D_Impl : Abstract_domain.S_with_Structure
         with Untranslatable -> state
       in
       let state = List.fold_left aux_arg state call.arguments in
-      Compute (Continue state, true)
+      Compute state
 
-    let default_call _stmt call state =
-      let kf = call.kf in
-      let name = Kernel_function.get_name kf in
-      if  Ast_info.is_frama_c_builtin name then begin
-        if Ast_info.is_cea_function name
-        then
-          let l = fst (Cil.CurrentLoc.get ()) in
-          Value_parameters.result ~dkey "DUMPING GAUGES STATE \
-                                         of file %s line %d@.%a"
-            (Filepath.pretty l.Lexing.pos_fname) l.Lexing.pos_lnum
-            pretty state;
-      end;
-      approximate_call kf state
+    let approximate_call _stmt call state = approximate_call call.kf state
+
+    let show_expr _valuation _state _fmt _expr = ()
+  end
 
     let enter_loop = G.enter_loop
     let incr_loop_counter _ = G.inc
     let leave_loop = G.leave_loop
-
-  end
-
-  let compute_using_specification _ (kf, _) state =
-    approximate_call kf state
 
   (* TODO: it would be interesting to return something here, but we
      currently need a valuation to perform the translation. *) 
@@ -1276,28 +1292,22 @@ module D_Impl : Abstract_domain.S_with_Structure
   let reuse ~current_input:_ ~previous_output = previous_output
 
   (* Initial state *)
-  let global_state () = None
-  let initialize_var_using_type state _ = state
-  let initialize_var state _ _ _ = state
+  let introduce_globals _ state = state
+  let initialize_variable_using_type _ _ state = state
+  let initialize_variable _ _ ~initialized:_ _ state = state
 
   (* Logic *)
-  type eval_env = state
-  let env_current_state state = `Value state
-  let env_annot ~pre:_ ~here () = here
-  let env_pre_f ~pre () = pre
-  let env_post_f ~pre:_ ~post ~result:_ () = post
-  let eval_predicate _ _ = Alarmset.Unknown
-  let reduce_by_predicate state _ _ = state
+  let logic_assign _assigns location ~pre:_ state = kill location state
+  let evaluate_predicate _ _ _ = Alarmset.Unknown
+  let reduce_by_predicate _ state _ _ = `Value state
 
   let top = G.empty (* must not be used, not neutral w.r.t. join (because
                        join crashes...)!! *)
-
 end
 
-module D = struct
+module D =
+  Domain_builder.Complete
+    (struct
   include D_Impl
-  module Store = Domain_store.Make (struct
-      include D_Impl
-      let storage _ = false    
+      let storage = Value_parameters.GaugesStorage.get
     end)
-end

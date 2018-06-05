@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -31,7 +31,7 @@ open Cil_types
 *)
 val type_rel: Logic_ptree.relation -> Cil_types.relation
 
-(** Arithmetic binop conversion. Addition and Substraction are always 
+(** Arithmetic binop conversion. Addition and Subtraction are always
     considered as being used on integers. It is the responsibility of the
     user to introduce PlusPI/IndexPI, MinusPI and MinusPP where needed. 
     @since Nitrogen-20111001
@@ -92,6 +92,7 @@ type typing_context = {
   find_type : type_namespace -> string -> typ;
   find_label : string -> stmt ref;
   remove_logic_function : string -> unit;
+  remove_logic_info: logic_info -> unit;
   remove_logic_type: string -> unit;
   remove_logic_ctor: string -> unit;
   add_logic_function: logic_info -> unit;
@@ -103,12 +104,37 @@ type typing_context = {
   pre_state:Lenv.t;
   post_state:termination_kind list -> Lenv.t;
   assigns_env: Lenv.t;
-  type_predicate:Lenv.t -> Logic_ptree.lexpr -> predicate;
-  type_term:Lenv.t -> Logic_ptree.lexpr -> term;
+  (**/**)
+  silent: bool;
+  (**/**)
+  logic_type:
+    typing_context -> location -> Lenv.t ->
+    Logic_ptree.logic_type -> Cil_types.logic_type ;
+  integral_cast : typ -> term -> term;
+  type_predicate:
+    typing_context -> Lenv.t -> Logic_ptree.lexpr -> predicate;
+  (** typechecks a predicate. Note that the first argument is itself a
+      [typing_context], which allows for open recursion. Namely, it is
+      possible for the extension to change the type-checking functions for
+      the sub-nodes of the parsed tree, and not only for the toplevel [lexpr].
+
+      @plugin development guide
+  *)
+  type_term:
+    typing_context -> Lenv.t -> Logic_ptree.lexpr -> term;
   type_assigns:
+    typing_context ->
     accept_formal:bool -> 
-    Lenv.t -> Logic_ptree.lexpr assigns -> identified_term assigns;
+    Lenv.t -> Logic_ptree.assigns -> assigns;
   error: 'a 'b. location -> ('a,Format.formatter,unit,'b) format4 -> 'a;
+
+  (** [on_error f rollback x] will attempt to evaluate [f x]. If this triggers
+      an error while in [-continue-annot-error] mode, [rollback ()] will be
+      executed and the exception re-raised.
+
+      @since Chlorine-20180501
+   *)
+  on_error: 'a 'b. ('a -> 'b) -> (unit -> unit) -> 'a -> 'b
 }
 
 (** [register_behavior_extension name f] registers a typing function [f] to 
@@ -117,13 +143,13 @@ type typing_context = {
     let count = ref 0 in
     let foo_typer ~typing_context ~loc ps =
     match ps with p::[] ->
-      ("FOO",
        Ext_preds
 	[
              (typing_context.type_predicate 
+                typing_context
 				 (typing_context.post_state [Normal]) 
 				 p)])
-      | [] -> let id = !count in incr count; ("FOO", Ext_id id)
+      | [] -> let id = !count in incr count; Ext_id id
       | _ -> typing_context.error loc "expecting a predicate after keyword FOO"
     let () = register_behavior_extension "FOO" foo_typer
 
@@ -145,7 +171,7 @@ module Make
           Only useful when creating objects of type [code_annotation]. *)
       val anonCompFieldName : string
       val conditionalConversion : typ -> typ -> typ
-      val compatibleTypesp : typ -> typ -> bool
+      val areCompatibleTypes : typ -> typ -> bool
       val find_macro : string -> Logic_ptree.lexpr
       val find_var : string -> logic_var
       val find_enum_tag : string -> exp * typ
@@ -154,6 +180,7 @@ module Make
       val find_label : string -> stmt ref
 
       val remove_logic_function : string -> unit
+      val remove_logic_info: logic_info -> unit
       val remove_logic_type: string -> unit
       val remove_logic_ctor: string -> unit
 
@@ -176,6 +203,9 @@ module Make
       (** raises an error at the given location and with the given message.
           @since Magnesium-20151001 *)
       val error: location -> ('a,Format.formatter,unit, 'b) format4 -> 'a 
+
+      (** see {!Logic_typing.typing_context}. *)
+      val on_error: ('a -> 'b) -> (unit -> unit) -> 'a -> 'b
 
     end) :
 sig

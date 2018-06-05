@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -46,6 +46,7 @@ module Make
   include (Domain : Abstract_domain.Lattice with type state = Domain.state)
 
   let structure = Domain.structure
+  let log_category = Domain.log_category
 
   type value = Convert.extended_value
   type location = Convert.extended_location
@@ -73,10 +74,6 @@ module Make
     let list = Domain.reduce_further state expr (Convert.restrict_val value) in
     List.map (fun (e, v) -> e, Convert.extend_val v) list
 
-  module Return = Domain.Return
-  type return = Domain.return
-
-
 
   let lift_left left = { left with lloc = Convert.restrict_loc left.lloc }
   let lift_flagged_value value =
@@ -93,20 +90,6 @@ module Make
       List.map (fun (exp, assigned) -> exp, lift_assigned assigned) call.rest
     in
     { call with arguments; rest }
-
-  let extend_return return_state =
-    let extend (value, return) =
-      { value with v = value.v >>-: Convert.extend_val }, return
-    in
-    let return = Extlib.opt_map extend return_state.return in
-    { return_state with return }
-
-  let extend_call_result res = res >>-: List.map extend_return
-
-  let extend_action = function
-    | Compute _ as a -> a
-    | Result (res, cacheable) -> Result (extend_call_result res, cacheable)
-
 
   module Transfer
       (Valuation:
@@ -141,12 +124,6 @@ module Make
 
     module Internal_Transfer = Domain.Transfer (Internal_Valuation)
 
-    type state = Domain.state
-    type return = Domain.return
-    type value = Convert.extended_value
-    type location = Convert.extended_location
-    type valuation = Valuation.t
-
     let update = Internal_Transfer.update
 
     let assign stmt lv expr value valuation state =
@@ -157,57 +134,45 @@ module Make
 
     let start_call stmt call valuation state =
       let call = lift_call call in
-      extend_action (Internal_Transfer.start_call stmt call valuation state)
-
-    let make_return kf stmt assign valuation state =
-      let assign = lift_assigned assign in
-      Internal_Transfer.make_return kf stmt assign valuation state
+      Internal_Transfer.start_call stmt call valuation state
 
     let finalize_call stmt call ~pre ~post =
       let call = lift_call call in
       Internal_Transfer.finalize_call stmt call ~pre ~post
 
-    let assign_return stmt lv kf return value valuation state =
-      let lv = lift_left lv
-      and value = lift_assigned value in
-      Internal_Transfer.assign_return stmt lv kf return value valuation state
+    let approximate_call stmt call state =
+      Internal_Transfer.approximate_call stmt (lift_call call) state
 
-    let default_call stmt call state =
-      let result = Internal_Transfer.default_call stmt (lift_call call) state in
-      extend_call_result result
-
-    let enter_loop stmt state =
-      Internal_Transfer.enter_loop stmt state
-
-    let incr_loop_counter stmt state =
-      Internal_Transfer.incr_loop_counter stmt state
-
-    let leave_loop stmt state =
-      Internal_Transfer.leave_loop stmt state
-
+    let show_expr = Internal_Transfer.show_expr
   end
 
-  let compute_using_specification kinstr kf state =
-    extend_call_result (Domain.compute_using_specification kinstr kf state)
+  let logic_assign assigns location ~pre state =
+    Domain.logic_assign assigns (Convert.restrict_loc location) ~pre state
 
-  include (Domain : Abstract_domain.Logic with type state := t)
+  let evaluate_predicate = Domain.evaluate_predicate
+  let reduce_by_predicate = Domain.reduce_by_predicate
 
   let enter_scope = Domain.enter_scope
   let leave_scope = Domain.leave_scope
 
-  let empty = Domain.empty
-  let initialize_var state lval loc value =
-    let loc = Convert.restrict_loc loc in
-    let value = value >>-: fun (v, b) -> Convert.restrict_val v, b in
-    Domain.initialize_var state lval loc value
+  let enter_loop = Domain.enter_loop
+  let incr_loop_counter = Domain.incr_loop_counter
+  let leave_loop = Domain.leave_loop
 
-  let initialize_var_using_type = Domain.initialize_var_using_type
-  let global_state = Domain.global_state
+  let empty = Domain.empty
+  let introduce_globals = Domain.introduce_globals
+  let initialize_variable lval loc ~initialized init_value state =
+    let loc = Convert.restrict_loc loc in
+    Domain.initialize_variable lval loc ~initialized init_value state
+
+  let initialize_variable_using_type = Domain.initialize_variable_using_type
 
   let filter_by_bases = Domain.filter_by_bases
   let reuse = Domain.reuse
 
   module Store = Domain.Store
+
+  let post_analysis = Domain.post_analysis
 
 end
 

@@ -1,17 +1,30 @@
 /* run.config*
    GCC:
-   OPT: -value-msg-key initial-state -val-initialization-padding-globals no -val @VALUECONFIG@ -lib-entry -main main -context-depth 3 -journal-disable -then -deps -out -input -then -main main2 -then -context-width 4
+   STDOPT: +"-value-msg-key initial-state -val-initialization-padding-globals no -lib-entry -main main -context-depth 3 -then -main main2 -then -context-width 4"
 */
 int f_int(int x);
+
+int *gpi;
+/*@ assigns \result \from indirect:x, gpi; */
 int *f_star_int(int x);
 
 int ****G; volatile v;
 int G0,*G1;
 
 typedef int (*pfun)(int *p1, const int *p2);
-pfun gen();
+
+
+
+pfun gen(void);
 extern pfun f;
-float *i(); double *k();
+
+float *gpf;
+/*@ assigns \result \from gpf; */
+float *i(void);
+
+double *gpd;
+/*@ assigns \result \from gpd; */
+double *k(void);
 
 void main(pfun g) {
   G0 = f_int(2);
@@ -24,7 +37,7 @@ void main(pfun g) {
   pfun h = gen();
   if (v) { int z1 = f(&x, &y); }
   if (v) { int z2 = g(&x, &y); }
-  int z3 = h(&x, &y);
+  if (v) { int z3 = h(&x, &y); }
   float *pf = i();
   float vf = *pf;
   *pf = 1.;

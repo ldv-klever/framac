@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/downcast.i (no preprocessing)
 [value] Analyzing an incomplete application starting at main
 [value] Computing initial state
@@ -15,84 +14,128 @@
   s ∈ [--..--]
   v ∈ [--..--]
 [value] computing for function main1 <- main.
-        Called from tests/value/downcast.i:142.
-tests/value/downcast.i:19:[value] warning: signed downcast. assert -128 ≤ (int)sx + (int)sy;
-tests/value/downcast.i:19:[value] warning: signed downcast. assert (int)sx + (int)sy ≤ 127;
-tests/value/downcast.i:22:[value] warning: signed downcast. assert uy + uz ≤ 2147483647;
+  Called from tests/value/downcast.i:152.
+[value:alarm] tests/value/downcast.i:19: Warning: 
+  signed downcast. assert -128 ≤ (int)sx + (int)sy;
+[value:alarm] tests/value/downcast.i:19: Warning: 
+  signed downcast. assert (int)sx + (int)sy ≤ 127;
+[value:alarm] tests/value/downcast.i:22: Warning: 
+  signed downcast. assert uy + uz ≤ 2147483647;
 [value] Recording results for main1
 [value] Done for function main1
 [value] computing for function main2_bitfield <- main.
-        Called from tests/value/downcast.i:143.
-tests/value/downcast.i:32:[value] warning: signed downcast. assert i ≤ 15;
+  Called from tests/value/downcast.i:153.
+[value:alarm] tests/value/downcast.i:32: Warning: 
+  signed downcast. assert i ≤ 15;
 [value] Recording results for main2_bitfield
 [value] Done for function main2_bitfield
 [value] computing for function main3_reduction <- main.
-        Called from tests/value/downcast.i:144.
-tests/value/downcast.i:38:[value] warning: signed downcast. assert -128 ≤ x_0;
-tests/value/downcast.i:38:[value] warning: signed downcast. assert x_0 ≤ 127;
+  Called from tests/value/downcast.i:154.
+[value:alarm] tests/value/downcast.i:38: Warning: 
+  signed downcast. assert -128 ≤ x_0;
+[value:alarm] tests/value/downcast.i:38: Warning: 
+  signed downcast. assert x_0 ≤ 127;
 [value] Recording results for main3_reduction
 [value] Done for function main3_reduction
 [value] computing for function main4_pointer <- main.
-        Called from tests/value/downcast.i:145.
-tests/value/downcast.i:48:[value] warning: signed downcast. assert p ≤ 2147483647;
+  Called from tests/value/downcast.i:155.
+[value:alarm] tests/value/downcast.i:50: Warning: 
+  signed overflow. assert -9223372036854775808 ≤ p + (long long)100;
+[value:alarm] tests/value/downcast.i:50: Warning: 
+  signed overflow. assert p + (long long)100 ≤ 9223372036854775807;
+[value:alarm] tests/value/downcast.i:52: Warning: 
+  signed downcast. assert -2147483648 ≤ p;
+[value:alarm] tests/value/downcast.i:52: Warning: 
+  signed downcast. assert p ≤ 2147483647;
 [value] Recording results for main4_pointer
 [value] Done for function main4_pointer
 [value] computing for function main5_wrap_signed <- main.
-        Called from tests/value/downcast.i:146.
-tests/value/downcast.i:54:[value] warning: assertion 'ASSUME' got status unknown.
-tests/value/downcast.i:55:[value] assertion got status valid.
-tests/value/downcast.i:58:[value] warning: signed downcast. assert y ≤ 2147483647;
-[value] Called Frama_C_show_each([100000..2147483647],
-                                 [100145..2147483647],
-                                 [100145..2147483647])
-tests/value/downcast.i:60:[value] assertion got status valid.
+  Called from tests/value/downcast.i:156.
+[value:alarm] tests/value/downcast.i:58: Warning: 
+  assertion 'ASSUME' got status unknown.
+[value] tests/value/downcast.i:59: assertion got status valid.
+[value:alarm] tests/value/downcast.i:62: Warning: 
+  signed downcast. assert y ≤ 2147483647;
+[value] tests/value/downcast.i:63: 
+  Frama_C_show_each:
+  [100000..2147483647], [100145..2147483647], [100145..2147483647]
+[value] tests/value/downcast.i:64: assertion got status valid.
 [value] Recording results for main5_wrap_signed
 [value] Done for function main5_wrap_signed
 [value] computing for function main6_val_warn_converted_signed <- main.
-        Called from tests/value/downcast.i:147.
-tests/value/downcast.i:67:[value] warning: signed downcast. assert 65300u ≤ 32767;
-tests/value/downcast.i:78:[value] warning: signed downcast. assert e_0 ≤ 32767;
-tests/value/downcast.i:83:[value] warning: signed downcast. assert e_1 ≤ 32767;
+  Called from tests/value/downcast.i:157.
+[value:alarm] tests/value/downcast.i:71: Warning: 
+  signed downcast. assert 65300u ≤ 32767;
+[value:alarm] tests/value/downcast.i:82: Warning: 
+  signed downcast. assert e_0 ≤ 32767;
+[value:alarm] tests/value/downcast.i:87: Warning: 
+  signed downcast. assert e_1 ≤ 32767;
+[value:alarm] tests/value/downcast.i:91: Warning: 
+  signed downcast. assert p ≤ 2147483647;
+[value:alarm] tests/value/downcast.i:92: Warning: 
+  signed downcast. assert p ≤ 32767;
+[value] tests/value/downcast.i:93: 
+  Assigning imprecise value to z.
+  The imprecision originates from Arithmetic {tests/value/downcast.i:93}
 [value] Recording results for main6_val_warn_converted_signed
 [value] Done for function main6_val_warn_converted_signed
 [value] computing for function main7_signed_upcast <- main.
-        Called from tests/value/downcast.i:148.
+  Called from tests/value/downcast.i:158.
 [value] Recording results for main7_signed_upcast
 [value] Done for function main7_signed_upcast
 [value] computing for function main8_bitfields <- main.
-        Called from tests/value/downcast.i:149.
-tests/value/downcast.i:104:[value] warning: signed downcast. assert S.i1 ≤ 31;
-tests/value/downcast.i:105:[value] warning: signed downcast. assert S.i1 ≤ 127;
-tests/value/downcast.i:109:[value] warning: signed downcast. assert S.i1 ≤ 31;
-tests/value/downcast.i:110:[value] warning: signed downcast. assert S.i1 ≤ 127;
-tests/value/downcast.i:114:[value] warning: signed downcast. assert S.i1 ≤ 31;
+  Called from tests/value/downcast.i:159.
+[value:alarm] tests/value/downcast.i:114: Warning: 
+  signed downcast. assert S.i1 ≤ 31;
+[value:alarm] tests/value/downcast.i:115: Warning: 
+  signed downcast. assert S.i1 ≤ 127;
+[value:alarm] tests/value/downcast.i:119: Warning: 
+  signed downcast. assert S.i1 ≤ 31;
+[value:alarm] tests/value/downcast.i:120: Warning: 
+  signed downcast. assert S.i1 ≤ 127;
+[value:alarm] tests/value/downcast.i:124: Warning: 
+  signed downcast. assert S.i1 ≤ 31;
 [value] Recording results for main8_bitfields
 [value] Done for function main8_bitfields
 [value] computing for function main9_bitfield <- main.
-        Called from tests/value/downcast.i:150.
-tests/value/downcast.i:123:[value] warning: signed downcast. assert bf.a ≤ 1023;
-tests/value/downcast.i:127:[value] warning: signed downcast. assert bf.a ≤ 127;
+  Called from tests/value/downcast.i:160.
+[value:alarm] tests/value/downcast.i:133: Warning: 
+  signed downcast. assert bf.a ≤ 1023;
+[value:alarm] tests/value/downcast.i:137: Warning: 
+  signed downcast. assert bf.a ≤ 127;
 [value] Recording results for main9_bitfield
 [value] Done for function main9_bitfield
 [value] computing for function main10_loop <- main.
-        Called from tests/value/downcast.i:151.
-tests/value/downcast.i:135:[value] entering loop for the first time
-tests/value/downcast.i:137:[value] warning: signed downcast. assert bf.b ≤ 127;
+  Called from tests/value/downcast.i:161.
+[value] tests/value/downcast.i:145: entering loop for the first time
+[value:alarm] tests/value/downcast.i:147: Warning: 
+  signed downcast. assert bf.b ≤ 127;
 [value] Recording results for main10_loop
 [value] Done for function main10_loop
 [value] Recording results for main
 [value] done for function main
-tests/value/downcast.i:32:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:67:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:78:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:83:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:104:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:105:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:109:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:110:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:114:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:123:[value] assertion 'Value,signed_downcast' got final status invalid.
-tests/value/downcast.i:127:[value] assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:32: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:71: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:82: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:87: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:114: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:115: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:119: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:120: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:124: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:133: 
+  assertion 'Value,signed_downcast' got final status invalid.
+[value] tests/value/downcast.i:137: 
+  assertion 'Value,signed_downcast' got final status invalid.
 [value] ====== VALUES COMPUTED ======
 [value:final-states] Values at end of function main1:
   sz ∈ [--..--]
@@ -117,9 +160,9 @@ tests/value/downcast.i:127:[value] assertion 'Value,signed_downcast' got final s
   y ∈ [--..--]
   d ∈ [--..--]
 [value:final-states] Values at end of function main4_pointer:
-  p ∈ {{ (long long)&x_0 }}
-  q ∈ {{ (unsigned int)&x_0 }}
-  r ∈ {{ (int)&x_0 }}
+  p ∈ {{ &x_0 + {100} }}
+  q ∈ {{ &x_0 + {100} }}
+  r ∈ {{ &x_0 + {100} }}
 [value:final-states] Values at end of function main5_wrap_signed:
   x_0 ∈ [100000..2147483647]
   y ∈ [100145..2147483647]
@@ -166,7 +209,7 @@ tests/value/downcast.i:127:[value] assertion 'Value,signed_downcast' got final s
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function main1:
   sz FROM sx; sy
   uc FROM x
@@ -199,49 +242,49 @@ tests/value/downcast.i:127:[value] assertion 'Value,signed_downcast' got final s
   s FROM uy; uz
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main1:
-          sz; uc; x; ux; s
+    sz; uc; x; ux; s
 [inout] Inputs for function main1:
-          sx; sy; x; uy; uz
+    sx; sy; x; uy; uz
 [inout] Out (internal) for function main10_loop:
-          c; bf.b; k
+    c; bf.b; k
 [inout] Inputs for function main10_loop:
-          v
+    v
 [inout] Out (internal) for function main2_bitfield:
-          i; j; ss{.i; .j}
+    i; j; ss{.i; .j}
 [inout] Inputs for function main2_bitfield:
-          v
+    v
 [inout] Out (internal) for function main3_reduction:
-          x_0; c; y; d
+    x_0; c; y; d
 [inout] Inputs for function main3_reduction:
-          v
+    v
 [inout] Out (internal) for function main4_pointer:
-          p; q; r
+    p; q; r
 [inout] Inputs for function main4_pointer:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main5_wrap_signed:
-          x_0; y; z
+    x_0; y; z
 [inout] Inputs for function main5_wrap_signed:
-          v
+    v
 [inout] Out (internal) for function main6_val_warn_converted_signed:
-          s_0; u; e; b; e_0; b_0; e_1; b_1
+    s_0; u; e; b; e_0; b_0; e_1; b_1; p; x_0; y; z
 [inout] Inputs for function main6_val_warn_converted_signed:
-          v
+    v
 [inout] Out (internal) for function main7_signed_upcast:
-          c; i
+    c; i
 [inout] Inputs for function main7_signed_upcast:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main8_bitfields:
-          S{.i1; .i2}; c
+    S{.i1; .i2}; c
 [inout] Inputs for function main8_bitfields:
-          v
+    v
 [inout] Out (internal) for function main9_bitfield:
-          bf.a; signed_a; c
+    bf.a; signed_a; c
 [inout] Inputs for function main9_bitfield:
-          v
+    v
 [inout] Out (internal) for function main:
-          sz; uc; x; ux; s
+    sz; uc; x; ux; s
 [inout] Inputs for function main:
-          sx; sy; x; uy; uz; v
+    sx; sy; x; uy; uz; v
 [report] Computing properties status...
 
 --------------------------------------------------------------------------------
@@ -276,89 +319,99 @@ tests/value/downcast.i:127:[value] assertion 'Value,signed_downcast' got final s
 --- Properties of Function 'main4_pointer'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 48)
+[    -    ] Assertion 'Value,signed_overflow' (file tests/value/downcast.i, line 50)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_overflow' (file tests/value/downcast.i, line 50)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 52)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 52)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main5_wrap_signed'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 54)
+[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 58)
             tried with Value.
-[  Valid  ] Assertion (file tests/value/downcast.i, line 55)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 59)
             by Value.
-[  Valid  ] Assertion (file tests/value/downcast.i, line 60)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 64)
             by Value.
-[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 58)
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 62)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main6_val_warn_converted_signed'
 --------------------------------------------------------------------------------
 
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 67)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 71)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 67)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 78)
+             - Unreachable initialization of 's_0' (file tests/value/downcast.i, line 71)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 82)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 78)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 83)
+             - Unreachable initialization of 'b_0' (file tests/value/downcast.i, line 82)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 87)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 83)
+             - Unreachable initialization of 'b_1' (file tests/value/downcast.i, line 87)
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 91)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 92)
+            tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main8_bitfields'
 --------------------------------------------------------------------------------
 
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 104)
-            By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 104)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 105)
-            By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 105)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 109)
-            By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 109)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 110)
-            By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 110)
 [  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 114)
             By Value, with pending:
              - Unreachable instruction (file tests/value/downcast.i, line 114)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 115)
+            By Value, with pending:
+             - Unreachable instruction (file tests/value/downcast.i, line 115)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 119)
+            By Value, with pending:
+             - Unreachable instruction (file tests/value/downcast.i, line 119)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 120)
+            By Value, with pending:
+             - Unreachable instruction (file tests/value/downcast.i, line 120)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 124)
+            By Value, with pending:
+             - Unreachable instruction (file tests/value/downcast.i, line 124)
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main9_bitfield'
 --------------------------------------------------------------------------------
 
-[  Dead   ] Assertion (file tests/value/downcast.i, line 124)
+[  Dead   ] Assertion (file tests/value/downcast.i, line 134)
             Locally valid, but unreachable.
             By Value because:
-             - Unreachable program point (file tests/value/downcast.i, line 124)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 123)
+             - Unreachable program point (file tests/value/downcast.i, line 134)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 133)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 123)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 127)
+             - Unreachable initialization of 'signed_a' (file tests/value/downcast.i, line 133)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 137)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 127)
-[Unreachable] Unreachable program point (file tests/value/downcast.i, line 124)
+             - Unreachable instruction (file tests/value/downcast.i, line 137)
+[Unreachable] Unreachable program point (file tests/value/downcast.i, line 134)
             by Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main10_loop'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 137)
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 147)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Status Report Summary
 --------------------------------------------------------------------------------
      2 Completely validated
-     9 To be validated
+    14 To be validated
     11 Alarms emitted
      1 Dead property
      1 Unreachable
-    24 Total
+    29 Total
 --------------------------------------------------------------------------------
 /* Generated by Frama-C */
 struct s {
@@ -401,11 +454,9 @@ void main1(void)
 
 void main2_bitfield(void)
 {
-  int i;
-  unsigned int j;
   struct s ss;
-  i = 117;
-  j = (unsigned int)254;
+  int i = 117;
+  unsigned int j = (unsigned int)254;
   if (v) 
     /*@ assert Value: signed_downcast: i ≤ 15; */
     ss.i = (int)i;
@@ -415,29 +466,30 @@ void main2_bitfield(void)
 
 void main3_reduction(void)
 {
-  int x_0;
-  char c;
-  unsigned int y;
-  unsigned char d;
-  x_0 = v;
+  int x_0 = v;
   /*@ assert Value: signed_downcast: -128 ≤ x_0; */
   /*@ assert Value: signed_downcast: x_0 ≤ 127; */
-  c = (char)x_0;
-  y = (unsigned int)v;
-  d = (unsigned char)y;
+  char c = (char)x_0;
+  unsigned int y = (unsigned int)v;
+  unsigned char d = (unsigned char)y;
   return;
 }
 
 void main4_pointer(void)
 {
   int x_0;
-  long long p;
-  unsigned int q;
-  int r;
-  p = (long long)(& x_0);
-  q = (unsigned int)p;
+  long long p = (long long)(& x_0);
+  /*@ assert
+      Value: signed_overflow: -9223372036854775808 ≤ p + (long long)100;
+  */
+  /*@ assert
+      Value: signed_overflow: p + (long long)100 ≤ 9223372036854775807;
+  */
+  p += (long long)100;
+  unsigned int q = (unsigned int)p;
+  /*@ assert Value: signed_downcast: -2147483648 ≤ p; */
   /*@ assert Value: signed_downcast: p ≤ 2147483647; */
-  r = (int)p;
+  int r = (int)p;
   return;
 }
 
@@ -447,16 +499,13 @@ extern int ( /* missing proto */ Frama_C_show_each)();
 
 void main5_wrap_signed(void)
 {
-  int x_0;
-  unsigned int y;
-  int z;
-  x_0 = v;
+  int x_0 = v;
   /*@ assert ASSUME: x_0 ≥ 100000; */ ;
   /*@ assert x_0 > 0x7FFFFFFF - 145 ∨ x_0 ≤ 0x7FFFFFFF - 145; */ ;
-  y = (unsigned int)x_0;
+  unsigned int y = (unsigned int)x_0;
   y += (unsigned int)145;
   /*@ assert Value: signed_downcast: y ≤ 2147483647; */
-  z = (int)y;
+  int z = (int)y;
   Frama_C_show_each(x_0,y,z);
   /*@ assert z ≥ 100000 + 145 ∨ z ≤ (int)(0x7FFFFFFF + 145); */ ;
   return;
@@ -465,43 +514,41 @@ void main5_wrap_signed(void)
 void main6_val_warn_converted_signed(void)
 {
   if (v) {
-    short s_0;
     /*@ assert Value: signed_downcast: 65300u ≤ 32767; */
-    s_0 = (short)65300u;
+    short s_0 = (short)65300u;
   }
   if (v) {
-    unsigned short u;
-    u = (unsigned short)65300u;
+    unsigned short u = (unsigned short)65300u;
   }
   if (v) {
-    unsigned long e;
-    short b;
-    e = (unsigned long)17;
-    b = (short)e;
+    unsigned long e = (unsigned long)17;
+    short b = (short)e;
   }
   if (v) {
-    unsigned long e_0;
-    short b_0;
-    e_0 = (unsigned long)(-12);
+    unsigned long e_0 = (unsigned long)(-12);
     /*@ assert Value: signed_downcast: e_0 ≤ 32767; */
-    b_0 = (short)e_0;
+    short b_0 = (short)e_0;
   }
   if (v) {
-    unsigned int e_1;
-    short b_1;
-    e_1 = (unsigned int)(-64000);
+    unsigned int e_1 = (unsigned int)(-64000);
     /*@ assert Value: signed_downcast: e_1 ≤ 32767; */
-    b_1 = (short)e_1;
+    short b_1 = (short)e_1;
+  }
+  if (v) {
+    int *p = (int *)(& v);
+    /*@ assert Value: signed_downcast: p ≤ 2147483647; */
+    int x_0 = (int)p;
+    /*@ assert Value: signed_downcast: p ≤ 32767; */
+    short y = (short)p;
+    unsigned short z = (unsigned short)p;
   }
   return;
 }
 
 void main7_signed_upcast(void)
 {
-  unsigned char c;
-  int i;
-  c = (unsigned char)240;
-  i = (int)c;
+  unsigned char c = (unsigned char)240;
+  int i = (int)c;
   return;
 }
 
@@ -537,9 +584,8 @@ void main9_bitfield(void)
   signed char c;
   bf.a = (unsigned int)1648;
   if (v) {
-    int signed_a;
     /*@ assert Value: signed_downcast: bf.a ≤ 1023; */
-    signed_a = (int)((int)bf.a);
+    int signed_a = (int)((int)bf.a);
     /*@ assert signed_a ≡ -400; */ ;
   }
   if (v) 
@@ -552,8 +598,7 @@ void main10_loop(void)
 {
   signed char c;
   struct __anonstruct_bf_2 bf;
-  int k;
-  k = 0;
+  int k = 0;
   while (k < 10) {
     bf.b = (unsigned int)v;
     if (v) 
@@ -595,66 +640,93 @@ void main(void)
   s ∈ [--..--]
   v ∈ [--..--]
 [value] computing for function main1 <- main.
-        Called from tests/value/downcast.i:142.
-tests/value/downcast.i:20:[value] warning: unsigned downcast. assert 0 ≤ (int)sx + (int)sy;
-tests/value/downcast.i:21:[value] warning: unsigned downcast. assert 0 ≤ x;
-tests/value/downcast.i:21:[value] warning: unsigned downcast. assert x ≤ 255;
-tests/value/downcast.i:24:[value] warning: unsigned downcast. assert uy + uz ≤ 65535;
+  Called from tests/value/downcast.i:152.
+[value:alarm] tests/value/downcast.i:20: Warning: 
+  unsigned downcast. assert 0 ≤ (int)sx + (int)sy;
+[value:alarm] tests/value/downcast.i:21: Warning: 
+  unsigned downcast. assert 0 ≤ x;
+[value:alarm] tests/value/downcast.i:21: Warning: 
+  unsigned downcast. assert x ≤ 255;
+[value:alarm] tests/value/downcast.i:24: Warning: 
+  unsigned downcast. assert uy + uz ≤ 65535;
 [value] Recording results for main1
 [value] Done for function main1
 [value] computing for function main2_bitfield <- main.
-        Called from tests/value/downcast.i:143.
-tests/value/downcast.i:33:[value] warning: unsigned downcast. assert j ≤ 31;
+  Called from tests/value/downcast.i:153.
+[value:alarm] tests/value/downcast.i:33: Warning: 
+  unsigned downcast. assert j ≤ 31;
 [value] Recording results for main2_bitfield
 [value] Done for function main2_bitfield
 [value] computing for function main3_reduction <- main.
-        Called from tests/value/downcast.i:144.
-tests/value/downcast.i:40:[value] warning: unsigned downcast. assert 0 ≤ v;
-tests/value/downcast.i:41:[value] warning: unsigned downcast. assert y ≤ 255;
+  Called from tests/value/downcast.i:154.
+[value:alarm] tests/value/downcast.i:40: Warning: 
+  unsigned downcast. assert 0 ≤ v;
+[value:alarm] tests/value/downcast.i:41: Warning: 
+  unsigned downcast. assert y ≤ 255;
 [value] Recording results for main3_reduction
 [value] Done for function main3_reduction
 [value] computing for function main4_pointer <- main.
-        Called from tests/value/downcast.i:145.
+  Called from tests/value/downcast.i:155.
+[value:alarm] tests/value/downcast.i:50: Warning: 
+  signed overflow. assert -9223372036854775808 ≤ p + (long long)100;
+[value:alarm] tests/value/downcast.i:50: Warning: 
+  signed overflow. assert p + (long long)100 ≤ 9223372036854775807;
+[value:alarm] tests/value/downcast.i:51: Warning: 
+  unsigned downcast. assert 0 ≤ p;
+[value:alarm] tests/value/downcast.i:51: Warning: 
+  unsigned downcast. assert p ≤ 4294967295;
 [value] Recording results for main4_pointer
 [value] Done for function main4_pointer
 [value] computing for function main5_wrap_signed <- main.
-        Called from tests/value/downcast.i:146.
-[value] Called Frama_C_show_each([100000..2147483647],
-                                 [100145..2147483792],
-                                 [-2147483648..2147483647])
-tests/value/downcast.i:60:[value] warning: assertion got status unknown.
+  Called from tests/value/downcast.i:156.
+[value] tests/value/downcast.i:63: 
+  Frama_C_show_each:
+  [100000..2147483647], [100145..2147483792], [-2147483648..2147483647]
+[value:alarm] tests/value/downcast.i:64: Warning: assertion got status unknown.
 [value] Recording results for main5_wrap_signed
 [value] Done for function main5_wrap_signed
 [value] computing for function main6_val_warn_converted_signed <- main.
-        Called from tests/value/downcast.i:147.
-tests/value/downcast.i:77:[value] warning: unsigned downcast. assert 0 ≤ -12;
-tests/value/downcast.i:82:[value] warning: unsigned downcast. assert 0 ≤ -64000;
+  Called from tests/value/downcast.i:157.
+[value:alarm] tests/value/downcast.i:81: Warning: 
+  unsigned downcast. assert 0 ≤ -12;
+[value:alarm] tests/value/downcast.i:86: Warning: 
+  unsigned downcast. assert 0 ≤ -64000;
+[value] tests/value/downcast.i:92: 
+  Assigning imprecise value to y.
+  The imprecision originates from Arithmetic {tests/value/downcast.i:92}
+[value:alarm] tests/value/downcast.i:93: Warning: 
+  unsigned downcast. assert p ≤ 65535;
 [value] Recording results for main6_val_warn_converted_signed
 [value] Done for function main6_val_warn_converted_signed
 [value] computing for function main7_signed_upcast <- main.
-        Called from tests/value/downcast.i:148.
+  Called from tests/value/downcast.i:158.
 [value] Recording results for main7_signed_upcast
 [value] Done for function main7_signed_upcast
 [value] computing for function main8_bitfields <- main.
-        Called from tests/value/downcast.i:149.
+  Called from tests/value/downcast.i:159.
 [value] Recording results for main8_bitfields
 [value] Done for function main8_bitfields
 [value] computing for function main9_bitfield <- main.
-        Called from tests/value/downcast.i:150.
-tests/value/downcast.i:124:[value] assertion got status valid.
+  Called from tests/value/downcast.i:160.
+[value] tests/value/downcast.i:134: assertion got status valid.
 [value] Recording results for main9_bitfield
 [value] Done for function main9_bitfield
 [value] computing for function main10_loop <- main.
-        Called from tests/value/downcast.i:151.
-tests/value/downcast.i:136:[value] warning: unsigned downcast. assert 0 ≤ v;
-tests/value/downcast.i:136:[value] warning: unsigned downcast. assert v ≤ 1023;
+  Called from tests/value/downcast.i:161.
+[value:alarm] tests/value/downcast.i:146: Warning: 
+  unsigned downcast. assert 0 ≤ v;
+[value:alarm] tests/value/downcast.i:146: Warning: 
+  unsigned downcast. assert v ≤ 1023;
 [value] Recording results for main10_loop
 [value] Done for function main10_loop
 [value] Recording results for main
 [value] done for function main
-tests/value/downcast.i:33:[value] assertion 'Value,unsigned_downcast' got final status invalid.
-tests/value/downcast.i:77:[value] assertion 'Value,unsigned_downcast' got final status invalid.
-tests/value/downcast.i:82:[value] assertion 'Value,unsigned_downcast' got final status invalid.
+[value] tests/value/downcast.i:33: 
+  assertion 'Value,unsigned_downcast' got final status invalid.
+[value] tests/value/downcast.i:81: 
+  assertion 'Value,unsigned_downcast' got final status invalid.
+[value] tests/value/downcast.i:86: 
+  assertion 'Value,unsigned_downcast' got final status invalid.
 [value] ====== VALUES COMPUTED ======
 [value:final-states] Values at end of function main1:
   sz ∈ [--..--]
@@ -678,9 +750,9 @@ tests/value/downcast.i:82:[value] assertion 'Value,unsigned_downcast' got final 
   y ∈ [0..255]
   d ∈ [--..--]
 [value:final-states] Values at end of function main4_pointer:
-  p ∈ {{ (long long)&x_0 }}
-  q ∈ {{ (unsigned int)&x_0 }}
-  r ∈ {{ (int)&x_0 }}
+  p ∈ {{ &x_0 + {100} }}
+  q ∈ {{ &x_0 + {100} }}
+  r ∈ {{ &x_0 + {100} }}
 [value:final-states] Values at end of function main5_wrap_signed:
   x_0 ∈ [100000..2147483647]
   y ∈ [100145..2147483792]
@@ -728,7 +800,7 @@ tests/value/downcast.i:82:[value] assertion 'Value,unsigned_downcast' got final 
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function main1:
   sz FROM sx; sy
   uc FROM x
@@ -761,49 +833,49 @@ tests/value/downcast.i:82:[value] assertion 'Value,unsigned_downcast' got final 
   s FROM uy; uz
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main1:
-          sz; uc; x; ux; s
+    sz; uc; x; ux; s
 [inout] Inputs for function main1:
-          sx; sy; x; uy; uz
+    sx; sy; x; uy; uz
 [inout] Out (internal) for function main10_loop:
-          c; bf.b; k
+    c; bf.b; k
 [inout] Inputs for function main10_loop:
-          v
+    v
 [inout] Out (internal) for function main2_bitfield:
-          i; j; ss{.i; .j}
+    i; j; ss{.i; .j}
 [inout] Inputs for function main2_bitfield:
-          v
+    v
 [inout] Out (internal) for function main3_reduction:
-          x_0; c; y; d
+    x_0; c; y; d
 [inout] Inputs for function main3_reduction:
-          v
+    v
 [inout] Out (internal) for function main4_pointer:
-          p; q; r
+    p; q; r
 [inout] Inputs for function main4_pointer:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main5_wrap_signed:
-          x_0; y; z
+    x_0; y; z
 [inout] Inputs for function main5_wrap_signed:
-          v
+    v
 [inout] Out (internal) for function main6_val_warn_converted_signed:
-          s_0; u; e; b; e_0; e_1
+    s_0; u; e; b; e_0; e_1; p; x_0; y; z
 [inout] Inputs for function main6_val_warn_converted_signed:
-          v
+    v
 [inout] Out (internal) for function main7_signed_upcast:
-          c; i
+    c; i
 [inout] Inputs for function main7_signed_upcast:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main8_bitfields:
-          S{.i1; .i2}; c
+    S{.i1; .i2}; c
 [inout] Inputs for function main8_bitfields:
-          v
+    v
 [inout] Out (internal) for function main9_bitfield:
-          bf.a; signed_a; c
+    bf.a; signed_a; c
 [inout] Inputs for function main9_bitfield:
-          v
+    v
 [inout] Out (internal) for function main:
-          sz; uc; x; ux; s
+    sz; uc; x; ux; s
 [inout] Inputs for function main:
-          sx; sy; x; uy; uz; v
+    sx; sy; x; uy; uz; v
 [report] Computing properties status...
 
 --------------------------------------------------------------------------------
@@ -837,50 +909,65 @@ tests/value/downcast.i:82:[value] assertion 'Value,unsigned_downcast' got final 
             tried with Value.
 
 --------------------------------------------------------------------------------
+--- Properties of Function 'main4_pointer'
+--------------------------------------------------------------------------------
+
+[    -    ] Assertion 'Value,signed_overflow' (file tests/value/downcast.i, line 50)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_overflow' (file tests/value/downcast.i, line 50)
+            tried with Value.
+[    -    ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 51)
+            tried with Value.
+[    -    ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 51)
+            tried with Value.
+
+--------------------------------------------------------------------------------
 --- Properties of Function 'main5_wrap_signed'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 54)
+[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 58)
             tried with Value.
-[  Valid  ] Assertion (file tests/value/downcast.i, line 55)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 59)
             by Value.
-[    -    ] Assertion (file tests/value/downcast.i, line 60)
+[    -    ] Assertion (file tests/value/downcast.i, line 64)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main6_val_warn_converted_signed'
 --------------------------------------------------------------------------------
 
-[  Alarm  ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 77)
+[  Alarm  ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 81)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 77)
-[  Alarm  ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 82)
+             - Unreachable initialization of 'e_0' (file tests/value/downcast.i, line 81)
+[  Alarm  ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 86)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 82)
+             - Unreachable initialization of 'e_1' (file tests/value/downcast.i, line 86)
+[    -    ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 93)
+            tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main9_bitfield'
 --------------------------------------------------------------------------------
 
-[  Valid  ] Assertion (file tests/value/downcast.i, line 124)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 134)
             by Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main10_loop'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 136)
+[    -    ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 146)
             tried with Value.
-[    -    ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 136)
+[    -    ] Assertion 'Value,unsigned_downcast' (file tests/value/downcast.i, line 146)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Status Report Summary
 --------------------------------------------------------------------------------
      2 Completely validated
-    10 To be validated
+    15 To be validated
      3 Alarms emitted
-    15 Total
+    20 Total
 --------------------------------------------------------------------------------
 /* Generated by Frama-C */
 struct s {
@@ -924,11 +1011,9 @@ void main1(void)
 
 void main2_bitfield(void)
 {
-  int i;
-  unsigned int j;
   struct s ss;
-  i = 117;
-  j = (unsigned int)254;
+  int i = 117;
+  unsigned int j = (unsigned int)254;
   if (v) 
     ss.i = (int)i;
   if (v) 
@@ -939,28 +1024,30 @@ void main2_bitfield(void)
 
 void main3_reduction(void)
 {
-  int x_0;
-  char c;
-  unsigned int y;
-  unsigned char d;
-  x_0 = v;
-  c = (char)x_0;
+  int x_0 = v;
+  char c = (char)x_0;
   /*@ assert Value: unsigned_downcast: 0 ≤ v; */
-  y = (unsigned int)v;
+  unsigned int y = (unsigned int)v;
   /*@ assert Value: unsigned_downcast: y ≤ 255; */
-  d = (unsigned char)y;
+  unsigned char d = (unsigned char)y;
   return;
 }
 
 void main4_pointer(void)
 {
   int x_0;
-  long long p;
-  unsigned int q;
-  int r;
-  p = (long long)(& x_0);
-  q = (unsigned int)p;
-  r = (int)p;
+  long long p = (long long)(& x_0);
+  /*@ assert
+      Value: signed_overflow: -9223372036854775808 ≤ p + (long long)100;
+  */
+  /*@ assert
+      Value: signed_overflow: p + (long long)100 ≤ 9223372036854775807;
+  */
+  p += (long long)100;
+  /*@ assert Value: unsigned_downcast: 0 ≤ p; */
+  /*@ assert Value: unsigned_downcast: p ≤ 4294967295; */
+  unsigned int q = (unsigned int)p;
+  int r = (int)p;
   return;
 }
 
@@ -970,15 +1057,12 @@ extern int ( /* missing proto */ Frama_C_show_each)();
 
 void main5_wrap_signed(void)
 {
-  int x_0;
-  unsigned int y;
-  int z;
-  x_0 = v;
+  int x_0 = v;
   /*@ assert ASSUME: x_0 ≥ 100000; */ ;
   /*@ assert x_0 > 0x7FFFFFFF - 145 ∨ x_0 ≤ 0x7FFFFFFF - 145; */ ;
-  y = (unsigned int)x_0;
+  unsigned int y = (unsigned int)x_0;
   y += (unsigned int)145;
-  z = (int)y;
+  int z = (int)y;
   Frama_C_show_each(x_0,y,z);
   /*@ assert z ≥ 100000 + 145 ∨ z ≤ (int)(0x7FFFFFFF + 145); */ ;
   return;
@@ -987,42 +1071,39 @@ void main5_wrap_signed(void)
 void main6_val_warn_converted_signed(void)
 {
   if (v) {
-    short s_0;
-    s_0 = (short)65300u;
+    short s_0 = (short)65300u;
   }
   if (v) {
-    unsigned short u;
-    u = (unsigned short)65300u;
+    unsigned short u = (unsigned short)65300u;
   }
   if (v) {
-    unsigned long e;
-    short b;
-    e = (unsigned long)17;
-    b = (short)e;
+    unsigned long e = (unsigned long)17;
+    short b = (short)e;
   }
   if (v) {
-    unsigned long e_0;
-    short b_0;
     /*@ assert Value: unsigned_downcast: 0 ≤ -12; */
-    e_0 = (unsigned long)(-12);
-    b_0 = (short)e_0;
+    unsigned long e_0 = (unsigned long)(-12);
+    short b_0 = (short)e_0;
   }
   if (v) {
-    unsigned int e_1;
-    short b_1;
     /*@ assert Value: unsigned_downcast: 0 ≤ -64000; */
-    e_1 = (unsigned int)(-64000);
-    b_1 = (short)e_1;
+    unsigned int e_1 = (unsigned int)(-64000);
+    short b_1 = (short)e_1;
+  }
+  if (v) {
+    int *p = (int *)(& v);
+    int x_0 = (int)p;
+    short y = (short)p;
+    /*@ assert Value: unsigned_downcast: p ≤ 65535; */
+    unsigned short z = (unsigned short)p;
   }
   return;
 }
 
 void main7_signed_upcast(void)
 {
-  unsigned char c;
-  int i;
-  c = (unsigned char)240;
-  i = (int)c;
+  unsigned char c = (unsigned char)240;
+  int i = (int)c;
   return;
 }
 
@@ -1053,8 +1134,7 @@ void main9_bitfield(void)
   signed char c;
   bf.a = (unsigned int)1648;
   if (v) {
-    int signed_a;
-    signed_a = (int)((int)bf.a);
+    int signed_a = (int)((int)bf.a);
     /*@ assert signed_a ≡ -400; */ ;
   }
   if (v) 
@@ -1066,8 +1146,7 @@ void main10_loop(void)
 {
   signed char c;
   struct __anonstruct_bf_2 bf;
-  int k;
-  k = 0;
+  int k = 0;
   while (k < 10) {
     /*@ assert Value: unsigned_downcast: 0 ≤ v; */
     /*@ assert Value: unsigned_downcast: v ≤ 1023; */
@@ -1110,60 +1189,84 @@ void main(void)
   s ∈ [--..--]
   v ∈ [--..--]
 [value] computing for function main1 <- main.
-        Called from tests/value/downcast.i:142.
-tests/value/downcast.i:19:[value] warning: signed downcast. assert -128 ≤ (int)sx + (int)sy;
-tests/value/downcast.i:19:[value] warning: signed downcast. assert (int)sx + (int)sy ≤ 127;
+  Called from tests/value/downcast.i:152.
+[value:alarm] tests/value/downcast.i:19: Warning: 
+  signed downcast. assert -128 ≤ (int)sx + (int)sy;
+[value:alarm] tests/value/downcast.i:19: Warning: 
+  signed downcast. assert (int)sx + (int)sy ≤ 127;
 [value] Recording results for main1
 [value] Done for function main1
 [value] computing for function main2_bitfield <- main.
-        Called from tests/value/downcast.i:143.
-tests/value/downcast.i:32:[value] warning: signed downcast. assert i ≤ 15;
+  Called from tests/value/downcast.i:153.
+[value:alarm] tests/value/downcast.i:32: Warning: 
+  signed downcast. assert i ≤ 15;
 [value] Recording results for main2_bitfield
 [value] Done for function main2_bitfield
 [value] computing for function main3_reduction <- main.
-        Called from tests/value/downcast.i:144.
-tests/value/downcast.i:38:[value] warning: signed downcast. assert -128 ≤ x_0;
-tests/value/downcast.i:38:[value] warning: signed downcast. assert x_0 ≤ 127;
+  Called from tests/value/downcast.i:154.
+[value:alarm] tests/value/downcast.i:38: Warning: 
+  signed downcast. assert -128 ≤ x_0;
+[value:alarm] tests/value/downcast.i:38: Warning: 
+  signed downcast. assert x_0 ≤ 127;
 [value] Recording results for main3_reduction
 [value] Done for function main3_reduction
 [value] computing for function main4_pointer <- main.
-        Called from tests/value/downcast.i:145.
-tests/value/downcast.i:48:[value] warning: signed downcast. assert p ≤ 2147483647;
+  Called from tests/value/downcast.i:155.
+[value:alarm] tests/value/downcast.i:50: Warning: 
+  signed overflow. assert -9223372036854775808 ≤ p + (long long)100;
+[value:alarm] tests/value/downcast.i:50: Warning: 
+  signed overflow. assert p + (long long)100 ≤ 9223372036854775807;
+[value:alarm] tests/value/downcast.i:52: Warning: 
+  signed downcast. assert -2147483648 ≤ p;
+[value:alarm] tests/value/downcast.i:52: Warning: 
+  signed downcast. assert p ≤ 2147483647;
 [value] Recording results for main4_pointer
 [value] Done for function main4_pointer
 [value] computing for function main5_wrap_signed <- main.
-        Called from tests/value/downcast.i:146.
-[value] Called Frama_C_show_each([100000..2147483647],
-                                 [100145..2147483792],
-                                 [-2147483648..2147483647])
+  Called from tests/value/downcast.i:156.
+[value] tests/value/downcast.i:63: 
+  Frama_C_show_each:
+  [100000..2147483647], [100145..2147483792], [-2147483648..2147483647]
 [value] Recording results for main5_wrap_signed
 [value] Done for function main5_wrap_signed
 [value] computing for function main6_val_warn_converted_signed <- main.
-        Called from tests/value/downcast.i:147.
-tests/value/downcast.i:67:[value] warning: signed downcast. assert (int)65300u ≤ 32767;
-tests/value/downcast.i:83:[value] warning: signed downcast. assert -32768 ≤ (int)e_1;
+  Called from tests/value/downcast.i:157.
+[value:alarm] tests/value/downcast.i:71: Warning: 
+  signed downcast. assert (int)65300u ≤ 32767;
+[value:alarm] tests/value/downcast.i:87: Warning: 
+  signed downcast. assert -32768 ≤ (int)e_1;
+[value:alarm] tests/value/downcast.i:92: Warning: 
+  signed downcast. assert -32768 ≤ (int)p;
+[value:alarm] tests/value/downcast.i:92: Warning: 
+  signed downcast. assert (int)p ≤ 32767;
 [value] Recording results for main6_val_warn_converted_signed
 [value] Done for function main6_val_warn_converted_signed
 [value] computing for function main7_signed_upcast <- main.
-        Called from tests/value/downcast.i:148.
+  Called from tests/value/downcast.i:158.
 [value] Recording results for main7_signed_upcast
 [value] Done for function main7_signed_upcast
 [value] computing for function main8_bitfields <- main.
-        Called from tests/value/downcast.i:149.
-tests/value/downcast.i:109:[value] warning: signed downcast. assert (int)S.i1 ≤ 31;
-tests/value/downcast.i:110:[value] warning: signed downcast. assert (int)S.i1 ≤ 127;
-tests/value/downcast.i:114:[value] warning: signed downcast. assert (int)S.i1 ≤ 31;
+  Called from tests/value/downcast.i:159.
+[value:alarm] tests/value/downcast.i:119: Warning: 
+  signed downcast. assert (int)S.i1 ≤ 31;
+[value:alarm] tests/value/downcast.i:120: Warning: 
+  signed downcast. assert (int)S.i1 ≤ 127;
+[value:alarm] tests/value/downcast.i:124: Warning: 
+  signed downcast. assert (int)S.i1 ≤ 31;
 [value] Recording results for main8_bitfields
 [value] Done for function main8_bitfields
 [value] computing for function main9_bitfield <- main.
-        Called from tests/value/downcast.i:150.
-tests/value/downcast.i:127:[value] warning: signed downcast. assert -128 ≤ (int)bf.a;
+  Called from tests/value/downcast.i:160.
+[value:alarm] tests/value/downcast.i:137: Warning: 
+  signed downcast. assert -128 ≤ (int)bf.a;
 [value] Recording results for main9_bitfield
 [value] Done for function main9_bitfield
 [value] computing for function main10_loop <- main.
-        Called from tests/value/downcast.i:151.
-tests/value/downcast.i:137:[value] warning: signed downcast. assert -128 ≤ (int)bf.b;
-tests/value/downcast.i:137:[value] warning: signed downcast. assert (int)bf.b ≤ 127;
+  Called from tests/value/downcast.i:161.
+[value:alarm] tests/value/downcast.i:147: Warning: 
+  signed downcast. assert -128 ≤ (int)bf.b;
+[value:alarm] tests/value/downcast.i:147: Warning: 
+  signed downcast. assert (int)bf.b ≤ 127;
 [value] Recording results for main10_loop
 [value] Done for function main10_loop
 [value] Recording results for main
@@ -1192,9 +1295,9 @@ tests/value/downcast.i:137:[value] warning: signed downcast. assert (int)bf.b �
   y ∈ [--..--]
   d ∈ [--..--]
 [value:final-states] Values at end of function main4_pointer:
-  p ∈ {{ (long long)&x_0 }}
-  q ∈ {{ (unsigned int)&x_0 }}
-  r ∈ {{ (int)&x_0 }}
+  p ∈ {{ &x_0 + {100} }}
+  q ∈ {{ &x_0 + {100} }}
+  r ∈ {{ &x_0 + {100} }}
 [value:final-states] Values at end of function main5_wrap_signed:
   x_0 ∈ [100000..2147483647]
   y ∈ [100145..2147483792]
@@ -1242,7 +1345,7 @@ tests/value/downcast.i:137:[value] warning: signed downcast. assert (int)bf.b �
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function main1:
   sz FROM sx; sy
   uc FROM x
@@ -1275,49 +1378,49 @@ tests/value/downcast.i:137:[value] warning: signed downcast. assert (int)bf.b �
   s FROM uy; uz
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main1:
-          sz; uc; x; ux; s
+    sz; uc; x; ux; s
 [inout] Inputs for function main1:
-          sx; sy; x; uy; uz
+    sx; sy; x; uy; uz
 [inout] Out (internal) for function main10_loop:
-          c; bf.b; k
+    c; bf.b; k
 [inout] Inputs for function main10_loop:
-          v
+    v
 [inout] Out (internal) for function main2_bitfield:
-          i; j; ss{.i; .j}
+    i; j; ss{.i; .j}
 [inout] Inputs for function main2_bitfield:
-          v
+    v
 [inout] Out (internal) for function main3_reduction:
-          x_0; c; y; d
+    x_0; c; y; d
 [inout] Inputs for function main3_reduction:
-          v
+    v
 [inout] Out (internal) for function main4_pointer:
-          p; q; r
+    p; q; r
 [inout] Inputs for function main4_pointer:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main5_wrap_signed:
-          x_0; y; z
+    x_0; y; z
 [inout] Inputs for function main5_wrap_signed:
-          v
+    v
 [inout] Out (internal) for function main6_val_warn_converted_signed:
-          s_0; u; e; b; e_0; b_0; e_1; b_1
+    s_0; u; e; b; e_0; b_0; e_1; b_1; p; x_0; y; z
 [inout] Inputs for function main6_val_warn_converted_signed:
-          v
+    v
 [inout] Out (internal) for function main7_signed_upcast:
-          c; i
+    c; i
 [inout] Inputs for function main7_signed_upcast:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main8_bitfields:
-          S{.i1; .i2}; c
+    S{.i1; .i2}; c
 [inout] Inputs for function main8_bitfields:
-          v
+    v
 [inout] Out (internal) for function main9_bitfield:
-          bf.a; signed_a; c
+    bf.a; signed_a; c
 [inout] Inputs for function main9_bitfield:
-          v
+    v
 [inout] Out (internal) for function main:
-          sz; uc; x; ux; s
+    sz; uc; x; ux; s
 [inout] Inputs for function main:
-          sx; sy; x; uy; uz; v
+    sx; sy; x; uy; uz; v
 [report] Computing properties status...
 
 --------------------------------------------------------------------------------
@@ -1350,71 +1453,81 @@ tests/value/downcast.i:137:[value] warning: signed downcast. assert (int)bf.b �
 --- Properties of Function 'main4_pointer'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 48)
+[    -    ] Assertion 'Value,signed_overflow' (file tests/value/downcast.i, line 50)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_overflow' (file tests/value/downcast.i, line 50)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 52)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 52)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main5_wrap_signed'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 54)
+[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 58)
             tried with Value.
-[  Valid  ] Assertion (file tests/value/downcast.i, line 55)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 59)
             by Value.
-[    -    ] Assertion (file tests/value/downcast.i, line 60)
+[    -    ] Assertion (file tests/value/downcast.i, line 64)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main6_val_warn_converted_signed'
 --------------------------------------------------------------------------------
 
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 67)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 71)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 67)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 83)
+             - Unreachable initialization of 's_0' (file tests/value/downcast.i, line 71)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 87)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 83)
+             - Unreachable initialization of 'b_1' (file tests/value/downcast.i, line 87)
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 92)
+            tried with Value.
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 92)
+            tried with Value.
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main8_bitfields'
 --------------------------------------------------------------------------------
 
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 109)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 119)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 109)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 110)
+             - Unreachable instruction (file tests/value/downcast.i, line 119)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 120)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 110)
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 114)
+             - Unreachable instruction (file tests/value/downcast.i, line 120)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 124)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 114)
+             - Unreachable instruction (file tests/value/downcast.i, line 124)
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main9_bitfield'
 --------------------------------------------------------------------------------
 
-[  Valid  ] Assertion (file tests/value/downcast.i, line 124)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 134)
             by Value.
-[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 127)
+[  Alarm  ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 137)
             By Value, with pending:
-             - Unreachable instruction (file tests/value/downcast.i, line 127)
+             - Unreachable instruction (file tests/value/downcast.i, line 137)
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main10_loop'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 137)
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 147)
             tried with Value.
-[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 137)
+[    -    ] Assertion 'Value,signed_downcast' (file tests/value/downcast.i, line 147)
             tried with Value.
 
 --------------------------------------------------------------------------------
 --- Status Report Summary
 --------------------------------------------------------------------------------
      2 Completely validated
-     9 To be validated
+    14 To be validated
      7 Alarms emitted
-    18 Total
+    23 Total
 --------------------------------------------------------------------------------
 /* Generated by Frama-C */
 struct s {
@@ -1456,11 +1569,9 @@ void main1(void)
 
 void main2_bitfield(void)
 {
-  int i;
-  unsigned int j;
   struct s ss;
-  i = 117;
-  j = (unsigned int)254;
+  int i = 117;
+  unsigned int j = (unsigned int)254;
   if (v) 
     /*@ assert Value: signed_downcast: i ≤ 15; */
     ss.i = (int)i;
@@ -1471,29 +1582,30 @@ void main2_bitfield(void)
 
 void main3_reduction(void)
 {
-  int x_0;
-  char c;
-  unsigned int y;
-  unsigned char d;
-  x_0 = v;
+  int x_0 = v;
   /*@ assert Value: signed_downcast: -128 ≤ x_0; */
   /*@ assert Value: signed_downcast: x_0 ≤ 127; */
-  c = (char)x_0;
-  y = (unsigned int)v;
-  d = (unsigned char)y;
+  char c = (char)x_0;
+  unsigned int y = (unsigned int)v;
+  unsigned char d = (unsigned char)y;
   return;
 }
 
 void main4_pointer(void)
 {
   int x_0;
-  long long p;
-  unsigned int q;
-  int r;
-  p = (long long)(& x_0);
-  q = (unsigned int)p;
+  long long p = (long long)(& x_0);
+  /*@ assert
+      Value: signed_overflow: -9223372036854775808 ≤ p + (long long)100;
+  */
+  /*@ assert
+      Value: signed_overflow: p + (long long)100 ≤ 9223372036854775807;
+  */
+  p += (long long)100;
+  unsigned int q = (unsigned int)p;
+  /*@ assert Value: signed_downcast: -2147483648 ≤ p; */
   /*@ assert Value: signed_downcast: p ≤ 2147483647; */
-  r = (int)p;
+  int r = (int)p;
   return;
 }
 
@@ -1503,15 +1615,12 @@ extern int ( /* missing proto */ Frama_C_show_each)();
 
 void main5_wrap_signed(void)
 {
-  int x_0;
-  unsigned int y;
-  int z;
-  x_0 = v;
+  int x_0 = v;
   /*@ assert ASSUME: x_0 ≥ 100000; */ ;
   /*@ assert x_0 > 0x7FFFFFFF - 145 ∨ x_0 ≤ 0x7FFFFFFF - 145; */ ;
-  y = (unsigned int)x_0;
+  unsigned int y = (unsigned int)x_0;
   y += (unsigned int)145;
-  z = (int)y;
+  int z = (int)y;
   Frama_C_show_each(x_0,y,z);
   /*@ assert z ≥ 100000 + 145 ∨ z ≤ (int)(0x7FFFFFFF + 145); */ ;
   return;
@@ -1520,42 +1629,40 @@ void main5_wrap_signed(void)
 void main6_val_warn_converted_signed(void)
 {
   if (v) {
-    short s_0;
     /*@ assert Value: signed_downcast: (int)65300u ≤ 32767; */
-    s_0 = (short)65300u;
+    short s_0 = (short)65300u;
   }
   if (v) {
-    unsigned short u;
-    u = (unsigned short)65300u;
+    unsigned short u = (unsigned short)65300u;
   }
   if (v) {
-    unsigned long e;
-    short b;
-    e = (unsigned long)17;
-    b = (short)e;
+    unsigned long e = (unsigned long)17;
+    short b = (short)e;
   }
   if (v) {
-    unsigned long e_0;
-    short b_0;
-    e_0 = (unsigned long)(-12);
-    b_0 = (short)e_0;
+    unsigned long e_0 = (unsigned long)(-12);
+    short b_0 = (short)e_0;
   }
   if (v) {
-    unsigned int e_1;
-    short b_1;
-    e_1 = (unsigned int)(-64000);
+    unsigned int e_1 = (unsigned int)(-64000);
     /*@ assert Value: signed_downcast: -32768 ≤ (int)e_1; */
-    b_1 = (short)e_1;
+    short b_1 = (short)e_1;
+  }
+  if (v) {
+    int *p = (int *)(& v);
+    int x_0 = (int)p;
+    /*@ assert Value: signed_downcast: -32768 ≤ (int)p; */
+    /*@ assert Value: signed_downcast: (int)p ≤ 32767; */
+    short y = (short)p;
+    unsigned short z = (unsigned short)p;
   }
   return;
 }
 
 void main7_signed_upcast(void)
 {
-  unsigned char c;
-  int i;
-  c = (unsigned char)240;
-  i = (int)c;
+  unsigned char c = (unsigned char)240;
+  int i = (int)c;
   return;
 }
 
@@ -1589,8 +1696,7 @@ void main9_bitfield(void)
   signed char c;
   bf.a = (unsigned int)1648;
   if (v) {
-    int signed_a;
-    signed_a = (int)((int)bf.a);
+    int signed_a = (int)((int)bf.a);
     /*@ assert signed_a ≡ -400; */ ;
   }
   if (v) 
@@ -1603,8 +1709,7 @@ void main10_loop(void)
 {
   signed char c;
   struct __anonstruct_bf_2 bf;
-  int k;
-  k = 0;
+  int k = 0;
   while (k < 10) {
     bf.b = (unsigned int)v;
     if (v) 
@@ -1646,12 +1751,14 @@ void main(void)
   uz ∈ [--..--]
   s ∈ [--..--]
   v ∈ [--..--]
-[value] Called Frama_C_show_each([100000..2147483502],
-                                 [100145..2147483647],
-                                 [100145..2147483647])
-[value] Called Frama_C_show_each([2147483503..2147483647],
-                                 [2147483648..2147483792],
-                                 [-2147483648..-2147483504])
+[value] tests/value/downcast.i:63: 
+  Frama_C_show_each:
+  [2147483503..2147483647],
+  [2147483648..2147483792],
+  [-2147483648..-2147483504]
+[value] tests/value/downcast.i:63: 
+  Frama_C_show_each:
+  [100000..2147483502], [100145..2147483647], [100145..2147483647]
 [value] Recording results for main5_wrap_signed
 [value] done for function main5_wrap_signed
 [value] ====== VALUES COMPUTED ======
@@ -1662,36 +1769,36 @@ void main(void)
 [from] Computing for function main5_wrap_signed
 [from] Done for function main5_wrap_signed
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function main5_wrap_signed:
   NO EFFECTS
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main5_wrap_signed:
-          x_0; y; z
+    x_0; y; z
 [inout] Inputs for function main5_wrap_signed:
-          v
+    v
 [report] Computing properties status...
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main5_wrap_signed'
 --------------------------------------------------------------------------------
 
-[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 54)
+[    -    ] Assertion 'ASSUME' (file tests/value/downcast.i, line 58)
             tried with Value (v2).
-[  Valid  ] Assertion (file tests/value/downcast.i, line 55)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 59)
             by Value (v2).
-[  Valid  ] Assertion (file tests/value/downcast.i, line 60)
+[  Valid  ] Assertion (file tests/value/downcast.i, line 64)
             by Value (v2).
 
 --------------------------------------------------------------------------------
 --- Properties of Function 'main9_bitfield'
 --------------------------------------------------------------------------------
 
-[  Dead   ] Assertion (file tests/value/downcast.i, line 124)
+[  Dead   ] Assertion (file tests/value/downcast.i, line 134)
             Locally valid, but unreachable.
             By Value (v2) because:
-             - Unreachable program point (file tests/value/downcast.i, line 124)
-[Unreachable] Unreachable program point (file tests/value/downcast.i, line 124)
+             - Unreachable program point (file tests/value/downcast.i, line 134)
+[Unreachable] Unreachable program point (file tests/value/downcast.i, line 134)
             by Value (v2).
 
 --------------------------------------------------------------------------------

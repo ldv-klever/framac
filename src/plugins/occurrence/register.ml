@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,10 +33,15 @@ module Occurrences: sig
   val add: varinfo -> kernel_function option -> kinstr -> lval -> unit
   val get: varinfo -> (kernel_function option * kinstr * lval) list
   val self: State.t
-  val iter: (varinfo ->
-             (kernel_function option * kinstr * lval) list -> unit) -> unit
-  val iter_sorted: (varinfo ->
-             (kernel_function option * kinstr * lval) list -> unit) -> unit
+  val get_last_result: unit ->
+    ((Kernel_function.t option * Cil_types.kinstr *
+      (Cil_types.lhost * Cil_types.offset))
+       list * Cil_types.varinfo)
+      option
+  val iter:
+    (varinfo -> (kernel_function option * kinstr * lval) list -> unit) -> unit
+  val iter_sorted:
+    (varinfo -> (kernel_function option * kinstr * lval) list -> unit) -> unit
 end = struct
 
   module IState =
@@ -70,10 +75,6 @@ end = struct
       Some (unsafe_get vi, vi)
     with Not_found ->
       None
-
-  let () =
-    Db.register Db.Journalization_not_required
-      Db.Occurrence.get_last_result get_last_result
 
   let iter_aux fold f =
     let old, l =
@@ -109,16 +110,16 @@ class occurrence = object (self)
   method! vlval lv =
     let ki = self#current_kinstr in
     if Db.Value.is_accessible ki then begin
-      let z = !Db.Value.lval_to_zone ki ~with_alarms:CilE.warn_none_mode lv in
+      let z = !Db.Value.lval_to_zone ki lv in
       try
         Locations.Zone.fold_topset_ok
           (fun b _ () ->
             match b with
-              | Base.Var (vi, _) | Base.Allocated (vi, _) ->
+              | Base.Var (vi, _) | Base.Allocated (vi, _, _) ->
                   Occurrences.add vi self#current_kf ki lv
               | _ -> ()
           ) z ()
-      with Locations.Zone.Error_Top ->
+      with Abstract_interp.Error_Top ->
         error ~current:true "Found completely imprecise value (%a). Ignoring@."
           Printer.pp_lval lv
     end;
@@ -178,6 +179,15 @@ let classify_accesses (_kf, ki, lv) =
               else Write
             else Read
 
+        | Local_init (v, _, _) ->
+          (match lv with
+           | Var v', _ when Cil_datatype.Varinfo.equal v v' ->
+             (* We are initializing v. We can't read from it at the same time.
+                Hence, there's no need to perform the additional checks done
+                in the cases above. *)
+             Write
+           | _ -> Read)
+
         | Asm (_, _, asm_outputs, asm_inputs, _, _, _) ->
             if List.exists (fun (_, _, out) -> is_lv out) asm_outputs then
               if List.exists (fun (_, _, inp) -> contained_exp inp) asm_inputs
@@ -216,7 +226,7 @@ let print_one fmt v l =
           | (Some kf, _, _) :: _ -> Kernel_function.get_name kf
           | (None,Kstmt _,_)::_ -> assert false
           | (None,Kglobal,_)::_ ->
-              fatal "inconsistent context for occurence of variable %s" v.vname
+              fatal "inconsistent context for occurrence of variable %s" v.vname
 	in
 	if v.vformal then "parameter of " ^ kf_name
 	else "local of " ^ kf_name);
@@ -228,28 +238,37 @@ let print_all () =
   compute ();
   result "%t" (fun fmt -> Occurrences.iter_sorted (print_one fmt))
 
-let main _fmt = if Print.get () then !Db.Occurrence.print_all ()
-let () = Db.Main.extend main
+(* ************************************************************************** *)
+(* Exported API *)
+(* ************************************************************************** *)
 
-let () =
-  Db.register
-    (Db.Journalize
-       ("Occurrence.get",
-        Datatype.func
+let self = Occurrences.self
+let get_last_result = Occurrences.get_last_result
+
+let get =
+  Journal.register
+    "Occurrence.get"
+    (Datatype.func
           Varinfo.ty
         (* [JS 2011/04/01] Datatype.list buggy in presence of journalisation.
            See comment in datatype.ml *)
         (*(Datatype.list (Datatype.pair Kinstr.ty Lval.ty))*)
-          (let module L = Datatype.List(Occurrence_datatype) in L.ty)))
-    Db.Occurrence.get
-    get;
-  Db.register
-    (Db.Journalize
-       ("Occurrence.print_all", Datatype.func Datatype.unit Datatype.unit))
+    (let module L = Datatype.List(Occurrence_datatype) in L.ty))
+    get
+
+let print_all =
+  Journal.register
+    "Occurrence.print_all"
+    (Datatype.func Datatype.unit Datatype.unit)
     (* pb: print_all should take a formatter as argument *)
-    Db.Occurrence.print_all
-    print_all;
-  Db.Occurrence.self := Occurrences.self
+    print_all
+
+(* ************************************************************************** *)
+(* Main *)
+(* ************************************************************************** *)
+
+let main _fmt = if Print.get () then print_all ()
+let () = Db.Main.extend main
 
 (*
 Local Variables:

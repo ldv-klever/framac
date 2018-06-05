@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,7 +25,7 @@ open Cil_types
 module M = Alarms.Map
 
 type alarm = Alarms.t
-type status = True | False | Unknown
+type status = Abstract_interp.Comp.result = True | False | Unknown
 type s = status M.t
 type t = Just of s | AllBut of s
 
@@ -105,9 +105,10 @@ let is_empty = function
   | AllBut _ -> false
   | Just m -> M.is_empty m
 
-let singleton a = Just (M.singleton a Unknown)
+let singleton ?(status=Unknown) a =
+  if status = True then Just M.empty else Just (M.singleton a status)
 
-let add' alarm status = function
+let set alarm status = function
   | Just m   ->
     if status = True
     then Just (M.remove alarm m)
@@ -116,10 +117,6 @@ let add' alarm status = function
     if status = Unknown
     then AllBut (M.remove alarm m)
     else AllBut (M.add alarm status m)
-
-let add alarm = function
-  | Just m   -> Just (M.add alarm Unknown m)
-  | AllBut m -> AllBut (M.add alarm True m)
 
 let default = function
   | Just _ -> True
@@ -131,7 +128,20 @@ let find alarm set =
     | AllBut m -> M.find alarm m
   with Not_found -> default set
 
-let merge merge_status s1 s2 =
+(* Merges two alarm maps [s1] and [s2], using [merge_status] to merge merge the
+   statuses bound to a same alarm.
+
+   If [combine] is true, both alarm maps [s1] and [s2] have been produced in
+   the same state but for different expressions [e1] and [e2]: they may contain
+   different alarms, but should always have the same status bound to a same
+   alarm. Do not use the default status for alarms in [s1] missing in [s2] (and
+   vice versa): such alarms may have no meaning for [e2], and should have the
+   same status in [s2] than in [s1] anyway.
+
+   If [combine] is false, both maps come from the evaluation of the same
+   expression in different states. In this case, use the default status for any
+   alarm missing in one side. *)
+let merge ~combine merge_status s1 s2 =
   let d1 = default s1 and d2 = default s2 in
   let m1 = get s1 and m2 = get s2 in
   let closed_set = match merge_status d1 d2 with
@@ -145,15 +155,15 @@ let merge merge_status s1 s2 =
   in
   let merge _ p1 p2 = match p1, p2 with
     | None, None       -> assert false
-    | Some p, None     -> return (merge_status p d2)
-    | None, Some p     -> return (merge_status d1 p)
+    | Some p, None -> if combine then Some p else return (merge_status p d2)
+    | None, Some p -> if combine then Some p else return (merge_status d1 p)
     | Some p1, Some p2 -> return (merge_status p1 p2)
   in
   if closed_set
   then Just (M.merge merge m1 m2)
   else AllBut (M.merge merge m1 m2)
 
-let union = merge Status.join
+let union = merge ~combine:false Status.join
 
 exception Inconsistent
 let intersect status1 status2 = match Status.inter status1 status2 with
@@ -161,8 +171,18 @@ let intersect status1 status2 = match Status.inter status1 status2 with
   | `Inconsistent -> raise Inconsistent
 
 let inter s1 s2 =
-  try `Value (merge intersect s1 s2)
+  try `Value (merge ~combine:false intersect s1 s2)
   with Inconsistent -> `Inconsistent
+
+let combine s1 s2 =
+  (* [intersect] is only applied if both maps explicitely contain the same
+     alarm. As both maps have been produced in the same state, the statuses for
+     this alarm should be consistent. *)
+  try merge ~combine:true intersect s1 s2
+  with Inconsistent ->
+    Value_parameters.fatal ~current:true
+      "Inconsistent combination of two alarm maps %a and %a."
+      pretty s1 pretty s2
 
 let iter f = function
   | Just m -> M.iter f m
@@ -173,8 +193,8 @@ let exists test ~default = function
   | AllBut m -> M.exists test m || default Unknown
 
 let for_all test ~default = function
-  | Just m -> M.for_all test m || default True
-  | AllBut m -> M.for_all test m || default Unknown
+  | Just m -> M.for_all test m && default True
+  | AllBut m -> M.for_all test m && default Unknown
 
 
 (* --------------------------------------------------------------------------
@@ -224,170 +244,129 @@ let local_printer: Printer.extensible_printer =
 
 let pr_annot = local_printer#code_annotation
 
-let current_stmt_tbl =
-  let s = Stack.create () in
-  Stack.push Cil_types.Kglobal s;
-  s
+(* Default behaviour: print one alarm per kinstr. *)
+module Alarm_key =
+  Datatype.Pair_with_collections (Cil_datatype.Kinstr) (Alarms)
+    (struct
+      let module_name = "Alarm_key"
+    end)
 
-let start_stmt ki =
-  Valarms.start_stmt ki;
-  Stack.push ki current_stmt_tbl
+module Alarm_cache =
+  State_builder.Hashtbl (Alarm_key.Hashtbl) (Datatype.Unit)
+    (struct
+      let name = "Value_messages.Alarm_cache"
+      let dependencies = [Db.Value.self]
+      let size = 35
+    end)
 
-let end_stmt () =
-  Valarms.end_stmt ();
-  try ignore (Stack.pop current_stmt_tbl)
-  with Stack.Empty -> assert false
-
-let current_stmt () =
-  try Stack.top current_stmt_tbl
-  with Stack.Empty -> assert false
-
-let sc_kinstr_loc ki = match ki with
-  | Cil_types.Kglobal -> (* can occur in case of obscure bugs (already happended)
+let loc = function
+  | Cil_types.Kglobal -> (* can occur in case of obscure bugs (already happened)
                             with wacky initializers. Module Initial_state of
                             value analysis correctly positions the loc *)
-    assert (Cil_datatype.Kinstr.equal Cil_types.Kglobal (current_stmt ()));
     Cil.CurrentLoc.get ()
   | Cil_types.Kstmt s -> Cil_datatype.Stmt.loc s
 
+let report_alarm ki annot msg =
+  Value_util.alarm_report ~source:(fst (loc ki)) "@[%s.@ @[<hov 2>%a@]@]%t"
+    msg pr_annot annot Value_util.pp_callstack
 
-let register_alarm ?kf alarm status f =
-  let ki = current_stmt () in
+let string_fkind = function
+  | Cil_types.FFloat -> "float"
+  | Cil_types.FDouble -> "double"
+  | Cil_types.FLongDouble -> "long double"
+
+(** Emitting alarms *)
+
+let register_alarm ki alarm status str =
   let status = match status with
     | True -> Property_status.True
-    | False -> Property_status.False_if_reachable
+    | False ->
+      (* We cannot soundly emit a red status on an alarm, because we may have
+         emitted a green status earlier on. Thus we store the information
+         for logging purposes, and emit an Unknown status. *)
+      Red_statuses.add_red_alarm ki alarm;
+      Property_status.Dont_know
     | Unknown -> Property_status.Dont_know
   in
   let annot, _is_new =
-    Alarms.register ~loc:(sc_kinstr_loc ki) ?kf ~status emitter ki alarm
+    Alarms.register ~loc:(loc ki) ~status emitter ki alarm
   in
-  let k =
-    Format.kfprintf
-      (fun _fmt -> Format.flush_str_formatter ()) Format.str_formatter
-  in
-  let str = f annot k Value_util.pp_callstack in
-  Value_messages.new_alarm ki alarm status annot str
+  (* Report each alarm only once per analysis. The boolean [is_new] returned
+     by {{Alarms.register}} is inadequate, as an alarm emitted by another
+     plugin or by a previous run of Eva would be considered as not new. *)
+  Alarm_cache.memo (fun (_ki,_alarm) -> report_alarm ki annot str) (ki, alarm)
 
-let do_warn {a_log; a_call} alarm status str =
-  let f () =
-    register_alarm alarm status
-      (fun annot k -> k "@[%s.@ %a@]%t" str pr_annot annot)
-  in
-  if a_log then f ();
-  a_call ()
+let emit_alarm kinstr alarm (status:status) =
+  let register_alarm = register_alarm kinstr alarm status in
+  match alarm with
+  | Alarms.Pointer_comparison (_, _) -> register_alarm "pointer comparison"
 
-let warn warn_mode alarm status = match alarm with
-  | Alarms.Pointer_comparison (_, e) ->
-    let emit = match Value_parameters.WarnPointerComparison.get () with
-      | "none" -> false
-      | "all" -> true
-      | "pointer" -> Cil.isPointerType (Cil.typeOf e)
-      | _ -> assert false
-    in
-    if emit then
-      do_warn warn_mode.defined_logic alarm status "pointer comparison"
-
-  | Alarms.Division_by_zero _ ->
-    do_warn warn_mode.others alarm status "division by zero"
+  | Alarms.Division_by_zero _ -> register_alarm "division by zero"
 
   | Alarms.Overflow (kind, _, _, _) ->
-    do_warn warn_mode.others alarm status
-      (Format.sprintf "%s"
-         (match kind with
+    let str = match kind with
           | Alarms.Signed -> "signed overflow"
           | Alarms.Unsigned -> "unsigned overflow"
           | Alarms.Signed_downcast -> "signed downcast"
           | Alarms.Unsigned_downcast -> "unsigned downcast"
-         ))
+    in
+    register_alarm str
 
   | Alarms.Float_to_int _ ->
-    do_warn warn_mode.others alarm status
-      "overflow in conversion from floating-point to integer"
+    register_alarm "overflow in conversion from floating-point to integer"
 
   | Alarms.Invalid_shift (_, Some _) ->
-    do_warn warn_mode.others alarm status
-      "invalid RHS operand for shift"
+    register_alarm "invalid RHS operand for shift"
 
   | Alarms.Invalid_shift (_, None) ->
-    do_warn warn_mode.others alarm status
-      "invalid LHS operand for left shift"
+    register_alarm "invalid LHS operand for left shift"
 
-  | Alarms.Memory_access (_, access_kind)
-  | Alarms.Logic_memory_access (_, access_kind) ->
-    do_warn warn_mode.others alarm status
-      (Format.sprintf "out of bounds %s"
-         (match access_kind with
-          | Alarms.For_reading -> "read" | Alarms.For_writing -> "write"))
+  | Alarms.Memory_access (_, access_kind) ->
+    let access = match access_kind with
+      | Alarms.For_reading -> "read"
+      | Alarms.For_writing -> "write"
+    in
+    register_alarm (Format.sprintf "out of bounds %s" access)
 
   | Alarms.Index_out_of_bound _ ->
-    do_warn warn_mode.others alarm status
-      "accessing out of bounds index"
-
-  | Alarms.Valid_string _ ->
-    do_warn warn_mode.defined_logic alarm status
-      "may not point to a valid string"
+    register_alarm "accessing out of bounds index"
 
   | Alarms.Differing_blocks _ ->
-    do_warn warn_mode.defined_logic alarm status
-      "pointer subtraction"
+    register_alarm "pointer subtraction"
 
   | Alarms.Is_nan_or_infinite (_, fkind) ->
-    let sfkind = match fkind with
-      | Cil_types.FFloat -> "float"
-      | Cil_types.FDouble -> "double"
-      | Cil_types.FLongDouble -> "long double"
-    in
-    do_warn warn_mode.others alarm status
-      (Format.sprintf "non-finite %s value" sfkind)
+    let sfkind = string_fkind fkind in
+    register_alarm (Format.sprintf "non-finite %s value" sfkind)
+
+  | Alarms.Is_nan (_, fkind) ->
+    let sfkind = string_fkind fkind in
+    register_alarm (Format.sprintf "NaN %s value" sfkind)
 
   | Alarms.Uninitialized _ ->
-    do_warn warn_mode.unspecified alarm status
-      "accessing uninitialized left-value"
+    register_alarm "accessing uninitialized left-value"
 
   | Alarms.Dangling _ ->
-    do_warn warn_mode.unspecified alarm status
-      "accessing left-value that contains escaping addresses"
+    register_alarm "accessing left-value that contains escaping addresses"
 
   | Alarms.Not_separated _ ->
-    do_warn warn_mode.others alarm status
-      "undefined multiple accesses in expression"
+    register_alarm "undefined multiple accesses in expression"
 
   | Alarms.Overlap _ ->
-    do_warn warn_mode.others alarm status
-      "partially overlapping lvalue assignment"
+    register_alarm "partially overlapping lvalue assignment"
 
   | Alarms.Function_pointer _ ->
-    do_warn warn_mode.others alarm status
-      "pointer to function with incompatible type"
+    register_alarm  "pointer to function with incompatible type"
 
-let rec height_expr expr =
-  match expr.enode with
-  | Const _ | SizeOf _ | SizeOfStr _ | AlignOf _ -> 0
-  | Lval lv | AddrOf lv | StartOf lv  -> height_lval lv + 1
-  | UnOp (_,e,_) | CastE (_, _, e) | Info (e,_) | SizeOfE e | AlignOfE e
-    -> height_expr e + 1
-  | BinOp (_,e1,e2,_) -> max (height_expr e1) (height_expr e2) + 1
+  | Alarms.Uninitialized_union _ ->
+    register_alarm "accessing uninitialized union"
 
-and height_lval (host, offset) =
-  let h1 = match host with
-    | Var _ -> 0
-    | Mem e -> height_expr e
-  in
-  max h1 (height_offset offset) + 1
-
-and height_offset = function
-  | NoOffset  -> 0
-  | Field (_,r) -> height_offset r + 1
-  | Index (e,r) -> max (height_expr e) (height_offset r) + 1
-
-let height_alarm = function
+let height_alarm = let open Value_util in function
   | Alarms.Division_by_zero e
   | Alarms.Index_out_of_bound (e,_)
   | Alarms.Invalid_shift (e,_)
   | Alarms.Overflow (_,e,_,_)
   | Alarms.Float_to_int (e,_,_)
-  | Alarms.Function_pointer e
-  | Alarms.Valid_string e -> height_expr e + 1
+  | Alarms.Function_pointer (e, _)
   | Alarms.Pointer_comparison (None,e) -> height_expr e + 2
   | Alarms.Memory_access (lv,_)
   | Alarms.Dangling lv -> height_lval lv + 1
@@ -396,26 +375,59 @@ let height_alarm = function
   | Alarms.Differing_blocks (e1,e2) -> max (height_expr e1) (height_expr e2) + 1
   | Alarms.Not_separated (lv1,lv2)
   | Alarms.Overlap (lv1,lv2) -> max (height_lval lv1) (height_lval lv2) + 1
-  | Alarms.Logic_memory_access (_,_) -> 0
-  | Alarms.Is_nan_or_infinite (e,fkind) ->
+  | Alarms.Is_nan_or_infinite (e, fkind)
+  | Alarms.Is_nan (e, fkind) ->
     let trivial = match Cil.typeOf e with
       | TFloat (fk, _) -> fk = fkind
       | _ -> false
     in
     if trivial then height_expr e else height_expr e + 1
+  | Alarms.Uninitialized_union llv -> List.fold_left max 0 (List.map height_lval llv)
 
 let cmp a1 a2 =
   Datatype.Int.compare (height_alarm (fst a1)) (height_alarm (fst a2))
 
-let emit warn_mode = function
-  | Just m ->
-    let list = M.bindings m in
+let emit_alarms kinstr map =
+  let list = M.bindings map in
     let sorted_list = List.sort cmp list in
-    List.iter (fun (alarm, status) -> warn warn_mode alarm status) sorted_list
+  List.iter (fun (alarm, status) -> emit_alarm kinstr alarm status) sorted_list;
+  if Alarm_cache.length () >= Value_parameters.StopAtNthAlarm.get ()
+  then begin
+    Value_parameters.log "Stopping at nth alarm" ;
+    raise Db.Value.Aborted
+  end
+
+let emit kinstr = function
+  | Just map -> if not (M.is_empty map) then emit_alarms kinstr map
   (* TODO: use GADT to avoid this assert false ? *)
   | AllBut  _ ->
     Value_parameters.abort ~current:true ~once:true
-      "All alarms may arise: abstract state too imprecise to continue the analysis."
+      "All alarms may arise: \
+       abstract state too imprecise to continue the analysis."
+
+let warn_alarm warn_mode = function
+  | Alarms.Uninitialized _
+  | Alarms.Dangling _
+    -> warn_mode.unspecified ()
+  | Alarms.Pointer_comparison _
+  | Alarms.Differing_blocks _
+    -> warn_mode.defined_logic ()
+  | Alarms.Division_by_zero _
+  | Alarms.Overflow _
+  | Alarms.Float_to_int _
+  | Alarms.Invalid_shift _
+  | Alarms.Memory_access _
+  | Alarms.Index_out_of_bound _
+  | Alarms.Is_nan_or_infinite _
+  | Alarms.Is_nan _
+  | Alarms.Not_separated _
+  | Alarms.Overlap _
+  | Alarms.Function_pointer _
+  | Alarms.Uninitialized_union _
+    -> warn_mode.others ()
+
+let notify warn_mode alarms =
+  iter (fun alarm _status -> warn_alarm warn_mode alarm) alarms
 
 
 (*

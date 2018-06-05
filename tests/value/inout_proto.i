@@ -1,5 +1,5 @@
 /*run.config*
-  OPT: @VALUECONFIG@ -inout -input-with-formals  -inout-with-formals -inout-callwise -main main_main
+  OPT: -no-autoload-plugins -load-module from,inout @VALUECONFIG@ -inout -input-with-formals  -inout-with-formals -main main_main
 */
 
 typedef unsigned char   BYTE;
@@ -23,7 +23,7 @@ void main(const MESSAGE_ADDR_TYPE msg)
 int a, b, c;
 
 //@ assigns a, b, c \from b;
-void f();
+void f(void);
 
 //@ assigns p[0..3] \from p[3..4];
 void g(int *p);

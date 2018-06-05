@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -65,8 +65,6 @@ module Cil : sig
   (** @return [true] if varinfo is a variadic function, [false] if it
       is a non-variadic function or if it is not a function. *)
   val is_variadic_function : varinfo -> bool
-
-  val static_string : exp -> string option
 
   (** Does not use {! Globals.Functions.get} nor
       {! Kernel_function.get_return_type}. *)

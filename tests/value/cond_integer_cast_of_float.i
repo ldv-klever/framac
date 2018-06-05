@@ -1,5 +1,5 @@
 /* run.config*
-   OPT: -val @VALUECONFIG@ -no-results -then -float-hex -main mainbis
+   OPT: -no-autoload-plugins -load-module value -val @VALUECONFIG@ -no-results -then -float-hex -main mainbis
 */
 typedef double D;
 typedef float F;
@@ -93,8 +93,8 @@ void main2() {
 /* Reduction by numeric predicates in the logic, with arguments of different
    type */
 
-/*@ requires -1000. <= f4 <= 1000; // Must fit in an int
-    requires -1000. <= d2 <= 1000; */
+/*@ requires f4: -1000. <= f4 <= 1000; // Must fit in an int
+    requires d2: -1000. <= d2 <= 1000; */
 void main3() {
 
   // Float/real, cast to bigger float

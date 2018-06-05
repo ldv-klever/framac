@@ -1,10 +1,10 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_typed/array_initialized.c (with preprocessing)
-tests/wp_typed/array_initialized.c:13:[kernel] warning: Too many initializers for array g
+[kernel] tests/wp_typed/array_initialized.c:13: Warning: 
+  Too many initializers for array g
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 [wp] 5 goals scheduled
 [wp] [Alt-Ergo] Goal typed_main1_assert : Valid
 [wp] [Alt-Ergo] Goal typed_main2_assert : Valid
@@ -12,13 +12,14 @@ tests/wp_typed/array_initialized.c:13:[kernel] warning: Too many initializers fo
 [wp] [Alt-Ergo] Goal typed_main_pointer_assert : Valid
 [wp] [Alt-Ergo] Goal typed_simpl_post : Valid
 [wp] Proved goals:    5 / 5
-     Qed:             1 
-     Alt-Ergo:        4
-----------------------------------------------------------
-Functions           WP   Alt-Ergo    Total   Success
-main1               -       1 (19)     1       100%
-main2               -       1 (123)    1       100%
-main3                1     -           1       100%
-main_pointer        -       1 (40)     1       100%
-simpl               -       1 (28)     1       100%
-----------------------------------------------------------
+  Qed:             1 
+  Alt-Ergo:        4
+[wp] Report 'tests/wp_typed/array_initialized.c.1.report.json'
+-------------------------------------------------------------
+Functions           WP     Alt-Ergo        Total   Success
+main1               -       1 (16..28)       1       100%
+main2               -       1 (112..136)     1       100%
+main3                1     -                 1       100%
+main_pointer        -       1 (56..80)       1       100%
+simpl               -       1 (12..24)       1       100%
+-------------------------------------------------------------

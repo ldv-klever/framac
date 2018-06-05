@@ -14,10 +14,11 @@ plug-ins in the platform.
 Thanks to this approach, Frama-C provides sophisticated tools, including:
 
 - an analyzer based on abstract interpretation, aimed at verifying
-  the absence of run-time errors (**Value**);
+  the absence of run-time errors (**Eva**);
 - a program proof framework based on weakest precondition calculus (**WP**);
 - a program slicer (**Slicing**);
 - a tool for verification of temporal (LTL) properties (**Aoraï**);
+- a runtime verification tool (**E-ACSL**);
 - several tools for code base exploration and dependency analysis
   (**From**, **Impact**, **Metrics**, **Occurrence**, **Scope**, etc.).
 
@@ -40,7 +41,7 @@ should install frama-c and its gui:
     opam depext frama-c
     opam install frama-c
 
-Frama-C is developed mainly in Linux, often tested in Mac OSX
+Frama-C is developed mainly in Linux, often tested in macOS
 (via Homebrew), and occasionally tested on Windows
 (with Cygwin + MinGW).
 
@@ -66,6 +67,11 @@ To list all plug-ins, run:
 Each plug-in has a help command
 (`-<plugin>-help` or `-<plugin>-h`) that describes its several
 options.
+
+Finally, the list of options governing the behavior of Frama-C's kernel itself
+is available through
+
+    frama-c -kernel-help
 
 #### Complex scenarios
 
@@ -111,3 +117,4 @@ via the GUI:
 
 - The [Github snapshot repository](https://github.com/Frama-C/Frama-C-snapshot)
   contains the .tar.gz archives of stable Frama-C releases, ready to be cloned.
+  It can also be used for reporting issues and submitting pull requests.

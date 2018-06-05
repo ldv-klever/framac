@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Aorai plug-in of Frama-C.                        *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -27,7 +27,7 @@ open Cil_types
 open Promelaast
 
 (** Given a transition a function and a function status (call or return)
-    it returns if the cross condition can be statisfied
+    it returns if the cross condition can be satisfied
     with only function status.
  *)
 
@@ -35,7 +35,7 @@ val isCrossable:
   (typed_condition * action) trans -> kernel_function -> funcStatus -> bool
 
 (** Given a transition and the main entry point it returns if
-    the cross condition can be statisfied at the beginning of the program. *)
+    the cross condition can be satisfied at the beginning of the program. *)
 val isCrossableAtInit:
   (typed_condition * action) trans -> kernel_function -> bool
 
@@ -101,8 +101,7 @@ val is_out_of_state_exp: state -> location -> Cil_types.exp
     @since Neon-20140301 adds kf argument
  *)
 val aorai_assigns:
-  Data_for_aorai.state ->
-  Cil_types.location -> Cil_types.identified_term Cil_types.assigns
+  Data_for_aorai.state -> Cil_types.location -> Cil_types.assigns
 
 (** returns the list of predicates expressing that for each current state
     the automaton currently is in, there is at least one transition that is

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,8 +22,6 @@
 
 open Cil
 open Cil_types
-
-let dkey = Kernel.register_category "exn_flow"
 
 (* all exceptions that can be raised somewhere in the AST. 
    Used to handle function pointers without exn specification
@@ -191,7 +189,8 @@ object (self)
 
   method! vinst =
     function
-      | Call(_,{ enode = Lval(Var f,NoOffset) },_,_) ->
+      | Call(_,{ enode = Lval(Var f,NoOffset) },_,_)
+      | Local_init(_, ConsInit(f, _, _), _) ->
         let kf = Globals.Functions.get f in
         if self#recursive_call kf then begin
           let module Found =
@@ -392,11 +391,13 @@ let make_init_assign loc v init =
   in
   List.rev (aux (Var v, NoOffset) [] init)
 
+let find_exns_func v =
+  try Exns.find (Globals.Functions.get v)
+  with Not_found -> Cil_datatype.Typ.Set.empty
+
 let find_exns e =
   match e.enode with
-    | Lval(Var v, NoOffset) ->
-      (try Exns.find (Globals.Functions.get v)
-       with Not_found -> Cil_datatype.Typ.Set.empty)
+    | Lval(Var v, NoOffset) -> find_exns_func v
     | _ -> all_exn ()
 
 class erase_exn =
@@ -437,7 +438,7 @@ object(self)
   method private update_union_bindings union exns =
     let update_one_binding t =
       let s = get_type_tag t in
-      Kernel.debug ~dkey
+      Kernel.debug ~dkey:Kernel.dkey_exn_flow
         "Registering %a as possible exn type" Cil_datatype.Typ.pretty t;
       let fi = List.find (fun fi -> fi.fname = s) union.cfields in
       Cil_datatype.Typ.Hashtbl.add exn_union t fi
@@ -472,7 +473,7 @@ object(self)
     self#exn_field_term exn_uncaught_name
 
   method private exn_obj_kind_field t =
-    Kernel.debug ~dkey
+    Kernel.debug ~dkey:Kernel.dkey_exn_flow
       "Searching for %a as possible exn type" Cil_datatype.Typ.pretty t; 
     Cil_datatype.Typ.Hashtbl.find exn_union t
 
@@ -638,7 +639,7 @@ object(self)
 
   method private guard_post_cond (kind,pred as orig) =
     match kind with
-        (* If we exit explicitely with exit,
+        (* If we exit explicitly with exit,
            we haven't seen an uncaught exception anyway. *)
       | Exits | Breaks | Continues -> orig
       | Returns | Normal ->
@@ -695,10 +696,8 @@ object(self)
       else (Catch_exn (v,caught), b) :: acc
 
   method! vstmt_aux s =
-    match s.skind with
-      | Instr (Call (_,f,_,loc) as instr) ->
-        let my_exns = find_exns f in
-        if Cil_datatype.Typ.Set.is_empty my_exns then SkipChildren
+    let generate_jumps instr exns loc =
+      if Cil_datatype.Typ.Set.is_empty exns then SkipChildren
         else begin
           self#modify_current ();
           let make_jump t (stmts, uncaught) =
@@ -713,7 +712,7 @@ object(self)
             end else stmts, true
           in
           let stmts, uncaught =
-            Cil_datatype.Typ.Set.fold make_jump my_exns ([],false)
+          Cil_datatype.Typ.Set.fold make_jump exns ([],false)
           in
           let stmts =
             if uncaught then begin
@@ -735,9 +734,15 @@ object(self)
             Visitor.visitFramacInstr (self:>Visitor.frama_c_visitor) instr
           in
           let call = Cil.mkStmtOneInstr (List.hd instr) in
-          s.skind <- Block (Cil.mkBlock [call;handler]);
+        s.skind <- Block (Cil.mkBlockNonScoping [call;handler]);
           SkipChildren
         end
+    in
+    match s.skind with
+      | Instr (Call (_,f,_,loc) as instr) ->
+        generate_jumps instr (find_exns f) loc
+      | Instr (Local_init(_, ConsInit(f,_,_), loc) as instr) ->
+        generate_jumps instr (find_exns_func f) loc
       | Throw _ when not can_throw ->
         Kernel.fatal "Unexpected Throw statement"
       | Throw(Some(e,t),loc) ->
@@ -836,7 +841,9 @@ let remove_exn f =
     Visitor.visitFramacFileSameGlobals (new exn_visit) f;
     let vis = new erase_exn in
     Visitor.visitFramacFile (vis :> Visitor.frama_c_visitor) f;
-    Cil_datatype.Fundec.Set.iter prepare_file vis#modified_funcs
+    let funs = vis#modified_funcs in
+    if not (Cil_datatype.Fundec.Set.is_empty funs) then Ast.mark_as_changed ();
+    Cil_datatype.Fundec.Set.iter prepare_file funs
   end
 
 let transform_category = File.register_code_transformation_category "remove_exn"

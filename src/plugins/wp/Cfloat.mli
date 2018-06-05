@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,7 +21,7 @@
 (**************************************************************************)
 
 (* -------------------------------------------------------------------------- *)
-(** Floatting Arithmetic Model *)
+(** Floating Arithmetic Model *)
 (* -------------------------------------------------------------------------- *)
 
 open Ctypes
@@ -34,9 +34,9 @@ val configure : model -> unit
 val code_lit : float -> term
 val acsl_lit : Cil_types.logic_real -> term
 
-val real_of_int : unop
 val float_of_int : c_float -> unop
-val convert : c_float -> unop
+val float_of_real : c_float -> unop
+val real_of_float : c_float -> unop
 val range : c_float -> term -> pred
 
 val fopp : c_float -> unop
@@ -45,9 +45,11 @@ val fsub : c_float -> binop
 val fmul : c_float -> binop
 val fdiv : c_float -> binop
 
-val f_iabs : lfun
-val f_rabs : lfun
-val f_sqrt : lfun
+val flt : c_float -> cmp
+val fle : c_float -> cmp
+val feq : c_float -> cmp
+val fneq : c_float -> cmp
+
 val f_model : lfun
 val f_delta : lfun
 val f_epsilon : lfun
@@ -56,4 +58,3 @@ val flt_rnd : c_float -> lfun
 val flt_add : c_float -> lfun
 val flt_mul : c_float -> lfun
 val flt_div : c_float -> lfun
-val flt_sqrt : c_float -> lfun

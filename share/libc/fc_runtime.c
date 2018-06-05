@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -24,10 +24,12 @@
 #include "assert.c"
 #include "ctype.c"
 #include "errno.c"
+#include "fenv.c"
 #include "getopt.c"
 #include "inttypes.c"
 #include "locale.c"
 #include "math.c"
+#include "netdb.c"
 #include "stdio.c"
 #include "stdlib.c"
 #include "string.c"

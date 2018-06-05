@@ -1,9 +1,8 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_plugin/injector.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 ------------------------------------------------------------
   Function f
 ------------------------------------------------------------
@@ -91,13 +90,12 @@ Goal Post-condition for 'ko' 'qed_ko' in 'f':
 Let x = out_0[0].
 Let x_1 = inp_0[0].
 Assume {
-  Type: is_sint32(b) /\ is_sint32(v) /\ is_sint32(x_1) /\
-      is_sint32(inp_0[k]) /\ is_sint32(x) /\ is_sint32(out_0[k]).
-  If 33 != x
-  Then { Have: inp_0 = inp_1[0 <- v]. }
-  Else { (* Call Effects *) Have: inp_0 = inp_1[0 <- v][1 <- b]. }
+  Type: is_sint32(b) /\ is_sint32(v) /\ is_sint32(x_1) /\ is_sint32(x).
+  If x != 33
+  Then { Have: inp_1[0 <- v] = inp_0. }
+  Else { (* Call Effects *) Have: inp_1[0 <- v][1 <- b] = inp_0. }
 }
-Prove: b = x_1.
+Prove: x_1 = b.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
@@ -107,9 +105,9 @@ Prove: b = x_1.
 Goal Post-condition for 'ko_1' 'qed_ko' in 'f':
 Assume {
   (* Pre-condition for 'ko_1' *)
-  Have: 33 = out_0[0].
+  Have: out_0[0] = 33.
   (* Pre-condition for 'ko_1' *)
-  Have: 33 = out_0[1].
+  Have: out_0[1] = 33.
 }
 Prove: false.
 
@@ -117,22 +115,22 @@ Prove: false.
 
 Goal Post-condition for 'ko_1' 'qed_ko' in 'f':
 Assume {
-  Type: is_sint32(v) /\ is_sint32(v_1).
+  Type: is_sint32(b) /\ is_sint32(v).
   (* Pre-condition for 'ko_1' *)
-  Have: 33 = out_0[0].
+  Have: out_0[0] = 33.
   (* Pre-condition for 'ko_1' *)
-  Have: 33 = out_0[1].
+  Have: out_0[1] = 33.
 }
-Prove: v = v_1.
+Prove: v = b.
 
 ------------------------------------------------------------
 
 Goal Post-condition for 'ko_1' 'qed_ko' in 'f':
 Assume {
   (* Pre-condition for 'ko_1' *)
-  Have: 33 = out_0[0].
+  Have: out_0[0] = 33.
   (* Pre-condition for 'ko_1' *)
-  Have: 33 = out_0[1].
+  Have: out_0[1] = 33.
 }
 Prove: false.
 

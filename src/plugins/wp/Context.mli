@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,6 +38,10 @@ val get : 'a value -> 'a
 (** Retrieves the current value of the context.
     Raise an exception if not bound. *)
 
+val get_opt : 'a value -> 'a option
+(** Retrieves the current value of the context.
+    Return [None] if not bound. *)
+
 val set : 'a value -> 'a -> unit
 (** Define the current value. Previous one is lost *)
 
@@ -58,6 +62,8 @@ val pop : 'a value -> 'a option -> unit
 
 val name : 'a value -> string
 
-val once : (unit -> unit) -> unit -> unit
-(** A global configure, executed once. *)
+val register : (unit -> unit) -> unit
+(** Register a global configure, to be executed once per project/ast. *)
 
+val configure : unit -> unit
+(** Apply global configure hooks, once per project/ast. *)

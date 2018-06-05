@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,26 +20,34 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Creation of the inital state of abstract domain. *)
+(** Creation of the initial state of abstract domain. *)
 
 open Cil_types
 open Bottom.Type
 
 module type S = sig
   type state
-  val initial_state : unit -> state or_bottom
-  val initial_state_with_formals : kernel_function -> state or_bottom
+
+  (** Compute the initial state for an analysis. The initial state is generated
+      according to the options of Value governing the shape of this state.
+      All global variables are bound in the resulting abstract state. *)
+  val initial_state : lib_entry:bool -> state or_bottom
+
+  (** Compute the initial state for an analysis (as in {!initial_state}),
+      but also bind the formal parameters of the function given as argument. *)
+  val initial_state_with_formals :
+    lib_entry:bool -> kernel_function -> state or_bottom
+
+  (** Initializes a local variable in the current state. *)
+  val initialize_local_variable:
+    stmt -> varinfo -> init -> state -> state or_bottom
 end
 
 module Make
-    (Value: Abstract_value.S)
-    (Loc: Abstract_location.S with type value = Value.t)
-    (Domain: Abstract_domain.External with type value = Value.t
-                                       and type location = Loc.location)
+    (Domain: Abstract_domain.External)
     (Eva: Evaluation.S with type state = Domain.state
-                        and type value = Domain.value
-                        and type origin = Domain.origin
                         and type loc = Domain.location)
+    (Transfer: Transfer_stmt.S with type state = Domain.t)
   : S with type state := Domain.t
 
 

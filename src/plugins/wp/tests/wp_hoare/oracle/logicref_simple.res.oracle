@@ -1,30 +1,17 @@
 # frama-c -wp -wp-model 'Typed (Ref)' [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_hoare/logicref_simple.i (no preprocessing)
 [wp] Running WP plugin...
 .................................................
 ... Ref Usage
 .................................................
-... Initial state
-  Nothing
-............
-... Function fsimple
-   c
-   __retres
-............
-... Function fsimple_array
-  &t
-   __retres
-............
-... Function ftwo_star
-   d
-   __retres
-............
-... Function fvpositive
-   b
+Init: { }
+Function fsimple: { c __retres }
+Function fsimple_array: { &t __retres }
+Function ftwo_star: { d __retres }
+Function fvpositive: { b }
 .................................................
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 ------------------------------------------------------------
   Function fsimple
 ------------------------------------------------------------
@@ -38,7 +25,7 @@ Assume {
   (* Pre-condition *)
   Have: P_simple(Mint_0, c).
 }
-Prove: 0 = x.
+Prove: x = 0.
 
 ------------------------------------------------------------
 
@@ -52,14 +39,14 @@ Prove: true.
 ------------------------------------------------------------
 
 Goal Post-condition (file tests/wp_hoare/logicref_simple.i, line 19) in 'fsimple_array':
-Let a = shift_A10_sint32(global(G_t_80), 0).
+Let a = global(G_t_31).
 Let x = Mint_0[shift_sint32(a, 3)].
 Assume {
   Type: is_sint32(x) /\ is_sint32(1 + x).
   (* Pre-condition *)
-  Have: P_simple_array(Mint_0, a).
+  Have: P_simple_array(Mint_0, shift_sint32(a, 0)).
 }
-Prove: 0 = x.
+Prove: x = 0.
 
 ------------------------------------------------------------
 
@@ -81,7 +68,7 @@ Assume {
   (* Pre-condition *)
   Have: P_two_star(Mptr_0, Mint_0, d).
 }
-Prove: 0 = x.
+Prove: x = 0.
 
 ------------------------------------------------------------
 
@@ -101,11 +88,10 @@ Prove: true.
 
 Goal Assertion 'OK' (file tests/wp_hoare/logicref_simple.i, line 30):
 Assume {
-  Type: is_sint32(Mint_0[b]).
   (* Heap *)
   Have: (region(b.base) <= 0) /\ linked(Malloc_0).
   (* Pre-condition *)
-  Have: P_vpositive(Malloc_0, Mint_1, b).
+  Have: P_vpositive(Malloc_0, Mint_0, b).
 }
 Prove: valid_rw(Malloc_0, b, 1).
 

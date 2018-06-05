@@ -1,5 +1,3 @@
-open Cil_types
-
 let emitter1 = 
   Emitter.create "Test1" [ Emitter.Property_status ] ~correctness:[] ~tuning:[]
 
@@ -32,9 +30,9 @@ let main () =
   print_status ();
   set_status emitter1 Property_status.Dont_know;
   set_status emitter2 Property_status.Dont_know;
-  (* unknow /\ unknown *)
+  (* unknown /\ unknown *)
   print_status (); 
-  (* unknow /\ true *)
+  (* unknown /\ true *)
   set_status emitter1 Property_status.True;
   print_status ();
   (* true /\ true *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -41,12 +41,10 @@ module Location_Bytes : sig
     val shape: t -> Ival.t Hptmap.Shape(Base.Base).t
   end
 
-  type t =
+  type t = private
     | Top of Base.SetLattice.t * Origin.t
        (** Garbled mix of the addresses in the set *)
-    | Map of M.t (** Precice set of addresses+offsets *)
-  (** This type should be considered private *)
-  (* TODO: make it private when OCaml 4.01 is mandatory *)
+    | Map of M.t (** Precise set of addresses+offsets *)
 
   type size_widen_hint = Ival.size_widen_hint
   type generic_widen_hint = Base.t -> Ival.generic_widen_hint
@@ -56,8 +54,7 @@ module Location_Bytes : sig
       such as [join], [narrow], etc. *)
   include Lattice_type.AI_Lattice_with_cardinal_one
     with type t := t
-    and type widen_hint := widen_hint
-  include Lattice_type.With_Error_Top
+     and type widen_hint := widen_hint
 
   include Datatype.S_with_collections with type t := t
 
@@ -96,7 +93,7 @@ module Location_Bytes : sig
 
   val sub_pointwise: ?factor:Int_Base.t -> t -> t -> Ival.t
   (** Subtracts the offsets of two locations [loc1] and [loc2].
-      Returns the pointwise substraction of their offsets
+      Returns the pointwise subtraction of their offsets
       [off1 - factor * off2]. [factor] defaults to [1]. *)
 
   (** Topifying of values, in case of imprecise accesses *)
@@ -141,6 +138,9 @@ module Location_Bytes : sig
     joiner:('a -> 'a -> 'a) -> empty:'a -> t -> 'a
   (** Cached version of [fold_i], for advanced users *)
 
+  val for_all: (Base.t -> Ival.t -> bool) -> t -> bool
+  val exists: (Base.t -> Ival.t -> bool) -> t -> bool
+
   val filter_base : (Base.t -> bool) -> t -> t
 
 
@@ -177,17 +177,17 @@ module Location_Bytes : sig
 
   val contains_addresses_of_locals : (M.key -> bool) -> t -> bool
     (** [contains_addresses_of_locals is_local loc] returns [true]
-        if [loc] contains the adress of a variable for which
+        if [loc] contains the address of a variable for which
         [is_local] returns [true] *)
 
-  val remove_escaping_locals : (M.key -> bool) -> t -> Base.SetLattice.t * t
-    (**  TODO: merge with above function
-         [remove_escaping_locals is_local v] removes from [v] information
-         associated with bases for which [is_local] returns [true]. *)
+  val remove_escaping_locals : (M.key -> bool) -> t -> bool * t
+  (**  [remove_escaping_locals is_local v] removes from [v] the information
+       associated with bases for which [is_local] returns [true]. The
+       returned boolean indicates that [v] contained some locals. *)
 
   val contains_addresses_of_any_locals : t -> bool
     (** [contains_addresses_of_any_locals loc] returns [true] iff [loc] contains
-        the adress of a local variable or of a formal variable. *)
+        the address of a local variable or of a formal variable. *)
 
   (** {2 Misc} *)
 
@@ -231,8 +231,6 @@ module Zone : sig
 
   type map_t
 
-  (** This type should be considered private *)
-  (* TODO: make it private when OCaml 4.01 is mandatory *)
   type t = private Top of Base.SetLattice.t * Origin.t | Map of map_t
 
   include Datatype.S_with_collections with type t := t
@@ -246,10 +244,6 @@ module Zone : sig
 
   val is_bottom: t -> bool
   val inject : Base.t -> Int_Intervals.t -> t
-
-  exception Error_Top
-
-  val map_i : (Base.t -> Int_Intervals.t -> t) -> t -> t
 
   val find_lonely_key : t -> Base.t * Int_Intervals.t
   val find_or_bottom : Base.t -> map_t -> Int_Intervals.t
@@ -357,7 +351,6 @@ val valid_cardinal_zero_or_one : for_writing:bool -> location -> bool
 (** Is the valid part of the location bottom or a singleton? *)
 
 val filter_base: (Base.t -> bool) -> location -> location
-val filter_loc : location -> Zone.t -> location
 
 val pretty : Format.formatter -> location -> unit
 val pretty_english : prefix:bool -> Format.formatter -> location -> unit

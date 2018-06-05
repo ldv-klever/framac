@@ -1,10 +1,10 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_usage/caveat.i (no preprocessing)
-tests/wp_usage/caveat.i:41:[kernel] warning: parsing obsolete ACSL construct 'logic declaration'. 'an axiomatic block' should be used instead.
+[kernel] tests/wp_usage/caveat.i:41: Warning: 
+  parsing obsolete ACSL construct 'logic declaration'. 'an axiomatic block' should be used instead.
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 ------------------------------------------------------------
   Function explicit
 ------------------------------------------------------------
@@ -28,7 +28,7 @@ Assume {
   (* Pre-condition *)
   Have: separated(a, 2, r, 1).
 }
-Prove: x = x_2.
+Prove: x_2 = x.
 
 ------------------------------------------------------------
 
@@ -51,7 +51,7 @@ Assume {
   (* Pre-condition *)
   Have: separated(a, 2, r, 1).
 }
-Prove: x_1 = x_3.
+Prove: x_3 = x_1.
 
 ------------------------------------------------------------
 
@@ -75,7 +75,7 @@ Assume {
   (* Pre-condition *)
   Have: separated(a, 2, r, 1).
 }
-Prove: x_2 = x_7.
+Prove: x_7 = x_2.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
@@ -99,7 +99,7 @@ Assume {
   (* Heap *)
   Have: (region(a.base) <= 0) /\ (region(r.base) <= 0).
 }
-Prove: x = x_2.
+Prove: x_2 = x.
 
 ------------------------------------------------------------
 
@@ -120,7 +120,7 @@ Assume {
   (* Heap *)
   Have: (region(a.base) <= 0) /\ (region(r.base) <= 0).
 }
-Prove: x_1 = x_3.
+Prove: x_3 = x_1.
 
 ------------------------------------------------------------
 
@@ -142,7 +142,7 @@ Assume {
   (* Heap *)
   Have: (region(a.base) <= 0) /\ (region(r.base) <= 0).
 }
-Prove: x_2 = x_7.
+Prove: x_7 = x_2.
 
 ------------------------------------------------------------
 ------------------------------------------------------------

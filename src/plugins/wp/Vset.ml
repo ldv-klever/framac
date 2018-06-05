@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -106,7 +106,7 @@ let f_range_all = Lang.extern_f ~library "range_all"
 let f_singleton = Lang.extern_f ~library "singleton"
 
 let single a b = match a,b with
-  | Some x , Some y when F.equal x y -> a
+  | Some x , Some y when F.QED.equal x y -> a
   | _ -> None
 
 let test_range x y a b =
@@ -117,7 +117,7 @@ let test_range x y a b =
 let sub_range x y a b =
   match single a b with
   | Some z -> p_and (p_equal x z) (p_equal y z)
-  | None -> test_range x y a b
+  | None -> p_imply (p_leq x y) (test_range x y a b)
 
 let in_size x n = p_and (p_leq e_zero x) (p_lt x (e_int n))
 
@@ -182,20 +182,39 @@ let concretize = function
 let inter xs ys = e_fun f_inter [xs;ys]
 
 (* -------------------------------------------------------------------------- *)
+(* --- Emptyness                                                          --- *)
+(* -------------------------------------------------------------------------- *)
+
+let p_empty s = p_equal s (e_fun f_empty [])
+
+let is_empty xs =
+  p_all (function
+      | Set(_,s) -> p_empty s
+      | Singleton _ -> p_false
+      | Range(Some a,Some b) -> p_lt b a
+      | Range _ -> p_false
+      | Descr(xs,t,p) -> p_forall xs (p_imply p (p_empty t))
+    ) xs
+    
+(* -------------------------------------------------------------------------- *)
 (* --- Inclusion                                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
 let subrange a b = function
   | [Range(c,d)] ->
-      p_and
-        (match c,a with
-         | None,_ -> p_true
-         | Some _,None -> p_false
-         | Some c,Some a -> p_leq c a)
-        (match b,d with
-         | _,None -> p_true
-         | None,Some _ -> p_false
-         | Some b,Some d -> p_leq b d)
+      p_imply
+        (match a,b with
+         | Some a , Some b -> p_leq a b
+         | _ -> p_true)
+        (p_and
+           (match c,a with
+            | None,_ -> p_true
+            | Some _,None -> p_false
+            | Some c,Some a -> p_leq c a)
+           (match b,d with
+            | _,None -> p_true
+            | None,Some _ -> p_false
+            | Some b,Some d -> p_leq b d))
   | ys ->
       let x = Lang.freshvar ~basename:"k" Logic.Int in
       let k = e_var x in
@@ -290,7 +309,7 @@ let disjoint xs ys =
   in p_conj ws
 
 (* -------------------------------------------------------------------------- *)
-(* --- Lifting & Maping                                                   --- *)
+(* --- Lifting & Mapping                                                  --- *)
 (* -------------------------------------------------------------------------- *)
 
 let cartesian f xs ys =

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,10 +24,10 @@ include Plugin.S
 
 module Enabled: Parameter_sig.Bool
 
-module DoAll: Parameter_sig.Bool
 module DoShift : Parameter_sig.Bool
 module DoDivMod : Parameter_sig.Bool
 module DoFloatToInt : Parameter_sig.Bool
+module DoInitialized : Parameter_sig.Bool
 module DoMemAccess : Parameter_sig.Bool
 module DoPointerCall : Parameter_sig.Bool
 module DoCalledPrecond : Parameter_sig.Bool

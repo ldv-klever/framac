@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,6 +26,8 @@ let debug2 fmt = R.debug ~level:2 fmt
 
 open Cil_datatype
 open Cil_types
+
+type t_zones = Locations.Zone.t Stmt.Hashtbl.t
 
 module Data = struct
   type t = Locations.Zone.t
@@ -141,9 +143,9 @@ let process_one_call data stmt lvaloption froms =
   let used = res_used || out_used in
     used, data
 
-let process_call data_after stmt lvaloption funcexp args =
+let process_call data_after stmt lvaloption funcexp args _loc =
   let funcexp_dpds, called_functions =
-    !Db.Value.expr_to_kernel_function ~with_alarms:CilE.warn_none_mode
+    !Db.Value.expr_to_kernel_function
       (Kstmt stmt) ~deps:(Some Data.bottom) funcexp
   in
   let used, data =
@@ -209,20 +211,38 @@ module Computer (Param:sig val states : Ctx.t end) = struct
 
   let doStmt _stmt = Dataflow2.Default
 
+  let do_assign stmt lval exp data =
+    let l_dpds, exact, l_zone =
+      Datascope.get_lval_zones ~for_writing:true stmt lval in
+    let r_dpds = Data.exp_zone stmt exp in
+    let used, data = compute_new_data data l_zone l_dpds exact r_dpds in
+    let _ = if used then add_used_stmt stmt in
+    data
+
   let doInstr stmt instr data =
     match instr with
-      | Set (lval, exp, _) ->
-          let l_dpds, exact, l_zone =
-            Datascope.get_lval_zones ~for_writing:true stmt lval in
-          let r_dpds = Data.exp_zone stmt exp in
-          let used, data = compute_new_data data l_zone l_dpds exact r_dpds in
-          let _ = if used then add_used_stmt stmt in
-              Dataflow2.Done data
-      |  Call (lvaloption,funcexp,args,_) ->
-          let used, data = process_call data stmt lvaloption funcexp args in
+      | Set (lval, exp, _) -> Dataflow2.Done (do_assign stmt lval exp data)
+      | Local_init (v, AssignInit i, _) ->
+        let rec aux lv i acc =
+          match i with
+          | SingleInit e -> do_assign stmt lv e data
+          | CompoundInit(ct, initl) ->
+            let implicit = true in
+            let doinit o i _ data = aux (Cil.addOffsetLval o lv) i data in
+            Cil.foldLeftCompound ~implicit ~doinit ~ct ~initl ~acc
+        in
+        Dataflow2.Done (aux (Cil.var v) i data)
+      |  Call (lvaloption,funcexp,args,loc) ->
+          let used, data = process_call data stmt lvaloption funcexp args loc in
           let _ = if used then add_used_stmt stmt in
             Dataflow2.Done data
-      | _ -> Dataflow2.Default
+      | Local_init(v, ConsInit(f, args, k), l) ->
+        let used, data =
+          Cil.treat_constructor_as_func (process_call data stmt) v f args k l
+        in
+        if used then add_used_stmt stmt;
+        Dataflow2.Done data
+      | Skip _ | Code_annot _ | Asm _ -> Dataflow2.Default
 
   let filterStmt _stmt _next = true
 
@@ -316,26 +336,21 @@ let pretty fmt stmt_zones =
 
        (*~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~*)
 
-let () =
-  Db.register (* kernel_function -> stmt -> lval -> StmtHptset.t * t_zones *)
-    Db.Journalization_not_required (* TODO *)
-    (*
-    (Db.Journalize("Scope.build_zones",
-                   Datatype.func Kernel_type.kernel_function
+let build_zones =
+  (* TODO: Journal.register *)
+  (* (Datatype.func Kernel_type.kernel_function
                      (Datatype.func Kernel_type.stmt
                         (Datatype.func Kernel_type.lval
                            (Datatype.couple Kernel_type.stmt_set zones_ty)))))
                            *)
-    Db.Scope.build_zones compute;
+  compute
 
-  Db.register (* t_zones ->  Cil_types.stmt -> Locations.Zone.t *)
-    Db.Journalization_not_required (* TODO *)
-    (*(Db.Journalize("Scope.get_zones",
-                   Datatype.func zones_ty (Datatype.func Kernel_type.stmt data_ty)))*)
-  Db.Scope.get_zones get;
+let get_zones =
+  (* TODO: Journal.register *)
+    (*(Datatype.func zones_ty (Datatype.func Kernel_type.stmt data_ty)))*)
+  get
 
-  Db.register (* (Format.formatter -> t_zones -> unit) *)
-    Db.Journalization_not_required (* TODO *)
-    (*(Db.Journalize("Scope.pretty_zones",
-                   Datatype.func Datatype.formatter (Datatype.func zones_ty Datatype.unit)))*)
-  Db.Scope.pretty_zones pretty;
+let pretty_zones =
+  (* TODO: Journal.register *)
+  (*( Datatype.func Datatype.formatter (Datatype.func zones_ty Datatype.unit)))*)
+  pretty

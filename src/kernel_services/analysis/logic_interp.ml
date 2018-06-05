@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -53,7 +53,7 @@ end) =
       let anonCompFieldName = Cabs2cil.anonCompFieldName
       let conditionalConversion = Cabs2cil.logicConditionalConversion
 
-      let compatibleTypesp = Cabs2cil.compatibleTypesp
+      let areCompatibleTypes = Cabs2cil.areCompatibleTypes
 
       let is_loop () = X.in_loop
 
@@ -84,6 +84,9 @@ end) =
       let add_logic_function =
         add_logic_function_gen Logic_utils.is_same_logic_profile
 
+      let remove_logic_info =
+        remove_logic_info_gen Logic_utils.is_same_logic_profile
+
       let integral_cast ty t =
         raise
           (Failure
@@ -96,6 +99,9 @@ end) =
       let error loc msg =
         Pretty_utils.ksfprintf (fun e -> raise (Error (loc, e))) msg
 
+      let on_error f rollback x =
+        try f x with Error _ as exn -> rollback (); raise exn
+
      end)
 
 (** Set up the parser for the infamous 'C hack' needed to parse typedefs *)
@@ -105,9 +111,10 @@ let sync_typedefs () =
     (fun name _ ns ->
       if ns = Logic_typing.Typedef then Logic_env.add_typename name)
 
-let wrap f loc =
-  try f ()
-  with Unbound s -> raise (Error (loc, s))
+let wrap f parsetree loc =
+  match parsetree with
+  | None -> raise (Error (loc, "Syntax error in annotation"))
+  | Some annot -> try f annot with Unbound s -> raise (Error (loc, s))
 
 let code_annot kf stmt s =
   sync_typedefs ();
@@ -116,19 +123,18 @@ let code_annot kf stmt s =
     let in_loop = Kernel_function.stmt_in_loop kf stmt
   end) in
   let loc = Stmt.loc stmt in
-  let pa = match snd (Logic_lexer.annot (fst loc, s)) with
-    | Logic_ptree.Acode_annot (_,a) -> a
-    | _ ->
-        raise (Error (Stmt.loc stmt,
-                      "Syntax error (expecting a code annotation)"))
+  let pa =
+    Extlib.opt_bind
+      (function (_, Logic_ptree.Acode_annot (_,a)) -> Some a | _ -> None)
+      (Logic_lexer.annot (fst loc,s))
   in
-  let parse () =
+  let parse pa =
     LT.code_annot
       (Stmt.loc stmt)
       (Logic_utils.get_behavior_names (Annotations.funspec kf))
       (Ctype (Kernel_function.get_return_type kf)) pa
   in
-  wrap parse loc
+  wrap parse pa loc
 
 let default_term_env () =
   Logic_typing.append_here_label (Logic_typing.Lenv.empty())
@@ -139,9 +145,9 @@ let term kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
     let kf = kf
     let in_loop = false (* unused *)
   end) in
-  let (_,pa_expr) = Logic_lexer.lexpr (fst loc, s) in
-  let parse () = LT.term env pa_expr in
-  wrap parse loc
+  let pa_expr = Extlib.opt_map snd (Logic_lexer.lexpr (fst loc, s)) in
+  let parse pa_expr = LT.term env pa_expr in
+  wrap parse pa_expr loc
 
 let term_lval kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
   match (term kf ~loc ~env s).term_node with
@@ -154,9 +160,9 @@ let predicate kf ?(loc=Location.unknown) ?(env=default_term_env ()) s =
     let kf = kf
     let in_loop = false (* unused *)
   end) in
-  let (_,pa_expr) = Logic_lexer.lexpr (fst loc, s) in
-  let parse () = LT.predicate env pa_expr in
-  wrap parse loc
+  let pa_expr = Extlib.opt_map snd (Logic_lexer.lexpr (fst loc, s)) in
+  let parse pa_expr = LT.predicate env pa_expr in
+  wrap parse pa_expr loc
 
 let error_lval () = raise Db.Properties.Interp.No_conversion
 
@@ -334,17 +340,16 @@ let loc_to_offset ~result loc =
                  Some h, loc_offset_to_offset ~result o
              | Some _ -> error_lval()
           )
-      | Tat ({ term_node = TLval(TResult _,_)} as lv,LogicLabel (_,"Post")) ->
+      | Tat ({ term_node = TLval(TResult _,_)} as lv, BuiltinLabel Post) ->
           aux h lv.term_node
       | Tunion locs -> List.fold_left
             (fun (b,l) x ->
                let (b,l') = aux b x.term_node in b, l @ l') (h,[]) locs
       | Tempty_set -> h,[]
-      | Trange _ | TAddrOf _
+      | Trange _ | TAddrOf _ | Tat _
       | TSizeOfE _ | TAlignOfE _ | TUnOp _ | TBinOp _ | TSizeOfStr _
       | TConst _ | TCastE _ | TAlignOf _ | TSizeOf _ | TOffsetOf _ | Tapp _ | Tif _ | Tpif _
-      | Tat _ | Toffset _ | Toffset_max _ | Toffset_min _
-      | Tbase_addr _ | Tblock_length _ | Tnull
+      | Toffset _ | Toffset_max _ | Toffset_min _ | Tbase_addr _ | Tblock_length _ | Tnull
       | TCoerce _ | TCoerceE _ | TDataCons _ | TUpdate _ | Tlambda _
       | Ttypeof _ | Ttype _ | Tcomprehension _ | Tinter _ | Tlet _
       | TLogic_coerce _ 
@@ -565,27 +570,33 @@ struct
       Varinfo.Set.empty
 
   (** Term utility:
-      Extract C local variables occuring into a [term]. *)
+      Extract C local variables occurring into a [term]. *)
   let extract_locals_from_term term =
     extract_locals (extract_free_logicvars_from_term term)
 
   (** Predicate utility:
-      Extract C local variables occuring into a [term]. *)
+      Extract C local variables occurring into a [term]. *)
   let extract_locals_from_pred pred =
     extract_locals (extract_free_logicvars_from_predicate pred)
 
   type abs_label = | AbsLabel_here
                    | AbsLabel_pre
                    | AbsLabel_post
+                   | AbsLabel_init
+                   | AbsLabel_loop_entry
+                   | AbsLabel_loop_current
                    | AbsLabel_stmt of stmt
 
   let is_same_label absl l =
     match absl, l with
       | AbsLabel_stmt s1, StmtLabel s2 -> Cil_datatype.Stmt.equal s1 !s2
-      | AbsLabel_here, LogicLabel (_, "Here") -> true
-      | AbsLabel_pre, LogicLabel (_, "Pre") -> true
-      | AbsLabel_post, LogicLabel (_, "Post") -> true
-      | _ -> false
+      | AbsLabel_here, BuiltinLabel Here -> true
+      | AbsLabel_pre, BuiltinLabel Pre -> true
+      | AbsLabel_post, BuiltinLabel Post -> true
+      | AbsLabel_init, BuiltinLabel Init -> true
+      | AbsLabel_loop_entry, BuiltinLabel LoopEntry -> true
+      | AbsLabel_loop_current, BuiltinLabel LoopCurrent -> true
+      | _, (StmtLabel _ | FormalLabel _ | BuiltinLabel _) -> false
 
 
   class populate_zone before_opt ki_opt kf =
@@ -627,6 +638,11 @@ struct
           | AbsLabel_pre -> get_fct_entry_point ()
           | AbsLabel_here -> get_ctrl_point true
           | AbsLabel_post -> get_ctrl_point false
+          | AbsLabel_init -> raise (NYI "[logic_interp] Init label")
+          | AbsLabel_loop_current ->
+            raise (NYI "[logic_interp] LoopCurrent label")
+          | AbsLabel_loop_entry ->
+            raise (NYI "[logic_interp] LoopEntry label")
         in (* TODO: the method should be able to return result directly *)
         match result with
         | current_before, Some current_stmt -> current_before, current_stmt
@@ -649,16 +665,16 @@ struct
           match ki_opt,before_opt with
             (* function contract *)
           | None,Some true -> 
-	    failwith "The use of the label Old is forbiden inside clauses \
-        related the pre-state of function contracts." 
+	    failwith "The use of the label Old is forbidden inside clauses \
+        related to the pre-state of function contracts." 
           | None,None
           | None,Some false -> 
 	    (* refers to the pre-state of the contract. *)
 	    self#change_label AbsLabel_pre x 
           (* statement contract *)
           | Some (_ki,false),Some true  -> 
-	    failwith "The use of the label Old is forbiden inside clauses \
-related the pre-state of statement contracts."
+	    failwith "The use of the label Old is forbidden inside clauses \
+related to the pre-state of statement contracts."
           | Some (ki,false),None
           | Some (ki,false),Some false  -> 
 	    (* refers to the pre-state of the contract. *)
@@ -676,20 +692,20 @@ related the pre-state of statement contracts."
             (* function contract *)
           | None,Some _ -> 
 	    failwith "Function contract where the use of the label Post is \
- forbiden."
+ forbidden."
           | None,None -> 
 	    (* refers to the post-state of the contract. *)
 	    self#change_label AbsLabel_post x 
           (* statement contract *)
           | Some (_ki,false),Some _  -> 
 	    failwith "Statement contract where the use of the label Post is \
-forbiden."
+forbidden."
           | Some (_ki,false),None -> 
 	    (* refers to the pre-state of the contract. *)
 	    self#change_label AbsLabel_post x 
           (* code annotation *)
           | Some (_ki,true), _ -> 
-	    failwith "The use of the label Post is forbiden inside code \
+	    failwith "The use of the label Post is forbidden inside code \
 annotations."
 
       method private change_label_to_pre: 'a.'a -> 'a visitAction =
@@ -697,7 +713,7 @@ annotations."
           match ki_opt with
             (* function contract *)
           | None -> 
-	    failwith "The use of the label Pre is forbiden inside function \
+	    failwith "The use of the label Pre is forbidden inside function \
 contracts."
           (* statement contract *)
           (* code annotation *)
@@ -705,13 +721,16 @@ contracts."
 	    (* refers to the pre-state of the function contract. *)
 	    self#change_label AbsLabel_pre x 
 
+      method private change_label_aux: 'a. _ -> 'a -> 'a visitAction =
+        fun lbl x -> self#change_label lbl x
+
       method private change_label_to_stmt: 'a.stmt -> 'a -> 'a visitAction =
         fun stmt x ->
           match ki_opt with
             (* function contract *)
           | None -> 
-	    failwith "the use of C labels is forbiden inside clauses related \
-function contracts."
+	    failwith "the use of C labels is forbidden inside clauses related \
+to function contracts."
           (* statement contract *)
           (* code annotation *)
           | Some _ -> 
@@ -725,14 +744,19 @@ function contracts."
                       "[logic_interp] %a" Printer.pp_predicate_node p))
       in
       match p with
-      | Pat (_, LogicLabel (_,"Old")) -> self#change_label_to_old p
-      | Pat (_, LogicLabel (_,"Here")) -> self#change_label_to_here p
-      | Pat (_, LogicLabel (_,"Pre")) -> self#change_label_to_pre p
-      | Pat (_, LogicLabel (_,"Post")) -> self#change_label_to_post p
+      | Pat (_, BuiltinLabel Old) -> self#change_label_to_old p
+      | Pat (_, BuiltinLabel Here) -> self#change_label_to_here p
+      | Pat (_, BuiltinLabel Pre) -> self#change_label_to_pre p
+      | Pat (_, BuiltinLabel Post) -> self#change_label_to_post p
+      | Pat (_, BuiltinLabel Init) ->
+        self#change_label_aux AbsLabel_init p
+      | Pat (_, BuiltinLabel LoopCurrent) ->
+        self#change_label_aux AbsLabel_loop_current p
+      | Pat (_, BuiltinLabel LoopEntry) ->
+        self#change_label_aux AbsLabel_loop_entry p
+      | Pat (_, FormalLabel s) ->
+        failwith ("unknown logic label" ^ s)
       | Pat (_, StmtLabel st) -> self#change_label_to_stmt !st p
-      | Pat (_, LogicLabel (_,s)) ->
-          failwith ("unknown logic label" ^ s)
-
       | Pfalse | Ptrue | Prel _ | Pand _ | Por _ | Pxor _ | Pimplies _
       | Piff _ | Pnot _ | Pif _ | Plet _ | Pforall _ | Pexists _
       | Papp (_, [], _) (* No label, thus cannot access memory *)
@@ -769,7 +793,7 @@ function contracts."
         try
           let deps = !Db.From.find_deps_term_no_transitivity_state state t in
           (* TODO: what we should we do with other program points? *)
-          let z = Logic_label.Map.find (LogicLabel (None,"Here")) deps in
+          let z = Logic_label.Map.find (BuiltinLabel Here) deps in
           let z =
             Locations.Zone.filter_base
               (function Base.CLogic_Var _ -> false | _ -> true)
@@ -785,12 +809,18 @@ function contracts."
           | TLval(TVar {lv_origin = Some _},_) | TStartOf _  ->
               self#do_term_lval t;
               SkipChildren
-          | Tat (_, LogicLabel (_,"Old")) -> self#change_label_to_old t
-          | Tat (_, LogicLabel (_,"Here")) -> self#change_label_to_here t
-          | Tat (_, LogicLabel (_,"Pre")) -> self#change_label_to_pre t
-          | Tat (_, LogicLabel (_,"Post")) -> self#change_label_to_post t
+          | Tat (_, BuiltinLabel Old) -> self#change_label_to_old t
+          | Tat (_, BuiltinLabel Here) -> self#change_label_to_here t
+          | Tat (_, BuiltinLabel Pre) -> self#change_label_to_pre t
+          | Tat (_, BuiltinLabel Post) -> self#change_label_to_post t
+          | Tat (_, BuiltinLabel Init) ->
+            self#change_label_aux AbsLabel_init t
+          | Tat (_, BuiltinLabel LoopCurrent) ->
+            self#change_label_aux AbsLabel_loop_current t
+          | Tat (_, BuiltinLabel LoopEntry) ->
+            self#change_label_aux AbsLabel_loop_entry t
           | Tat (_, StmtLabel st) -> self#change_label_to_stmt !st t
-          | Tat (_, LogicLabel (_,s)) ->
+          | Tat (_, FormalLabel s) ->
             failwith ("unknown logic label" ^ s)
           | TSizeOf _ | TSizeOfE _ | TSizeOfStr _ | TAlignOf _ | TAlignOfE _ ->
             (* These are static constructors, there are no dependencies here *)

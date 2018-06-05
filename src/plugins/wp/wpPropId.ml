@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,6 +34,7 @@ open Cil_datatype
 *)
 
 type prop_kind =
+  | PKTactic      (** tactical sub-goal *)
   | PKCheck       (** internal check *)
   | PKProp        (** normal property *)
   | PKEstablished (** computation related to a loop property before the loop. *)
@@ -46,13 +47,19 @@ type prop_kind =
   | PKPre of kernel_function * stmt * Property.t (** precondition for function
                                                      at stmt, property of the require. Many information that should come
                                                      from the p_prop part of the prop_id, but in the PKPre case,
-                                                     it seems that it is hiden in a IPBlob property ! *)
+                                                     it seems that it is hidden in a IPBlob property ! *)
 
 type prop_id = {
   p_kind : prop_kind ;
   p_prop : Property.t ;
   p_part : (int * int) option ;
 }
+
+let tactical ~gid =
+  let ip = "Wp.Tactical." ^ gid in
+  { p_kind = PKTactic ;
+    p_prop = Property.ip_other ip None Kglobal ;
+    p_part = None }
 
 (* -------------------------------------------------------------------------- *)
 (* --- Category                                                           --- *)
@@ -93,12 +100,10 @@ let mk_annot_id kf stmt ca = Property.ip_of_code_annot_single kf stmt ca
 let mk_annot_ids kf stmt ca = Property.ip_of_code_annot kf stmt ca
 
 let mk_code_annot_ids kf s ca =  List.map (mk_prop PKProp) (mk_annot_ids kf s ca)
-
-
-
 let mk_assert_id kf s ca = mk_prop PKProp  (mk_annot_id kf s ca)
-let mk_establish_id  kf s ca = mk_prop PKEstablished (mk_annot_id kf s ca)
-let mk_preserve_id   kf s ca = mk_prop PKPreserved (mk_annot_id kf s ca)
+let mk_loop_inv_id kf s ~established ca =
+  let kind = if established then PKEstablished else PKPreserved in
+  mk_prop kind (mk_annot_id kf s ca)
 let mk_inv_hyp_id    kf s ca = mk_prop PKPropLoop  (mk_annot_id kf s ca)
 let mk_var_decr_id   kf s ca = mk_prop PKVarDecr (mk_annot_id kf s ca)
 let mk_var_pos_id    kf s ca = mk_prop PKVarPos  (mk_annot_id kf s ca)
@@ -176,6 +181,7 @@ let kind_order = function
   | PKAFctOut -> 7
   | PKAFctExit -> 8
   | PKCheck -> 9
+  | PKTactic -> 10
 
 let compare_kind k1 k2 = match k1, k2 with
     PKPre (kf1, ki1, p1), PKPre (kf2, ki2, p2) ->
@@ -251,9 +257,7 @@ end = struct
 
   let basename_of_prop_id p =
     match p.p_kind , p.p_prop with
-    | PKCheck , p -> base_id_prop_txt p
-    | PKProp , p -> base_id_prop_txt p
-    | PKPropLoop , p -> base_id_prop_txt p
+    | (PKTactic | PKCheck | PKProp | PKPropLoop) , p -> base_id_prop_txt p
     | PKEstablished , p -> base_id_prop_txt p ^ "_established"
     | PKPreserved , p -> base_id_prop_txt p ^ "_preserved"
     | PKVarDecr , p -> base_id_prop_txt p ^ "_decrease"
@@ -266,7 +270,7 @@ end = struct
             (Kernel_function.find_englobing_kf stmt)
         in Printf.sprintf "%s_call_%s" kf_name_of_stmt (base_id_prop_txt pre)
 
-  (** function used to normanize basename *)
+  (** function used to normalize basename *)
   let normalize_basename s =
     (* truncates basename in order to limit length of file name *)
     let max_len = Wp_parameters.TruncPropIdFileName.get () in
@@ -316,10 +320,10 @@ end
 let get_propid = Names.get_prop_id_name
 (** Name related to a property PO *)
 
-let pp_propid fmt pid = Format.fprintf fmt "%s" (get_propid pid)
+let pp_propid fmt pid =
+  Format.pp_print_string fmt (get_propid pid)
 
-let pp_names fmt l =  match l with [] -> ()
-                                 | _ ->
+let pp_names fmt l =  match l with [] -> () | _ ->
                                      Format.fprintf fmt "_%a" (Wp_error.pp_string_list ~empty:"" ~sep:"_") l
 
 let ident_names names =
@@ -340,6 +344,11 @@ let user_prop_names p = match p with
         Format.asprintf  "%c%a" '@' Property.pretty_predicate_kind kind
       in
       kind_name::idp.ip_content.pred_name
+  | Property.IPExtended(_,_,(_,name,_)) ->
+      let kind_name =
+        Format.asprintf  "%s_extension" name
+      in
+      [kind_name]
   | Property.IPCodeAnnot (_,_, ca) -> code_annot_names ca
   | Property.IPComplete (_, _,_,lb) ->
       let kind_name = "@complete_behaviors" in
@@ -387,6 +396,7 @@ let string_of_termination_kind = function
   | Returns -> "returns"
 
 let label_of_kind = function
+  | PKTactic -> "Tactic"
   | PKCheck -> "Check"
   | PKProp -> "Property"
   | PKPropLoop -> "Invariant" (* should be assert false ??? *)
@@ -412,7 +422,7 @@ struct
     | None -> ()
     | Some(k,n) -> fprintf fmt " (%d/%d)" (succ k) n
   let pp_subprop fmt p = match p.p_kind with
-    | PKProp | PKCheck | PKPropLoop -> ()
+    | PKProp | PKTactic | PKCheck | PKPropLoop -> ()
     | PKEstablished -> pp_print_string fmt " (established)"
     | PKPreserved -> pp_print_string fmt " (preserved)"
     | PKVarDecr -> pp_print_string fmt " (decrease)"
@@ -469,6 +479,7 @@ let propid_hints hs p =
   | PKPropLoop , Property.IPAssigns _ -> add_required hs "loop-assigns"
   | PKPropLoop , _ -> add_required hs "invariant"
   | PKProp , _ -> add_required hs "property"
+  | PKTactic , _ -> add_required hs "tactic"
   | PKEstablished , _ -> add_required hs "established"
   | PKPreserved , _ -> add_required hs "preserved"
   | PKVarDecr , _ -> add_required hs "decrease"
@@ -515,6 +526,8 @@ let property_hints hs = function
       List.iter (add_required hs) ps
   | Property.IPPredicate(_,_,_,ipred) ->
       List.iter (add_hint hs) ipred.ip_content.pred_name
+  | Property.IPExtended(_,_,(_,name,_)) ->
+      List.iter (add_hint hs) [name]
   | Property.IPCodeAnnot(_,_,ca) -> annot_hints hs ca.annot_content
   | Property.IPAssigns(_,_,_,froms) -> assigns_hints hs froms
   | Property.IPAllocation _ (* TODO *)
@@ -546,6 +559,7 @@ let prop_id_keys p =
 (*----------------------------------------------------------------------------*)
 
 let pp_goal_kind fmt = function
+  | PKTactic
   | PKCheck
   | PKProp
   | PKPropLoop
@@ -580,6 +594,7 @@ let pretty_context kf fmt pid =
 (*----------------------------------------------------------------------------*)
 
 let is_check p = p.p_kind = PKCheck
+let is_tactic p = p.p_kind = PKTactic
 
 let is_assigns p =
   match property_of_id p with
@@ -642,35 +657,35 @@ type a_kind = LoopAssigns | StmtAssigns
 type effect_source = FromCode | FromCall | FromReturn
 
 type assigns_desc = {
-  a_label : Cil_types.logic_label ;
+  a_label : Clabels.c_label ;
   a_stmt : Cil_types.stmt option ;
   a_kind : a_kind ;
-  a_assigns : Cil_types.identified_term Cil_types.assigns ;
+  a_assigns : Cil_types.assigns ;
 }
 
 let mk_asm_assigns_desc s = {
-  a_label = Clabels.mk_logic_label s ;
+  a_label = Clabels.stmt s ;
   a_stmt = Some s ;
   a_kind = StmtAssigns ;
   a_assigns = WritesAny ;
 }
 
 let mk_loop_assigns_desc s assigns = {
-  a_label = Clabels.mk_logic_label s ;
+  a_label = Clabels.stmt s ;
   a_stmt = Some s ;
   a_kind = LoopAssigns ;
   a_assigns = Writes assigns
 }
 
 let mk_stmt_assigns_desc s assigns = {
-  a_label =  Clabels.mk_logic_label s ;
+  a_label = Clabels.stmt s ;
   a_stmt = Some s ;
   a_kind = StmtAssigns ;
   a_assigns = Writes assigns ;
 }
 
 let mk_init_assigns = {
-  a_label = Logic_const.init_label ;
+  a_label = Clabels.init ;
   a_stmt = None ;
   a_kind = StmtAssigns ;
   a_assigns = WritesAny ;
@@ -695,14 +710,15 @@ let mk_exit_assigns_desc assigns = {
 *)
 
 let mk_kf_assigns_desc assigns = {
-  a_label = Logic_const.pre_label ;
+  a_label = Clabels.pre ;
   a_stmt = None ;
   a_kind = StmtAssigns ;
   a_assigns = Writes assigns ;
 }
 
 let is_call_assigns = function
-  | { a_stmt = Some { skind = Instr(Call _) } } -> true
+  | {a_stmt=Some {skind=Instr(Call _ | Local_init (_, ConsInit _, _)) } }
+    -> true
   | _ -> false
 
 let pp_assigns_desc fmt a = Wp_error.pp_assigns fmt a.a_assigns
@@ -739,7 +755,7 @@ let mk_assigns_info id a = AssignsLocations (id, a)
 
 let mk_stmt_any_assigns_info s =
   let a = {
-    a_label = Clabels.mk_logic_label s ;
+    a_label = Clabels.stmt s ;
     a_stmt = Some s ;
     a_kind = StmtAssigns ;
     a_assigns = WritesAny ;
@@ -748,7 +764,7 @@ let mk_stmt_any_assigns_info s =
 
 let mk_kf_any_assigns_info () =
   let a = {
-    a_label = Logic_const.pre_label ;
+    a_label = Clabels.pre ;
     a_stmt = None ;
     a_kind = StmtAssigns ;
     a_assigns = WritesAny ;
@@ -757,7 +773,7 @@ let mk_kf_any_assigns_info () =
 
 let mk_loop_any_assigns_info s =
   let a = {
-    a_label = Clabels.mk_logic_label s ;
+    a_label = Clabels.stmt s ;
     a_stmt = Some s ;
     a_kind = LoopAssigns ;
     a_assigns = WritesAny ;
@@ -775,9 +791,10 @@ let pp_assign_info k fmt a = match a with
         | LoopAssigns -> "loop"
       in
       Format.fprintf fmt "%s(@@%a): %s assigns everything@."
-        k Wp_error.pp_logic_label a.a_label pkind
-  | AssignsLocations (_,a) -> Format.fprintf fmt "%s(@@%a): %a@." k
-                                Wp_error.pp_logic_label a.a_label
+        k Clabels.pretty a.a_label pkind
+  | AssignsLocations (_,a) ->
+      Format.fprintf fmt "%s(@@%a): %a@." k
+        Clabels.pretty a.a_label
                                 pp_assigns_desc a
 
 let merge_assign_info a1 a2 = match a1,a2 with
@@ -818,14 +835,14 @@ let _split job pid goals =
 
 let subproofs id = match id.p_kind with
   | PKCheck -> 0
-  | PKProp | PKPre _ | PKPropLoop -> 1
+  | PKProp | PKTactic | PKPre _ | PKPropLoop -> 1
   | PKEstablished | PKPreserved
   | PKVarDecr | PKVarPos
   | PKAFctExit | PKAFctOut -> 2
 
 let subproof_idx id = match id.p_kind with
   | PKCheck -> (-1) (* 0/0 *)
-  | PKProp | PKPre _ | PKPropLoop -> 0 (* 1/1 *)
+  | PKProp | PKTactic | PKPre _ | PKPropLoop -> 0 (* 1/1 *)
   | PKPreserved  -> 0 (* 1/2 *)
   | PKEstablished-> 1 (* 2/2 *)
   | PKVarDecr    -> 0 (* 1/2 *)
@@ -875,7 +892,7 @@ let get_induction p =
     | Property.IPAssigns(kf,Kstmt stmt,_,_) -> Some (kf, stmt)
     | _ -> None
   in match p.p_kind with
-  | PKCheck | PKAFctOut|PKAFctExit|PKPre _ -> None
+  | PKCheck | PKAFctOut|PKAFctExit|PKPre _ | PKTactic -> None
   | PKProp ->
       let loop_stmt_opt = match get_stmt (property_of_id p) with
         | None -> None

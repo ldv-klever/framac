@@ -1,4 +1,18 @@
-void printf(const char*c, ...);
+/* run.config*
+   STDOPT:
+*/
+
+/* These declarations are useful for the plugin 'variadic' */
+//@ axiomatic String { predicate valid_read_string{L}(char *s); } // Beware that this predicate is not recognized by Eva as coming from the libc, and is thus not evaluated. The proper solution would be to enclose it inside __PUSH_FC_STDLIB pragmas.
+struct __fc_FILE {
+  unsigned int __fc_FILE_id;
+  unsigned int __fc_FILE_data;
+};
+typedef struct __fc_FILE FILE;
+extern FILE * __fc_stdout;
+//@ assigns \result, __fc_stdout->__fc_FILE_data;
+int printf(const char * restrict format, ...);
+
 
 int G,H,K,L,i,b;
 unsigned int I;

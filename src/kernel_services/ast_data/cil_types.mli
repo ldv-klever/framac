@@ -51,7 +51,7 @@
 (* A first test to see if something has been broken by a change is to launch*)
 (* ptests.byte -add-options '-files-debug "-check -copy"'                   *)
 (* In addition, it is a good idea to add some invariant checks in the       *)
-(* check_file class in frama-c/src/file.ml (before lauching the tests)      *)
+(* check_file class in frama-c/src/file.ml (before launching the tests)     *)
 (****************************************************************************)
 
 (* ************************************************************************* *)
@@ -96,7 +96,7 @@ type file = {
 and global =
   | GType of typeinfo * location
   (** A typedef. All uses of type names (through the [TNamed] constructor)
-      must be preceeded in the file by a definition of the name. The string
+      must be preceded in the file by a definition of the name. The string
       is the defined name and always not-empty. *)
 
   | GCompTag of compinfo * location
@@ -217,7 +217,7 @@ and typ =
 
   | TNamed of typeinfo * attributes
   (** The use of a named type. All uses of the same type name must share the
-      typeinfo. Each such type name must be preceeded in the file by a [GType]
+      typeinfo. Each such type name must be preceded in the file by a [GType]
       global. This is printed as just the type name. The actual referred type
       is not printed here and is carried only to simplify processing. To see
       through a sequence of named type references, use {!Cil.unrollType}. The
@@ -227,7 +227,7 @@ and typ =
   | TComp of compinfo * bitsSizeofTypCache * attributes
   (** A reference to a struct or a union type. All references to the
       same struct or union must share the same compinfo among them and
-      with a [GCompTag] global that preceeds all uses (except maybe
+      with a [GCompTag] global that precedes all uses (except maybe
       those that are pointers to the composite type). The attributes
       given are those pertaining to this use of the type and are in
       addition to the attributes that were given at the definition of
@@ -236,7 +236,7 @@ and typ =
   | TEnum of enuminfo * attributes
   (** A reference to an enumeration type. All such references must
       share the enuminfo among them and with a [GEnumTag] global that
-      preceeds all uses. The attributes refer to this use of the
+      precedes all uses. The attributes refer to this use of the
       enumeration and are in addition to the attributes of the
       enumeration itself, which are stored inside the enuminfo *)
 
@@ -299,7 +299,19 @@ and attrparam =
   | ACons of string * attrparam list 
   (** Constructed attributes. These are printed [foo(a1,a2,...,an)]. The list
       of parameters can be empty and in that case the parentheses are not
-      printed. *)
+      printed.
+
+      There are some Frama-C builtins that are used to account for OSX's
+      peculiarities:
+      - __fc_assign takes two arguments and emulate [a1=a2] syntax
+      - __fc_float takes one string argument and indicates a floating point
+        constant, that will be printed as such.
+      See https://clang.llvm.org/docs/AttributeReference.html#availability
+      for more information. Proper attributes node might be added if really
+      needed, i.e. if some plug-in wants to interpret the availability
+      attribute.
+  *)
+
   | ASizeOf of typ                       (** A way to talk about types *)
   | ASizeOfE of attrparam
   | AAlignOf of typ
@@ -477,7 +489,7 @@ and typeinfo = {
 
   mutable tname: string;
   (** The name. Can be empty only in a [GType] when introducing a composite or
-      enumeration tag. If empty cannot be refered to from the file *)
+      enumeration tag. If empty cannot be referred to from the file *)
 
   mutable ttype: typ;
   (** The actual type. This includes the attributes that were present in the
@@ -540,9 +552,13 @@ and varinfo = {
   (** True if this is a global variable*)
 
   mutable vdefined: bool;
-  (** True if the variable or function is defined in the file.  Only relevant
-      for functions and global variables.  Not used in particular for local
-      variables and logic variables. *)
+  (**
+     - For global variables, true iff the variable or function
+       is defined in the file.
+     - For local variables, true iff the variable is explicitly initialized
+       at declaration time.
+     - Unused for formals variables and logic variables.
+  *)
 
   mutable vformal: bool;
   (** True if the variable is a formal parameter of a function. *)
@@ -902,6 +918,26 @@ and init =
     define it as a mutable field *)
 and initinfo = { mutable init : init option }
 
+(** kind of constructor for initializing a local variable through a function
+    call.
+    @since Phosphorus-20170501-beta1. *)
+
+and constructor_kind =
+    | Plain_func (** plain function call, whose result is used for initializing
+                     the variable. *)
+    | Constructor (** C++-like constructor: the function takes as first argument
+                      the address of the variable to be initialized, and
+                      returns [void]. *)
+
+(** Initializers for local variables.
+    @since Phosphorus-20170501-beta1
+*)
+and local_init =
+  | AssignInit of init (** normal initialization *)
+  | ConsInit of varinfo * exp list * constructor_kind
+     (** [ConsInit(f,args,kind)] indicates that the corresponding
+         local is initialized via a call to [f], of kind [kind]
+         with the given [args]. *)
 (* ************************************************************************* *)
 (** {2 Function definitions} *)
 (* ************************************************************************* *)
@@ -960,13 +996,32 @@ and fundec = {
 }
 
 (** A block is a sequence of statements with the control falling through from
-    one element to the next *)
+    one element to the next. In addition, blocks are used to determine the scope
+    of variables, through the blocals field. Variables in [blocals] that have
+    their [vdefined] field set to [true] must appear as the target of a
+    [Local_init] instruction directly in the [bstmts], with two exceptions: the
+    [Local_init] instruction can be part of an [UnspecifiedSequence], or of
+    a block that has [bscoping] set to [false]. Such block _must not_
+    itself have local variables: it denotes a simple list of statements grouped
+    together (e.g. to stay in scope of an annotation extending to the
+    whole list).
+*)
 and block = { 
   mutable battrs: attributes; (** Attributes for the block *)
+
+  mutable bscoping: bool;
+  (** Whether the block is used to determine the scope of local variables. *)
 
   mutable blocals: varinfo list; 
   (** variables that are local to the block. It is a subset of the slocals of
       the enclosing function. *)
+
+  mutable bstatics: varinfo list;
+  (** static variables whose syntactic scope is restricted to the block.
+      They are normalized as globals, since their lifetime is the whole program
+      execution, but we maintain a syntactic scope information here for better
+      traceability from the original source code.
+  *)
 
   mutable bstmts: stmt list;  (** The statements comprising the block. *)
 }
@@ -1201,6 +1256,14 @@ and instr =
       If the type of the result variable is not the same as the declared type of
       the function result then an implicit cast exists. 
   *)
+  | Local_init of varinfo * local_init * location
+    (** initialization of a local variable. The corresponding varinfo must
+        belong to the [blocals] list of the innermost enclosing block that does
+        not have attribute {!Cil.block_no_scope_attr}. Such blocks are purely
+        here for grouping statements and do not play a role for scoping
+        variables. See {!Cil_types.block} definition for more information
+        @since Phosphorus-20170501-beta1
+      *)
 
   (* See the GCC specification for the meaning of ASM.
     If the source is MS VC then only the templates
@@ -1235,7 +1298,6 @@ and instr =
   | Skip of location
 
   | Code_annot of code_annotation * location
-
 
 (** GNU extended-asm information:
     - a list of outputs, each of which is an lvalue with optional names and
@@ -1290,7 +1352,7 @@ and logic_type =
   | Larrow of logic_type list * logic_type (** (n-ary) function type *)
 
 (** tsets with an unique identifier.
-    Use [Logic_const.new_location] to generate a new id. *)
+    Use {!Logic_const.new_identified_term} to generate a new id. *)
 and identified_term = {
   it_id: int; (** the identifier. *)
   it_content: term (** the term *)
@@ -1299,8 +1361,18 @@ and identified_term = {
 (** logic label referring to a particular program point. *)
 and logic_label =
   | StmtLabel of stmt ref (** label of a C statement. *)
-  | LogicLabel of (stmt option * string) (* [JS 2011/05/13] why a tuple here? *)
-(** builtin logic label ({t Here, Pre}, ...) *)
+  | FormalLabel of string (** label of global annotation. *)
+  | BuiltinLabel of logic_builtin_label
+
+(** builtin logic labels defined in ACSL. *)
+and logic_builtin_label =
+  | Here
+  | Old
+  | Pre
+  | Post
+  | LoopEntry
+  | LoopCurrent
+  | Init
 
 (* ************************************************************************* *)
 (** {2 Terms} *)
@@ -1339,7 +1411,7 @@ and term_node =
   | TStartOf of term_lval (** beginning of an array. *)
 
   (* additional constructs *)
-  | Tapp of logic_info * (logic_label * logic_label) list * term list
+  | Tapp of logic_info * logic_label list * term list
       (** application of a logic function. *)
   | Tlambda of quantifiers * term (** lambda abstraction. *)
   | TDataCons of logic_ctor_info * term list
@@ -1394,6 +1466,9 @@ and model_info = {
   mutable mi_field_type: logic_type; (** type of the field *)
   mutable mi_base_type: typ; (** type to which the field is associated. *)
           mi_decl: location; (** where the field has been declared. *)
+  mutable mi_attr: attributes;
+  (** attributes tied to the field.
+      @since Phosphorus-20170501-beta1 *)
 }
 
 (** offset of an lvalue. *)
@@ -1444,8 +1519,11 @@ and logic_body =
 and logic_type_info = { 
   lt_name: string;
   lt_params : string list; (** type parameters*)
-  mutable lt_def: logic_type_def option
+  mutable lt_def: logic_type_def option;
     (** definition of the type. None for abstract types. *)
+  mutable lt_attr: attributes;
+    (** attributes associated to the logic type.
+        @since Phosphorus-20170501-beta1 *)
 }
 (* will be expanded when dealing with concrete types *)
 
@@ -1469,9 +1547,12 @@ and logic_var = {
   mutable lv_id : int; (** unique identifier *)
   mutable lv_type : logic_type; (** type of the variable. *)
   mutable lv_kind: logic_var_kind; (** kind of the variable *)
-  mutable lv_origin : varinfo option
+  mutable lv_origin : varinfo option;
 (** when the logic variable stems from a C variable, set to the original C
     variable.  *)
+  mutable lv_attr: attributes
+      (** attributes tied to the logic variable
+          @since Phosphorus-20170501-beta1 *)
 }
 
 (** Description of a constructor of a logic sum-type.
@@ -1504,7 +1585,7 @@ and relation =
 and predicate_node =
   | Pfalse (** always-false predicate. *)
   | Ptrue (** always-true predicate. *)
-  | Papp of logic_info * (logic_label * logic_label) list * term list
+  | Papp of logic_info * logic_label list * term list
       (** application of a predicate. *)
   | Pseparated of term list
   | Prel of relation * term * term (** comparison of two terms. *)
@@ -1526,7 +1607,7 @@ and predicate_node =
     (** the pointed function has a type compatible with the one of pointer. *)
   | Pinitialized of logic_label * term   (** the given locations are initialized. *)
   | Pdangling of logic_label * term (** the given locations contain dangling
-                                        adresses. *)
+                                        addresses. *)
   | Pallocable of logic_label * term   (** the given locations can be allocated. *)
   | Pfreeable of logic_label * term   (** the given locations can be free. *)
   | Pfresh of logic_label * logic_label * term * term
@@ -1535,7 +1616,7 @@ and predicate_node =
   | Psubtype of term * term
       (** First term is a type tag that is a subtype of the second. *)
 
-(** predicate with an unique identifier.  Use [Logic_const.new_predicate] to
+(** predicate with an unique identifier.  Use {!Logic_const.new_predicate} to
     create fresh predicates *)
 and identified_predicate = {
   ip_id: int; (** identifier *)
@@ -1549,28 +1630,27 @@ and predicate = {
   pred_content : predicate_node;(** content *)
 }
 
-(*  Polymorphic types shared with parsed trees (Logic_ptree) *)
-(** variant of a loop or a recursive function. Type shared with Logic_ptree. *)
-and 'term variant = 'term * string option
+(** variant of a loop or a recursive function. *)
+and variant = term * string option
 
 (** allocates and frees. 
     @since Oxygen-20120901  *)
-and 'locs allocation =
-  | FreeAlloc of 'locs list * 'locs list (** tsets. Empty list means \nothing. *)
+and allocation =
+  | FreeAlloc of identified_term list * identified_term list (** tsets. Empty list means \nothing. *)
   | FreeAllocAny (** Nothing specified. Semantics depends on where it 
 		     is written. *)
 
-(** dependencies of an assigned location. Shared with Logic_ptree. *)
-and 'locs deps =
-  | From of 'locs list (** tsets. Empty list means \nothing. *)
+(** dependencies of an assigned location. *)
+and deps =
+  | From of identified_term list (** tsets. Empty list means \nothing. *)
   | FromAny (** Nothing specified. Any location can be involved. *)
 
-and 'locs from = ('locs * 'locs deps)
+and from = identified_term * deps
 
-(** zone assigned with its dependencies. Type shared with Logic_ptree. *)
-and 'locs assigns = 
+(** zone assigned with its dependencies. *)
+and assigns =
   | WritesAny (** Nothing specified. Anything can be written. *)
-  | Writes of 'locs from list
+  | Writes of from list
     (** list of locations that can be written. Empty list means \nothing. *)
 
 (** Function or statement contract. This type shares the name of its
@@ -1579,7 +1659,7 @@ and spec = {
   mutable spec_behavior : behavior list;
   (** behaviors *)
 
-  mutable spec_variant : term variant option;
+  mutable spec_variant : variant option;
   (** variant for recursive functions. *)
 
   mutable spec_terminates: identified_predicate option;
@@ -1595,8 +1675,10 @@ and spec = {
 }
 
 
-(** extension to standard ACSL clause.
-    Each extension is associated to a keyword. An extension
+(** Extension to standard ACSL clause with an unique identifier.
+    Use {!Logic_const.new_acsl_extension} to create new acsl extension with
+    a fresh id.
+    Each extension is associated with a keyword. An extension
     can be registered through the following functions:
     - {!Logic_typing.register_behavior_extension} for parsing and type-checking
     - {!Cil_printer.register_behavior_extension} for pretty-printing an
@@ -1604,8 +1686,9 @@ and spec = {
     - {!Cil.register_behavior_extension} for visiting an extended clause
 
     @plugin development guide *)
-and acsl_extension = string * acsl_extension_kind
+and acsl_extension = int * string * acsl_extension_kind
 
+(** @plugin development guide *)
 and acsl_extension_kind =
   | Ext_id of int (** id used internally by the extension itself. *)
   | Ext_terms of term list
@@ -1617,49 +1700,51 @@ and acsl_extension_kind =
     @since Oxygen-20120901 [b_allocation] has been added.
     @since Carbon-20101201 [b_requires] has been added.
     @modify Boron-20100401 [b_ensures] is replaced by [b_post_cond].
-    Old [b_ensures] represent the [Normal] case of [b_post_cond]. *)
+    Old [b_ensures] represent the [Normal] case of [b_post_cond].
+ *)
 and behavior = {
   mutable b_name : string; (** name of the behavior. *)
   mutable b_requires : identified_predicate list; (** require clauses. *)
   mutable b_assumes : identified_predicate list; (** assume clauses. *)
   mutable b_post_cond : (termination_kind * identified_predicate) list
       (** post-condition. *);
-  mutable b_assigns : identified_term assigns; (** assignments. *)
-  mutable b_allocation : identified_term allocation; (** frees, allocates. *)
-  mutable b_extended : acsl_extension list (** extensions *)
+  mutable b_assigns : assigns; (** assignments. *)
+  mutable b_allocation : allocation; (** frees, allocates. *)
+  mutable b_extended : acsl_extension list
+    (** extensions
+        @plugin development guide *)
 }
 
 (** kind of termination a post-condition applies to. See ACSL manual. *)
 and termination_kind = Normal | Exits | Breaks | Continues | Returns
 
-(** Pragmas for the value analysis plugin of Frama-C.
-    Type shared with Logic_ptree.*)
-and 'term loop_pragma =
-  | Unroll_specs of 'term list
-  | Widen_hints of 'term list
-  | Widen_variables of 'term list
+(** Pragmas for the value analysis plugin of Frama-C. *)
+and loop_pragma =
+  | Unroll_specs of term list
+  | Widen_hints of term list
+  | Widen_variables of term list
 
-(** Pragmas for the slicing plugin of Frama-C. Type shared with Logic_ptree.*)
-and 'term slice_pragma =
-  | SPexpr of 'term
+(** Pragmas for the slicing plugin of Frama-C. *)
+and slice_pragma =
+  | SPexpr of term
   | SPctrl
   | SPstmt
 
-(** Pragmas for the impact plugin of Frama-C. Type shared with Logic_ptree.*)
-and 'term impact_pragma =
-  | IPexpr of 'term
+(** Pragmas for the impact plugin of Frama-C. *)
+and impact_pragma =
+  | IPexpr of term
   | IPstmt
 
-(** Pragmas for the Jessie and WP plugins of Frama-C. Type shared with Logic_ptree.*)
-and 'term jessie_pragma =
-  | JPexpr of 'term
+(** Pragmas for the Jessie plugin of Frama-C. *)
+and jessie_pragma =
+  | JPexpr of term
 
-(** The various kinds of pragmas. Type shared with Logic_ptree. *)
-and 'term pragma =
-  | Loop_pragma of 'term loop_pragma
-  | Slice_pragma of 'term slice_pragma
-  | Impact_pragma of 'term impact_pragma
-  | Jessie_pragma of 'term jessie_pragma
+(** The various kinds of pragmas. *)
+and pragma =
+  | Loop_pragma of loop_pragma
+  | Slice_pragma of slice_pragma
+  | Impact_pragma of impact_pragma
+  | Jessie_pragma of jessie_pragma
 
 (** all annotations that can be found in the code.
     This type shares the name of its constructors with
@@ -1678,21 +1763,21 @@ and code_annotation_node =
       this invariant applies.  The boolean flag is true for normal loop
       invariants and false for invariant-as-assertions. *)
                                          
-  | AVariant of term variant
+  | AVariant of variant
   (** loop variant. Note that there can be at most one variant associated to a
       given statement *)
 
-  | AAssigns of string list * identified_term assigns
+  | AAssigns of string list * assigns
   (** loop assigns.  (see [b_assigns] in the behaviors for other assigns).  At
       most one clause associated to a given (statement, behavior) couple.  *)
 
-  | AAllocation of string list * identified_term allocation
+  | AAllocation of string list * allocation
   (** loop allocation clause.  (see [b_allocation] in the behaviors for other
       allocation clauses).
       At most one clause associated to a given (statement, behavior) couple.
       @since Oxygen-20120901 when [b_allocation] has been added.  *)
 
-  | APragma of term pragma (** pragma. *)
+  | APragma of pragma (** pragma. *)
   | AExtended of string list * acsl_extension
     (** extension in a loop annotation.
         @since Silicon-20161101 *)
@@ -1702,7 +1787,7 @@ and code_annotation_node =
 and funspec = spec
 
 (** code annotation with an unique identifier.
-    Use [Logic_const.new_code_annotation] to create new code annotations with
+    Use {!Logic_const.new_code_annotation} to create new code annotations with
     a fresh id. *)
 and code_annotation = { 
   annot_id: int; (** identifier. *) 
@@ -1716,13 +1801,14 @@ and funbehavior = behavior
 and global_annotation =
   | Dfun_or_pred of logic_info * location
   | Dvolatile of 
-      identified_term list * varinfo option * varinfo option * location
+      identified_term list * varinfo option * varinfo option
+      * attributes * location
   (** associated terms, reading function, writing function *)
-  | Daxiomatic of string * global_annotation list * location
+  | Daxiomatic of string * global_annotation list * attributes * location
   | Dtype of logic_type_info * location (** declaration of a logic type. *)
   | Dlemma of
       string * bool * logic_label list * string list *
-        predicate * location
+        predicate * attributes * location
   (** definition of a lemma. The boolean flag is [true] if the property should
       be taken as an axiom and [false] if it must be proved.  *)
   | Dinvariant of logic_info * location
@@ -1732,7 +1818,7 @@ and global_annotation =
   | Dmodel_annot of model_info * location
   (** Model field for a type t, seen as a logic function with one 
       argument of type t *)
-  | Dcustom_annot of custom_tree * string* location
+  | Dcustom_annot of custom_tree * string * attributes * location
       (*Custom declaration*)
 
 and custom_tree = CustomDummy
@@ -1765,12 +1851,29 @@ type kernel_function = {
 }
 
 (* [VP] TODO: VLocal should be attached to a particular block, not a whole
-   function. *)
+   function. It might be worth it to unify this type with the newer
+   syntactic_scope below.
+*)
 type localisation =
   | VGlobal
   | VLocal of kernel_function
   | VFormal of kernel_function
 
+(** Various syntactic scopes through which an identifier might be searched.
+    Note that for this purpose static variables are still tied to the block
+    where they were declared in the original source (see {!Cil_types.block}).
+    @since Chlorine-20180501
+*)
+type syntactic_scope =
+  | Program (** Only non-static global symbols. *)
+  | Translation_unit of string
+    (** Any global visible within the given C source file. *)
+  | Block_scope of stmt
+      (** same as above + all locals of the blocks to which the given statement
+          belongs. *)
+
+(** Definition of a machine model (architecture + compiler).
+    @plugin development guide *)
 type mach = {
   sizeof_short: int;      (* Size of "short" *)
   sizeof_int: int;        (* Size of "int" *)
@@ -1781,7 +1884,7 @@ type mach = {
   sizeof_double: int;     (* Size of "double" *)
   sizeof_longdouble: int; (* Size of "long double" *)
   sizeof_void: int;       (* Size of "void" *)
-  sizeof_fun: int;        (* Size of function *)
+  sizeof_fun: int;        (* Size of function. Negative if unsupported. *)
   size_t: string;         (* Type of "sizeof(T)" *)
   wchar_t: string;        (* Type of "wchar_t" *)
   ptrdiff_t: string;      (* Type of "ptrdiff_t" *)
@@ -1794,7 +1897,7 @@ type mach = {
   alignof_double: int;    (* Alignment of "double" *)
   alignof_longdouble: int;  (* Alignment of "long double" *)
   alignof_str: int;       (* Alignment of strings *)
-  alignof_fun: int;       (* Alignment of function *)
+  alignof_fun: int;       (* Alignment of function. Negative if unsupported. *)
   char_is_unsigned: bool; (* Whether "char" is unsigned *)
   underscore_name: bool;  (* If assembly names have leading underscore *)
   const_string_literals: bool; (* Whether string literals have const chars *)
@@ -1804,6 +1907,8 @@ type mach = {
   __thread_is_keyword: bool (* Whether [__thread] is a keyword *);
   compiler: string;       (* Compiler being used. Currently recognized names
                              are 'gcc', 'msvc' and 'generic'. *)
+  cpp_arch_flags: string list;  (* Architecture-specific flags to be given to
+                                   the preprocessor (if supported) *)
   version: string;        (* Information on this machdep *)
 }
 

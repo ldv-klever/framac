@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,5 +20,8 @@
 (*                                                                        *)
 (**************************************************************************)
 
-
-(** No function is directly exported: they are registered in {!Db.Report}. *)
+(* Pretty prints a report about the status of all properties.
+   @since Sulfur-20171101 *)
+module Register : sig
+  val print : unit -> unit
+end

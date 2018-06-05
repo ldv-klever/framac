@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -20,7 +20,8 @@
 #                                                                        #
 ##########################################################################
 
-BINDIR=$(dirname $0)
+MYDIR=$(dirname $0)
+BINDIR=$(cd $MYDIR && pwd) #more portable realpath
 ROOTDIR=$BINDIR/..
 
 export FRAMAC_PLUGIN_GUI="$ROOTDIR/lib/plugins/gui"

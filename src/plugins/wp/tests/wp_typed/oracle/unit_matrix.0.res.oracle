@@ -1,9 +1,8 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_typed/unit_matrix.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 ------------------------------------------------------------
   Function make
 ------------------------------------------------------------
@@ -15,9 +14,9 @@ Assume {
   Type: is_sint32(a) /\ is_sint32(b) /\ is_sint32(c) /\ is_sint32(d) /\
       is_sint32(x).
   (* Goal *)
-  When: a != c.
+  When: c != a.
 }
-Prove: 1 = x.
+Prove: x = 1.
 
 ------------------------------------------------------------
 
@@ -33,6 +32,6 @@ Assume {
   Type: is_sint32(a) /\ is_sint32(b) /\ is_sint32(c) /\ is_sint32(d) /\
       is_sint32(x).
 }
-Prove: 1 = x.
+Prove: x = 1.
 
 ------------------------------------------------------------

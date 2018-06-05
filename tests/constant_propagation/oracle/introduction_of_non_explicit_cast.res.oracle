@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/constant_propagation/introduction_of_non_explicit_cast.c (with preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -12,40 +11,43 @@
   s2 ∈ {0}
   ull ∈ {0}
 [value] computing for function test_ull <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:68.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:68.
 [value] Recording results for test_ull
 [value] Done for function test_ull
 [value] computing for function test_struct <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:69.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:69.
 [value] Recording results for test_struct
 [value] Done for function test_struct
 [value] computing for function test_struct_ptr <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:70.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:70.
 [value] Recording results for test_struct_ptr
 [value] Done for function test_struct_ptr
 [value] computing for function test_tab <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:71.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:71.
 [value] Recording results for test_tab
 [value] Done for function test_tab
 [value] computing for function init <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:73.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:73.
 [value] computing for function add3 <- init <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:57.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:57.
 [value] Recording results for add3
 [value] Done for function add3
 [value] Recording results for init
 [value] Done for function init
 [value] computing for function add3 <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:74.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:74.
 [value] Recording results for add3
 [value] Done for function add3
 [value] computing for function test_ptr <- main.
-        Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:76.
+  Called from tests/constant_propagation/introduction_of_non_explicit_cast.c:76.
 [value] Recording results for test_ptr
 [value] Done for function test_ptr
-tests/constant_propagation/introduction_of_non_explicit_cast.c:77:[value] assertion got status valid.
-tests/constant_propagation/introduction_of_non_explicit_cast.c:80:[value] warning: assertion got status unknown.
-tests/constant_propagation/introduction_of_non_explicit_cast.c:81:[value] assertion got status valid.
+[value] tests/constant_propagation/introduction_of_non_explicit_cast.c:77: 
+  assertion got status valid.
+[value:alarm] tests/constant_propagation/introduction_of_non_explicit_cast.c:80: Warning: 
+  assertion got status unknown.
+[value] tests/constant_propagation/introduction_of_non_explicit_cast.c:81: 
+  assertion got status valid.
 [value] Recording results for main
 [value] done for function main
 [value] ====== VALUES COMPUTED ======
@@ -121,7 +123,7 @@ tests/constant_propagation/introduction_of_non_explicit_cast.c:81:[value] assert
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function add3:
   \result FROM v1; v2; v3
 [from] Function init:
@@ -168,9 +170,7 @@ struct st s1;
 struct st s2;
 void test_struct(void)
 {
-  ST s;
-  s.a = 0;
-  s.b = 1;
+  ST s = {.a = 0, .b = 1};
   s1 = s;
   s1.a = 1;
   s2.a = 1;
@@ -182,20 +182,15 @@ void test_struct(void)
 
 void test_tab(int v)
 {
-  int *r;
-  char *q;
-  int decal;
-  { /* sequence */
-    s2.b = 2;
-    TAB[1] = 0;
-  }
-  r = & TAB[4];
+  s2.b = 2;
+  TAB[1] = 0;
+  int *r = & TAB[4];
   TAB[4] = 13;
   TAB[5] = 13;
-  q = (char *)(& TAB[4]);
+  char *q = (char *)(& TAB[4]);
   *((char *)(& TAB[4])) = (char)13;
   *((char *)(& TAB[4]) + 1) = (char)13;
-  decal = 4;
+  int decal = 4;
   *((char *)(& TAB[5])) = (char)13;
   return;
 }
@@ -203,13 +198,10 @@ void test_tab(int v)
 int *test_ptr(int v)
 {
   int *__retres;
-  int *p;
-  char *s;
-  int decal;
-  p = & x;
-  s = (char *)(& x);
+  int *p = & x;
+  char *s = (char *)(& x);
   *((char *)(& x)) = (char)7;
-  decal = 1;
+  int decal = 1;
   *((char *)(& x) + 1) = (char)7;
   s = (char *)(& x) + 1;
   *((char *)(& x) + 1) = (char)7;
@@ -221,8 +213,7 @@ int *test_ptr(int v)
 int *test_struct_ptr(void)
 {
   int *__retres;
-  int *q;
-  q = & s1.b;
+  int *q = & s1.b;
   __retres = & s1.a;
   return __retres;
 }
@@ -236,15 +227,12 @@ int add3(int v1, int v2, int v3)
 
 int init(int v)
 {
-  int zero;
-  int sept;
-  int z1;
-  zero = 0;
-  sept = 7;
+  int zero = 0;
+  int sept = 7;
   x = 5;
   y = 7;
   z = add3(5,7,0);
-  z1 = 12;
+  int z1 = 12;
   return zero;
 }
 
@@ -257,22 +245,18 @@ void test_ull(void)
 
 void main(int a)
 {
-  int b;
-  int *p;
-  int *q;
   int *tmp_1;
-  int yy;
   test_ull();
   test_struct();
   test_struct_ptr();
   test_tab(13);
-  b = init(5);
+  int b = init(5);
   z = add3(a,0,0);
-  p = test_ptr(7);
+  int *p = test_ptr(7);
   /*@ assert *p ≡ 7; */ ;
   if (a) tmp_1 = & x; else tmp_1 = & y;
-  q = tmp_1;
-  yy = 7;
+  int *q = tmp_1;
+  int yy = 7;
   /*@ assert a ≡ 0 ⇒ q ≡ &y; */ ;
   /*@ assert *q ≡ 7; */ ;
   return;

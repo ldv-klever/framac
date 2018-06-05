@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,7 +51,7 @@ end
  * Usually, the propagated thing should be a predicate,
  * but it can be more sophisticated like lists of predicates,
  * or maybe a structure to keep hypotheses and goals separated.
- * Moreover, proof obligations may also need to be handeled.
+ * Moreover, proof obligations may also need to be handled.
  **)
 module type S = sig
 
@@ -77,23 +77,15 @@ module type S = sig
   val use_assigns : t_env -> stmt option -> WpPropId.prop_id option ->
     WpPropId.assigns_desc -> t_prop -> t_prop
 
-  val label  : t_env -> Clabels.c_label -> t_prop -> t_prop
+  val label  : t_env -> stmt option -> Clabels.c_label -> t_prop -> t_prop
+  val init : t_env -> varinfo -> init option -> t_prop -> t_prop
+  val const : t_env -> varinfo -> t_prop -> t_prop
   val assign : t_env -> stmt -> lval -> exp -> t_prop -> t_prop
   val return : t_env -> stmt -> exp option -> t_prop -> t_prop
   val test : t_env -> stmt -> exp -> t_prop -> t_prop -> t_prop
   val switch : t_env -> stmt -> exp -> (exp list * t_prop) list -> t_prop -> t_prop
 
   val has_init : t_env -> bool
-  val init_value : t_env -> lval -> typ -> exp option -> t_prop -> t_prop
-  (** init_value env lv t v_opt wp:
-      put value of type t (or default if None) in lv *)
-  val init_range : t_env -> lval -> typ ->
-    Integer.t -> Integer.t -> exp option -> t_prop -> t_prop
-  (** init_range env lv t_elt a b wp :
-      put default values of type t_elt in lv[k] with a <= k < b *)
-
-  val init_const : t_env -> varinfo -> t_prop -> t_prop
-  (** the (entire) variable has its initial value *)
 
   val loop_entry : t_prop -> t_prop
   val loop_step : t_prop -> t_prop
@@ -115,7 +107,7 @@ module type S = sig
     pre:     WpPropId.pred_info list ->
     post:    WpPropId.pred_info list ->
     pexit:   WpPropId.pred_info list ->
-    assigns: identified_term assigns ->
+    assigns: assigns ->
     p_post: t_prop ->
     p_exit: t_prop ->
     t_prop

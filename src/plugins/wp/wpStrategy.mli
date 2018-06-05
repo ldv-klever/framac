@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,9 +21,10 @@
 (**************************************************************************)
 
 open Cil_types
+open Clabels
 
 (* -------------------------------------------------------------------------- *)
-(** This file provide all the functions to build a stategy that can then
+(** This file provide all the functions to build a strategy that can then
  * be used by the main generic calculus.  *)
 (* -------------------------------------------------------------------------- *)
 
@@ -45,7 +46,7 @@ type annot_kind =
   | Agoal (** annotation is a goal,
               but not an hypothesis (see Aboth): A /\ ...*)
   | Aboth of bool (** annotation can be used as both hypothesis and goal :
-                      - with true : considerer as both : A /\ A=>..
+                      - with true : considered as both : A /\ A=>..
                       - with false : we just want to use it as hyp right now. *)
   | AcutB of bool (** annotation is use as a cut :
                       - with true (A is also a goal) -> A (+ proof obligation A => ...)
@@ -95,7 +96,7 @@ val add_prop_stmt_pre : t_annots -> annot_kind ->
  * Add [\old (assumes) => post] if [assumes] is given. *)
 val add_prop_stmt_post :t_annots -> annot_kind ->
   kernel_function -> stmt -> funbehavior -> termination_kind ->
-  logic_label option -> assumes:predicate option -> identified_predicate
+  c_label option -> assumes:predicate option -> identified_predicate
   -> t_annots
 
 (** Add all the [b_requires]. Add [b_assumes => b_requires] if [with_assumes] *)
@@ -120,7 +121,7 @@ val add_prop_assert : t_annots -> annot_kind ->
   kernel_function -> stmt -> code_annotation -> predicate -> t_annots
 
 val add_prop_loop_inv : t_annots -> annot_kind ->
-  stmt -> WpPropId.prop_id -> predicate -> t_annots
+  stmt -> established:bool -> WpPropId.prop_id -> predicate -> t_annots
 
 (** {3 Adding assigns properties} *)
 
@@ -134,7 +135,7 @@ val add_assigns_any : t_annots -> annot_kind ->
 
 (** shortcut to add a stmt spec assigns property as an hypothesis. *)
 val add_stmt_spec_assigns_hyp : t_annots -> kernel_function -> stmt ->
-  logic_label option -> funspec -> t_annots
+  c_label option -> funspec -> t_annots
 
 (** short cut to add a dynamic call *)
 val add_call_assigns_any : t_annots -> stmt -> t_annots
@@ -142,17 +143,17 @@ val add_call_assigns_any : t_annots -> stmt -> t_annots
 (** shortcut to add a call assigns property as an hypothesis. *)
 val add_call_assigns_hyp : t_annots -> kernel_function -> stmt ->
   called_kf:kernel_function ->
-  logic_label option -> funspec option -> t_annots
+  c_label option -> funspec option -> t_annots
 
 (** shortcut to add a loop assigns property as an hypothesis. *)
 val add_loop_assigns_hyp : t_annots -> kernel_function -> stmt ->
-  (code_annotation * identified_term from list) option -> t_annots
+  (code_annotation * from list) option -> t_annots
 
 val add_fct_bhv_assigns_hyp : t_annots -> kernel_function -> termination_kind ->
   funbehavior -> t_annots
 
 val assigns_upper_bound :
-  funspec -> (funbehavior * identified_term from list) option
+  funspec -> (funbehavior * from list) option
 
 (** {3 Getting information from annotations} *)
 
@@ -165,7 +166,7 @@ val get_both_hyp_goals : t_annots ->
  * considered as a both goal and hyp ([goal=true], or hyp only ([goal=false]) *)
 val get_cut : t_annots -> (bool * WpPropId.pred_info) list
 
-(** To be used as hypotheses arround a call, (the pre are in
+(** To be used as hypotheses around a call, (the pre are in
  * [get_call_pre_goal]) *)
 val get_call_hyp : t_annots -> kernel_function -> WpPropId.pred_info list
 
@@ -224,11 +225,10 @@ type strategy_kind =
   | SKannots (** normal mode for annotations *)
   | SKfroms of strategy_for_froms
 
-val mk_strategy : string -> Cil2cfg.t -> string option -> bool ->
+val mk_strategy : string -> Cil2cfg.t -> string option -> 
   strategy_kind -> annots_tbl -> strategy
 
 val get_annots : strategy -> Cil2cfg.edge -> t_annots
-val new_loop_computation : strategy -> bool
 val strategy_has_asgn_goal : strategy -> bool
 val strategy_has_prop_goal : strategy -> bool
 val strategy_kind : strategy -> strategy_kind
@@ -251,7 +251,7 @@ val pp_info_of_strategy : Format.formatter -> strategy -> unit
 val is_main_init : Cil_types.kernel_function -> bool
 
 
-(** True if both options [-const-readonly] and [-wp-init] are positionned,
+(** True if both options [-const-readonly] and [-wp-init] are positioned,
     and the variable is global, not extern, with a ["const"] type
     (see [hasConstAttribute]).
     @since Sodium-20150201

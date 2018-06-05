@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,12 +20,11 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Weak topological orderings (WTOs) are a hierarchical decompositions of the
+(** Weak topological orderings (WTOs) are a hierarchical decomposition of the
     a graph where each layer is topologically ordered and strongly connected
-    components are agregated and oredered recursively. This is a very
-    convenient reprentation to describe an evaluation order to reach a
+    components are aggregated and ordered recursively. This is a very
+    convenient representation to describe an evaluation order to reach a
     fixpoint. *)
-
 
 (** Each component of the graph is either an individual node of the graph
     (without) self loop, or a strongly connected component where a node is
@@ -36,11 +35,14 @@ type 'n component =
     (** A strongly connected component, described by its head node and the
         remaining sub-components topologically ordered *)
   | Node of 'n
-    (** A signe node without self loop *)
+    (** A single node without self loop *)
 
 (** A list of strongly connected components, sorted topologically *)
 and 'n partition = 'n component list
 
+val flatten: 'n partition -> 'n list
+
+val fold_heads: ('a -> 'n -> 'a) -> 'a -> 'n partition -> 'a
 
 (** This functor provides the partitioning algorithm constructing a WTO. *)
 module Make(Node:sig
@@ -50,10 +52,16 @@ module Make(Node:sig
     val pretty: Format.formatter -> t -> unit
   end):sig
 
-  (** Implements Bourdoncle "Efficient chaotic iteration strategies with 
+  type pref = Node.t -> Node.t -> int
+  (** partial order of preference for the choice of the head of a loop *)
+
+  (** Implements Bourdoncle "Efficient chaotic iteration strategies with
   widenings" algorithm to compute a WTO. *)
-  val partition: init:Node.t -> succs:(Node.t -> Node.t list) -> Node.t partition
+  val partition: ?pref:pref -> init:Node.t -> succs:(Node.t -> Node.t list) -> Node.t partition
 
   val pretty_partition: Format.formatter -> Node.t partition -> unit
-  val pretty_component: Format.formatter -> Node.t component -> unit    
+  val pretty_component: Format.formatter -> Node.t component -> unit
+
+  val equal_component: Node.t component -> Node.t component -> bool
+  val equal_partition: Node.t partition -> Node.t partition -> bool
 end

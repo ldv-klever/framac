@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,6 +44,12 @@ struct
   module T = Graph.Topological.Make_stable(G)
 
   let iter g f =
+    (* Warns if [-cg-no-function-pointers] is in effect, which may lead
+       to unsound analyses for the users of the callgraph. *)
+    if not (Options.Function_pointers.get ()) then
+      Options.warning ~once:true "using callgraph while option %s is unset, \
+                                  result may be unsound"
+        Options.Function_pointers.name;
     if S.is_empty () then T.iter S.add g;
     S.iter f
 
@@ -109,6 +115,12 @@ let accept_base ~with_formals ~with_locals kf v =
      | true,  true, Definition (fundec, _) -> Base.is_formal_or_local v fundec
      | true , _, Declaration (_, vd, _, _) -> Base.is_formal_of_prototype v vd)
   || is_local_or_formal_of_caller v kf
+
+let nb_calls () =
+  let g = Cg.get () in
+  (* [g] contains bidirectional edges (from caller to callee and
+     conversely). Conseqently each function call is counted twice. *)
+  Cg.G.nb_edges g / 2
 
 (*
 Local Variables:

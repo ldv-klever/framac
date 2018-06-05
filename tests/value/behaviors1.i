@@ -470,9 +470,9 @@ void test_assigns() {
   int a, b;
   int *p1, *p2, *p3;
 
-  p1 = f(&a, &b); // garbled_mix of &{a}
-  p2 = f(0, &b); // garbled_mix of &{b}
-  p3 = f(0, 0); // [0..+oo]
+  p1 = (int*)f(&a, &b); // garbled_mix of &{a}
+  p2 = (int*)f(0, &b); // garbled_mix of &{b}
+  p3 = (int*)f(0, 0); // [0..+oo]
 }
 
 char T[10];
@@ -576,6 +576,21 @@ void test_small6() {
   int *p = f8(&a);
 }
 
+/*@
+  requires \valid(p);
+  assigns \result \from p;
+  assigns *p \from \nothing;
+  ensures \result == p;
+  behavior b:
+    ensures \initialized(\result);
+ */
+int *f8_bis(int *p);
+
+void test_small6_bis() {
+  int a;
+  int *p = f8_bis(&a);
+}
+
 /*@ axiomatic MyLen { logic ℤ length{L}(char *s); } */
 /*@
   assigns \result \from *s, n;
@@ -587,7 +602,7 @@ void test_small6() {
     ensures \result == 1;
   complete behaviors;
  */
-int f9(char* s, int n);
+int f9(char const* s, int n);
 
 void test_promote() {
   int x = nondet;
@@ -637,6 +652,7 @@ int main() {
   test_small4();
   test_small5();
   test_small6();
+  test_small6_bis();
   test_promote();
   test_narrow();
 }

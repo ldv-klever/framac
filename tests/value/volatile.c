@@ -1,5 +1,5 @@
 /* run.config*
-   OPT: -val @VALUECONFIG@ -val-initialization-padding-globals maybe
+   STDOPT: +"-no-deps -no-input -no-out -val-initialization-padding-globals maybe -c11"
 */
 
 int volatile G = 1;
@@ -62,7 +62,7 @@ int main1 () {
   h = 1;
   E = h;
 
-  /* assignement via pointer */
+  /* assignment via pointer */
   X = -1;
   Y = -1; 
   pv = (int *) &X;
@@ -94,6 +94,10 @@ int * volatile main2() {
   if (t[a[v]-1] != a[v]-1) Frama_C_show_each_a_minus(a[v]-1);       \
   if (t[a[v]] != v) Frama_C_show_each_av(v)
 
+// Assertion that can be true only if v is properly seen as volatile
+#define do_not_reduce_volatile_logic(v) \
+  assert NORED: (v) == 1 && (v) == 2
+
 /* Tests the non-reduction of volatile expressions (expression containing the
    dereference of a volatile location) during the backward propagation of
    an evaluation. */
@@ -112,10 +116,12 @@ void main3 () {
   /* Volatile variable */
   volatile int v = 42;
   do_not_reduce_volatile(v);
+  //@ do_not_reduce_volatile_logic(v);
 
   /* Pointer to volatile variable */
   volatile int *v_ptr = &v;
   do_not_reduce_volatile(*v_ptr);
+  //@ do_not_reduce_volatile_logic(*v_ptr);
 
   /* Volatile structure. */
   volatile struct vol {
@@ -123,10 +129,12 @@ void main3 () {
   } svol;
   svol.f[0] = 42;
   do_not_reduce_volatile(svol.f[0]);
+  //@ do_not_reduce_volatile_logic(svol.f[0]);
 
   /* Pointer to volatile structure. */
   volatile struct vol *svol_ptr = &svol;
   do_not_reduce_volatile(svol_ptr->f[0]);
+  //@ do_not_reduce_volatile_logic(svol_ptr->f[0]);
 
   /* Non volatile structure with a volatile field. */
   struct deepvol {
@@ -134,21 +142,39 @@ void main3 () {
   } sdeepvol;
   sdeepvol.g[0] = 42;
   do_not_reduce_volatile(sdeepvol.g[0]);
+  //@ do_not_reduce_volatile_logic(sdeepvol.g[0]);
 
   /* Array of volatile structs. */
   volatile struct vol volt[1] = {svol};
   do_not_reduce_volatile(volt[0].f[0]);
+  //@ do_not_reduce_volatile_logic(volt[0].f[0]);
 
   /* Array of structs with a volatile field. */
   struct deepvol deepvolt[1] = {sdeepvol};
   do_not_reduce_volatile(deepvolt[0].g[0]);
-
+  //@ do_not_reduce_volatile_logic(deepvolt[0].g[0]);
 }
 
-
+/* Tests the initialization of volatile local variables. */
+void main4 () {
+  int x;
+  volatile int v1;
+  x = v1; /* Initialization alarm, and imprecise value. */
+  volatile int v2 = 17;
+  x = v2; /* No alarm, but imprecise value. */
+  Frama_C_show_each_int_volatile(v1, v2); /* Both variables should be top_int. */
+  int* volatile p1;
+  int *q = p1; /* Initialization alarm, and imprecise value. */
+  Frama_C_show_each_ptr(q);
+  p1 = &x;
+  int* volatile p2 = &x;
+  /* Both pointers should have the same imprecise value: &x + imprecise offset. */
+  Frama_C_show_each_ptr_volatile(p1, p2);
+}
 
 void main() {
   main1();
   main2();
   main3();
+  main4();
 }

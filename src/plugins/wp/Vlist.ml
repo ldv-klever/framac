@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,32 +51,63 @@ let l_repeat = Lang.(E.({
     coq = F_call "repeat" ;
   }))
 
+(*--- Typechecking ---*)
+
+let a_list = Lang.get_builtin_type ~library ~name:t_list ~link:l_list
+
+let ty_nil = function _ -> L.Data(a_list,[L.Tvar 0])
+
+let ty_listelt = function
+  | L.Data(_,[t]) -> (t : tau)
+  | _ -> raise Not_found
+
+let ty_cons = function
+  | [ _ ; Some l ] -> l
+  | [ Some e ; _ ] -> L.Data(a_list,[e])
+  | _ -> raise Not_found
+
+let ty_elt = function
+  | [ Some e ] -> L.Data(a_list,[e])
+  | _ -> raise Not_found
+
+let ty_nth = function
+  | Some l :: _ -> ty_listelt l
+  | _ -> raise Not_found
+
+let rec ty_concat = function
+  | Some l :: _ -> l
+  | None :: w -> ty_concat w
+  | [] -> raise Not_found 
+
+let ty_repeat = function
+  | Some l :: _ -> l
+  | _ -> raise Not_found
+
 (*--- Qed Symbols ---*)
 
-let f_cons = Lang.extern_f ~library "cons" (* rewriten in concat(elt) *)
-let f_nil  = Lang.extern_f ~library ~category:L.Constructor "nil"
-let f_elt = Lang.extern_f ~library ~category:L.Constructor ~link:l_elt "elt"
+let f_cons = Lang.extern_f ~library ~typecheck:ty_cons "cons" (* rewriten in concat(elt) *)
+let f_nil  = Lang.extern_f ~library ~typecheck:ty_nil ~category:L.Constructor "nil"
+let f_elt = Lang.extern_f ~library ~category:L.Constructor ~typecheck:ty_elt ~link:l_elt "elt"
 
 let concatenation = L.(Operator {
-    inversible = true ;
+    invertible = true ;
     associative = true ;
     commutative = false ;
     idempotent = false ;
-    neutral = E_const f_nil ;
+    neutral = E_fun(f_nil,[]) ;
     absorbant = E_none ;
   })
 
-let f_nth    = Lang.extern_f ~library "nth"
+let f_nth    = Lang.extern_f ~library ~typecheck:ty_nth "nth"
 let f_length = Lang.extern_f ~library ~sort:L.Sint "length"
-let f_concat = Lang.extern_f ~library ~category:concatenation ~link:l_concat "concat"
-let f_repeat = Lang.extern_f ~library "repeat" ~link:l_repeat
+let f_concat = Lang.extern_f ~library ~category:concatenation ~typecheck:ty_concat ~link:l_concat "concat"
+let f_repeat = Lang.extern_f ~library ~typecheck:ty_repeat ~link:l_repeat "repeat" 
 
 (*--- ACSL Builtins ---*)
 
 let () =
   let open LogicBuiltins in
   begin
-    add_type t_list ~library ~link:l_list () ;
     add_builtin "\\Nil" [] f_nil ;
     add_builtin "\\Cons" [A;A] f_cons ;
     add_builtin "\\nth" [A;Z] f_nth ;
@@ -87,7 +118,7 @@ let () =
 
 (*--- Smart Constructors ---*)
 
-let v_nil = F.e_fun f_nil []
+let v_nil = F.constant (F.e_fun f_nil [])
 let v_elt e = F.e_fun f_elt [e]
 let v_concat es = F.e_fun f_concat es
 let v_length l = F.e_fun f_length [l]
@@ -102,8 +133,8 @@ let rewrite_cons a w = v_concat [v_elt a ; w]
 let rewrite_length e =
   match F.repr e with
   | L.Fun( nil , [] ) when nil == f_nil -> F.e_zero
-  | L.Fun( elt , [_] ) when elt = f_elt -> F.e_one
-  | L.Fun( concat , es ) when concat = f_concat ->
+  | L.Fun( elt , [_] ) when elt == f_elt -> F.e_one
+  | L.Fun( concat , es ) when concat == f_concat ->
       F.e_sum (List.map v_length es)
   | _ -> raise Not_found
 
@@ -133,23 +164,81 @@ let rewrite_nth s k =
 let rewrite_repeat s n =
   if F.equal n e_zero then v_nil else
   if F.equal n e_one then s else
-  if Cint.is_positive_or_null n then
+  if F.equal s v_nil then v_nil else
     match F.repr s with
-    | L.Fun( repeat , [s0 ; n0] ) when (repeat = f_repeat) &&
-                                       (Cint.is_positive_or_null n0) ->
-        v_repeat s0 (F.e_mul n0 n)
-    | _ when F.equal s v_nil -> v_nil
+    | L.Fun( repeat , [s0 ; n0] )
+      when (repeat == f_repeat) &&
+           (Cint.is_positive_or_null n) &&
+           (Cint.is_positive_or_null n0) -> v_repeat s0 (F.e_mul n0 n)
     | _ -> raise Not_found
-  else raise Not_found
+             
+let rec leftmost a ms =
+  match F.repr a with
+  | L.Fun( concat , e :: es ) when concat == f_concat ->
+      leftmost e (es@ms)
+  | L.Fun( repeat , [ u ; n ] ) when repeat == f_repeat && Cint.is_positive_or_null n ->
+      leftmost u (v_repeat u (F.e_sub n F.e_one) :: ms)
+  | _ -> a , ms
 
-let once_for_each_ast = Model.run_once_for_each_ast ~name:"Vlist" (fun () ->
-    F.set_builtin_2 f_nth rewrite_nth ;
-    F.set_builtin_2 f_cons rewrite_cons ;
-    F.set_builtin_2 f_repeat rewrite_repeat ;
-    F.set_builtin_1 f_length rewrite_length ;
-  )
+let rec rightmost ms a =
+  match F.repr a with
+  | L.Fun( concat , es ) when concat == f_concat ->
+      begin match List.rev es with
+        | [] -> ms , a
+        | e::es -> rightmost (ms @ List.rev es) e
+      end
+  | L.Fun( repeat , [ u ; n ] ) when repeat == f_repeat && Cint.is_positive_or_null n ->
+      rightmost (ms @ [v_repeat u (F.e_sub n F.e_one)]) u
+  | _ -> ms , a
 
-let configure () = once_for_each_ast ()
+let leftmost_eq a b =
+  let a , u = leftmost a [] in
+  let b , v = leftmost b [] in
+  if u <> [] || v <> [] then
+    match F.is_equal a b with
+    | L.Yes -> F.p_equal (v_concat u) (v_concat v)
+    | L.No -> F.p_false
+    | L.Maybe -> raise Not_found
+  else
+    raise Not_found
+
+let rightmost_eq a b =
+  let u , a = rightmost [] a in
+  let v , b = rightmost [] b in
+  if u <> [] || v <> [] then
+    match F.is_equal a b with
+    | L.Yes -> F.p_equal (v_concat u) (v_concat v)
+    | L.No -> F.p_false
+    | L.Maybe -> raise Not_found
+  else
+    raise Not_found
+
+let p_is_nil a = F.p_equal a v_nil
+let rewrite_is_nil a =
+  match F.repr a with
+  | L.Fun(concat,es) when concat == f_concat -> F.p_all p_is_nil es
+  | L.Fun(elt,[_]) when elt == f_elt -> F.p_false
+  | L.Fun(repeat,[u;n]) when repeat == f_repeat ->
+      F.p_or (F.p_leq n F.e_zero) (p_is_nil u)
+  | _ -> raise Not_found
+
+let rewrite_eq a b =
+  match F.repr a , F.repr b with
+  | L.Fun(nil,[]) , _ when nil == f_nil -> rewrite_is_nil b
+  | _ , L.Fun(nil,[]) when nil == f_nil -> rewrite_is_nil a
+  | _ ->
+      try leftmost_eq a b with Not_found -> rightmost_eq a b
+
+let () =
+  Context.register
+    begin fun () ->
+      F.set_builtin_2 f_nth rewrite_nth ;
+      F.set_builtin_2 f_cons rewrite_cons ;
+      F.set_builtin_2 f_repeat rewrite_repeat ;
+      F.set_builtin_1 f_length rewrite_length ;
+      F.set_builtin_eqp f_repeat rewrite_eq ;
+      F.set_builtin_eqp f_nil rewrite_eq ;
+    end
 
 (* -------------------------------------------------------------------------- *)
 (* --- Typing                                                             --- *)
@@ -159,13 +248,13 @@ let f_list = [ f_nil ; f_cons ; f_elt ; f_repeat ; f_concat ]
 
 let check_tau = Lang.is_builtin_type ~name:t_list
 
-let rec check_term e = match F.repr e with
+let check_term e =
+  try match F.repr e with
   | L.Fvar x -> check_tau (F.tau_of_var x)
   | L.Bvar(_,t) -> check_tau t
-  | L.Fun( f , _ ) ->
-      List.memq f f_list ||
-      (try check_tau (Lang.tau_of_lfun f) with Not_found -> false)
+    | L.Fun( f , _ ) -> List.memq f f_list || check_tau (Lang.F.typeof e)
   | _ -> false
+  with Not_found -> false
 
 (* -------------------------------------------------------------------------- *)
 (* --- Export                                                             --- *)
@@ -178,7 +267,7 @@ class type engine =
     method pp_flow : Format.formatter -> Lang.F.term -> unit
   end
 
-let rec pp_concat (engine : #engine) fmt = function
+let rec export (engine : #engine) fmt = function
   | [] ->
       begin match engine#callstyle with
         | E.CallVoid -> Format.pp_print_string fmt "nil()"
@@ -187,18 +276,59 @@ let rec pp_concat (engine : #engine) fmt = function
   | e::es ->
       begin match F.repr e with
         | L.Fun( elt , [x] ) when elt == f_elt ->
-            pp_apply engine fmt "cons" x es
+            apply engine fmt "cons" x es
         | _ ->
-            pp_apply engine fmt "concat" e es
+            apply engine fmt "concat" e es
       end
 
-and pp_apply (engine : #engine) fmt f x es =
+and apply (engine : #engine) fmt f x es =
   match engine#callstyle with
   | E.CallVar | E.CallVoid ->
       Format.fprintf fmt "@[<hov 2>%s(@,%a,@,%a)@]"
-        f engine#pp_flow x (pp_concat engine) es
+        f engine#pp_flow x (export engine) es
   | E.CallApply ->
       Format.fprintf fmt "@[<hov 2>(%s@ %a@ %a)@]"
-        f engine#pp_atom x (pp_concat engine) es
+        f engine#pp_atom x (export engine) es
+  
+(* -------------------------------------------------------------------------- *)
+
+let rec collect xs = function
+  | [] -> List.rev xs , []
+  | (e::es) as w ->
+      begin match F.repr e with
+        | L.Fun( elt , [x] ) when elt == f_elt -> collect (x::xs) es
+        | _ -> List.rev xs , w
+      end
+
+let list engine fmt xs = Qed.Plib.pp_listsep ~sep:"," engine#pp_flow fmt xs
+
+let elements (engine : #engine) fmt xs =
+  Format.fprintf fmt "@[<hov 2>[ %a ]@]" (list engine) xs
+
+let rec pp_concat (engine : #engine) fmt es =
+  let xs , es = collect [] es in
+  begin
+    (if xs <> [] then elements engine fmt xs) ;
+    match es with
+    | [] -> ()
+    | m::ms ->
+        if xs <> [] then Format.fprintf fmt " ^@ " ;
+        engine#pp_atom fmt m ;
+        if ms <> [] then
+          ( Format.fprintf fmt " ^@ " ; pp_concat engine fmt ms )
+  end
+
+let pretty (engine : #engine) fmt es =
+  if es = [] then Format.pp_print_string fmt "[]" else
+    Format.fprintf fmt "@[<hov 2>%a@]" (pp_concat engine) es
+
+let pprepeat (engine : #engine) fmt = function
+  | [l;n] -> Format.fprintf fmt "@[<hov 2>(%a *^@ %a)@]" engine#pp_flow l engine#pp_flow n
+  | es -> Format.fprintf fmt "@[<hov 2>repeat(%a)@]" (list engine) es
+
+let shareable e =
+  match F.repr e with
+  | L.Fun( f , es ) -> f != f_elt && es != []
+  | _ -> true
 
 (* -------------------------------------------------------------------------- *)

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -68,8 +68,18 @@ let () = Cmdline.run_after_early_stage print_sharepath
 let print_libpath = print_config Kernel.PrintLib.get Config.libdir
 let () = Cmdline.run_after_early_stage print_libpath
 
-let print_pluginpath = print_config Kernel.PrintPluginPath.get Config.plugin_path
+let print_pluginpath =
+  print_config Kernel.PrintPluginPath.get Config.plugin_path
 let () = Cmdline.run_after_early_stage print_pluginpath
+
+let print_machdep () =
+  if Kernel.PrintMachdep.get () then begin
+    File.pretty_machdep ();
+    raise Cmdline.Exit
+  end else
+    Cmdline.nop
+let () = Cmdline.run_after_exiting_stage print_machdep
+
 
 (* Time *)
 let time () =
@@ -116,7 +126,7 @@ let () =
   (* implement behavior described in BTS #1388: 
      - on normal exit: save
      - on Sys.break, system error, user error or feature request: do not save
-     - on fatal error or unexpected error: save, but slighly change the
+     - on fatal error or unexpected error: save, but slightly change the
      generated filename. *)
   Cmdline.at_normal_exit (fun () -> save_binary true);
   Cmdline.at_error_exit
@@ -140,13 +150,9 @@ let () = Cmdline.run_after_loading_stage load_binary
 let on_call_to_undeclared_function vi =
   let name = vi.Cil_types.vname in
   if not (Ast_info.is_frama_c_builtin name) then
-    let action = Kernel.ImplicitFunctionDeclaration.get () in
-    if action = "warn" then
-      Kernel.warning ~current:true ~once:true
-        "Calling undeclared function %s. Old style K&R code?" name
-    else if action = "error" then
-      Kernel.abort ~current:true
-        "calling undeclared function %s." name
+    Kernel.warning ~wkey:Kernel.wkey_implicit_function_declaration
+      ~current:true ~once:true
+      "Calling undeclared function %s. Old style K&R code?" name
 
 let () =
   Cabs2cil.register_implicit_prototype_hook on_call_to_undeclared_function

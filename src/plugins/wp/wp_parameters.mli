@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,7 +44,7 @@ val job : unit -> job
 
 (** {2 Model Selection} *)
 
-val has_dkey : string -> bool
+val has_dkey : category -> bool
 
 module Model : Parameter_sig.String_list
 module ByValue : Parameter_sig.String_set
@@ -53,11 +53,15 @@ module InHeap : Parameter_sig.String_set
 module InCtxt : Parameter_sig.String_set
 module ExternArrays: Parameter_sig.Bool
 module ExtEqual : Parameter_sig.Bool
+module Overflows : Parameter_sig.Bool
 module Literals : Parameter_sig.Bool
+module Volatile : Parameter_sig.Bool
+module BoolRange : Parameter_sig.Bool
 
 (** {2 Computation Strategies} *)
 
 module Init: Parameter_sig.Bool
+module InitAlias: Parameter_sig.Bool
 module InitWithForall: Parameter_sig.Bool
 module BoundForallUnfolding: Parameter_sig.Int
 module RTE: Parameter_sig.Bool
@@ -67,12 +71,18 @@ module Core: Parameter_sig.Bool
 module Prune: Parameter_sig.Bool
 module Clean: Parameter_sig.Bool
 module Filter: Parameter_sig.Bool
+module Parasite: Parameter_sig.Bool
+module Prenex: Parameter_sig.Bool
 module Bits: Parameter_sig.Bool
+module Ground: Parameter_sig.Bool
+module Reduce: Parameter_sig.Bool
 module QedChecks : Parameter_sig.String_set
+module UnfoldAssigns : Parameter_sig.Bool
 module Split: Parameter_sig.Bool
-module Invariants: Parameter_sig.Bool
+module SplitDepth: Parameter_sig.Int
 module DynCall : Parameter_sig.Bool
 module SimplifyIsCint : Parameter_sig.Bool
+module SimplifyLandMask : Parameter_sig.Bool
 module SimplifyForall : Parameter_sig.Bool
 module SimplifyType : Parameter_sig.Bool
 module CalleePreCond : Parameter_sig.Bool
@@ -86,6 +96,8 @@ module Drivers: Parameter_sig.String_list
 module Script: Parameter_sig.String
 module UpdateScript: Parameter_sig.Bool
 module Timeout: Parameter_sig.Int
+module TimeExtra: Parameter_sig.Int
+module TimeMargin: Parameter_sig.Int
 module CoqTimeout: Parameter_sig.Int
 module CoqCompiler : Parameter_sig.String
 module CoqIde : Parameter_sig.String
@@ -106,11 +118,17 @@ module AltGrErgo: Parameter_sig.String
 module AltErgoLibs: Parameter_sig.String_list
 module AltErgoFlags: Parameter_sig.String_list
 
+module Auto: Parameter_sig.String_list
+module AutoDepth: Parameter_sig.Int
+module AutoWidth: Parameter_sig.Int
+module BackTrack: Parameter_sig.Int
+
 (** {2 Proof Obligations} *)
 
 module TruncPropIdFileName: Parameter_sig.Int
 module Print: Parameter_sig.Bool
 module Report: Parameter_sig.String_list
+module ReportJson: Parameter_sig.String
 module ReportName: Parameter_sig.String
 module Separation: Parameter_sig.Bool
 module Check: Parameter_sig.Bool
@@ -118,7 +136,9 @@ module Check: Parameter_sig.Bool
 (** {2 Environment Variables} *)
 
 val get_env : ?default:string -> string -> string
-val is_out : unit -> bool (* -wp-out <dir> positionned *)
+val is_out : unit -> bool (* -wp-out <dir> positioned *)
+val get_session : unit -> string
+val get_session_dir : string -> string
 val get_output : unit -> string
 val get_output_dir : string -> string
 val get_includes: unit -> string list
@@ -126,6 +146,6 @@ val make_output_dir: string -> unit
 
 (** {2 Debugging Categories} *)
 val has_print_generated: unit -> bool
-val print_generated: string -> unit
+val print_generated: ?header:string -> string -> unit
 (** print the given file if the debugging category
     "print-generated" is set *)

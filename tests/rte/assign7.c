@@ -1,5 +1,5 @@
 /* run.config
-   OPT: -rte -warn-signed-overflow -print -rte-no-all -rte-precond -journal-disable
+   OPT: -rte -warn-signed-overflow -print -rte-precond -journal-disable
 */
 
 //@ assigns *p \from \union(*(char*)p,*q);
@@ -20,7 +20,7 @@ extern void gg(int* p);
 
 int X, Y ;
 //@ assigns \union(X, Y) ;
-void hh();
+void hh(void);
 
 int main() {
   int x,y,z;

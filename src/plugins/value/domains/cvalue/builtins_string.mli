@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,17 +22,16 @@
 
 (** Value builtins related to functions in string.h. *)
 
-(** The actual builtins are registed through {!Builtins.register_builtin}.
+(** The actual builtins are registered through {!Builtins.register_builtin}.
     The functions below are also  used for the evaluation of logical predicates
     [valid_string] and [valid_read_string]. *)
 
-(** Alarms are triples (kind, text, warning_msg):
-    - Alarm kind
-    - Message text (to be emitted via emit_alarm)
-    - Warning message (to be emitted via Value_util.alarm_report)
+(** Alarms are pairs (assertion, warning_msg):
+    - ACSL "assertion"
+    - Informative message on why the evaluation raised an alarm
 *)
 module String_alarms:
-  Datatype.S_with_collections with type t = Alarms.t * string * string
+  Datatype.S_with_collections with type t = string * string
 
 type expterm =
   | Exp of Cil_types.exp
@@ -52,3 +51,9 @@ val frama_c_rawmemchr_wrapper: str_builtin_sig
 val frama_c_memchr_wrapper: str_builtin_sig
 
 val frama_c_strchr_wrapper: str_builtin_sig
+
+val frama_c_wcslen_wrapper: unit -> str_builtin_sig
+
+val frama_c_wcschr_wrapper: unit -> str_builtin_sig
+
+val frama_c_wmemchr_wrapper: unit -> str_builtin_sig

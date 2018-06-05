@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/lazy.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
@@ -11,9 +10,30 @@
   r ∈ {0}
   s ∈ {0}
   t ∈ {0}
-tests/value/lazy.i:11:[value] warning: pointer comparison. assert \pointer_comparable((void *)0, (void *)q);
-tests/value/lazy.i:14:[value] warning: pointer comparison. assert \pointer_comparable((void *)0, (void *)s);
-tests/value/lazy.i:19:[value] warning: pointer comparison. assert \pointer_comparable((void *)0, (void *)(&a + 2));
+[value:pointer-comparison] tests/value/lazy.i:11: 
+  invalid pointer comparison: invalid pointer(s)
+[value:pointer-comparison] tests/value/lazy.i:11: 
+  evaluating condition to {0; 1} instead of {1} because of UPCPA
+[value:alarm] tests/value/lazy.i:11: Warning: 
+  pointer comparison. assert \pointer_comparable((void *)0, (void *)q);
+[value:pointer-comparison] tests/value/lazy.i:11: 
+  evaluating condition to {0; 1} instead of {0} because of UPCPA
+[value:pointer-comparison] tests/value/lazy.i:14: 
+  invalid pointer comparison: invalid pointer(s)
+[value:pointer-comparison] tests/value/lazy.i:14: 
+  evaluating condition to {0; 1} instead of {0} because of UPCPA
+[value:alarm] tests/value/lazy.i:14: Warning: 
+  pointer comparison. assert \pointer_comparable((void *)0, (void *)s);
+[value:pointer-comparison] tests/value/lazy.i:14: 
+  evaluating condition to {0; 1} instead of {1} because of UPCPA
+[value:pointer-comparison] tests/value/lazy.i:19: 
+  invalid pointer comparison: invalid pointer(s)
+[value:pointer-comparison] tests/value/lazy.i:19: 
+  evaluating condition to {0; 1} instead of {1} because of UPCPA
+[value:alarm] tests/value/lazy.i:19: Warning: 
+  pointer comparison. assert \pointer_comparable((void *)0, (void *)(&a + 2));
+[value:pointer-comparison] tests/value/lazy.i:19: 
+  evaluating condition to {0; 1} instead of {0} because of UPCPA
 [value] Recording results for main
 [value] done for function main
 [value] ====== VALUES COMPUTED ======
@@ -28,7 +48,7 @@ tests/value/lazy.i:19:[value] warning: pointer comparison. assert \pointer_compa
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function main:
   a FROM \nothing
   b FROM \nothing
@@ -39,6 +59,6 @@ tests/value/lazy.i:19:[value] warning: pointer comparison. assert \pointer_compa
   S_p[0] FROM p; S_p[0] (and SELF)
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function main:
-          a; b; q; r; s; t; S_p[0]
+    a; b; q; r; s; t; S_p[0]
 [inout] Inputs for function main:
-          a; q; s; S_p[0]
+    a; q; s; S_p[0]

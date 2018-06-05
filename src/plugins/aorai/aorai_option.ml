@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Aorai plug-in of Frama-C.                        *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -153,17 +153,6 @@ module Deterministic=
 let is_on () =
   not (Ltl_File.is_default () && To_Buchi.is_default () &&
        Buchi.is_default ()    && Ya.is_default () )
-
-(* [JS 2009/10/04]
-   Preserve the behaviour of svn release <= r5012.
-   However it works only if aorai is run from the command line. *)
-let init () =
-  if is_on () then begin
-    Kernel.SimplifyCfg.on ();
-    Kernel.KeepSwitch.on ()
-  end
-
-let () = Cmdline.run_after_configuring_stage init
 
 let promela_file () =
   if Buchi.get () = "" then To_Buchi.get () else Buchi.get ()

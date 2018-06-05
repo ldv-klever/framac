@@ -18,12 +18,12 @@ const int t[10] = {1, 2, 3, 4, 5, 6};
 void const_formal(int const i)
 {
   Frama_C_show_each(i);
-  if (v) i = 0;
+  if (v) *((int *)&i) = 0;
 }
 
 void pointer_to_const(const int *p) {
   Frama_C_show_each(*p);
-  *p = 0; // Invalid access through the formal itself
+  *((int *)p) = 0; // Invalid access through the formal itself
   Frama_C_show_each_dead();
 }
 
@@ -37,7 +37,7 @@ void modify_I (){
   Frama_C_show_each(I);
   if (v) I++;
   if (v) pointer_to_const(&I);
-  if (v) const_destination(&I);
+  if (v) const_destination((int *)&I);
 }
 
 void modify_J (){
@@ -51,14 +51,14 @@ void modify_s (){
   Frama_C_show_each(s.i1);
   if (v) s.i1 ++;
   if (v) pointer_to_const(&s.i2);
-  if (v) const_destination(&s.i2);
+  if (v) const_destination((int *)&s.i2);
 }
 
 void modify_t(){
   Frama_C_show_each(t[5]);
   if (v) t[5] ++;
   if (v) pointer_to_const(&t[3]);
-  if (v) const_destination(&t[2]);
+  if (v) const_destination((int *)&t[2]);
 
 }
 
@@ -77,7 +77,25 @@ void constrain_G () {
 // Validity in the logic must correspond to the C part: check that the l-value
 // is not const
 void pointer_to_const_logic(const int *p) {
-  if (v) *p = 12;
+  if (v) *((int *)p) = 12;
+}
+
+
+int f() { return 7; }
+
+void local_const () {
+  const int x = 5;
+  const int y = f();
+}
+
+const int aux_ret_const() {
+  return 1;
+}
+
+// the 'const' qualifier of aux_ret_const must not influence the assignments
+// performed in the engine for the return value. Nothing should be const here
+int ret_const() {
+  return aux_ret_const();
 }
 
 void main () {
@@ -91,4 +109,6 @@ void main () {
   constrain_G ();
 
   pointer_to_const_logic (&J);
+  local_const ();
+  ret_const();
 }

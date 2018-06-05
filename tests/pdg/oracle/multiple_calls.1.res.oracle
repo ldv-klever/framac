@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/pdg/multiple_calls.c (with preprocessing)
 [value] Analyzing a complete application starting at appel_ptr_fct_bis
 [value] Computing initial state
@@ -9,11 +8,11 @@
   G3 ∈ [--..--]
   G4 ∈ [--..--]
 [value] computing for function fct2 <- appel_ptr_fct_bis.
-        Called from tests/pdg/multiple_calls.c:28.
+  Called from tests/pdg/multiple_calls.c:28.
 [value] Recording results for fct2
 [value] Done for function fct2
 [value] computing for function fct1 <- appel_ptr_fct_bis.
-        Called from tests/pdg/multiple_calls.c:28.
+  Called from tests/pdg/multiple_calls.c:28.
 [value] Recording results for fct1
 [value] Done for function fct1
 [value] Recording results for appel_ptr_fct_bis
@@ -25,7 +24,7 @@
 [from] Computing for function appel_ptr_fct_bis
 [from] Done for function appel_ptr_fct_bis
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function fct1:
   G1 FROM z
   G3 FROM y
@@ -43,26 +42,26 @@
   \result FROM c; a; b
 [from] ====== END OF DEPENDENCIES ======
 [inout] InOut (internal) for function fct1:
-        Operational inputs:
-          x; y; z
-        Operational inputs on termination:
-          x; y; z
-        Sure outputs:
-          G1; G3; G4
+  Operational inputs:
+    x; y; z
+  Operational inputs on termination:
+    x; y; z
+  Sure outputs:
+    G1; G3; G4
 [inout] InOut (internal) for function fct2:
-        Operational inputs:
-          x; y; z
-        Operational inputs on termination:
-          x; y; z
-        Sure outputs:
-          G2; G3
+  Operational inputs:
+    x; y; z
+  Operational inputs on termination:
+    x; y; z
+  Sure outputs:
+    G2; G3
 [inout] InOut (internal) for function appel_ptr_fct_bis:
-        Operational inputs:
-          c; a; b; d
-        Operational inputs on termination:
-          c; a; b; d
-        Sure outputs:
-          G3; G4; pf; tmp
+  Operational inputs:
+    c; a; b; d
+  Operational inputs on termination:
+    c; a; b; d
+  Sure outputs:
+    G3; G4; pf; tmp
 [pdg] computing for function appel_ptr_fct_bis
 [pdg] done for function appel_ptr_fct_bis
 [pdg] PDG for appel_ptr_fct_bis
@@ -97,52 +96,52 @@
    -[-c-]-> 1
    -[a--]-> 11
    -[-c-]-> 12
- {n15}: pf = tmp;
+ {n15}: int (*pf)(int , int , int ) = tmp;
    -[-c-]-> 1
    -[a--]-> 10
    -[--d]-> 11
    -[--d]-> 13
    -[--d]-> 14
- {n16}: Call28-InCtrl : G4 = (*pf)(a,b,d);
+ {n16}: Call29-InCtrl : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
- {n17}: Call28-In1 : G4 = (*pf)(a,b,d);
+ {n17}: Call29-In1 : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[--d]-> 4
    -[--d]-> 5
    -[-c-]-> 16
- {n18}: Call28-In2 : G4 = (*pf)(a,b,d);
+ {n18}: Call29-In2 : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[--d]-> 6
    -[--d]-> 7
    -[-c-]-> 16
- {n19}: Call28-In3 : G4 = (*pf)(a,b,d);
+ {n19}: Call29-In3 : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[--d]-> 8
    -[--d]-> 9
    -[-c-]-> 16
- {n20}: Call28-Out(G1) : G4 = (*pf)(a,b,d);
+ {n20}: Call29-Out(G1) : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[-c-]-> 15
    -[-c-]-> 16
    -[--d]-> 19
- {n21}: Call28-Out(G3) : G4 = (*pf)(a,b,d);
+ {n21}: Call29-Out(G3) : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[-c-]-> 15
    -[-c-]-> 16
    -[--d]-> 17
    -[--d]-> 18
- {n22}: Call28-Out(G4) : G4 = (*pf)(a,b,d);
+ {n22}: Call29-Out(G4) : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[-c-]-> 15
    -[-c-]-> 16
    -[--d]-> 19
- {n23}: Call28-OutRet : G4 = (*pf)(a,b,d);
+ {n23}: Call29-OutRet : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[-c-]-> 15
    -[-c-]-> 16
    -[--d]-> 17
    -[--d]-> 18
- {n24}: Call28-Out(G2) : G4 = (*pf)(a,b,d);
+ {n24}: Call29-Out(G2) : G4 = (*pf)(a,b,d);
    -[-c-]-> 1
    -[-c-]-> 15
    -[-c-]-> 16

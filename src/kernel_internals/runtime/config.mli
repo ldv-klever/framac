@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -38,6 +38,10 @@ val ocamlopt: string
   (** Name of the native compiler.
       @since Boron-20100401 *)
 
+val ocaml_wflags: string
+  (** Warning flags used when compiling Frama-C.
+      @since Chlorine-20180501 *)
+
 val datadir: string
   (** Directory where architecture independent files are. *)
 
@@ -52,12 +56,6 @@ val plugin_dir: string list
 val plugin_path: string
   (** The coma-separated concatenation of [plugin_dir].
       @since Magnesium-20151001 *)
-
-val static_plugins: string list
-  (** Plug-ins statically linked within Frama-C. *)
-
-val static_gui_plugins: string list
-  (** GUI of plug-ins statically linked within Frama-C. *)
 
 val compilation_unit_names: string list
   (** List of names of all kernel compilation units.
@@ -74,11 +72,25 @@ val preprocessor: string
       "gcc -C -E -I."
       @since Oxygen-20120901 *)
 
+val using_default_cpp: bool
+  (** whether the preprocessor command is the one defined at configure time
+      or the result of taking a CPP environment variable, in case it differs
+      from the configure-time command.
+
+      @since Phosphorus-20170501-beta1 *)
+
 val preprocessor_is_gnu_like: bool
   (** whether the default preprocessor accepts the same options as gcc
       (i.e. is either gcc or clang), when this is the case, the default
       command line for pre-processing contains more options.
       @since Sodium-20150201
+   *)
+
+val preprocessor_supported_arch_options: string list
+  (** architecture-related options (e.g. -m32) known to be supported by
+      the default preprocessor. Used to match preprocessor commands to
+      selected machdeps.
+      @since Phosphorus-20170501-beta1
    *)
 
 val preprocessor_keep_comments: bool
@@ -91,6 +103,11 @@ val dot: string option
 (** Dot command name.
     @return [None] if `dot' is not installed.
     @since Carbon-20101201 *)
+
+val has_yojson: bool
+(** [true] if Frama-C has been compiled with yojson support.
+    @since Chlorine-20180501
+*)
 
 (*
   Local Variables:

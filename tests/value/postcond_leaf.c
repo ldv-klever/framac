@@ -1,5 +1,5 @@
 /* run.config* 
-OPT: -no-val-show-progress -val -val-use-spec g1,g2,g3 -then -report
+OPT: -no-autoload-plugins @VALUECONFIG@ -load-module value,inout,report -no-val-show-progress -val -val-use-spec g1,g2,g3 -then -report
 */
 
 /* Test what is printed when Value evaluates a post-condition:
@@ -19,19 +19,19 @@ OPT: -no-val-show-progress -val -val-use-spec g1,g2,g3 -then -report
 extern int i;
 
 //@ ensures 0 == 1;
-void f1();
+void f1(void);
 
 /*@ behavior b:
       assumes i == 1;
       ensures 0 == 1;
     complete behaviors b; */
-void f2();
+void f2(void);
 
 /*@ ensures i == 4; */
-void f3();
+void f3(void);
 
 /*@ ensures \false; */
-void f4();
+void f4(void);
 
 /*@ ensures 0 == 1; */
 void g1() {

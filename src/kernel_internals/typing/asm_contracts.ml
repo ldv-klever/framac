@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,8 +23,6 @@
 open Cil_types
 
 let category = File.register_code_transformation_category "asm contracts"
-
-let _dkey = Kernel.register_category "asm:contracts"
 
 let emitter =
   Emitter.(
@@ -91,7 +89,7 @@ object(self)
           (* the only interesting information for clobbers is the
              presence of the "memory" keyword, which indicates that
              memory may have been accessed (read or write) outside of
-             the locations explicitely referred to as output or
+             the locations explicitly referred to as output or
              input. We can't do much more than emitting a warning and
              considering that nothing is touched beyond normally
              specified outputs and inputs. *)
@@ -133,11 +131,15 @@ object(self)
                 Annotations.add_code_annot emitter ~kf stmt ca;
                 if not mem_clobbered && Kernel.AsmContractsAutoValidate.get()
                 then begin
-                  let ips = Property.ip_of_code_annot kf stmt ca in
+                  let active = [] in
+                  let ip_assigns =
+                    Property.ip_assigns_of_behavior kf (Kstmt stmt) ~active bhv in
+                  let ip_from =
+                    Property.ip_from_of_behavior kf (Kstmt stmt) ~active bhv in
                   List.iter
                     Property_status.(
                       fun x -> emit emitter ~hyps:[] x True)
-                    ips
+                    (Extlib.list_of_opt ip_assigns @ ip_from)
                 end
            | [ { annot_content = AStmtSpec ([], spec) } ] ->
                 (* Already existing contracts. Just add assigns clause for

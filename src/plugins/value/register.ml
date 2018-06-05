@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,90 +23,20 @@
 open Cil_types
 open Locations
 
-let dkey_card = Value_parameters.register_category "cardinal"
-
 let compute () =
   (* Nothing to recompute when Value has already been computed. This boolean
      is automatically cleared when an option of Value changes, because they
      are registered as dependencies on [Db.Value.self] in {!Value_parameters}.*)
-  if not (Db.Value.is_computed ()) then
-    if Value_parameters.Eva.get ()
-    then Analysis.force_compute ()
-    else Eval_funs.force_compute ()
+  if not (Db.Value.is_computed ()) then Analysis.force_compute ()
 
 let _self =
   Db.register_compute "Value.compute" [ Db.Value.self ] Db.Value.compute compute
-
-
-let display ?fmt kf =
-  (* Do not pretty Cil-generated variables or out-of scope local variables *)
-  let filter_generated_and_locals base =
-    match base with
-      | Base.Var (v, _) ->
-        if v.vtemp then v.vname = "__retres"
-        else
-          ((not (Kernel_function.is_local v kf))
-          (* only locals of outermost block *)
-           || List.exists (fun x -> x.vid = v.vid)
-             (Kernel_function.get_definition kf).sbody.blocals )
-      | _ -> true
-  in
-  try
-    let values = Db.Value.get_stmt_state (Kernel_function.find_return kf) in
-    let fst_values =
-      Db.Value.get_stmt_state (Kernel_function.find_first_stmt kf)
-    in
-    if Cvalue.Model.is_reachable fst_values
-      && not (Cvalue.Model.is_top fst_values)
-    then begin
-      let print_cardinal = Value_parameters.is_debug_key_enabled dkey_card in
-      let estimate =
-        if print_cardinal
-        then Cvalue.Model.cardinal_estimate values
-        else Cvalue.CardinalEstimate.one
-      in
-      let outs = !Db.Outputs.get_internal kf in
-      let outs = Zone.filter_base filter_generated_and_locals outs in
-      let header fmt =
-        Format.fprintf fmt "Values at end of function %a:%t"
-          Kernel_function.pretty kf
-          (fun fmt ->
-            if print_cardinal then
-              Format.fprintf fmt " (~%a states)"
-                Cvalue.CardinalEstimate.pretty estimate)
-      in
-      let body fmt =
-        Format.fprintf fmt "@[%t@]@[  %t@]"
-          (fun fmt ->
-            match outs with
-            | Zone.Top (Base.SetLattice.Top, _) ->
-              Format.fprintf fmt "@[Cannot filter: dumping raw memory \
-                  (including unchanged variables)@]@\n"
-            | _ -> ())
-          (fun fmt -> Cvalue.Model.pretty_filter fmt values outs) in
-      match fmt with
-      | None -> Value_parameters.printf
-                  ~dkey:Value_parameters.dkey_final_states ~header "%t" body
-      | Some fmt -> Format.fprintf fmt "%t@.%t@," header body
-    end
-  with Kernel_function.No_Statement -> ()
-
-let display_results () =
-  if Db.Value.is_computed () && Value_parameters.verbose_atleast 1
- then begin
-    Value_parameters.result "====== VALUES COMPUTED ======";
-    Callgraph.Uses.iter_in_rev_order display;
-    Value_parameters.result "%t" Value_perf.display
-  end
 
 let () = Value_parameters.ForceValues.set_output_dependencies [Db.Value.self]
 
 let main () =
   (* Value computations *)
-  if Value_parameters.ForceValues.get () then begin
-    !Db.Value.compute ();
-    Value_parameters.ForceValues.output display_results;
-  end
+  if Value_parameters.ForceValues.get () then !Db.Value.compute ()
 
 let () = Db.Main.extend main
 
@@ -126,9 +56,10 @@ let assigns_inputs_to_zone state assigns =
         try
           List.fold_left
             (fun acc t ->
-              let z = Eval_terms.eval_tlval_as_zone
-                ~with_alarms:CilE.warn_none_mode
-                ~for_writing:false env t.it_content in
+               let z =
+                 Eval_terms.eval_tlval_as_zone ~alarm_mode:Eval_terms.Ignore
+                   ~for_writing:false env t.it_content
+               in
               Zone.join acc z)
             acc
             l
@@ -162,15 +93,20 @@ let assigns_outputs_aux ~eval ~bot ~top ~join state ~result assigns =
     | Writes l  -> List.fold_left treat_asgn bot l
 
 let assigns_outputs_to_zone =
-  assigns_outputs_aux
-    ~eval:(Eval_terms.eval_tlval_as_zone
-             ~with_alarms:CilE.warn_none_mode ~for_writing:true)
+  let eval env term =
+    Eval_terms.eval_tlval_as_zone
+      ~alarm_mode:Eval_terms.Ignore ~for_writing:true env term
+  in
+  assigns_outputs_aux ~eval
     ~bot:Locations.Zone.bottom ~top:Locations.Zone.top ~join:Locations.Zone.join
 
 let assigns_outputs_to_locations =
+  let eval env term =
+    Eval_terms.eval_tlval_as_location
+      ~alarm_mode:Eval_terms.Ignore env term
+  in
   assigns_outputs_aux
-    ~eval:(Eval_terms.eval_tlval_as_location
-             ~with_alarms:CilE.warn_none_mode)
+    ~eval
     ~bot:[] ~top:(Locations.make_loc Locations.Location_Bits.top Int_Base.top)
     ~join:(fun v l -> v :: l)
 
@@ -178,11 +114,11 @@ let assigns_outputs_to_locations =
 (* "access" functions before evaluation, registered in Db.Value *)
 let access_value_of_lval kinstr lv =
   let state = Db.Value.get_state kinstr in
-  snd (!Db.Value.eval_lval ~with_alarms:CilE.warn_none_mode None state lv)
+  snd (!Db.Value.eval_lval None state lv)
 
 let access_value_of_expr kinstr e =
   let state = Db.Value.get_state kinstr in
-  !Db.Value.eval_expr ~with_alarms:CilE.warn_none_mode state e
+  !Db.Value.eval_expr state e
 
 let access_value_of_location kinstr loc =
   let state = Db.Value.get_state kinstr in
@@ -191,7 +127,7 @@ let access_value_of_location kinstr loc =
 let find_deps_term_no_transitivity_state state t =
   try
     let env = Eval_terms.env_only_here state in
-    let r = Eval_terms.eval_term ~with_alarms:CilE.warn_none_mode env t in
+    let r = Eval_terms.eval_term ~alarm_mode:Eval_terms.Ignore env t in
     r.Eval_terms.ldeps
   with Eval_terms.LogicEvalError _ -> raise Db.From.Not_lval
 
@@ -214,7 +150,6 @@ let eval_predicate ~pre ~here p =
 
 let () =
 (* Pretty-printing *)
-  Db.Value.display := (fun fmt kf -> display ~fmt kf);
   Db.Value.use_spec_instead_of_definition := use_spec_instead_of_definition;
   Db.Value.assigns_outputs_to_zone := assigns_outputs_to_zone;
   Db.Value.assigns_outputs_to_locations := assigns_outputs_to_locations;
@@ -288,7 +223,10 @@ and eval_deps_offset state o = match o with
   | Index (i, o) ->
     Locations.Zone.join (eval_deps state i) (eval_deps_offset state o)
 
-let eval_expr_with_valuation ~with_alarms deps state expr =
+let notify_opt with_alarms alarms =
+  Extlib.may (fun mode -> Alarmset.notify mode alarms) with_alarms
+
+let eval_expr_with_valuation ?with_alarms deps state expr=
   let state = Cvalue_domain.inject state in
   let deps = match deps with
     | None -> None
@@ -297,7 +235,7 @@ let eval_expr_with_valuation ~with_alarms deps state expr =
       Some (Locations.Zone.join deps' deps)
   in
   let eval, alarms = Eva.evaluate state expr in
-  Alarmset.emit with_alarms alarms;
+  notify_opt with_alarms alarms;
   match eval with
   | `Bottom -> (Cvalue.Model.bottom, deps, Cvalue.V.bottom), None
   | `Value (valuation, result) ->
@@ -308,15 +246,15 @@ let eval_expr_with_valuation ~with_alarms deps state expr =
    scheme. *)
 module Eval = struct
 
-  let eval_expr ~with_alarms state expr =
+  let eval_expr ?with_alarms state expr =
     let state = Cvalue_domain.inject state in
     let eval, alarms = Eva.evaluate ~reduction:false state expr in
-    Alarmset.emit with_alarms alarms;
+    notify_opt with_alarms alarms;
     bot_value (eval >>-: snd)
 
-  let eval_lval ~with_alarms deps state lval =
-    let expr = Cil.dummy_exp (Cil_types.Lval lval) in
-    let res, valuation = eval_expr_with_valuation ~with_alarms deps state expr in
+  let eval_lval ?with_alarms deps state lval =
+    let expr = Value_util.lval_to_exp lval in
+    let res, valuation = eval_expr_with_valuation ?with_alarms deps state expr in
     let typ = match valuation with
       | None -> Cil.typeOfLval lval
       | Some valuation -> match Eva.Valuation.find_loc valuation lval with
@@ -326,21 +264,20 @@ module Eval = struct
     let state, deps, v = res in
     state, deps, v, typ
 
-  let eval_expr_with_deps_state ~with_alarms deps state expr =
-    fst (eval_expr_with_valuation ~with_alarms deps state expr)
+  let eval_expr_with_deps_state ?with_alarms deps state expr =
+    fst (eval_expr_with_valuation ?with_alarms deps state expr)
 
 
-  let reduce_by_cond state cond =
+  let reduce_by_cond state expr positive =
     let state = Cvalue_domain.inject state in
     let eval, _alarms =
-      Eva.reduce state cond.Eval_exprs.exp cond.Eval_exprs.positive
+      Eva.reduce state expr positive
     in
     bot_state (eval >>-: fun valuation ->
                Cvalue_domain.project (Transfer.update valuation state))
 
 
-  let lval_to_precise_loc_deps_state
-      ~with_alarms ~deps state ~reduce_valid_index:(_:bool) lval =
+  let lval_to_precise_loc_deps_state ?with_alarms ~deps state ~reduce_valid_index:(_:bool) lval =
     if not (Cvalue.Model.is_reachable state)
     then state, deps, Precise_locs.loc_bottom, (Cil.typeOfLval lval)
     else
@@ -354,45 +291,45 @@ module Eval = struct
     let eval, alarms =
       Eva.lvaluate ~for_writing:false state lval
     in
-    Alarmset.emit with_alarms alarms;
+    notify_opt with_alarms alarms;
     match eval with
       | `Bottom -> Cvalue.Model.bottom, deps, Precise_locs.loc_bottom, (Cil.typeOfLval lval)
       | `Value (valuation, loc, typ) ->
           Cvalue_domain.project (Transfer.update valuation state), deps, loc, typ
 
-  let lval_to_loc_deps_state ~with_alarms ~deps state ~reduce_valid_index lv =
+  let lval_to_loc_deps_state ?with_alarms ~deps state ~reduce_valid_index lv =
     let state, deps, pl, typ =
       lval_to_precise_loc_deps_state
-        ~with_alarms ~deps state ~reduce_valid_index lv
+        ?with_alarms ~deps state ~reduce_valid_index lv
     in
     state, deps, Precise_locs.imprecise_location pl, typ
 
-  let lval_to_precise_loc_state ~with_alarms state lv =
+  let lval_to_precise_loc_state ?with_alarms state lv =
     let state, _, r, typ =
       lval_to_precise_loc_deps_state
-        ~with_alarms ~deps:None ~reduce_valid_index:(Kernel.SafeArrays.get ())
+        ?with_alarms ~deps:None ~reduce_valid_index:(Kernel.SafeArrays.get ())
         state lv
     in
     state, r, typ
 
-  and lval_to_loc_state ~with_alarms state lv =
+  and lval_to_loc_state ?with_alarms state lv =
     let state, _, r, typ =
       lval_to_loc_deps_state
-        ~with_alarms ~deps:None ~reduce_valid_index:(Kernel.SafeArrays.get ())
+        ?with_alarms ~deps:None ~reduce_valid_index:(Kernel.SafeArrays.get ())
         state lv
     in
     state, r, typ
 
-  let lval_to_precise_loc ~with_alarms state lv =
-    let _, r, _typ = lval_to_precise_loc_state ~with_alarms state lv in
+  let lval_to_precise_loc ?with_alarms state lv =
+    let _, r, _typ = lval_to_precise_loc_state ?with_alarms state lv in
     r
 
-  let lval_to_loc ~with_alarms state lv =
-    let _, r, _typ = lval_to_loc_state ~with_alarms state lv in
+  let lval_to_loc ?with_alarms state lv =
+    let _, r, _typ = lval_to_loc_state ?with_alarms state lv in
     r
 
 
-  let resolv_func_vinfo ~with_alarms deps state funcexp =
+  let resolv_func_vinfo ?with_alarms deps state funcexp =
     let open Cil_types in
     let state = Cvalue_domain.inject state in
     let deps = match funcexp.enode with
@@ -407,7 +344,7 @@ module Eval = struct
       | _ -> assert false
     in
     let kfs, alarms = Eva.eval_function_exp funcexp state in
-    Alarmset.emit with_alarms alarms;
+    notify_opt with_alarms alarms;
     let kfs = match kfs with
       | `Bottom -> Kernel_function.Hptset.empty
       | `Value kfs ->
@@ -419,7 +356,6 @@ module Eval = struct
 
 end
 
-
 module type Eval = module type of Eval
 
 (* Functions to register in Db.Value that depend on evaluation functions. *)
@@ -427,10 +363,10 @@ module Export (Eval : Eval) = struct
 
   open Eval
 
-  let lval_to_loc_with_deps_state ~with_alarms state ~deps lv =
+  let lval_to_loc_with_deps_state ?with_alarms state ~deps lv =
     let _state, deps, r, _ =
       lval_to_loc_deps_state
-        ~with_alarms
+        ?with_alarms
         ~deps:(Some deps)
         ~reduce_valid_index:(Kernel.SafeArrays.get ())
         state
@@ -438,46 +374,35 @@ module Export (Eval : Eval) = struct
     in
     Extlib.opt_conv Locations.Zone.bottom deps, r
 
-  let lval_to_loc_with_deps kinstr ~with_alarms ~deps lv =
-    Valarms.start_stmt kinstr;
+  let lval_to_loc_with_deps kinstr ?with_alarms ~deps lv =
     let state = Db.Value.noassert_get_state kinstr in
-    let result =
-      lval_to_loc_with_deps_state ~with_alarms  state ~deps lv in
-    Valarms.end_stmt ();
-    result
+    lval_to_loc_with_deps_state ?with_alarms  state ~deps lv
 
-  let lval_to_loc_kinstr kinstr ~with_alarms lv =
-    Valarms.start_stmt kinstr;
+  let lval_to_loc_kinstr kinstr ?with_alarms lv =
     let state = Db.Value.noassert_get_state kinstr in
-    let r = lval_to_loc ~with_alarms state lv in
-    Valarms.end_stmt ();
-    r
+    lval_to_loc ?with_alarms state lv
 
-  let lval_to_precise_loc_with_deps_state_alarm ~with_alarms state ~deps lv =
+  let lval_to_precise_loc_with_deps_state_alarm ?with_alarms state ~deps lv =
     let _state, deps, ploc, _ =
-      lval_to_precise_loc_deps_state ~with_alarms
+      lval_to_precise_loc_deps_state ?with_alarms
         ~deps ~reduce_valid_index:(Kernel.SafeArrays.get ()) state lv
     in
     let deps = Extlib.opt_conv Locations.Zone.bottom deps in
     deps, ploc
 
   let lval_to_precise_loc_with_deps_state =
-    lval_to_precise_loc_with_deps_state_alarm ~with_alarms:CilE.warn_none_mode
+    lval_to_precise_loc_with_deps_state_alarm ?with_alarms:None
 
-  let lval_to_zone kinstr ~with_alarms lv =
-    Valarms.start_stmt kinstr;
+  let lval_to_zone kinstr ?with_alarms lv =
     let state_to_joined_zone state acc =
       let _, r =
-        lval_to_precise_loc_with_deps_state_alarm ~with_alarms state ~deps:None lv
+        lval_to_precise_loc_with_deps_state_alarm ?with_alarms state ~deps:None lv
       in
       let zone = Precise_locs.enumerate_valid_bits ~for_writing:false r in
       Locations.Zone.join acc zone
     in
-    let zone = Db.Value.fold_state_callstack
+    Db.Value.fold_state_callstack
         state_to_joined_zone Locations.Zone.bottom ~after:false kinstr
-    in
-    Valarms.end_stmt ();
-    zone
 
   let lval_to_zone_state state lv =
     let _, r = lval_to_precise_loc_with_deps_state state ~deps:None lv in
@@ -495,52 +420,46 @@ module Export (Eval : Eval) = struct
     deps, zone, exact
 
 
-  let lval_to_offsetmap_aux ~with_alarms state lv =
+  let lval_to_offsetmap_aux ?with_alarms state lv =
     let loc =
-      Locations.valid_part ~for_writing:false (lval_to_loc ~with_alarms state lv)
+      Locations.valid_part ~for_writing:false
+        (lval_to_loc ?with_alarms state lv)
     in
     match loc.Locations.size with
       | Int_Base.Top -> None
       | Int_Base.Value size ->
-          match snd (Cvalue.Model.copy_offsetmap loc.Locations.loc size state) with
+        match Cvalue.Model.copy_offsetmap loc.Locations.loc size state with
             | `Bottom -> None
             | `Value m -> Some m
 
-  let lval_to_offsetmap kinstr lv ~with_alarms =
-    Valarms.start_stmt kinstr;
+  let lval_to_offsetmap kinstr ?with_alarms lv =
     let state = Db.Value.noassert_get_state kinstr in
-    let r = lval_to_offsetmap_aux ~with_alarms state lv in
-    Valarms.end_stmt ();
-    r
+    lval_to_offsetmap_aux ?with_alarms state lv
 
   let lval_to_offsetmap_state state lv =
-    lval_to_offsetmap_aux ~with_alarms:CilE.warn_none_mode state lv
+    lval_to_offsetmap_aux state lv
 
 
-  let expr_to_kernel_function_state ~with_alarms state ~deps exp =
-    let r, deps = resolv_func_vinfo ~with_alarms deps state exp in
+  let expr_to_kernel_function_state ?with_alarms state ~deps exp =
+    let r, deps = resolv_func_vinfo ?with_alarms deps state exp in
     Extlib.opt_conv Locations.Zone.bottom deps, r
 
-  let expr_to_kernel_function kinstr ~with_alarms ~deps exp =
-    Valarms.start_stmt kinstr;
+  let expr_to_kernel_function kinstr ?with_alarms ~deps exp =
     let state_to_joined_kernel_function state (z_acc, kf_acc) =
       let z, kf =
-        expr_to_kernel_function_state ~with_alarms state ~deps exp
+        expr_to_kernel_function_state ?with_alarms state ~deps exp
       in
       Locations.Zone.join z z_acc,
       Kernel_function.Hptset.union kf kf_acc
     in
-    let r = Db.Value.fold_state_callstack
+    Db.Value.fold_state_callstack
         state_to_joined_kernel_function
         ((match deps with None -> Locations.Zone.bottom | Some z -> z),
          Kernel_function.Hptset.empty)
         ~after:false kinstr
-    in
-    Valarms.end_stmt ();
-    r
 
   let expr_to_kernel_function_state =
-    expr_to_kernel_function_state ~with_alarms:CilE.warn_none_mode
+    expr_to_kernel_function_state ?with_alarms:None
 end
 
 
@@ -550,24 +469,25 @@ let register (module Eval: Eval) (module Export: Export) =
   let open Export in
   Db.Value.eval_expr := Eval.eval_expr;
   Db.Value.eval_expr_with_state :=
-    (fun ~with_alarms state expr ->
+    (fun ?with_alarms state expr ->
        let (s, _, v) =
-         Eval.eval_expr_with_deps_state ~with_alarms None state expr
+         Eval.eval_expr_with_deps_state ?with_alarms None state expr
        in
        s, v);
+  Db.Value.reduce_by_cond := Eval.reduce_by_cond;
   Db.Value.eval_lval :=
-    (fun ~with_alarms deps state lval ->
-      let _, deps, r, _ = Eval_exprs.eval_lval ~with_alarms deps state lval in
+    (fun ?with_alarms deps state lval ->
+      let _, deps, r, _ = Eval.eval_lval ?with_alarms deps state lval in
       deps, r);
   Db.Value.lval_to_loc_with_deps := lval_to_loc_with_deps;
   Db.Value.lval_to_loc_with_deps_state :=
-    lval_to_loc_with_deps_state ~with_alarms:CilE.warn_none_mode;
+    lval_to_loc_with_deps_state ?with_alarms:None;
   Db.Value.lval_to_loc := lval_to_loc_kinstr;
-  Db.Value.lval_to_loc_state :=
-    Eval.lval_to_loc ~with_alarms:CilE.warn_none_mode;
+  Db.Value.lval_to_loc_state := Eval.lval_to_loc ?with_alarms:None;
   Db.Value.lval_to_zone_state := lval_to_zone_state;
   Db.Value.lval_to_zone := lval_to_zone;
   Db.Value.lval_to_zone_with_deps_state := lval_to_zone_with_deps_state;
+  Db.Value.lval_to_precise_loc_state := Eval.lval_to_precise_loc_state;
   Db.Value.lval_to_precise_loc_with_deps_state :=
     lval_to_precise_loc_with_deps_state;
   Db.Value.lval_to_offsetmap := lval_to_offsetmap;
@@ -577,28 +497,12 @@ let register (module Eval: Eval) (module Export: Export) =
   ()
 
 
-let compute_initial_state eva =
-  if eva
-  then
-    Db.Value.initial_state_only_globals :=
-      Analysis.cvalue_initial_state
-  else
-    Db.Value.initial_state_only_globals := fun () ->
-      if snd (Globals.entry_point ())
-      then Initial_state.initial_state_lib_entry ()
-      else Initial_state.initial_state_not_lib_entry ()
+let () = Db.Value.initial_state_only_globals := Analysis.cvalue_initial_state
 
-let hook_register _old eva =
-  let eval =
-    if eva then (module Eval : Eval)
-    else (module Eval_exprs : Eval)
-  in
+let () =
+  let eval = (module Eval : Eval) in
   let export = (module Export ((val eval : Eval)) : Export) in
-  register eval export;
-  compute_initial_state eva;;
-
-Value_parameters.Eva.add_set_hook hook_register;;
-hook_register () (Value_parameters.Eva.get ());;
+  register eval export;;
 
 
 (*

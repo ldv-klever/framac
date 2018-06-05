@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,6 +33,9 @@ type config = {
   polka_loose : bool;
   polka_strict : bool;
   polka_equalities : bool;
+  inout: bool;
+  signs: bool;
+  printer: bool;
 }
 
 let configure () = {
@@ -46,6 +49,9 @@ let configure () = {
   polka_loose = Value_parameters.PolkaLoose.get ();
   polka_strict = Value_parameters.PolkaStrict.get ();
   polka_equalities = Value_parameters.PolkaEqualities.get ();
+  inout = Value_parameters.InoutDomain.get ();
+  signs = Value_parameters.SignDomain.get ();
+  printer = Value_parameters.PrinterDomain.get ();
 }
 
 let default_config = configure ()
@@ -61,6 +67,9 @@ let legacy_config = {
   polka_loose = false;
   polka_strict = false;
   polka_equalities = false;
+  inout = false;
+  signs = false;
+  printer = false;
 }
 
 module type Value = sig
@@ -95,10 +104,21 @@ let has_apron config =
   config.apron_oct || config.apron_box || config.polka_equalities
   || config.polka_loose || config.polka_strict
 
-let add_value_abstraction value v =
-  let module Value = (val value : Abstract_value.Internal) in
-  let module V = (val v : Abstract_value.Internal) in
-  (module Value_product.Make (Value) (V) : Abstract_value.Internal)
+(* The apron domains relies on a specific interval abstraction to communicate
+   with other domains. This function adds the intervals to the current [value]
+   abstraction. These intervals carry the same information as the cvalue
+   abstractions (if they are enabled). Do not display the intervals in the GUI
+   in this case. *)
+let add_apron_value config value =
+  let module Left = ((val value: Abstract_value.Internal)) in
+  let module V = struct
+    include Value_product.Make (Left) (Main_values.Interval)
+    let pretty_typ =
+      if config.cvalue
+      then fun fmt typ (left, _right) -> Left.pretty_typ fmt typ left
+      else pretty_typ
+  end in
+  (module V: Abstract_value.Internal)
 
 let open_value_abstraction value =
   let module Value = (val value : Abstract_value.Internal) in
@@ -114,8 +134,15 @@ let build_value config =
     else (module Main_values.CVal : Abstract_value.Internal)
   in
   let value =
+    if config.signs
+    then
+      let module V = Value_product.Make ((val value)) (Sign_value) in
+      (module V: Abstract_value.Internal)
+    else value
+  in
+  let value =
     if has_apron config
-    then add_value_abstraction value (module Main_values.Interval)
+    then add_apron_value config value
     else value
   in
   open_value_abstraction value
@@ -131,6 +158,8 @@ module Convert
   let extend_val =
     let set = Value.set K.key in
     fun v -> set v Value.top
+
+  let replace_val = Value.set K.key
 
   let restrict_val = match Value.get K.key with
     | None -> assert false
@@ -275,42 +304,87 @@ let add_offsm abstract =
   end : Abstract)
 
 (* -------------------------------------------------------------------------- *)
-(*                            Symbolic locations                              *)
+(*                   Domains on standard locations and values                 *)
 (* -------------------------------------------------------------------------- *)
 
-let add_symbolic_locs abstract =
+module type Standard_abstraction = Abstract_domain.Internal
+  with type value = Cvalue.V.t
+   and type location = Precise_locs.precise_location
+
+let add_standard_domain d abstract =
   let module Abstract = (val abstract : Abstract) in
   let module K = struct
     type v = Cvalue.V.t
     let key = Main_values.cvalue_key
   end in
   let module Conv = Convert (Abstract.Val) (K) in
-  let module SymbLocs = Domain_lift.Make (Symbolic_locs.D) (Conv) in
-  let module Dom = Domain_product.Make (Abstract.Val)(Abstract.Dom)(SymbLocs) in
+  let module D = (val d: Standard_abstraction) in
+  let module LD = Domain_lift.Make (D) (Conv) in
+  let module Dom = Domain_product.Make (Abstract.Val)(Abstract.Dom)(LD) in
   (module struct
     module Val = Abstract.Val
     module Loc = Abstract.Loc
     module Dom = Dom
   end : Abstract)
+
+(* List of abstractions registered by other plugins *)
+let dynamic_abstractions = ref []
+
+let add_dynamic_abstractions abstract =
+  List.fold_left
+    (fun d abstract -> add_standard_domain abstract d)
+    abstract !dynamic_abstractions
+
+let register_dynamic_abstraction d =
+  dynamic_abstractions := d :: !dynamic_abstractions
+
+(* --------------------------------------------------------------------------*)
+(*                            Symbolic locations                             *)
+(* --------------------------------------------------------------------------*)
+
+let add_symbolic_locs =
+  add_standard_domain (module Symbolic_locs.D)
 
 (* -------------------------------------------------------------------------- *)
 (*                            Gauges                                          *)
 (* -------------------------------------------------------------------------- *)
 
-let add_gauges abstract =
+let add_gauges =
+  add_standard_domain (module Gauges_domain.D)
+
+(* -------------------------------------------------------------------------- *)
+(*                            Inout                                           *)
+(* -------------------------------------------------------------------------- *)
+
+let add_inout =
+  add_standard_domain (module Inout_domain.D)
+
+(* -------------------------------------------------------------------------- *)
+(*                            Sign Domain                                     *)
+(* -------------------------------------------------------------------------- *)
+
+let add_signs abstract =
   let module Abstract = (val abstract : Abstract) in
   let module K = struct
-    type v = Cvalue.V.t
-    let key = Main_values.cvalue_key
+    type v = Sign_value.t
+    let key = Sign_value.sign_key
   end in
   let module Conv = Convert (Abstract.Val) (K) in
-  let module Gauges = Domain_lift.Make (Gauges_domain.D) (Conv) in
-  let module Dom = Domain_product.Make (Abstract.Val)(Abstract.Dom)(Gauges) in
+  let module Sign = Domain_lift.Make (Sign_domain) (Conv) in
+  let module Dom = Domain_product.Make (Abstract.Val) (Abstract.Dom) (Sign) in
   (module struct
     module Val = Abstract.Val
     module Loc = Abstract.Loc
     module Dom = Dom
   end : Abstract)
+
+
+(* -------------------------------------------------------------------------- *)
+(*                                 Printer                                    *)
+(* -------------------------------------------------------------------------- *)
+
+let add_printer =
+  add_standard_domain (module Printer_domain)
 
 (* -------------------------------------------------------------------------- *)
 (*                            Build Abstractions                              *)
@@ -372,6 +446,22 @@ let build_abstractions config =
     then add_gauges abstractions
     else abstractions
   in
+  let abstractions =
+    if config.inout
+    then add_inout abstractions
+    else abstractions
+  in
+  let abstractions =
+    if config.signs
+    then add_signs abstractions
+    else abstractions
+  in
+  let abstractions =
+    if config.printer
+    then add_printer abstractions
+    else abstractions
+  in
+  let abstractions = add_dynamic_abstractions abstractions in
   abstractions
 
 

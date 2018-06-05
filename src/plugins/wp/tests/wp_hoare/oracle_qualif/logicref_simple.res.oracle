@@ -1,9 +1,8 @@
 # frama-c -wp -wp-model 'Typed (Ref)' [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp_hoare/logicref_simple.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 [wp] 9 goals scheduled
 [wp] [Alt-Ergo] Goal typed_ref_fsimple_post : Valid
 [wp] [Qed] Goal typed_ref_fsimple_assign : Valid
@@ -15,12 +14,13 @@
 [wp] [Alt-Ergo] Goal typed_ref_fvpositive_assert_OK : Valid
 [wp] [Qed] Goal typed_ref_fvpositive_assign : Valid
 [wp] Proved goals:    9 / 9
-     Qed:             5 
-     Alt-Ergo:        4
-----------------------------------------------------------
-Functions           WP   Alt-Ergo    Total   Success
-fsimple              1      1 (10)     2       100%
-fsimple_array        1      1 (13)     2       100%
-ftwo_star            1      1 (12)     2       100%
-fvpositive           2      1 (9)      3       100%
-----------------------------------------------------------
+  Qed:             5 
+  Alt-Ergo:        4
+[wp] Report 'tests/wp_hoare/logicref_simple.i.0.report.json'
+-------------------------------------------------------------
+Functions           WP     Alt-Ergo        Total   Success
+fsimple              1      1 (8..20)        2       100%
+fsimple_array        1      1 (24..36)       2       100%
+ftwo_star            1      1 (8..20)        2       100%
+fvpositive           2      1 (4..16)        3       100%
+-------------------------------------------------------------

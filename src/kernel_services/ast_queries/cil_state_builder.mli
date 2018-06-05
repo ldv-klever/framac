@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -39,6 +39,10 @@ module Varinfo_hashtbl(Data:Datatype.S)(Info: State_builder.Info_with_size) :
 
 module Exp_hashtbl(Data:Datatype.S)(Info: State_builder.Info_with_size) :
   State_builder.Hashtbl with type key = Cil_types.exp
+                         and type data = Data.t
+
+module Lval_hashtbl(Data:Datatype.S)(Info: State_builder.Info_with_size) :
+  State_builder.Hashtbl with type key = Cil_types.lval
                          and type data = Data.t
 
 module Kernel_function_hashtbl

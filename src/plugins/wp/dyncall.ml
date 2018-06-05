@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,8 @@ open Cil_types
 open Logic_typing
 open Logic_ptree
 open Cil_datatype
+
+let dkey_calls = Wp_parameters.register_category "calls"
 
 (* -------------------------------------------------------------------------- *)
 (* --- Typing                                                             --- *)
@@ -59,18 +61,13 @@ let get_call t = match t.term_node with
   | TLval (TVar { lv_origin = Some v } , TNoOffset ) -> Globals.Functions.get v
   | _ -> raise Not_found
 
-let rec either loc = function
-  | [] -> Logic_const.pfalse
-  | [p] -> p
-  | p::ps -> Logic_const.por ~loc (p,either loc ps)
-
 let get_calls ecmd bhvs : (string * Kernel_function.t list) list =
   List.fold_right
     (fun bhv calls ->
        let fs = ref [] in
        List.iter
          (function
-           | cmd, Ext_terms ts when cmd = ecmd ->
+           | _,cmd, Ext_terms ts when cmd = ecmd ->
                fs := !fs @ List.map get_call ts
            | _ -> ())
          bhv.Cil_types.b_extended ;
@@ -109,8 +106,6 @@ let property ~kf ?bhv ~stmt ~calls =
 (* --- Detection                                                          --- *)
 (* -------------------------------------------------------------------------- *)
 
-let dkey = Wp_parameters.register_category "calls"
-
 class dyncall =
   object(self)
     inherit Visitor.frama_c_inplace
@@ -136,7 +131,7 @@ class dyncall =
              List.iter
                (fun (bhv,kfs) ->
                   begin
-                    if Wp_parameters.has_dkey "calls" then
+                    if Wp_parameters.has_dkey dkey_calls then
                       let source = snd (Stmt.loc stmt) in
                       if Cil.default_behavior_name = bhv then
                         Wp_parameters.result ~source

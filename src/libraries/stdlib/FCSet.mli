@@ -1,38 +1,39 @@
-(**************************************************************************)
-(*                                                                        *)
-(*  This file was originally part of Objective Caml                       *)
-(*                                                                        *)
-(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt            *)
-(*                                                                        *)
-(*  Copyright (C) 1996 INRIA                                              *)
-(*    INRIA (Institut National de Recherche en Informatique et en         *)
-(*           Automatique)                                                 *)
-(*                                                                        *)
-(*  All rights reserved.                                                  *)
-(*                                                                        *)
-(*  This file is distributed under the terms of the GNU Library General   *)
-(*  Public License version 2, with the special exception on linking       *)
-(*  described below. See the GNU Library General Public License version   *)
-(*  2 for more details (enclosed in the file licenses/LGPLv2).            *)
-(*                                                                        *)
-(*  As a special exception to the GNU Library General Public License,     *)
-(*  you may link, statically or dynamically, a "work that uses the        *)
-(*  Library" with a publicly distributed version of the Library to        *)
-(*  produce an executable file containing portions of the Library, and    *)
-(*  distribute that executable file under terms of your choice, without   *)
-(*  any of the additional requirements listed in clause 6 of the GNU      *)
-(*  Library General Public License.  By "a publicly distributed version   *)
-(*  of the Library", we mean either the unmodified Library as             *)
-(*  distributed by INRIA, or a modified version of the Library that is    *)
-(*  distributed under the conditions defined in clause 2 of the GNU       *)
-(*  Library General Public License.  This exception does not however      *)
-(*  invalidate any other reasons why the executable file might be         *)
-(*  covered by the GNU Library General Public License.                    *)
-(*                                                                        *)
-(*  File modified by CEA (Commissariat à l'énergie atomique et aux        *)
-(*                        énergies alternatives).                         *)
-(*                                                                        *)
-(**************************************************************************)
+(*****************************************************************************)
+(*                                                                           *)
+(*  This file was originally part of Objective Caml                          *)
+(*                                                                           *)
+(*            Xavier Leroy, projet Cristal, INRIA Rocquencourt               *)
+(*                                                                           *)
+(*  Copyright (C) 1996 INRIA                                                 *)
+(*    INRIA (Institut National de Recherche en Informatique et en            *)
+(*           Automatique)                                                    *)
+(*                                                                           *)
+(*  All rights reserved.                                                     *)
+(*                                                                           *)
+(*  This file is distributed under the terms of the GNU Library General      *)
+(*  Public License version 2, with the special exception on linking          *)
+(*  described below. See the GNU Library General Public License version      *)
+(*  2 for more details (enclosed in the file licenses/LGPLv2).               *)
+(*                                                                           *)
+(*  As a special exception to the GNU Library General Public License,        *)
+(*  you may link, statically or dynamically, a "work that uses the Library"  *)
+(*  with a publicly distributed version of the Library to                    *)
+(*  produce an executable file containing portions of the Library, and       *)
+(*  distribute that executable file under terms of your choice, without      *)
+(*  any of the additional requirements listed in clause 6 of the GNU         *)
+(*  Library General Public License.                                          *)
+(*  By "a publicly distributed version of the Library",                      *)
+(*  we mean either the unmodified Library as                                 *)
+(*  distributed by INRIA, or a modified version of the Library that is       *)
+(*  distributed under the conditions defined in clause 2 of the GNU          *)
+(*  Library General Public License.  This exception does not however         *)
+(*  invalidate any other reasons why the executable file might be            *)
+(*  covered by the GNU Library General Public License.                       *)
+(*                                                                           *)
+(*  File modified by CEA (Commissariat à l'énergie atomique et aux           *)
+(*                        énergies alternatives).                            *)
+(*                                                                           *)
+(*****************************************************************************)
 
 (** Sets over ordered types.
 
@@ -129,15 +130,6 @@ module type S_Basic_Compare =
        the set is empty. Which element is chosen is unspecified,
        but equal elements will be chosen for equal sets. *)
 
-    val split: elt -> t -> t * bool * t
-    (** [split x s] returns a triple [(l, present, r)], where
-          [l] is the set of elements of [s] that are
-          strictly less than [x];
-          [r] is the set of elements of [s] that are
-          strictly greater than [x];
-          [present] is [false] if [s] contains no element equal to [x],
-          or [true] if [s] contains an element equal to [x]. *)
-
     val find: elt -> t -> elt
     (** [find x s] returns the element of [s] equal to [x] (according
         to [Ord.compare]), or raise [Not_found] if no such element
@@ -170,6 +162,14 @@ module type S =
     (** Same as {min_elt}, but returns the largest element of the
        given set. *)
 
+    val split: elt -> t -> t * bool * t
+    (** [split x s] returns a triple [(l, present, r)], where
+          [l] is the set of elements of [s] that are
+          strictly less than [x];
+          [r] is the set of elements of [s] that are
+          strictly greater than [x];
+          [present] is [false] if [s] contains no element equal to [x],
+          or [true] if [s] contains an element equal to [x]. *)
 
     (* Frama-C- additions *)
 

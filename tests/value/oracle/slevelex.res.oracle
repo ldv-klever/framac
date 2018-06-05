@@ -1,65 +1,64 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/slevelex.i (no preprocessing)
 [value] Analyzing a complete application starting at main
 [value] Computing initial state
 [value] Initial state computed
 [value:initial-state] Values of globals at initialization
   c ∈ [--..--]
-tests/value/slevelex.i:80:[value] warning: assertion got status unknown.
-[value] Called Frama_C_show_each_xy({1; 2}, {1; 2})
+[value:alarm] tests/value/slevelex.i:80: Warning: assertion got status unknown.
+[value] tests/value/slevelex.i:82: Frama_C_show_each_xy: {1; 2}, {1; 2}
 [value] computing for function f <- main.
-        Called from tests/value/slevelex.i:83.
+  Called from tests/value/slevelex.i:83.
 [value] Recording results for f
 [value] Done for function f
-tests/value/slevelex.i:84:[value] assertion got status valid.
+[value] tests/value/slevelex.i:84: assertion got status valid.
 [value] computing for function gu <- main.
-        Called from tests/value/slevelex.i:88.
-tests/value/slevelex.i:26:[value] assertion got status valid.
-[value] Called Frama_C_show_each_u({1})
-[value] Called Frama_C_show_each_u({2})
-[value] Called Frama_C_show_each_u({3})
-[value] Called Frama_C_show_each_u({4})
-[value] Called Frama_C_show_each_u({5})
-[value] Called Frama_C_show_each_u({6})
-[value] Called Frama_C_show_each_u({7})
-[value] Called Frama_C_show_each_u({8})
-[value] Called Frama_C_show_each_u({9})
-[value] Called Frama_C_show_each_u({10})
-[value] Called Frama_C_show_each_u({11})
-[value] Called Frama_C_show_each_u({12})
-[value] Called Frama_C_show_each_u({13})
-[value] Called Frama_C_show_each_u({14})
-[value] Called Frama_C_show_each_u({15})
-[value] Called Frama_C_show_each_u({16})
-[value] Called Frama_C_show_each_u({17})
-[value] Called Frama_C_show_each_u({18})
-[value] Called Frama_C_show_each_u({19})
-[value] Called Frama_C_show_each_u({20})
+  Called from tests/value/slevelex.i:88.
+[value] tests/value/slevelex.i:26: assertion got status valid.
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {1}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {2}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {3}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {4}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {5}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {6}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {7}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {8}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {9}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {10}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {11}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {12}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {13}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {14}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {15}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {16}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {17}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {18}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {19}
+[value] tests/value/slevelex.i:40: Frama_C_show_each_u: {20}
 [value] Recording results for gu
 [value] Done for function gu
 [value] computing for function ginc <- main.
-        Called from tests/value/slevelex.i:89.
-tests/value/slevelex.i:49:[value] assertion got status valid.
-[value] Called Frama_C_show_each_inc({4})
-[value] Called Frama_C_show_each_inc({8})
-[value] Called Frama_C_show_each_inc({12})
-[value] Called Frama_C_show_each_inc({16})
-[value] Called Frama_C_show_each_inc({20})
-[value] Called Frama_C_show_each_inc({24})
-[value] Called Frama_C_show_each_inc({28})
-[value] Called Frama_C_show_each_inc({32})
-[value] Called Frama_C_show_each_inc({36})
-[value] Called Frama_C_show_each_inc({40})
-[value] Called Frama_C_show_each_inc({44})
-[value] Called Frama_C_show_each_inc({48})
-[value] Called Frama_C_show_each_inc({52})
-[value] Called Frama_C_show_each_inc({56})
-[value] Called Frama_C_show_each_inc({60})
-[value] Called Frama_C_show_each_inc({64})
-[value] Called Frama_C_show_each_inc({68})
-[value] Called Frama_C_show_each_inc({72})
-[value] Called Frama_C_show_each_inc({76})
-[value] Called Frama_C_show_each_inc({80})
+  Called from tests/value/slevelex.i:89.
+[value] tests/value/slevelex.i:49: assertion got status valid.
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {4}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {8}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {12}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {16}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {20}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {24}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {28}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {32}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {36}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {40}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {44}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {48}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {52}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {56}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {60}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {64}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {68}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {72}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {76}
+[value] tests/value/slevelex.i:63: Frama_C_show_each_inc: {80}
 [value] Recording results for ginc
 [value] Done for function ginc
 [value] Recording results for main
@@ -86,7 +85,7 @@ tests/value/slevelex.i:49:[value] assertion got status valid.
 [from] Computing for function main
 [from] Done for function main
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function f:
   \result FROM c
 [from] Function ginc:
@@ -97,18 +96,18 @@ tests/value/slevelex.i:49:[value] assertion got status valid.
   NO EFFECTS
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function f:
-          x; y; __retres
+    x; y; __retres
 [inout] Inputs for function f:
-          c
+    c
 [inout] Out (internal) for function ginc:
-          inc
+    inc
 [inout] Inputs for function ginc:
-          \nothing
+    \nothing
 [inout] Out (internal) for function gu:
-          \nothing
+    \nothing
 [inout] Inputs for function gu:
-          \nothing
+    \nothing
 [inout] Out (internal) for function main:
-          un; x; y
+    un; x; y
 [inout] Inputs for function main:
-          c
+    c

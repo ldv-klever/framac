@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,9 @@
 (* -------------------------------------------------------------------------- *)
 
 open Task
+
+let dkey_prover = Wp_parameters.register_category "prover"
+
 
 (* -------------------------------------------------------------------------- *)
 (* --- Export Printer                                                     --- *)
@@ -130,6 +133,18 @@ let location file line = {
   Lexing.pos_cnum = 0 ;
 }
 
+let timeout = function
+  | None -> Wp_parameters.Timeout.get ()
+  | Some t -> t
+
+let stepout = function
+  | None -> Wp_parameters.Steps.get ()
+  | Some t -> t
+
+let depth = function
+  | None -> Wp_parameters.Depth.get ()
+  | Some t -> t
+
 let pp_file ~message ~file =
   if Sys.file_exists file then
     Log.print_on_output
@@ -181,6 +196,10 @@ class command name =
     val stdout = Buffer.create 256
     val stderr = Buffer.create 256
 
+    method command = cmd :: param
+    method pretty fmt =
+      Format.pp_print_string fmt cmd ; pp_args fmt param
+    
     method set_command name = cmd <- name
     method add args = param <- param @ args
 
@@ -220,7 +239,7 @@ class command name =
       Task.command ~timeout ~time ~stdout ~stderr cmd args
       >>?
       begin fun st -> (* finally *)
-        if Wp_parameters.has_dkey "prover" then
+        if Wp_parameters.has_dkey dkey_prover then
           Log.print_on_output
             begin fun fmt ->
               Format.fprintf fmt "@[<hov 2>RUN '%s%a'@]@." cmd pp_args param ;
@@ -281,30 +300,35 @@ let server ?procs () =
 (* --- Task Composition                                                   --- *)
 (* -------------------------------------------------------------------------- *)
 
+let schedule task =
+  let server = server () in
+  Task.spawn server (Task.thread task)
+
 let silent _ = ()
-let spawn ?(monitor=silent) (jobs : ('a * bool Task.task) list) =
-  begin
-    let pool = ref [] in
-    let step = ref 0 in
-    let canceled = ref false in
-    let callback a r =
-      if r then
-        begin if not !canceled then
-            begin
-              canceled := true ;
-              monitor (Some a) ;
-              List.iter Task.cancel !pool ;
-            end
-        end
-      else
-        begin
-          decr step ;
-          if not !canceled && !step = 0 then
-            monitor None ;
-        end in
-    let pack (a,t) = Task.thread (t >>= Task.call (callback a)) in
-    let server = server () in
-    step := List.length jobs ;
-    pool := List.map pack jobs ;
-    List.iter (Task.spawn server) !pool ;
-  end
+let spawn ?(monitor=silent) ?pool (jobs : ('a * bool Task.task) list) =
+  if jobs <> [] then
+    begin
+      let step = ref 0 in
+      let monitored = ref [] in
+      let canceled = ref false in
+      let callback a r =
+        if r then
+          begin if not !canceled then
+              begin
+                canceled := true ;
+                monitor (Some a) ;
+                List.iter Task.cancel !monitored ;
+              end
+          end
+        else
+          begin
+            decr step ;
+            if not !canceled && !step = 0 then
+              monitor None ;
+          end in
+      let pack (a,t) = Task.thread (t >>= Task.call (callback a)) in
+      step := List.length jobs ;
+      monitored := List.map pack jobs ;
+      let server = server () in
+      List.iter (Task.spawn server ?pool) !monitored ;
+    end

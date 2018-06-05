@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,13 +27,6 @@ open Cil_types
 (** Bitfields *)
 val is_bitfield: typ -> bool
 
-val bitfield_size: typ -> Integer.t option
-
-val cast_lval_if_bitfield : typ -> Int_Base.t -> Cvalue.V.t -> Cvalue.V.t
-(** if needed, cast the given abstract value to the given size. Useful
-    to handle bitfield. The type given as argument must be the type of
-    the l-value the abstract value is written into, which is of size [size]. *)
-
 val sizeof_lval_typ: typ -> Int_Base.t
 (** Size of the type of a lval, taking into account that the lval might have
     been a bitfield. *)
@@ -50,28 +43,19 @@ val need_cast: typ -> typ -> bool
 (** return [true] if the two types are statically distinct, and a cast
     from one to the other may have an effect on an abstract value. *)
 
-type fct_pointer_compatibility =
-  | Compatible
-  | Incompatible
-  | Incompatible_but_accepted
-
+(* [compatible_functions typ kfs] filters the list [kfs] to only keep functions
+   compatible with the type [typ]. The returned boolean is true if some
+   functions were incompatible. If a list of arguments [args] is provided, also
+   removes functions incompatible with them. Used to verify a call through a
+   function pointer is ok.
+   In theory, we could only check that both types are compatible as defined by
+   C99, 6.2.7. However, some industrial codes do not strictly follow the norm,
+   and we must be more lenient. Thus, some functions are also kept when Eva can
+   ignore more or less safely the incompatibility in the types (which is however
+   reported in the returned boolean). *)
 val compatible_functions:
-  typ_pointed:typ -> typ_fun:typ -> fct_pointer_compatibility
-(** Test that two functions types are compatible; used to verify that a call
-    through a function pointer is ok. In theory, we could only check that
-    both types are compatible as defined by C99, 6.2.7. However, some industrial
-    codes do not strictly follow the norm, and we must be more lenient.
-    Thus, we return [Incompatible_but_accepted] if Value can ignore more or
-    less safely the incompatibleness in the types. *)
-
-val resolve_functions :
-  typ_pointer:typ -> Cvalue.V.t -> Kernel_function.Hptset.t Eval.or_top * bool
-(** given [(funs, warn) = resolve_functions typ v], [funs] is the set of
-    functions pointed to by [v] that have a type compatible with [typ].
-    Compatibility is interpreted in a relaxed way, using
-    {!compatible_functions}. [warn] indicates that at least one value of [v]
-    was not a function, or  was a function with a type incompatible with [v];
-    for [warn], compatibility is interpreted in a strict way. *)
+  typ -> ?args:exp list -> Kernel_function.t list ->
+  Kernel_function.t list * bool
 
 val expr_contains_volatile: exp -> bool
 val lval_contains_volatile: lval -> bool
@@ -97,9 +81,8 @@ val ik_attrs_range: ikind -> attributes -> integer_range
 (** Range for an integer type with some attributes. The attribute
     {!Cil.bitfield_attribute_name} influences the width of the type. *)
 
-val range_inclusion: integer_range -> integer_range -> bool * bool
-(** Check inclusion of two integer ranges. Returns two boolean [ok_low, ok_up],
-    for inclusion of the low and upper ranges respectively. *)
+val range_inclusion: integer_range -> integer_range -> bool
+(** Checks inclusion of two integer ranges. *)
 
 val range_lower_bound: integer_range -> Integer.t
 val range_upper_bound: integer_range -> Integer.t

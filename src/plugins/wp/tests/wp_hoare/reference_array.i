@@ -1,9 +1,9 @@
 /* run.config
-   OPT: -wp-model +ref -wp-msg-key var_kind
+   OPT: -wp-model +ref
 */
 
 /* run.config_qualif
-  OPT: -wp -wp-proof alt-ergo -wp-par 1 -wp-model +ref
+  OPT: -wp-model +ref
 */
 
 /*@ requires \valid(fp+(0..4)); 
@@ -80,9 +80,9 @@ void calls_on_array_dim_1 (void)
  */
 void calls_on_array_dim_2_to_1 (void)
 {
-  load_5(&(tt[0]));
-  reset_5(&(tt[0]));
-  add_5(&(tt[0]));
+  load_5(tt[0]);
+  reset_5(tt[0]);
+  add_5(tt[0]);
 }
 
 

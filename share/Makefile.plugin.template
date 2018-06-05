@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2016                                               #
+#  Copyright (C) 2007-2018                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -39,8 +39,6 @@ endif
 PLUGIN_DIR?=
 PLUGIN_ENABLE?=  # Whether the plugin is enabled
 PLUGIN_DEPENDS?= # Deprecated (static plug-in dependencies, Frama-C only)
-PLUGIN_DYNAMIC?= # Set it to yes if the plugin is only
-                 # dynamically linked with Frama-C.
 
 # META file
 # ---------
@@ -124,7 +122,7 @@ PLUGIN_NO_DEFAULT_TEST?= # Set it to a non-empty value if you don't want the
 PLUGIN_INTERNAL_TEST?= # Set it to a non-empty value if the tests of the plugin
                        # are in Frama-C's tests directory and not a tests
 	               # subdirectory of the plugin (internal use only,
-                       # obsolete and not recommanded way to handle tests)
+                       # obsolete and not recommended way to handle tests)
 
 # Distribution
 # ------------
@@ -142,7 +140,7 @@ PLUGIN_DISTRIB_EXTERNAL?= # list of files that should be distributed within the
 PLUGIN_RESET?=yes # Set it to no in order to NOT reset plug-in variable.
 
 
-# Except for their initialisation, all these variables should not be used
+# Except for their initialization, all these variables should not be used
 # outside of this Makefile.
 #
 # Instead, you can safely use the corresponding following variables.
@@ -177,10 +175,15 @@ PLUGIN_RESET?=yes # Set it to no in order to NOT reset plug-in variable.
 # Where the other plug-ins to load are already installed
 ifeq ($(FRAMAC_INTERNAL),yes)
 INSTALLED_PLUGIN_DIR:=$(FRAMAC_ROOT_SRCDIR)/lib/plugins
-else
-INSTALLED_PLUGIN_DIR:=$(PLUGIN_INSTALL_DIR)
-endif
+# Also inform the main Makefile that there's another plug-in to be
+# considered
+PLUGIN_LIST+=$(PLUGIN_DIR)/@PLUGIN_NAME@
 
+else
+
+INSTALLED_PLUGIN_DIR:=$(PLUGIN_INSTALL_DIR)
+
+endif
 
 # The plugin types .cm* files
 PLUGIN_TYPES_CMO:=$(addsuffix .cmo,$(PLUGIN_TYPES_CMO))
@@ -297,7 +300,7 @@ endif
 @PLUGIN_NAME@_GUI_CMX:=$(PLUGIN_GUI_CMX)
 @PLUGIN_NAME@_GUI_CMI:=$(PLUGIN_GUI_CMI)
 
-# Inteface for the the packed pluins
+# Interface for the the packed plugins
 TARGET_MLI:= $(PLUGIN_LIB_DIR)/@PLUGIN_NAME@.mli
 TARGET_CMI:= $(TARGET_MLI:.mli=.cmi)
 
@@ -318,11 +321,7 @@ else
 TARGET_TOP_CMXA:=
 endif
 
-ifeq ("$(USABLE_NATIVE_DYNLINK) $(PLUGIN_DYNAMIC)","yes yes")
 TARGET_TOP_CMXS:= $(TARGET_TOP_CMX:.cmx=.cmxs)
-else
-TARGET_TOP_CMXS:=
-endif
 
 # The packed files for GUI mode (in directory 'gui')
 ifeq ($(HAS_GUI),yes)
@@ -332,11 +331,7 @@ TARGET_GUI_CMI:= $(TARGET_GUI_CMO:.cmo=.cmi)
 TARGET_GUI_CMX:= $(TARGET_GUI_CMO:.cmo=.cmx)
 TARGET_GUI_CMA:= $(TARGET_GUI_CMO:.cmo=.cma)
 TARGET_GUI_CMXA:= $(TARGET_GUI_CMX:.cmx=.cmxa)
-ifeq ("$(USABLE_NATIVE_DYNLINK) $(PLUGIN_DYNAMIC)","yes yes")
 TARGET_GUI_CMXS:= $(TARGET_GUI_CMO:.cmo=.cmxs)
-else
-TARGET_GUI_CMXS:=
-endif
 else
 TARGET_GUI_MLI:=
 TARGET_GUI_CMO:=
@@ -467,9 +462,7 @@ META.$(PLUGIN_PKG).NATIVE :=@PLUGIN_NAME@.cmxa
 else
 META.$(PLUGIN_PKG).NATIVE :=@PLUGIN_NAME@.cmx
 endif
-ifeq ("$(USABLE_NATIVE_DYNLINK) $(PLUGIN_DYNAMIC)","yes yes")
 META.$(PLUGIN_PKG).PLUGIN :=@PLUGIN_NAME@.cmxs
-endif
 
 ifeq ($(FRAMAC_INTERNAL),yes)
 # In internal mode, we depend on the main Makefile for plugins that do not
@@ -573,14 +566,12 @@ $(TARGET_TOP_CMX): $(PLUGIN_CMX) \
 	  $(@PLUGIN_NAME@_TARGET_OFLAGS) \
 	  $(@PLUGIN_NAME@_CMI_ONLY) $(@PLUGIN_NAME@_CMX)
 
-ifeq ("$(USABLE_NATIVE_DYNLINK) $(PLUGIN_DYNAMIC)","yes yes")
 $(TARGET_TOP_CMXS): $(TARGET_TOP_CMX) $(PLUGIN_EXTRA_OPT)
 	$(PRINT_PACKING) $@
 	$(OCAMLOPT) -o $(call winpath,$@) -shared \
 	  $(@PLUGIN_NAME@_OFLAGS) \
 	  $(@PLUGIN_NAME@_EXTRA_OPT) \
           $(@:.cmxs=.cmx)
-endif
 
 ifdef PLUGIN_EXTRA_BYTE
 $(TARGET_TOP_CMA): $(PLUGIN_EXTRA_BYTE) $(TARGET_TOP_CMO)
@@ -631,7 +622,6 @@ $(TARGET_GUI_CMX): $(PLUGIN_GUI_CMX) $(TARGET_CMI) $(TARGET_GUI_CMI)
 	  $(@PLUGIN_NAME@_GUI_CMI_ONLY) \
 	  $(@PLUGIN_NAME@_GUI_CMX)
 
-ifeq ("$(USABLE_NATIVE_DYNLINK) $(PLUGIN_DYNAMIC)","yes yes")
 $(TARGET_GUI_CMXS): $(TARGET_GUI_CMX)
 	$(PRINT_PACKING) $@
 	$(MKDIR) $(PLUGIN_LIB_DIR)/gui
@@ -640,7 +630,6 @@ $(TARGET_GUI_CMXS): $(TARGET_GUI_CMX)
           $(@PLUGIN_NAME@_GUI_TARGET_OFLAGS) \
           $(@PLUGIN_NAME@_EXTRA_OPT) \
 	  $^
-endif
 
 ifdef PLUGIN_EXTRA_BYTE
 $(TARGET_GUI_CMA): $(PLUGIN_EXTRA_BYTE) $(TARGET_GUI_CMO)
@@ -723,7 +712,11 @@ $(PLUGIN_DOC_DIR)/@PLUGIN_NAME@.txt: $(DOC_INTRO) $(PLUGIN_INTRO)
 
 ifeq ($(FRAMAC_INTERNAL),yes)
 OCAMLDOC_GEN:=$(DOC_PLUGIN)
-ifneq ($(FRAMAC_INTERNAL),yes)
+OCAMLDOC_GEN+=$(DOC_DIR)/kernel-doc.ocamldoc
+
+else
+OCAMLDOC_GEN:=
+
 # not doing kernel documentation if just compiling plugin's one
 
 $(DOC_DIR)/docgen.cmo: $(DOC_DIR)/docgen.ml
@@ -734,11 +727,6 @@ $(DOC_DIR)/docgen.cmxs: $(DOC_DIR)/docgen.ml
 	$(PRINT_PACKING) $@
 	$(OCAMLOPT) -o $(call winpath,$@) -shared -I +ocamldoc \
 	  $(call winpath,$(DOC_DIR))/docgen.ml
-else
-OCAMLDOC_GEN+=$(DOC_DIR)/kernel-doc.ocamldoc
-endif
-else
-OCAMLDOC_GEN:=
 endif
 
 OCAMLDOC_DEPEND:= $(PLUGIN_CMO)
@@ -752,25 +740,24 @@ endif
 		    $(PLUGIN_DOC_DIR)/@PLUGIN_NAME@.txt \
 		    $(PLUGIN_DOC_DIR)/modules.svg \
 		    $(DOC_PLUGIN)
-	$(PRINT_DOC) $(patsubst %_DOC,%,$@)
-	$(MKDIR) $($@_DIR)
-	$(RM) $($@_DIR)/*.html
+	$(PRINT_DOC) @PLUGIN_NAME@
+	$(MKDIR) $(@PLUGIN_NAME@_DOC_DIR)
+	$(RM) $(@PLUGIN_NAME@_DOC_DIR)/*.html
 # Only generate toc for kernel's documentation if we are in Frama-C's main
 # Makefile
 ifeq ($(FRAMAC_INTERNAL),yes)
-	$(ECHO) '<li><a href="$(subst $(DOC_DIR)/,,$($@_DIR))/index.html">$(subst _, ,$(patsubst %_DOC,%,$@))</a></li>' > $(DOC_DIR)/$(patsubst %_DOC,%,$@).toc
+	$(ECHO) '<li><a href="$(subst $(DOC_DIR)/,,$(@PLUGIN_NAME@_DOC_DIR))/index.html">$(subst _, ,@PLUGIN_NAME@)</a></li>' > $(DOC_DIR)/@PLUGIN_NAME@.toc
 endif
-	$(OCAMLDOC) $($@FLAGS) \
-	  -t "$(patsubst %_DOC,%,$@) plugin" \
-	  -intro $($@_DIR)/$(patsubst %_DOC,%,$@).txt \
+	$(OCAMLDOC) $(@PLUGIN_NAME@_DOCFLAGS) \
+	  -t "@PLUGIN_NAME@ plugin" \
 	  -css-style ../style.css \
-	  -d $($@_DIR) -g $(DOC_PLUGIN) -passopt -docpath $(DOC_DIR)/html \
+	  -d $(@PLUGIN_NAME@_DOC_DIR) -g $(DOC_PLUGIN) -passopt -docpath $(DOC_DIR)/html \
 	  $(addprefix -load ,$(wildcard $(DOC_DIR)/kernel-doc.ocamldoc)) \
-	  $(wildcard $($@_SRC))
+	  $(wildcard $(@PLUGIN_NAME@_DOC_SRC))
 # [rb+js] 20090619
 # pwd is required to avoid "bad directory" message on OpenBSD
 # don't know why
-	cd `pwd`/$($(patsubst %_DOC,%_DOC_DIR,$@)); \
+	cd `pwd`/$(@PLUGIN_NAME@_DOC_DIR); \
 	for f in $(foreach f,$(@PLUGIN_NAME@_TYPES_TODOC),\
 	                     $(basename $(notdir $f))); do \
 	  for g in \
@@ -958,11 +945,7 @@ $(PLUGIN_DIR)/@PLUGIN_NAME@_CLEAN_DOC: $(@PLUGIN_NAME@_DOC_DIR)
 
 PLUGIN_GENERATED_LIST += $(PLUGIN_GENERATED)
 
-ifeq ($(PLUGIN_DYNAMIC),yes)
-#dynamic plugin
 PLUGIN_META_LIST += $(TARGET_META)
-PLUGIN_DYN_EXISTS:=yes
-PLUGIN_DYN_LIST += $(PLUGIN_DIR)/@PLUGIN_NAME@
 PLUGIN_DYN_CMI_LIST += $(TARGET_CMI)
 ifdef PLUGIN_EXTRA_BYTE
 .PRECIOUS: $(TARGET_TOP_CMO)
@@ -980,7 +963,6 @@ PLUGIN_DYN_GUI_CMO_LIST += $(TARGET_GUI_CMO)
 endif #EXTRA_BYTE
 endif #HAS_GUI
 
-ifeq ($(USABLE_NATIVE_DYNLINK),yes)
 PLUGIN_DYN_DEP_GUI_CMX_LIST += $(PLUGIN_GUI_CMX)
 PLUGIN_DYN_CMX_LIST	+= $(TARGET_TOP_CMXS) $(TARGET_TOP_CMX)
       # If P1 depends on P2, then dynamically link P1.cmxs requires to have 
@@ -990,38 +972,7 @@ PLUGIN_DYN_CMX_LIST	+= $(TARGET_TOP_CMXA)
 endif #EXTRA_OPT
 ifeq ($(HAS_GUI),yes)
 PLUGIN_DYN_GUI_CMX_LIST += $(TARGET_GUI_CMXS)
-endif
-else # No native dynlink: use a static version
-PLUGIN_CMX_LIST += $(TARGET_TOP_CMX)
-ifdef PLUGIN_EXTRA_OPT
-EXTRA_OPT_LIBS+= $(PLUGIN_EXTRA_OPT)
-endif
-ifeq ($(HAS_GUI),yes)
-PLUGIN_GUI_CMX_LIST += $(TARGET_GUI_CMX)
 endif # HAS_GUI
-endif # USABLE_NATIVE_DYNLINK
-
-else # Normal plugin
-PLUGIN_LIST += $(PLUGIN_DIR)/@PLUGIN_NAME@
-ifdef PLUGIN_EXTRA_BYTE
-.PRECIOUS: $(TARGET_TOP_CMO) $(TARGET_GUI_CMO)
-PLUGIN_CMO_LIST += $(TARGET_TOP_CMA)
-PLUGIN_GUI_CMO_LIST += $(TARGET_GUI_CMA)
-else
-PLUGIN_CMO_LIST += $(TARGET_TOP_CMO)
-PLUGIN_GUI_CMO_LIST += $(TARGET_GUI_CMO)
-endif
-ifdef PLUGIN_EXTRA_OPT
-.PRECIOUS: $(TARGET_TOP_CMX) $(TARGET_GUI_CMX)
-PLUGIN_CMX_LIST += $(TARGET_TOP_CMXA)
-PLUGIN_GUI_CMX_LIST += $(TARGET_GUI_CMXA)
-DEP_CMXS=$(TARGET_TOP_CMXA)
-else
-PLUGIN_CMX_LIST += $(TARGET_TOP_CMX)
-PLUGIN_GUI_CMX_LIST += $(TARGET_GUI_CMX)
-DEP_CMXS=$(TARGET_TOP_CMX)
-endif
-endif
 
 PLUGIN_INTERNAL_CMO_LIST += $(PLUGIN_CMO)
 PLUGIN_INTERNAL_CMX_LIST += $(PLUGIN_CMX)
@@ -1055,7 +1006,6 @@ PLUGIN_OFLAGS:=
 PLUGIN_DEPFLAGS:=
 PLUGIN_DOCFLAGS:=
 PLUGIN_GENERATED:=
-PLUGIN_DYNAMIC:=
 PLUGIN_TYPES_CMO:=
 PLUGIN_GUI_CMO:=
 PLUGIN_GUI_CMX:=

@@ -1,8 +1,8 @@
 /* run.config*
-   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=double" -float-hex -journal-disable -val-subdivide-non-linear 0 -then -no-float-hex -no-val-print -val-print
-   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=double" -float-hex -journal-disable -val-subdivide-non-linear 10  -then -no-float-hex -no-val-print -val-print
-   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=float" -float-hex -journal-disable -val-subdivide-non-linear 0 -then -no-float-hex -no-val-print -val-print
-   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=float" -float-hex -journal-disable -val-subdivide-non-linear 10 -then -no-float-hex -no-val-print -val-print
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=double" -float-hex -journal-disable -val-subdivide-non-linear 0
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=double" -float-hex -journal-disable -val-subdivide-non-linear 10
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=float" -float-hex -journal-disable -val-subdivide-non-linear 0
+   OPT: -value-msg-key nonlin -slevel 30 -val @VALUECONFIG@ -cpp-extra-args="-DFLOAT=float" -float-hex -journal-disable -val-subdivide-non-linear 10
 */
 
 #include "__fc_builtin.h"
@@ -81,9 +81,17 @@ void norm() {
   double square = (double)v1*v1+(double)v2*v2;
 }
 
+// a bug resulted in an invalid interval due to the presence of garbled mix
+void garbled() {
+  int x;
+  float a = (float)((int)(&x + (int)&x));
+  float f = a + a;
+}
+
 void main() {
   nonlin_f();
   other ();
   split_alarm();
   norm();
+  garbled();
 }

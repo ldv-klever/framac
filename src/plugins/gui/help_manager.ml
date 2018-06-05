@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,10 +22,16 @@
 
 let show main_ui =
   let authors = [
+    "Michele Alberti";
+    "Thibaud Antignac";
+    "Gergö Barany";
     "Patrick Baudin";
+    "Lionel Blatter";
     "François Bobot";
     "Richard Bonichon";
+    "Quentin Bouillaguet";
     "David Bühler";
+    "Zakaria Chihani";
     "Loïc Correnson";
     "Julien Crétin";
     "Pascal Cuoq";
@@ -33,10 +39,13 @@ let show main_ui =
     "Jean-Christophe Filliâtre";
     "Philippe Herrmann";
     "Florent Kirchner";
+    "Tristan Le Gall";
+    "Jean-Christophe Léchenet";
     "Matthieu Lemerre";
     "David Maison";
     "Claude Marché";
     "André Maroneze";
+    "Melody Méaulle";
     "Benjamin Monate";
     "Yannick Moy";
     "Anne Pacalet";
@@ -46,6 +55,7 @@ let show main_ui =
     "Armand Puccetti";
     "Muriel Roger";
     "Julien Signoles";
+    "Kostyantyn Vorobyov";
     "Boris Yakobowski"
   ]
   in

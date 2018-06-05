@@ -1,11 +1,10 @@
 # frama-c -wp [...]
-[kernel] Parsing FRAMAC_SHARE/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/wp/wp_strategy.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
-[wp] warning: Missing RTE guards
+[wp] Warning: Missing RTE guards
 ------------------------------------------------------------
-  Function default_behaviors with behavior default_for_stmt_55
+  Function default_behaviors with behavior default_for_stmt_54
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:
@@ -13,7 +12,7 @@ Prove: true.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
-  Function dpd1 with behavior default_for_stmt_11
+  Function dpd1 with behavior default_for_stmt_10
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at program point (file tests/wp/wp_strategy.c, line 37):
@@ -21,7 +20,7 @@ Prove: true.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
-  Function dpd2 with behavior default_for_stmt_16
+  Function dpd2 with behavior default_for_stmt_15
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at program point (file tests/wp/wp_strategy.c, line 45):
@@ -29,7 +28,7 @@ Prove: true.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
-  Function spec_if with behavior default_for_stmt_21
+  Function spec_if with behavior default_for_stmt_20
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:
@@ -37,7 +36,7 @@ Prove: true.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
-  Function spec_if with behavior default_for_stmt_27
+  Function spec_if with behavior default_for_stmt_26
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:
@@ -45,7 +44,7 @@ Prove: true.
 
 ------------------------------------------------------------
 ------------------------------------------------------------
-  Function spec_if with behavior default_for_stmt_33
+  Function spec_if with behavior default_for_stmt_32
 ------------------------------------------------------------
 
 Goal Assigns 'qed_ok' at block:

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -26,6 +26,7 @@
   open Lexing
   type end_of_buffer = NEWLINE | SPACE | CHAR
   let preprocess_buffer = Buffer.create 1024
+
   let output_buffer = Buffer.create 1024
   (* Standard prohibits the predefined macros to be subject of a #define
      (or #undef) directive. We thus have to filter the definition of these
@@ -136,7 +137,7 @@
     if !has_annot then begin
       let debug =
         Kernel.debug_atleast 3 ||
-          Kernel.Debug_category.exists (fun x -> x = "parser")
+          Kernel.is_debug_key_enabled Kernel.dkey_parser
       in
       let ppname =
         try Extlib.temp_file_cleanup_at_exit ~debug "ppannot" suffix
@@ -172,6 +173,14 @@
       preprocess_buffer "# %d %s \n" !curr_line !curr_file
 
   let make_newline () = incr curr_line
+
+  let process_annot_start () =
+    is_newline := CHAR;
+    has_annot := true;
+    Buffer.add_string output_buffer annot_content;
+    Buffer.add_string preprocess_buffer annot_beg;
+    Buffer.add_char preprocess_buffer '\n';
+    add_preprocess_line_info()
 }
 
 rule main = parse
@@ -202,12 +211,7 @@ rule main = parse
         comment c lexbuf;}
   | "/*"  (_ as c) {
       if c = !Clexer.annot_char then begin
-        is_newline:=CHAR;
-        has_annot := true;
-        Buffer.add_string output_buffer annot_content;
-        Buffer.add_string preprocess_buffer annot_beg;
-        Buffer.add_char preprocess_buffer '\n';
-        add_preprocess_line_info();
+        process_annot_start ();
         annot lexbuf
       end else begin
         if c = '\n' then make_newline();
@@ -220,12 +224,7 @@ rule main = parse
       } 
   | "//"  (_ as c) {
       if c = !Clexer.annot_char then begin
-        is_newline:=CHAR;
-        has_annot:=true;
-        Buffer.add_string output_buffer annot_content;
-        Buffer.add_string preprocess_buffer annot_beg;
-        Buffer.add_char preprocess_buffer '\n';
-        add_preprocess_line_info();
+        process_annot_start ();
         oneline_annot lexbuf
       end
       else if c = '\n' then begin
@@ -330,6 +329,7 @@ and macro_char blacklisted = parse
 | _ as c { if not blacklisted then Buffer.add_char preprocess_buffer c;
            macro_char blacklisted lexbuf }
 and c_string = parse
+| eof { abort_preprocess "unterminated string" }
 | "\\\"" { Buffer.add_string output_buffer (lexeme lexbuf); c_string lexbuf }
 | "\"" { Buffer.add_char output_buffer '"'; main lexbuf }
 | '\n' { make_newline ();
@@ -340,6 +340,7 @@ and c_string = parse
 | _ as c { Buffer.add_char output_buffer c; c_string lexbuf }
 (* C syntax allows for multiple char character constants *)
 and c_char = parse
+| eof { abort_preprocess "unterminated char" }
 | "\\\'" { Buffer.add_string output_buffer (lexeme lexbuf);
            c_char lexbuf }
 | "'" { Buffer.add_char output_buffer '\''; main lexbuf }
@@ -496,7 +497,7 @@ parse
 {
   let file suffix cpp filename =
     reset ();
-    let debug = Kernel.Debug_category.exists (fun x -> x = "parser") in
+    let debug = Kernel.is_debug_key_enabled Kernel.dkey_parser in
     let inchan = open_in_bin filename in
     let lex = Lexing.from_channel inchan in
     let ppname =

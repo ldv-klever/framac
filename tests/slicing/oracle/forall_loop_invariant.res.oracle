@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/forall_loop_invariant.i (no preprocessing)
 [slicing] slicing requests in progress...
 [value] Analyzing a complete application starting at main
@@ -7,16 +6,23 @@
 [value:initial-state] Values of globals at initialization
   t[0..9] ∈ {0}
   u[0..9] ∈ {0}
-tests/slicing/forall_loop_invariant.i:10:[value] loop invariant got status valid.
-tests/slicing/forall_loop_invariant.i:11:[value] loop invariant got status valid.
-tests/slicing/forall_loop_invariant.i:12:[value] loop invariant got status valid.
-tests/slicing/forall_loop_invariant.i:14:[value] entering loop for the first time
-tests/slicing/forall_loop_invariant.i:11:[value] warning: loop invariant got status unknown.
-tests/slicing/forall_loop_invariant.i:12:[value] warning: loop invariant got status unknown.
-tests/slicing/forall_loop_invariant.i:18:[value] warning: assertion got status unknown.
+[value] tests/slicing/forall_loop_invariant.i:10: 
+  loop invariant got status valid.
+[value] tests/slicing/forall_loop_invariant.i:11: 
+  loop invariant got status valid.
+[value] tests/slicing/forall_loop_invariant.i:12: 
+  loop invariant got status valid.
+[value] tests/slicing/forall_loop_invariant.i:14: 
+  entering loop for the first time
+[value:alarm] tests/slicing/forall_loop_invariant.i:11: Warning: 
+  loop invariant got status unknown.
+[value:alarm] tests/slicing/forall_loop_invariant.i:12: Warning: 
+  loop invariant got status unknown.
+[value:alarm] tests/slicing/forall_loop_invariant.i:18: Warning: 
+  assertion got status unknown.
 [value] Recording results for main
 [value] done for function main
-[slicing] making slicing project 'Slicing'...
+[slicing] initializing slicing ...
 [slicing] interpreting slicing requests from the command line...
 [pdg] computing for function main
 [pdg] done for function main
@@ -36,8 +42,7 @@ int u[10];
 void main(void)
 {
   {
-    int i;
-    i = 0;
+    int i = 0;
     /*@ loop invariant 0 ≤ i ≤ 10;
         loop invariant ∀ int k; 0 ≤ k < i ⇒ t[k] ≡ 1;
         loop invariant ∀ int k; 0 ≤ k < i ⇒ u[k] ≡ 2;
@@ -53,7 +58,7 @@ void main(void)
 
 
 [slicing] slicing requests in progress...
-[slicing] making slicing project 'Slicing'...
+[slicing] reinitializing slicing ...
 [slicing] interpreting slicing requests from the command line...
 [slicing] applying all slicing requests...
 [slicing] applying 0 actions...
@@ -72,8 +77,7 @@ int main(void)
 {
   int __retres;
   {
-    int i;
-    i = 0;
+    int i = 0;
     /*@ loop invariant 0 ≤ i ≤ 10;
         loop invariant ∀ int k; 0 ≤ k < i ⇒ t[k] ≡ 1;
         loop invariant ∀ int k; 0 ≤ k < i ⇒ u[k] ≡ 2;
@@ -89,5 +93,4 @@ int main(void)
 }
 
 
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/slicing/result/ocode_0_forall_loop_invariant.i (no preprocessing)

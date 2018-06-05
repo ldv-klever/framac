@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,7 +48,10 @@ let pretty_zone fmt z =
   Format.fprintf fmt "@[<h 1>%a@]" Locations.Zone.pretty z
 
 let ask_for_lval (main_ui:Design.main_window_extension_points) kf =
-  let txt = GToolbox.input_string ~title:"Input lvalue expression" "" in
+  let txt =
+    Gtk_helper.input_string
+      ~parent:main_ui#main_window ~title:"Input lvalue expression" ""
+  in
     match txt with None | Some "" -> None
       | Some txt ->
           try
@@ -100,7 +103,7 @@ module Kf_containing_highlighted_stmt =
         let name = "Dpds_gui.Kf_containing_highlighted_stmt"
         let size = 7
         let dependencies =
-	  [ (*Dependencies are managed manually by Make_StmtSetState*) ]
+          [ (*Dependencies are managed manually by Make_StmtSetState*) ]
        end)
 
 let default_icon_name = "gtk-apply"
@@ -120,8 +123,8 @@ module Make_StmtSetState (Info:sig val name: string end) =
      Kf_containing_highlighted_stmt.clear ();
      Stmt.Hptset.iter
        (fun stmt ->
-	 Kf_containing_highlighted_stmt.replace
-	   (Kernel_function.find_englobing_kf stmt) default_icon)
+         Kf_containing_highlighted_stmt.replace
+           (Kernel_function.find_englobing_kf stmt) default_icon)
        s;
      !update_column `Contents
 
@@ -149,7 +152,7 @@ module Make_StmtMapState (Info:sig val name: string end) =
            with Not_found -> D.String.Set.empty
          in
          let union = D.String.Set.union prev s in
-	 Kf_containing_highlighted_stmt.replace kf union)
+         Kf_containing_highlighted_stmt.replace kf union)
        s;
      !update_column `Contents
 
@@ -196,7 +199,7 @@ module DataScope : (DpdCmdSig with type t_in = lval)  = struct
     else "[scope] selected"
 
   let compute kf stmt lval =
-    let f, (fb, b) = !Db.Scope.get_data_scope_at_stmt kf stmt lval in
+    let f, (fb, b) = Datascope.get_data_scope_at_stmt kf stmt lval in
     Fscope.set f; FBscope.set fb; Bscope.set b;
     "[scope] computed"
 
@@ -236,7 +239,7 @@ module Pscope (* : (DpdCmdSig with type t_in = code_annotation) *) = struct
     else "[prop_scope] selected"
 
   let compute kf stmt annot =
-    let s1, s2 = !Db.Scope.get_prop_scope_at_stmt kf stmt annot in
+    let s1, s2 = Datascope.get_prop_scope_at_stmt kf stmt annot in
     Pscope.set s1; Pscope_warn.set s2;
     "[prop_scope] computed"
 
@@ -328,10 +331,10 @@ module Zones : (DpdCmdSig with type t_in = lval)  = struct
       set s;
       Kf_containing_highlighted_stmt.clear ();
       Stmt.Hptset.iter
-	(fun stmt ->
-	  Kf_containing_highlighted_stmt.replace
-	    (Kernel_function.find_englobing_kf stmt) default_icon)
-	(snd s);
+        (fun stmt ->
+          Kf_containing_highlighted_stmt.replace
+            (Kernel_function.find_englobing_kf stmt) default_icon)
+        (snd s);
      !update_column `Contents
     end
   let clear () = ZonesState.clear ()
@@ -348,7 +351,7 @@ module Zones : (DpdCmdSig with type t_in = lval)  = struct
         match kf_stmt_opt with
           | None -> "[zones] no information for this point"
           | Some (_kf, stmt) ->
-              let z = !Db.Scope.get_zones zones stmt in
+              let z = Zones.get_zones zones stmt in
               let txt =
                 Format.asprintf "[zones] needed before stmt %d = %a"
                   stmt.sid pretty_zone z
@@ -356,7 +359,7 @@ module Zones : (DpdCmdSig with type t_in = lval)  = struct
     with Not_found -> ""
 
   let compute kf stmt lval =
-    let used_stmts, zones = !Db.Scope.build_zones kf stmt lval in
+    let used_stmts, zones = Zones.build_zones kf stmt lval in
       ZonesState.set (zones, used_stmts);
       "[zones] computed"
 
@@ -379,7 +382,7 @@ let help (main_ui:Design.main_window_extension_points) =
        ^"and the data is the one that is selected if any, "
        ^"or it can be given via a popup.\n"
        ^"\tIf the text given in the popup is empty, or 'Cancel' is chosen, "
-       ^"the selection of the command is reseted.");
+       ^"the selection of the command is reset.");
     add (ShowDef.help);
     add (Zones.help);
     add (DataScope.help);
@@ -484,7 +487,7 @@ let check_value (main_ui:Design.main_window_extension_points) =
       else false
 
 
-(** To add a sensitive/unsensitive menu item to a [factory].
+(** To add a sensitive/insensitive menu item to a [factory].
 * The menu item is insensitive when [arg_opt = None],
 * else, when the item is selected, the callback is called with the argument.
 * If [~use_values], check if the value analysis has been computed.
@@ -510,9 +513,6 @@ let selector (popup_factory:GMenu.menu GMenu.factory)
     begin
       let submenu = popup_factory#add_submenu "Dependencies" in
       let submenu_factory = new GMenu.factory submenu in
-      add_item main_ui ~use_values:false submenu_factory
-        "Help" (Some()) (fun _ -> help main_ui) ;
-      ignore (submenu_factory#add_separator ());
       let arg = match (Pretty_source.kf_of_localizable localizable,
                        Pretty_source.ki_of_localizable localizable)
         with
@@ -533,7 +533,10 @@ let selector (popup_factory:GMenu.menu GMenu.factory)
 
       ignore (submenu_factory#add_separator ());
       add_item main_ui ~use_values:false submenu_factory "Reset All" (Some())
-        (fun _ -> reset () ; main_ui#rehighlight ())
+        (fun _ -> reset () ; main_ui#rehighlight ());
+      ignore (submenu_factory#add_separator ());
+      add_item main_ui ~use_values:false submenu_factory
+        "Help" (Some()) (fun _ -> help main_ui) ;
     end
 
 let filetree_decorate main_ui =

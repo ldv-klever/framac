@@ -1,6 +1,6 @@
 /* run.config*
-   OPT: -val @VALUECONFIG@ -slevel 100 -cpp-extra-args="-DPTEST " -journal-disable -no-warn-signed-overflow
-   OPT: -val @VALUECONFIG@ -slevel 100 -cpp-extra-args="-DPTEST " -journal-disable -machdep ppc_32 -no-warn-signed-overflow
+   OPT: -no-autoload-plugins -load-module value,inout -val @VALUECONFIG@ -slevel 100 -cpp-extra-args="-DPTEST " -journal-disable -no-warn-signed-overflow
+   OPT: -no-autoload-plugins -load-module value,inout -val @VALUECONFIG@ -slevel 100 -cpp-extra-args="-DPTEST " -journal-disable -machdep ppc_32 -no-warn-signed-overflow
 */
 
 #ifndef PTEST
@@ -50,7 +50,7 @@ int main(void)
 #ifndef PTEST
   printf("s_int: %d  col_ones: %d col_123:%d\n", s_int, col_ones, col_123);
 #endif
-  /* résultat attendu, avec int 32-bits :
+  /* rÃ©sultat attendu, avec int 32-bits :
      little endian: s_int = -833811464
      big_endian :  s_int: -1480071902  col_ones: 825307442 col_123:825373236
   */

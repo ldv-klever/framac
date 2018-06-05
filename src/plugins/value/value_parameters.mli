@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,8 +24,6 @@ include Plugin.General_services
 
 module ForceValues: Parameter_sig.With_output
 
-module Eva: Parameter_sig.Bool
-
 module EnumerateCond: Parameter_sig.Bool
 module OracleDepth: Parameter_sig.Int
 module ReductionDepth: Parameter_sig.Int
@@ -35,6 +33,9 @@ module EqualityDomain: Parameter_sig.Bool
 module GaugesDomain: Parameter_sig.Bool
 module SymbolicLocsDomain: Parameter_sig.Bool
 module BitwiseOffsmDomain: Parameter_sig.Bool
+module InoutDomain: Parameter_sig.Bool
+module SignDomain: Parameter_sig.Bool
+module PrinterDomain: Parameter_sig.Bool
 
 module ApronOctagon: Parameter_sig.Bool
 module ApronBox: Parameter_sig.Bool
@@ -42,8 +43,14 @@ module PolkaLoose: Parameter_sig.Bool
 module PolkaStrict: Parameter_sig.Bool
 module PolkaEqualities: Parameter_sig.Bool
 
+module EqualityCall: Parameter_sig.String
+module EqualityCallFunction:
+  Parameter_sig.Map with type key = Cil_types.kernel_function
+                     and type value = string
+
 module EqualityStorage: Parameter_sig.Bool
 module SymbolicLocsStorage: Parameter_sig.Bool
+module GaugesStorage: Parameter_sig.Bool
 module ApronStorage: Parameter_sig.Bool
 module BitwiseOffsmStorage: Parameter_sig.Bool
 
@@ -51,11 +58,6 @@ module BitwiseOffsmStorage: Parameter_sig.Bool
 module AutomaticContextMaxDepth: Parameter_sig.Int
 module AutomaticContextMaxWidth: Parameter_sig.Int
 
-module SeparateStmtStart:  Parameter_sig.String_set
-module SeparateStmtWord:  Parameter_sig.Int
-module SeparateStmtOf:  Parameter_sig.Int
-
-module AllRoundingModes: Parameter_sig.Bool
 module AllRoundingModesConstants: Parameter_sig.Bool
 
 module NoResultsFunctions: Parameter_sig.Fundec_set
@@ -98,8 +100,11 @@ module UndefinedPointerComparisonPropagateAll: Parameter_sig.Bool
 module WarnPointerComparison: Parameter_sig.String
 
 module ReduceOnLogicAlarms: Parameter_sig.Bool
+module InitializedLocals: Parameter_sig.Bool
 
 module UsePrototype: Parameter_sig.Kernel_function_set
+
+module SkipLibcSpecs: Parameter_sig.Bool
 
 module RmAssert: Parameter_sig.Bool
 
@@ -108,6 +113,7 @@ module BuiltinsOverrides:
   Parameter_sig.Map with type key = Cil_types.kernel_function
                     and type value = string
 module BuiltinsAuto: Parameter_sig.Bool
+module BuiltinsList: Parameter_sig.Bool
 module SplitReturnFunction:
   Parameter_sig.Map with type key = Cil_types.kernel_function
                     and type value = Split_strategy.t
@@ -120,6 +126,7 @@ module ValPerfFlamegraphs: Parameter_sig.String
 module ShowSlevel: Parameter_sig.Int
 module PrintCallstacks: Parameter_sig.Bool
 module AlarmsWarnings: Parameter_sig.Bool
+module WarnBuiltinOverride: Parameter_sig.Bool
 
 module MemExecAll: Parameter_sig.Bool
 
@@ -133,24 +140,36 @@ module StopAtNthAlarm: Parameter_sig.Int
 (** Dynamic allocation *)
 
 module MallocFunctions: Parameter_sig.String_set
-module MallocReturnsNull: Parameter_sig.Bool
+module AllocReturnsNull: Parameter_sig.Bool
 module MallocLevel: Parameter_sig.Int
 
 
 val parameters_correctness: Typed_parameter.t list
 val parameters_tuning: Typed_parameter.t list
+val parameters_abstractions: Typed_parameter.t list
 
 (** Debug categories responsible for printing initial and final states of Value.
    Enabled by default, but can be disabled via the command-line:
    -value-msg-key="-initial_state,-final_state" *)
-val dkey_initial_state : Log.category
-val dkey_final_states : Log.category
+val dkey_initial_state : category
+val dkey_final_states : category
 
-(** Debug category used when emitting an alarm in "non-warning" mode *)
-val dkey_alarm: Log.category
+(** Warning category used when emitting an alarm in "warning" mode. *)
+val wkey_alarm: warn_category
 
 (** Debug category used to print garbled mix *)
-val dkey_garbled_mix: Log.category
+val dkey_garbled_mix: category
+
+(** Debug category used to print information about invalid pointer comparisons*)
+val dkey_pointer_comparison: category
+
+(** Debug category used to print the cvalue domain on Frama_C_[dump|show]_each
+    functions. *)
+val dkey_cvalue_domain: category
+
+(* Print non-bottom product of states with no concretization, revealed by
+   an evaluation leading to bottom without alarms. *)
+val dkey_incompatible_states: category
 
 (*
 Local Variables:

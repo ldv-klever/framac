@@ -1,4 +1,3 @@
-[kernel] Parsing share/libc/__fc_builtin_for_normalization.i (no preprocessing)
 [kernel] Parsing tests/value/val_ptr.i (no preprocessing)
 [value] Analyzing a complete application starting at f1
 [value] Computing initial state
@@ -17,7 +16,7 @@
   c ∈ {0}
   p ∈ {0}
   T[0..7] ∈ {0}
-tests/value/val_ptr.i:34:[value] entering loop for the first time
+[value] tests/value/val_ptr.i:34: entering loop for the first time
 [value] Recording results for f1
 [value] done for function f1
 [value] ====== VALUES COMPUTED ======
@@ -26,11 +25,11 @@ tests/value/val_ptr.i:34:[value] entering loop for the first time
 [from] Computing for function f1
 [from] Done for function f1
 [from] ====== DEPENDENCIES COMPUTED ======
-       These dependencies hold at termination for the executions that terminate:
+  These dependencies hold at termination for the executions that terminate:
 [from] Function f1:
   p FROM \nothing
 [from] ====== END OF DEPENDENCIES ======
 [inout] Out (internal) for function f1:
-          p
+    p
 [inout] Inputs for function f1:
-          p
+    p

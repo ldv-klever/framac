@@ -56,6 +56,14 @@ module type S = sig
       a binding of the key [k] to the datum [d]. If a binding already exists
       for [k], it is overridden. *)
 
+  val replace : (v option -> v option) -> key -> t -> t
+  (** [replace f k m] returns a map whose bindings are all bindings in [m],
+      except for the key [k] which is:
+      - removed from the map if [f o] = None
+      - bound to v' if [f o] = Some v'
+      where [o] is (Some v) if [k] is bound to [v] in [m], or None if [k]
+      is not bound in [m]. *)
+
   val find : key -> t -> v
   val find_check_missing: key -> t -> v
   (** Both [find key m] and [find_check_missing key m] return the value
@@ -85,6 +93,9 @@ module type S = sig
   val map': (key -> v -> v option) -> t -> t
   (** Same as [map], except if [f k v] returns [None]. In this case, [k] is not
       bound in the resulting map. *)
+
+  val filter: (key -> bool) -> t -> t
+  (** [filter f t] keep only the bindings of [m] whose key verify [f].  *)
 
   val fold : (key -> v -> 'b -> 'b) -> t -> 'b -> 'b
   (** [fold f m seed] invokes [f k d accu], in turn, for each binding from
@@ -221,7 +232,7 @@ module type S = sig
     decide_both:(key -> v -> v -> bool) ->
     t -> t -> bool
   (** Same functionality as [generic_predicate] but with a different signature.
-      All decisin functions return a boolean that are combined differently
+      All decision functions return a boolean that are combined differently
       depending on whether the predicate is existential or universal. *)
 
   val generic_symmetric_predicate :
@@ -285,8 +296,6 @@ module type S = sig
 
   val min_binding: t -> key * v
   val max_binding: t -> key * v
-
-  val split: key -> t -> t * v option * t
 
   val compositional_bool: t -> bool
   (** Value of the compositional boolean associated to the tree, as computed

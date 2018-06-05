@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -104,6 +104,7 @@ module Refreshers: sig
   val onlyCurrent: check
 
   val ensures: check
+  val extended: check
   val preconditions: check
   val behaviors: check
   val complete_disjoint: check
@@ -226,6 +227,8 @@ struct
       ~hint:"Show function preconditions" ()
   let ensures = add ~name:"Postconditions"
       ~hint:"Show function postconditions" ()
+  let extended = add ~name:"Extended"
+      ~hint:"Show extended function annotation" ()
   let behaviors = add ~name:"Behaviors" ~default:false
       ~hint:"Show function behaviors" ()
   let complete_disjoint = add ~name:"Complete/disjoint"
@@ -340,6 +343,7 @@ struct
     in
     preconditions.add hb;
     ensures.add hb;
+    extended.add hb;
     behaviors.add hb;
     complete_disjoint.add hb;
     allocations.add hb;
@@ -551,7 +555,12 @@ let make_panel (main_ui:main_window_extension_points) =
        if not currently_selected then
          begin match model#custom_get_iter path with
            | Some {MODEL.finfo={ip = ip;}} ->
-               ignore (main_ui#scroll (Pretty_source.PIP ip))
+             ignore (main_ui#scroll (Pretty_source.PIP ip));
+             (* Note: the code below generates double scrolling:
+                the previous call to main_ui#scroll causes the original source
+                viewer to scroll to the beginning of the function, and then
+                the code below re-scrolls it to the exact statement. *)
+             main_ui#view_original (Property.location ip)
            | None -> ()
          end;
        true);
@@ -608,6 +617,8 @@ let make_panel (main_ui:main_window_extension_points) =
         preconditions.get () && stmtSpec.get ()
     | Property.IPPredicate(Property.PKAssumes _,_,_,_) -> false
     | Property.IPPredicate(Property.PKEnsures _,_,Kglobal,_) -> ensures.get ()
+    | Property.IPExtended(_,Kglobal,_) -> extended.get ()
+    | Property.IPExtended(_,Kstmt _, _) -> extended.get ()
     | Property.IPPredicate(Property.PKEnsures _,_,Kstmt _,_) ->
         ensures.get() && stmtSpec.get()
     | Property.IPPredicate(Property.PKTerminates,_,_,_) -> terminates.get ()
@@ -695,9 +706,10 @@ let make_panel (main_ui:main_window_extension_points) =
       in
       Globals.Functions.fold aux []
     in
-    (* Sort functions by names *)
+    (* Sort functions by names, in a case-insensitive way *)
     let cmp (k1, _) (k2, _) =
-      String.compare (Kernel_function.get_name k1) (Kernel_function.get_name k2)
+      Extlib.compare_ignore_case
+        (Kernel_function.get_name k1) (Kernel_function.get_name k2)
     in
     let by_kf = List.sort cmp with_rte in
 
@@ -746,7 +758,7 @@ let highlighter (buffer:reactive_buffer) localizable ~start ~stop =
   | Pretty_source.PIP ppt ->
       Design.Feedback.mark
         buffer#buffer ~offset:start (Property_status.Feedback.get ppt)
-  | Pretty_source.PStmt(_,({ skind=Instr(Call _) } as stmt)) ->
+  | Pretty_source.PStmt(_,({ skind=Instr(Call _| Local_init (_, ConsInit _, _)) } as stmt)) ->
       let kfs = Statuses_by_call.all_functions_with_preconditions stmt in
       (* We separate the consolidated statuses of the preconditions inside
          guarded behaviors from those outside. For guarded behaviors, since we
@@ -797,7 +809,7 @@ let highlighter (buffer:reactive_buffer) localizable ~start ~stop =
               "Invalid internal state for statement %d" stmt.sid;
             stop (* fallback *)
         in
-        Design.Feedback.mark buffer#buffer ~offset validity
+        Design.Feedback.mark buffer#buffer ~call_site:stmt ~offset validity
 
   | Pretty_source.PStmt _
   | Pretty_source.PGlobal _| Pretty_source.PVDecl _

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,11 +31,12 @@ type localizable =
   | PLval of (kernel_function option * kinstr * lval)
   | PExp of (kernel_function option * kinstr * exp)
   | PTermLval of (kernel_function option * kinstr * Property.t * term_lval)
-  | PVDecl of (kernel_function option * varinfo)
+  | PVDecl of (kernel_function option * kinstr * varinfo)
   (** Declaration and definition of variables and function. Check the type
       of the varinfo to distinguish between the various possibilities.
       If the varinfo is a global or a local, the kernel_function is the
-      one in which the variable is declared. *)
+      one in which the variable is declared. The [kinstr] argument is given
+      for local variables with an explicit initializer. *)
   | PGlobal of global (** all globals but variable declarations and function
                           definitions. *)
   | PIP of Property.t
@@ -48,6 +49,13 @@ module Locs: sig
   val create: unit -> state
   val clear: state -> unit
 end
+
+(* Folds or unfolds the preconditions at callsite [stmt]. *)
+val fold_preconds_at_callsite: stmt -> unit
+
+(* Are the preconditions unfolded at statement [stmt]?
+   Used to know which folding or unfolding icon to display at [stmt]. *)
+val are_preconds_unfolded: stmt -> bool
 
 val display_source :
   global list ->

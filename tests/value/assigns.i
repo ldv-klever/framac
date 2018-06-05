@@ -1,5 +1,5 @@
 /* run.config*
-   STDOPT: #" -inout-callwise" +"-print -inout"
+   STDOPT: +"-print -inout"
 */
 volatile int v;
 int G;
@@ -35,7 +35,7 @@ void j(int *p);
 int x;
 int k = 53;
 
-/*@ assigns \at(x, Post) \from \at(x, Post);
+/*@ assigns x \from \at(x, Post);
     assigns Tpost[\at(i, Post)];
     assigns Tpost[\at(k, Post)];
 */
@@ -46,31 +46,31 @@ void main1(void)
   F1(T);
 
   for (int i=0;i<=5;i++)
-    f(&t[i].f2);
+    f((char*)&t[i].f2);
 
   g(2 * (int)(&T) );
-  h(2 * (int)(&t3) );
+  h((int*)(2 * (int)(&t3)));
   
-  j(T+9);
+  j((int*)(T+9));
 
   assigns_post(18);
 }
 
 //@ assigns \result;
-int ff1();
+int ff1(void);
 
-int* ff2();
+int* ff2(void);
 //@ assigns \nothing;
-int* ff2_bis();
+int* ff2_bis(void);
 
 int y1, y2, y3;
 
 /*@ assigns y1, y2, y3; assigns y2 \from y2;*/
-void ff3();
+void ff3(void);
 
-void ff4();
+void ff4(void);
 
-int ff5();
+int ff5(void);
 
 int main2() {
   int l = ff1();
@@ -98,7 +98,7 @@ ts u_main4[100];
 void f_main4_1(int i);
 
 //@ assigns t_main4[0..999].f1 \from \nothing; assigns u_main4[0..99].f1 \from \nothing;
-void f_main4_2();
+void f_main4_2(void);
 
 void main4() {
   f_main4_1(v);

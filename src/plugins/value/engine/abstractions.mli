@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2016                                               *)
+(*  Copyright (C) 2007-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,7 +20,7 @@
 (*                                                                        *)
 (**************************************************************************)
 
-(** Constructions of the abstractions used by EVA. *)
+(** Constructions of the abstractions used by Eva. *)
 
 (** Configuration of the abstract domain. *)
 type config = {
@@ -34,16 +34,19 @@ type config = {
   polka_loose : bool;
   polka_strict : bool;
   polka_equalities : bool;
+  inout: bool;
+  signs: bool;
+  printer: bool;
 }
 
-(** Default configuration of EVA. *)
+(** Default configuration of Eva. *)
 val default_config : config
 
-(** Legacy configuration of EVA, with only the cvalue domain enabled.
+(** Legacy configuration of Eva, with only the cvalue domain enabled.
     May be the default config as well. *)
 val legacy_config : config
 
-(** Build a configuration according to the analysis paramaters. *)
+(** Build a configuration according to the analysis parameters. *)
 val configure : unit -> config
 
 
@@ -62,12 +65,18 @@ module type S = sig
                                          and type location = Loc.location
 end
 
+(** Type of abstractions that use the builtin types for values and locations *)
+module type Standard_abstraction = Abstract_domain.Internal
+  with type value = Cvalue.V.t
+   and type location = Precise_locs.precise_location
+
+val register_dynamic_abstraction: (module Standard_abstraction) -> unit
 
 (** Builds the abstractions according to a configuration. *)
 val make : config -> (module S)
 
 
-(** Two abstractions are instanciated at compile time: default and legacy
+(** Two abstractions are instantiated at compile time: default and legacy
     (which may be the same). *)
 
 module Legacy : S

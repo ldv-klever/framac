@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2016                                               */
+/*  Copyright (C) 2007-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -25,16 +25,27 @@
 
 /* ISO C: 7.14 */
 
+#include "features.h"
+__PUSH_FC_STDLIB
 #include "__fc_define_pid_t.h"
 #include "__fc_define_uid_and_gid.h"
-#include "features.h"
 
 __BEGIN_DECLS
 
 /* TODO: put sig_atomic_t in machdep */
+#ifndef __sig_atomic_t_defined
 typedef volatile int sig_atomic_t;
+#define __sig_atomic_t_defined
+#endif
+
 typedef void (*__fc_sighandler_t) (int);
 
+#define sighandler_t __fc_sighandler_t
+
+/* for BSD 4.4 */
+#ifdef __USE_MISC
+typedef __fc_sighandler_t sig_t;
+#endif
 
 #define SIG_DFL ((__fc_sighandler_t)0)     /* default signal handling */
 #define SIG_IGN ((__fc_sighandler_t)1)     /* ignore signal */
@@ -98,18 +109,21 @@ typedef void (*__fc_sighandler_t) (int);
 #define SA_ONESHOT	SA_RESETHAND
 
 /*@ assigns \nothing; */
-void (*signal(int sig, void (*func)(int)))(int);
+extern void (*signal(int sig, void (*func)(int)))(int);
 
 /*@ 
   assigns \nothing;
-  ensures \false; */
-int raise(int sig);
+  ensures never_terminates: \false; */
+extern int raise(int sig);
 #include "__fc_define_sigset_t.h"
 
 union sigval {
 	int sival_int;
 	void *sival_ptr;
 };
+
+#ifndef __have_siginfo_t
+#define __have_siginfo_t
 typedef struct {
 	int si_signo;
 	int si_code;
@@ -121,6 +135,7 @@ typedef struct {
 	int si_status;
 	int si_band;
 } siginfo_t;
+#endif
 
 struct sigaction {
                void     (*sa_handler)(int);
@@ -129,17 +144,18 @@ struct sigaction {
                int        sa_flags;
            };
 
-int sigemptyset(sigset_t *set);
-int sigfillset(sigset_t *set);
-int sigaddset(sigset_t *set, int signum);
-int sigdelset(sigset_t *set, int signum);
-int sigismember(const sigset_t *set, int signum);
-int sigaction(int signum, const struct sigaction *act,
+extern int sigemptyset(sigset_t *set);
+extern int sigfillset(sigset_t *set);
+extern int sigaddset(sigset_t *set, int signum);
+extern int sigdelset(sigset_t *set, int signum);
+extern int sigismember(const sigset_t *set, int signum);
+extern int sigaction(int signum, const struct sigaction *act,
                      struct sigaction *oldact);
-int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
+extern int sigprocmask(int how, const sigset_t *set, sigset_t *oldset);
 
-int kill(pid_t pid, int sig);
+extern int kill(pid_t pid, int sig);
 
 __END_DECLS
 
+__POP_FC_STDLIB
 #endif
