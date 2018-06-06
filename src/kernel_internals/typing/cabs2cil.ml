@@ -8764,12 +8764,7 @@ and createLocal ghost ((_, sto, _, _) as specs)
           let alloca_size =
             new_exp ~loc
               (BinOp(Mult Check,
-                     new_exp ~loc
-                       (SizeOfE
-                          (new_exp ~loc
-                             (Lval
-                                (Mem(new_exp ~loc (Lval(var vi))),
-                                 NoOffset)))),
+                     elt_size,
                      new_exp ~loc (Lval (var savelen)),
                      theMachine.typeOfSizeOf))
           in
