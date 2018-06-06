@@ -81,8 +81,16 @@ end) =
       let find_label s = Kernel_function.find_label X.kf s
       include Logic_env
 
+      let error loc msg =
+        Pretty_utils.ksfprintf (fun e -> raise (Error (loc, e))) msg
+
+      let on_error f rollback x =
+        try f x with Error _ as exn -> rollback (); raise exn
+
       let add_logic_function =
-        add_logic_function_gen Logic_utils.is_same_logic_profile
+        add_logic_function_gen { error } Logic_utils.is_same_logic_profile
+
+      let add_logic_type = add_logic_type_gen { error }
 
       let remove_logic_info =
         remove_logic_info_gen Logic_utils.is_same_logic_profile
@@ -95,12 +103,6 @@ end) =
                 Printer.pp_term t
                 Printer.pp_logic_type Linteger
                 Printer.pp_typ ty))
-
-      let error loc msg =
-        Pretty_utils.ksfprintf (fun e -> raise (Error (loc, e))) msg
-
-      let on_error f rollback x =
-        try f x with Error _ as exn -> rollback (); raise exn
 
      end)
 

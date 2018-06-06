@@ -2236,7 +2236,7 @@ let rec logic_annot_pass2 ~in_axiomatic g a =
 	  | None ->
 	    if not in_axiomatic then
               mergePushGlobals (visitCilGlobal renameVisitor g);
-            Logic_utils.add_logic_function li;
+            Logic_utils.add_logic_function l li;
 	  | Some _ -> ()
     (* FIXME: should we perform same actions
        as the case Dlogic_reads above ? *)
@@ -2251,7 +2251,7 @@ let rec logic_annot_pass2 ~in_axiomatic g a =
             let def =
               (PlainMerging.find_eq_table ltEq (!currentFidx,t.lt_name)).ndata
             in
-            Logic_env.add_logic_type t.lt_name def;
+            Logic_utils.add_logic_type l t.lt_name def;
             (match def.lt_def with
              | Some (LTsum l) ->
                List.iter (fun c -> Logic_env.add_logic_ctor c.ctor_name c) l
@@ -2268,7 +2268,7 @@ let rec logic_annot_pass2 ~in_axiomatic g a =
             if in_axiomatic then Kernel.abort ~current:true
                 "nested axiomatics are not allowed in ACSL";
             mergePushGlobals (visitCilGlobal renameVisitor g);
-            Logic_utils.add_logic_function 
+            Logic_utils.add_logic_function l
               (LogicMerging.find_eq_table lfEq (!currentFidx,li)).ndata
           | Some _ -> ()
       end
@@ -2280,7 +2280,7 @@ let rec logic_annot_pass2 ~in_axiomatic g a =
             let g = visitCilGlobal renameVisitor g in
 	    if not in_axiomatic then
               mergePushGlobals g;
-            Logic_utils.add_logic_function
+            Logic_utils.add_logic_function l
               (LogicMerging.find_eq_table lfEq (!currentFidx,n)).ndata
           | Some _ -> ()
       end

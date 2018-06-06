@@ -13,6 +13,9 @@
 # OCaml native-compiled module files
 *.cmx
 
+# OCaml native-compiled dynamically linkable library module files
+*.cmxs
+
 # OCaml bytecode-compiled module files
 *.cmo
 
@@ -58,12 +61,19 @@ src/kernel_internals/parsing/logic_preprocess.ml
 config.log
 config.status
 configure
+frama_c_journal.ml
 bin/frama-c-config
 bin/fc-config
 doc/code/docgen.ml
 lib/
 ptests/ptests_config.ml
 tests/ptests_config
+tests/pdg/call.f.dot
+tests/pdg/call.g.dot
+tests/pdg/doc.g.dot
+tests/pdg/dyn_dpds_0.dot
+tests/pdg/dyn_dpds_1.dot
+tests/misc/my_visitor.sav
 share/Makefile.config
 share/Makefile.dynamic_config
 share/Makefile.kernel
@@ -84,6 +94,7 @@ src/plugins/aorai/tests/ptests_config
 src/plugins/aorai/yalexer.ml
 src/plugins/aorai/yaparser.ml
 src/plugins/aorai/yaparser.mli
+src/plugins/e-acsl/tests/test_config
 src/kernel/config.ml
 src/kernel/frama_c_config.ml
 src/lib/dynlink_common_interface.ml
@@ -114,6 +125,44 @@ src/plugins/print_api/lexer.ml
 src/plugins/value/domains/apron/apron_domain.ml
 src/plugins/wp/Wp.mli
 src/plugins/wp/share/instwp
+src/plugins/wp/tests/wp_usage/save_load.sav
+
+# Test results
+src/plugins/report/tests/report/result/
+src/plugins/wp/tests/wp/result/
+src/plugins/wp/tests/wp_acsl/result/
+src/plugins/wp/tests/wp_bts/result/
+src/plugins/wp/tests/wp_gallery/result/
+src/plugins/wp/tests/wp_hoare/result/
+src/plugins/wp/tests/wp_plugin/result/
+src/plugins/wp/tests/wp_store/result/
+src/plugins/wp/tests/wp_typed/result/
+src/plugins/wp/tests/wp_usage/result/
+tests/callgraph/result/
+tests/cil/result/
+tests/constant_propagation/result/
+tests/dynamic/result/
+tests/float/result/
+tests/idct/result/
+tests/impact/result/
+tests/jcdb/result/
+tests/journal/result/
+tests/libc/result/
+tests/metrics/result/
+tests/misc/result/
+tests/occurrence/result/
+tests/pdg/result/
+tests/pretty_printing/result/
+tests/rte/result/
+tests/rte_manual/result/
+tests/saveload/result/
+tests/scope/result/
+tests/slicing/result/
+tests/sparecode/result/
+tests/spec/result/
+tests/syntax/result/
+tests/test/result/
+tests/value/result/
 
 # ? some dummy empty _DEP files
 *_DEP

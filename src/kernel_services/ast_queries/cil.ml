@@ -3065,22 +3065,25 @@ and childrenSpec vis s =
    CurrentLoc.set oldloc;
    res
 
- and childrenAnnotation vis a =
+ and childrenAnnotation =
+   let add_logic_function, add_logic_type =
+     let error (source, _) f = Kernel.abort ~source f in
+     Logic_env.(add_logic_function_gen { error } alphabetafalse, add_logic_type_gen { error })
+   in
+   fun vis a ->
    match a with
      | Dfun_or_pred (li,loc) ->
 	 let li' = visitCilLogicInfo vis li in
 	 if vis#behavior.is_copy_behavior then
 	   Queue.add
-	     (fun () ->
-		Logic_env.add_logic_function_gen alphabetafalse li')
+	     (fun () -> add_logic_function loc li')
 	     vis#get_filling_actions;
 	 if li' != li then Dfun_or_pred (li',loc) else a
      | Dtype (ti,loc) ->
 	 let ti' = visitCilLogicTypeInfo vis ti in
 	 if vis#behavior.is_copy_behavior then
 	   Queue.add
-	     (fun () ->
-		Logic_env.add_logic_type ti'.lt_name ti')
+	     (fun () -> add_logic_type loc ti'.lt_name ti')
 	     vis#get_filling_actions;
 	 if ti' != ti then Dtype (ti',loc) else a
      | Dlemma(s,is_axiom,labels,tvars,p,attr,loc) ->
@@ -3093,14 +3096,14 @@ and childrenSpec vis s =
 	 let p' = visitCilLogicInfo vis p in
 	 if vis#behavior.is_copy_behavior then
 	   Queue.add
-	     (fun () -> Logic_env.add_logic_function_gen alphabetafalse p')
+	     (fun () -> add_logic_function loc p')
 	     vis#get_filling_actions;
 	 if p' != p then Dinvariant (p',loc) else a
      | Dtype_annot (ta,loc) ->
 	 let ta' = visitCilLogicInfo vis ta in
 	 if vis#behavior.is_copy_behavior then
 	   Queue.add
-	     (fun () -> Logic_env.add_logic_function_gen alphabetafalse ta')
+	     (fun () -> add_logic_function loc ta')
 	     vis#get_filling_actions;
 	 if ta' != ta then Dtype_annot (ta',loc) else a
      | Dmodel_annot (mfi,loc) ->

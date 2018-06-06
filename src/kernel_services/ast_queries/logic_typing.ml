@@ -483,8 +483,8 @@ type typing_context = {
   remove_logic_info: logic_info -> unit;
   remove_logic_type: string -> unit;
   remove_logic_ctor: string -> unit;
-  add_logic_function: logic_info -> unit;
-  add_logic_type: string -> logic_type_info -> unit;
+  add_logic_function: location -> logic_info -> unit;
+  add_logic_type: location -> string -> logic_type_info -> unit;
   add_logic_ctor: string -> logic_ctor_info -> unit;
   find_all_logic_functions: string -> logic_info list;
   find_logic_type: string -> logic_type_info;
@@ -648,15 +648,15 @@ module Make
       val remove_logic_info: logic_info -> unit
       val remove_logic_type: string -> unit
       val remove_logic_ctor: string -> unit
-      val add_logic_function: logic_info -> unit
-      val add_logic_type: string -> logic_type_info -> unit
+      val add_logic_function: location -> logic_info -> unit
+      val add_logic_type: location -> string -> logic_type_info -> unit
       val add_logic_ctor: string -> logic_ctor_info -> unit
       val find_all_logic_functions: string -> logic_info list
       val find_first_logic_function : string -> logic_info
       val find_logic_type: string -> logic_type_info
       val find_logic_ctor: string -> logic_ctor_info
       val integral_cast: Cil_types.typ -> Cil_types.term -> Cil_types.term
-      val error: location -> ('a,formatter,unit, 'b) format4 -> 'a 
+      val error: location -> ('a,formatter,unit, 'b) format4 -> 'a
       val on_error: ('a -> 'b) -> (unit -> unit) -> 'a -> 'b
     end) =
 struct
@@ -707,24 +707,12 @@ struct
   let add_rollback_action f x = Queue.add (fun () -> f x) rollback
 
   let add_logic_function loc li =
-    let l = Logic_env.find_all_logic_functions li.l_var_info.lv_name in
-    if List.exists (Logic_utils.is_same_logic_profile li) l then begin
-      C.error loc
-        "%s %s is already declared with the same profile"
-        (match li.l_type with None -> "predicate" | Some _ -> "logic function")
-        li.l_var_info.lv_name
-    end else begin
-        C.add_logic_function li;
-        add_rollback_action C.remove_logic_info li
-      end
+    C.add_logic_function loc li;
+    add_rollback_action C.remove_logic_info li
 
   let add_logic_type loc info =
-    try
-      ignore (C.find_logic_type info.lt_name);
-      C.error loc "logic type %s is already defined" info.lt_name
-    with Not_found ->
-      C.add_logic_type info.lt_name info;
-      add_rollback_action C.remove_logic_type info.lt_name
+    C.add_logic_type loc info.lt_name info;
+    add_rollback_action C.remove_logic_type info.lt_name
 
   let check_non_void_ptr loc ty =
     if Logic_utils.isLogicVoidPointerType ty then
@@ -3646,7 +3634,7 @@ let add_label info lab =
 
   let type_annot ~stage loc ti =
     let finish_with infos =
-      C.add_logic_function infos;
+      C.add_logic_function loc infos;
       infos
     in
     match stage with
@@ -4369,7 +4357,7 @@ let add_label info lab =
           end
       | LDinvariant (s, e) ->
           let finish_with li =
-            C.add_logic_function li;
+            C.add_logic_function loc li;
             Dinvariant (li, loc)
           in
           begin match stage with

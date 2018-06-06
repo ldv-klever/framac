@@ -95,8 +95,8 @@ type typing_context = {
   remove_logic_info: logic_info -> unit;
   remove_logic_type: string -> unit;
   remove_logic_ctor: string -> unit;
-  add_logic_function: logic_info -> unit;
-  add_logic_type: string -> logic_type_info -> unit;
+  add_logic_function: location -> logic_info -> unit;
+  add_logic_type: location -> string -> logic_type_info -> unit;
   add_logic_ctor: string -> logic_ctor_info -> unit;
   find_all_logic_functions: string -> logic_info list;
   find_logic_type: string -> logic_type_info;
@@ -184,8 +184,8 @@ module Make
       val remove_logic_type: string -> unit
       val remove_logic_ctor: string -> unit
 
-      val add_logic_function: logic_info -> unit
-      val add_logic_type: string -> logic_type_info -> unit
+      val add_logic_function: location -> logic_info -> unit
+      val add_logic_type: location -> string -> logic_type_info -> unit
       val add_logic_ctor: string -> logic_ctor_info -> unit
 
       val find_all_logic_functions : string -> Cil_types.logic_info list

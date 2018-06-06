@@ -37,7 +37,11 @@ exception Not_well_formed of Cil_types.location * string
 
 (** add a logic function in the environment.
     See {!Logic_env.add_logic_function_gen}*)
-val add_logic_function : logic_info -> unit
+val add_logic_function : location -> logic_info -> unit
+
+(** add a logic type in the environment.
+    See {!Logic_env.add_logic_type_gen}*)
+val add_logic_type : location -> string -> logic_type_info -> unit
 
 (** {2 Types} *)
 

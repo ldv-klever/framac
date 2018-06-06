@@ -198,15 +198,13 @@ let is_logic_function s = is_builtin_logic_function s || Logic_info.mem s
 
 let find_all_logic_functions s =
   match Logic_info.find_all s with
-    | l -> l
-    | exception Not_found ->
-      try
-        let builtins = Logic_builtin.find_all s in
-        let res = List.map builtin_to_logic builtins in
-        List.iter (Logic_builtin_used.add s) res;
-        List.iter (Logic_info.add s) res;
-        res
-      with Not_found -> []
+  | [] ->
+    let builtins = Logic_builtin.find_all s in
+    let res = List.map builtin_to_logic builtins in
+    List.iter (Logic_builtin_used.add s) res;
+    List.iter (Logic_info.add s) res;
+    res
+  | l -> l
 
 let find_first_logic_function s =
     try
@@ -224,18 +222,18 @@ let find_logic_cons vi =
     (fun x -> Cil_datatype.Logic_var.equal x.l_var_info vi)
     (Logic_info.find_all vi.lv_name)
 
+type error = { error : 'a. location -> ('a, Format.formatter, unit) format -> 'a }
+
 (* add_logic_function takes as argument a function eq_logic_info which
    decides whether two logic_info are identical. It is intended to be
    Logic_utils.is_same_logic_profile, but this one can not be called
    from here since it will cause a circular dependency Logic_env <-
    Logic_utils <- Cil <- Logic_env
 *)
-
-let add_logic_function_gen is_same_profile li =
+let add_logic_function_gen error is_same_profile loc li =
   let name = li.l_var_info.lv_name in
   if is_builtin_logic_function name then
-    error
-      (CurrentLoc.get())
+    error.error loc
       "logic function or predicate %s is built-in. You can not redefine it"
       name;
   try
@@ -245,8 +243,9 @@ let add_logic_function_gen is_same_profile li =
     List.iter
       (fun li' ->
          if is_same_profile li li' && Forward_decls.mem "" then (* Don't report error on the first pass *)
-	   error (CurrentLoc.get ())
-             "already declared logic function or predicate %s with same profile"
+	   error.error loc
+             "%s %s is already declared with the same profile"
+             (match li.l_type with None -> "predicate" | Some _ -> "logic function")
              name)
       (Logic_info.find_all name);
     Logic_info.add name li
@@ -269,14 +268,14 @@ let remove_logic_info_gen is_same_profile li =
 
 let is_logic_type = Logic_type_info.mem
 let find_logic_type = Logic_type_info.find
-let add_logic_type t infos =
+let add_logic_type_gen error loc t infos =
   try
     check_and_pass_forward_logic_type t infos
   with
   | Not_found ->
     if is_logic_type t
     (* type variables hide type definitions on their scope *)
-    then error (CurrentLoc.get ()) "logic type %s already declared" t
+    then error.error loc "logic type %s already declared" t
     else Logic_type_info.add t infos
 
 let is_logic_ctor = Logic_ctor_info.mem
@@ -520,7 +519,7 @@ let add_builtin_logic_type name infos =
   if not (Logic_type_builtin.mem name) then begin
     Logic_type_builtin.add name infos;
     add_typename name;
-    add_logic_type name infos
+    add_logic_type_gen { error } (CurrentLoc.get ()) name infos
   end
 
 let add_builtin_logic_ctor name infos =

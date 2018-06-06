@@ -62,6 +62,8 @@ val check_forward_declarations : unit -> unit
 
 (** {3 Add an user-defined object} *)
 
+type error = { error : 'a. location -> ('a, Format.formatter, unit) format -> 'a }
+
 (** add_logic_function_gen takes as argument a function eq_logic_info
     which decides whether two logic_info are identical. It is intended
     to be Logic_utils.is_same_logic_profile, but this one can not be
@@ -71,8 +73,8 @@ val check_forward_declarations : unit -> unit
     what you're doing. Use {!Logic_utils.add_logic_function} instead.
 *)
 val add_logic_function_gen:
-  (logic_info -> logic_info -> bool) -> logic_info -> unit
-val add_logic_type: string -> logic_type_info -> unit
+  error -> (logic_info -> logic_info -> bool) -> location -> logic_info -> unit
+val add_logic_type_gen: error -> location -> string -> logic_type_info -> unit
 val add_logic_ctor: string -> logic_ctor_info -> unit
 
 (**

@@ -663,8 +663,15 @@ struct
   let find_label _ = raise Not_found
 
   include Logic_env
+
+  let error (source,_) msg = Aorai_option.abort ~source msg
+
+  (* we never attempt to recover on an error. *)
+  let on_error f _ x = f x
+
   let add_logic_function =
-    add_logic_function_gen Logic_utils.is_same_logic_profile
+    add_logic_function_gen { error } Logic_utils.is_same_logic_profile
+  let add_logic_type = add_logic_type_gen { error }
 
   let remove_logic_info =
     remove_logic_info_gen Logic_utils.is_same_logic_profile
@@ -673,12 +680,6 @@ struct
     Aorai_option.abort
       "term %a has type %a, but %a is expected."
       Printer.pp_term t Printer.pp_logic_type Linteger Printer.pp_typ ty
-
-  let error (source,_) msg = Aorai_option.abort ~source msg
-
-  (* we never attempt to recover on an error. *)
-  let on_error f _ x = f x
-
 end
 
 module LTyping = Logic_typing.Make(C_logic_env)

@@ -3829,14 +3829,6 @@ struct
 
   include Logic_env
 
-  let add_logic_function =
-    add_logic_function_gen Logic_utils.is_same_logic_profile
-
-  let remove_logic_info =
-    remove_logic_info_gen Logic_utils.is_same_logic_profile
-
-  let integral_cast = integral_cast
-
   (* This function raises a non-recoverable when [-continue-annot-error] is not
      set, and [LogicTypeError] otherwise. This exception must *not* escape
      Cabs2cil. Hence, each call to a function of module [Ltyping] below must
@@ -3847,6 +3839,14 @@ struct
   let on_error f rollback x =
     try f x with LogicTypeError _ as exn -> rollback(); raise exn
 
+  let add_logic_function =
+    add_logic_function_gen { error } Logic_utils.is_same_logic_profile
+  let add_logic_type = add_logic_type_gen { error }
+
+  let remove_logic_info =
+    remove_logic_info_gen Logic_utils.is_same_logic_profile
+
+  let integral_cast = integral_cast
 end
 
 module Ltyping = Logic_typing.Make (C_logic_env)

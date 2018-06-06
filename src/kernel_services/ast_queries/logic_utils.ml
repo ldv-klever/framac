@@ -699,7 +699,11 @@ let is_same_builtin_profile l1 l2 =
   is_same_list (fun (_,t1) (_,t2) -> is_same_type t1 t2)
   l1.bl_profile l2.bl_profile
 
-let add_logic_function = Logic_env.add_logic_function_gen is_same_logic_profile
+let error (source, _) f = Kernel.abort ~source f
+
+let add_logic_function = Logic_env.(add_logic_function_gen { error } is_same_logic_profile)
+
+let add_logic_type = Logic_env.(add_logic_type_gen { error })
 
 let is_same_logic_ctor_info ci1 ci2 =
   ci1.ctor_name = ci2.ctor_name &&
