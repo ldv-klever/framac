@@ -483,10 +483,14 @@ class cil_printer () = object (self)
   method private may_be_skipped s = s.labels = []
 
   method location fmt loc =
-    let loc = (fst loc) in
-    Format.fprintf fmt "%s:%d"
-      (Filepath.pretty loc.Lexing.pos_fname)
-      loc.Lexing.pos_lnum
+    let loc1, loc2 = loc in
+    let open Lexing in
+    Format.fprintf fmt "%s:%d,%d-%d,%d"
+      (Filepath.pretty loc1.pos_fname)
+      loc1.pos_lnum
+      (loc1.pos_cnum - loc1.pos_bol)
+      loc2.pos_lnum
+      (loc2.pos_cnum - loc2.pos_bol)
 
   (* constant *)
   method constant fmt = function
@@ -2319,7 +2323,7 @@ class cil_printer () = object (self)
     | TBinOp (LAnd, l, r) when not state.print_cil_as_is ->
       fprintf fmt "@[%a@]" self#tand_list (get_tand_list l [r])
     | TBinOp (op,l,r) ->
-      fprintf fmt "%a%a%a"
+      fprintf fmt "@[%a@ %a@ %a@]"
 	(self#term_prec current_level) l
 	self#term_binop op
 	(self#term_prec current_level) r

@@ -179,15 +179,7 @@ module Location = struct
       let copy = Datatype.identity (* immutable strings *)
       let equal : t -> t -> bool = ( = )
       let internal_pretty_code = Datatype.undefined
-      let pretty fmt loc =
-	let loc1, loc2 = loc in
-        let open Lexing in
-        Format.fprintf fmt "%s:%d,%d-%d,%d"
-          (Filepath.pretty loc1.pos_fname)
-          loc1.pos_lnum
-          (loc1.pos_cnum - loc1.pos_bol)
-          loc2.pos_lnum
-          (loc2.pos_cnum - loc2.pos_bol)
+      let pretty fmt loc = !pretty_ref fmt loc
       let varname _ = "loc"
      end)
 
