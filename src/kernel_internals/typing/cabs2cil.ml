@@ -5006,14 +5006,15 @@ and doType (ghost:bool) isFuncArg
                 (* e.g., there may be a float constant involved.
                  * We'll leave it to the user to ensure the length is
                  * non-negative, etc.*)
-                   Kernel.warning ~once:true ~current:true
-                     "Unable to do constant-folding on array length %a. \
-                      Some CIL operations on this array may fail."
-                     Cil_printer.pp_exp cst
-                 else
-                   Kernel.error ~once:true ~current:true
-                     "Length of array is not a constant: %a"
-                     Cil_printer.pp_exp cst)
+                Kernel.warning ~once:true ~current:true
+                  "Unable to do constant-folding on array length %a. \
+                   Some CIL operations on this array may fail."
+                  Cil_printer.pp_exp cst
+              else
+                  Kernel.warning ~once:true ~current:true
+                    "Length of array is not a constant: %a. \
+		     Some CIL operations on this array may fail."
+                    Cil_printer.pp_exp cst)
             end;
             if Cil.isZero len' && not allowZeroSizeArrays &&
                not (Cil.gccMode () || Cil.msvcMode ())
