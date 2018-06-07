@@ -7356,9 +7356,9 @@ let rec makeZeroInit ~loc (t: typ) : init =
  let rec isCompleteType ?(isLastField=false) ?(allowZeroSizeArrays=false) t =
    match unrollType t with
    | TVoid _ -> false (* void is an incomplete type by definition (6.2.5§19) *)
-   | TArray(t, None, _, _) -> isLastField && allowZeroSizeArrays && isCompleteType t
-   | TArray(t, Some z, _, _) when isZero z -> allowZeroSizeArrays && isCompleteType t
-   | TArray(t, Some _, _, _) -> isCompleteType t
+   | TArray(t, None, _, _) -> isLastField && allowZeroSizeArrays && isCompleteType ~allowZeroSizeArrays t
+   | TArray(t, Some z, _, _) when isZero z -> allowZeroSizeArrays && isCompleteType ~allowZeroSizeArrays t
+   | TArray(t, Some _, _, _) -> isCompleteType ~allowZeroSizeArrays t
    | TComp (comp, _, _) -> (* Struct or union *)
        comp.cdefined &&
        let last = if comp.cfields <> [] then Some (Extlib.last comp.cfields) else None in
