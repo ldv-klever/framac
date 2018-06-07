@@ -231,6 +231,8 @@ val empty_local_env: local_env
  *)
 val ghost_local_env: bool -> local_env
 
+val doLocalInit: Cil_types.varinfo -> Cabs.init_expression -> Cil_types.init * Cil_types.typ
+
 (** Applies [mkAddrOf] after marking variable whose address is taken. *)
 val mkAddrOfAndMark : Cil_types.location -> Cil_types.lval -> Cil_types.exp
 

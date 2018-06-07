@@ -7909,6 +7909,8 @@ and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
     vi.vname (fun fmt -> resolveGotos (); Cil_printer.pp_init fmt) init Cil_printer.pp_typ typ' d_chunk acc;
   empty @@ (acc, local_env.is_ghost), init, typ'', reads
 
+and doLocalInit vi inite = let _, init, typ, _ = doInitializer empty_local_env vi inite in init, typ
+
 (* Consume some initializers. This is used by both global and local variables
    initialization.
    - local_env is the current environment
