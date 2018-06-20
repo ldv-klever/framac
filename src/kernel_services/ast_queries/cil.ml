@@ -5467,7 +5467,7 @@ and constFold (machdep: bool) (e: exp) : exp =
       Kernel.debug "ConstFold CAST to to %a@." !pp_typ_ref t ;
     let e = constFold machdep e in
     match e.enode, unrollType t with
-      | Const(CInt64(i,_k,_)),(TInt(nk,a)|TEnum({ekind = nk},a)) when oft = Modulo && a = [] ->
+      | Const(CInt64(i,_k,_)),(TInt(nk,a)|TEnum({ekind = nk},a)) when a = [] ->
         begin
           (* If the cast has attributes, leave it alone. *)
           if debugConstFold then
@@ -5476,7 +5476,7 @@ and constFold (machdep: bool) (e: exp) : exp =
           (* Downcasts might truncate silently *)
           kinteger64 ~loc ~kind:nk i
         end
-      | Const (CReal(f,_,_)),(TInt(ik,a)|TEnum({ekind = ik},a)) when oft = Modulo && a = [] ->
+      | Const (CReal(f,_,_)),(TInt(ik,a)|TEnum({ekind = ik},a)) when a = [] ->
         (* See above *)
         begin
           try
