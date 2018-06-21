@@ -9020,7 +9020,6 @@ and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : ch
         };
       !currentFunctionFDEC.svar.vdecl <- idloc;
 
-      constrExprId := 0;
       (* Setup the environment. Add the formals to the locals. Maybe
        * they need alpha-conv  *)
       enterScope ();  (* Start the scope *)
