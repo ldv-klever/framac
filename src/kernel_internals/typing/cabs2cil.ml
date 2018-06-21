@@ -3574,13 +3574,13 @@ let fieldsToInit
     let offset = Cil.addOffset (Field (f, NoOffset)) offset in
     (* if this field is an anonymous comp *)
     if prefix anonCompFieldName f.fname then
-      match unrollType f.ftype with
-      | TComp (comp, _, _) ->
-        add_comp offset comp acc (* go deeper inside *)
+      begin match unrollType f.ftype with
+      | TComp (comp, _, _) -> ()
       | _ ->
         abort_context "unnamed field type is not a struct/union"
+      end;
     (* if this field is an anonymous field but not a comp *)
-    else if f.fname = missingFieldName then
+    if f.fname = missingFieldName then
       acc (* Ignore anonymous non-comp fields *)
     (* if we have already found the designator, just append the current field *)
     else if found then
