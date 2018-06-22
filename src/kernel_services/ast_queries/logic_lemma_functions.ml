@@ -110,7 +110,7 @@ let lemma_for_behavior fvar args beh =
     | _ -> pred_with_args in
   let pred_without_old = remove_old pred_with_ret in
   let name = "LF__Lemma__" ^ fvar.vname in
-  Dlemma (name, true, [], [], pred_without_old, Cil_datatype.Location.unknown)
+  Dlemma (name, true, [], [], pred_without_old, [], Cil_datatype.Location.unknown)
 
 (** Generate an axiomatic for a behavior (with the dummy predicate), registering globals *)
 let axiomatic_for_behavior fvar args beh l =
@@ -123,7 +123,7 @@ let axiomatic_for_behavior fvar args beh l =
   let axiomatic = Daxiomatic ("LF__Axiomatic__" ^ fvar.vname, [
       lemma;
       pred_def
-    ], l) in
+    ], [], l) in
   Annotations.add_global Emitter.end_user pred_def;
   Annotations.add_global Emitter.end_user axiomatic;
   (GAnnot (axiomatic, l), pred)
@@ -136,7 +136,7 @@ let () = Logic_typing.register_behavior_extension
   "lemmafn" (fun ~typing_context ~loc l -> Ext_terms [tinteger 1])
 
 let beh_is_lemma beh =
-  List.exists (fun (extname, _) -> extname = "lemmafn") beh.b_extended
+  List.exists (fun (_, extname, _) -> extname = "lemmafn") beh.b_extended
 
 (** If a functions is marked with the annotation,
  *  make sure the function is a valid lemma-function

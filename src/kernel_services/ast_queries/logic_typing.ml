@@ -683,12 +683,12 @@ struct
                     (info.l_var_info.lv_name, info) :: !funcs_with_new_types
             ) x; [])
         | GAnnot (Dtype (_, _), _) -> ChangeTo []
-        | GAnnot (Dlemma (_, _, _, _, _, _), _) ->
+        | GAnnot (Dlemma (_, _, _, _, _, _, _), _) ->
             DoChildrenPost (fun x -> x |> List.map (function
-              | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, loc), aloc) ->
+              | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, attr, loc), aloc) ->
                   let (_, new_name) = Extlib.make_unique_name
                     Logic_env.Lemmas.mem ~sep:"_" name in
-                  let def = Dlemma (new_name, false, labels, ss, pred, inc_loc) in
+                  let def = Dlemma (new_name, false, labels, ss, pred, attr, inc_loc) in
                   Logic_env.Lemmas.add new_name def;
                   GAnnot (def, inc_loc)))
         | _ -> DoChildren
@@ -4428,10 +4428,12 @@ let add_label info lab =
                 | LDinclude (name,types,functions,lemmas) ->
                     Kernel.debug "Including axiomatic %s:@ %a@ at location: %a" name Logic_print.print_decl x
                       Cil_printer.pp_location x.decl_loc;
+                    let env = Lenv.empty () in
+                    let ctxt = base_ctxt env in
                     let types = List.map (fun (k, v) ->
                       (* convert Logic_typing types to Cil types *)
-                      (logic_type loc (Lenv.empty ()) k,
-                       logic_type loc (Lenv.empty ()) v)) types in
+                      (logic_type ctxt loc env k,
+                       logic_type ctxt loc env v)) types in
                     used_types := List.append !used_types types;
                     if Logic_env.Axiomatics.mem name then (
                       let fs = List.fold_left (fun a (k, v) ->
@@ -4439,7 +4441,7 @@ let add_label info lab =
                         let dst_fun = Logic_env.Logic_info.find v in
                         Cil_datatype.Logic_info.Map.add src_fun dst_fun a
                       ) Cil_datatype.Logic_info.Map.empty functions in
-                      let Daxiomatic (_, decls, _) = Logic_env.Axiomatics.find name in
+                      let Daxiomatic (_, decls, _, _) = Logic_env.Axiomatics.find name in
                       List.mapi (fun i dec ->
                         (* TODO add i to loc *)
                         let (result, funcs_with_new_types) = apply_substs
