@@ -688,7 +688,8 @@ struct
               | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, attr, loc), aloc) ->
                   let (_, new_name) = Extlib.make_unique_name
                     Logic_env.Lemmas.mem ~sep:"_" name in
-                  let def = Dlemma (new_name, false, labels, ss, pred, attr, inc_loc) in
+                  let flipped_axiom = (if attr = [AttrAnnot "AbstractLemma"] then not is_axiom else is_axiom) in
+                  let def = Dlemma (new_name, flipped_axiom, labels, ss, pred, [], inc_loc) in
                   Logic_env.Lemmas.add new_name def;
                   GAnnot (def, inc_loc)))
         | _ -> DoChildren
@@ -4517,17 +4518,18 @@ let add_label info lab =
               C.error loc "Definition of %s is cyclic" s;
             finish_with my_info
           end
-      | LDlemma (x, is_axiom, labels, poly, e) ->
+      | LDlemma (x, is_axiom, is_abstract, labels, poly, e) ->
+          let abstr_attr = if is_abstract then [AttrAnnot "AbstractLemma"] else [] in
           begin match stage with
           | `Names ->
-            Dlemma (x, is_axiom, [], poly, Logic_const.unamed Ptrue, [], loc)
+            Dlemma (x, is_axiom, [], poly, Logic_const.unamed Ptrue, abstr_attr, loc)
           | `Types ->
             let labels, _ = annot_env loc labels poly in
             let labels = match !Lenv.default_label with
               | None -> labels
               | Some lab -> [lab]
             in
-            let def = Dlemma (x, is_axiom, labels, poly, Logic_const.unamed Ptrue, [], loc) in
+            let def = Dlemma (x, is_axiom, labels, poly, Logic_const.unamed Ptrue, abstr_attr, loc) in
             def
           | `Bodies ->
             if Logic_env.Lemmas.mem x then begin
@@ -4550,7 +4552,7 @@ let add_label info lab =
               | None -> labels
               | Some lab -> [lab]
             in
-      let def = Dlemma (x,is_axiom, labels, poly,  p, [], loc) in
+            let def = Dlemma (x, is_axiom, labels, poly, p, abstr_attr, loc) in
             Logic_env.Lemmas.add x def;
             def
           end

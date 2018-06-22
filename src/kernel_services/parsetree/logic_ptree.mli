@@ -238,11 +238,12 @@ and decl_node =
         (** [LDinductive_def(name,labels,type_params, parameters, indcases)]
             represents an inductive definition of a new predicate.
          *)
-  | LDlemma of string * bool * string list * string list * lexpr
-      (** LDlemma(name,is_axiom,labels,type_params,property) represents
+  | LDlemma of string * bool * bool * string list * string list * lexpr
+      (** LDlemma(name,is_axiom,is_abstract,labels,type_params,property) represents
           a lemma or an axiom [name].
-          [is_axiom] is true for an axiom and false for a lemma. [labels]
-          is the list of label arguments and
+          [is_axiom] is true for an axiom and false for a lemma.
+          [is_abstract] is a flag for flipping is_axiom on inclusion.
+          [labels] is the list of label arguments and
           [type_params] the list of type parameters. Last, [property] is the
           statement of the lemma.
        *)

@@ -1552,6 +1552,11 @@ parameters:
 | LPAR full_parameters RPAR { $2 }
 ;
 
+maybe_abstract:
+| ABSTRACT { true }
+| { false }
+;
+
 logic_def:
 /* logic function definition */
 | LOGIC full_logic_rt_type poly_id opt_parameters EQUAL full_lexpr SEMICOLON
@@ -1568,10 +1573,10 @@ logic_def:
     { let (id,labels,tvars) = $2 in
       exit_type_variables_scope ();
       LDinductive_def(id, labels, tvars, $3, $5) }
-| LEMMA poly_id COLON full_lexpr SEMICOLON
-    { let (id,labels,tvars) = $2 in
+| maybe_abstract LEMMA poly_id COLON full_lexpr SEMICOLON
+    { let (id,labels,tvars) = $3 in
       exit_type_variables_scope ();
-      LDlemma (id, false, labels, tvars, $4) }
+      LDlemma (id, false, $1, labels, tvars, $5) }
 | AXIOMATIC any_identifier LBRACE logic_decls RBRACE
     { LDaxiomatic($2,$4) }
 | TYPE poly_id_type_add_typename EQUAL typedef SEMICOLON
@@ -1656,10 +1661,10 @@ logic_decl:
       exit_type_variables_scope ();
       LDtype(id,tvars,None) }
 /* axiom */
-| AXIOM poly_id COLON full_lexpr SEMICOLON
-    { let (id,labels,tvars) = $2 in
+| maybe_abstract AXIOM poly_id COLON full_lexpr SEMICOLON
+    { let (id,labels,tvars) = $3 in
       exit_type_variables_scope ();
-      LDlemma (id, true, labels, tvars, $4) }
+      LDlemma (id, true, $1, labels, tvars, $5) }
 /* include */
 | INCLUDE any_identifier WITH subst SEMICOLON
     { let (types, functions, lemmas) = sort_substs $4 in

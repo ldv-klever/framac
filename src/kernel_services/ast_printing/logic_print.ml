@@ -370,8 +370,9 @@ let rec print_decl fmt d =
           (pp_list ~pre:"<@[" ~sep:",@ " ~suf:"@>}" pp_print_string) tvar
           (pp_list ~sep:",@ " print_typed_ident) prms
           (pp_list ~sep:"@\n" print_case) cases
-    | LDlemma(name,is_axiom,labels,tvar,body) ->
-        fprintf fmt "@[<2>%a@ %s%a%a:@ %a;@]"
+    | LDlemma(name,is_axiom,is_abstract,labels,tvar,body) ->
+        fprintf fmt "@[<2>%a@ %a@ %s%a%a:@ %a;@]"
+          (pp_cond ~pr_false:"" is_abstract) "abstract"
           (pp_cond ~pr_false:"lemma" is_axiom) "axiom" name
           (pp_list ~pre:"{@[" ~sep:",@ " ~suf:"@]}" pp_print_string) labels
           (pp_list ~pre:"<@[" ~sep:",@ " ~suf:"@>}" pp_print_string) tvar
