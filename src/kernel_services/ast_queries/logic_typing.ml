@@ -1045,7 +1045,9 @@ struct
       C.areCompatibleTypes ctyp1 ctyp2
     in
     Cil_datatype.Logic_type.equal (Ctype ctyp1) (Ctype ctyp2) ||
-    is_compatible_struct_type ctyp1 ctyp2
+    is_compatible_struct_type
+      (type_remove_attributes_for_logic_type ctyp1)
+      (type_remove_attributes_for_logic_type ctyp2)
 
   let rec c_mk_cast ?(force=false) ?overflow e oldt newt =
     if is_same_c_type oldt newt then begin
