@@ -639,7 +639,8 @@ let parse_cabs = function
                            preprocessor."; true))
         then begin
           let pp_annot_supp_args =
-            Format.asprintf "-traditional-cpp -nostdinc %a"
+            Format.asprintf "%s -nostdinc %a"
+              (if Kernel.GeneratePPFile.get () then "-traditional-cpp" else "")
               (Pretty_utils.pp_list ~sep:" " Format.pp_print_string)
               supported_cpp_arch_args
           in
