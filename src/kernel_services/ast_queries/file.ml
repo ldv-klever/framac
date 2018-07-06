@@ -387,15 +387,15 @@ let generate_pp_file =
   let warn_preprocessor_output =
     let module H = Datatype.String.Hashtbl in
     let h = H.create 2 in
-    fun s file ->
+    fun s file line ->
       let key = s ^ " " ^ file in
       if not (H.mem h key) then begin
         Kernel.warning
-          "Frama-C@ detected@ suspicious@ preprocessor@ output@ %s (%s).@ \
+          "@[Frama-C@ detected@ suspicious@ preprocessor@ output@ %s (%s, line %d).@ \
            This@ is@ likely@ to@ be@ due@ to@ GCC@ bug 23779@ related@ to@ \
            incorrect@ handling@ of@ CR+LF@ newlines@ in@ comments. Consider@ using@ UNIX-style@ line@ ends@ or@ \
-           another@ preprocessor@ e.g.@ clang@ (see@ also@ option -cpp-command)."
-          s file;
+           another@ preprocessor@ e.g.@ clang@ (see@ also@ option -cpp-command).@]"
+          s file line;
         H.replace h key ()
       end
   in
@@ -437,7 +437,7 @@ let generate_pp_file =
         if pp_line_present.(!line - 1) then begin
           (* Handle multiline output *)
           if fs <= oldfs && olds <> "" then
-            warn_preprocessor_output "overwriting the same input file location twice" pp_in_file;
+            warn_preprocessor_output "overwriting the same input file location twice" pp_in_file !line;
           String.((if olds = "" then "" else sub olds 0 (length olds - 1)) ^ sub s fs @@ length s - fs)
         end else if fs > 0 && oldfs > 0 && not String.(equal (sub olds 0 oldfs) @@ sub s 0 fs) then
           (* Handle messed indentation *)
@@ -458,15 +458,16 @@ let generate_pp_file =
   end;
   (* DIRTY HACK CONT'D *)
   let pp_input, pp_line_present =
+    let exception Exceed of int in
     try
       let n = Array.length pp_input in
       for i = n / 2 to n - 1 do
-        if pp_line_present.(i) then raise Exit
+        if pp_line_present.(i) then raise (Exceed i)
       done;
       Array.(sub pp_input 0 (n / 2), sub pp_line_present 0 (n / 2))
     with
-    | Exit ->
-      warn_preprocessor_output "exceeding beyond the end location of the input file" pp_in_file;
+    | Exceed line ->
+      warn_preprocessor_output "exceeding beyond the end location of the input file" pp_in_file line;
       pp_input, pp_line_present
   in
   Array.iter2
