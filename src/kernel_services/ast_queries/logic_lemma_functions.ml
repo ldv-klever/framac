@@ -121,7 +121,7 @@ let lemma_for_behavior fvar args beh =
   let pred_without_old = remove_old pred_with_ret
     |> error_if_label_other_than (BuiltinLabel Here) in
   let name = "LF__Lemma__" ^ fvar.vname in
-  Dlemma (name, true, [BuiltinLabel Here], [], pred_without_old, [], Cil_datatype.Location.unknown)
+  Dlemma (name, true, [BuiltinLabel Here], [], pred_without_old, [], fvar.vdecl)
 
 (** Generate an axiomatic for a behavior (with the dummy predicate), registering globals *)
 let axiomatic_for_behavior fvar args beh l =
