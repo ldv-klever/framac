@@ -89,6 +89,16 @@ let add_usage_of_pred f p =
       let my_kf = Globals.Functions.get f.svar in
       Annotations.add_behaviors Emitter.end_user my_kf [beh]
 
+(** Error if a different label is found anywhere inside the predicate *)
+let error_if_label_other_than good_l pred = Visitor.visitFramacPredicate (object
+  inherit Visitor.frama_c_inplace
+
+  method! vlogic_label l =
+    if l <> good_l then Kernel.fatal "unsupported label in lemma-function"
+    else DoChildren
+
+  end) pred
+
 (** Generate an axiom from a behavior *)
 let lemma_for_behavior fvar args beh =
   let preconds = List.map (fun pred -> pred.ip_content)
@@ -108,9 +118,10 @@ let lemma_for_behavior fvar args beh =
         let ret_var = Cil_const.make_logic_var_formal "result" (Ctype ret_typ) in
         pexists ([ret_var], replace_result ret_var pred_with_args)
     | _ -> pred_with_args in
-  let pred_without_old = remove_old pred_with_ret in
+  let pred_without_old = remove_old pred_with_ret
+    |> error_if_label_other_than (BuiltinLabel Here) in
   let name = "LF__Lemma__" ^ fvar.vname in
-  Dlemma (name, true, [], [], pred_without_old, [], Cil_datatype.Location.unknown)
+  Dlemma (name, true, [BuiltinLabel Here], [], pred_without_old, [], Cil_datatype.Location.unknown)
 
 (** Generate an axiomatic for a behavior (with the dummy predicate), registering globals *)
 let axiomatic_for_behavior fvar args beh l =
