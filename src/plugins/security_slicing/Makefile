@@ -30,7 +30,7 @@ FRAMAC_LIBDIR :=$(shell frama-c-config -print-libpath)
 endif
 
 PLUGIN_DIR ?=.
-PLUGIN_ENABLE:=yes
+PLUGIN_ENABLE:=no
 PLUGIN_NAME:=Security_slicing
 PLUGIN_CMO:= security_slicing_parameters components
 PLUGIN_GUI_CMO:= register_gui

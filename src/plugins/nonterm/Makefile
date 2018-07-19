@@ -34,7 +34,7 @@ endif
 ###################
 
 PLUGIN_DIR ?=.
-PLUGIN_ENABLE:=yes
+PLUGIN_ENABLE:=no
 PLUGIN_NAME:=Nonterm
 PLUGIN_CMO:= nonterm_run
 PLUGIN_DISTRIBUTED:=$(PLUGIN_ENABLE)

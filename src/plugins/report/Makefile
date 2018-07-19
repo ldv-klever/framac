@@ -34,7 +34,7 @@ endif
 ###################
 
 PLUGIN_DIR ?=.
-PLUGIN_ENABLE:=yes
+PLUGIN_ENABLE:=no
 PLUGIN_NAME:=Report
 PLUGIN_CMO:= report_parameters scan dump csv property_names classify register
 PLUGIN_DISTRIBUTED:=$(PLUGIN_ENABLE)

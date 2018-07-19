@@ -38,7 +38,7 @@ FRAMAC_LIBDIR :=$(shell frama-c-config -print-libpath)
 endif
 PLUGIN_DIR ?=.
 
-PLUGIN_ENABLE:=partial
+PLUGIN_ENABLE:=no
 PLUGIN_NAME:=Aorai
 PLUGIN_GENERATED:= $(addprefix ${PLUGIN_DIR}/, \
 		promelalexer_withexps.ml promelaparser_withexps.ml \
@@ -74,7 +74,7 @@ PLUGIN_HAS_EXT_DOC:=no # [JS 2010/07/28] was 'yes'
                        # but prevent 'make src-distrib to work
 
 # if ltltoba is not present, do not attempt to run any test.
-ifneq (no,yes)
+ifneq (,yes)
 PLUGIN_NO_TEST:=yes
 PLUGIN_NO_DEFAULT_TEST:=yes
 endif

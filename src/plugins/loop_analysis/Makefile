@@ -27,7 +27,7 @@ ifndef FRAMAC_LIBDIR
 FRAMAC_LIBDIR :=$(shell frama-c-config -print-libpath)
 endif
 
-PLUGIN_ENABLE:=yes
+PLUGIN_ENABLE:=no
 PLUGIN_DISTRIBUTED:=$(PLUGIN_ENABLE)
 
 PLUGIN_NAME:= LoopAnalysis

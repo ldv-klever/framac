@@ -1261,7 +1261,7 @@ do
     [\\/$]* | ?:[\\/]* )  continue;;
     NONE | '' ) case $ac_var in *prefix ) continue;; esac;;
   esac
-#  as_fn_error $? "expected an absolute directory name for --$ac_var: $ac_val"
+  as_fn_error $? "expected an absolute directory name for --$ac_var: $ac_val"
 done
 
 # There might be people who depend on the old broken behavior: `$host'

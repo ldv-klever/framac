@@ -34,7 +34,7 @@ endif
 # cannot be used at this point. Unfortunatly cannot reuse the same variable name
 # here without introducing unexpected interaction with Frama-C compilation when
 # compiling it with --enable-external=e-acsl.
-EACSL_OCAMLVERSION 	?=4.06.1
+EACSL_OCAMLVERSION 	?=4.06.0
 ifeq ($(findstring 3.12,$(EACSL_OCAMLVERSION)),)
 EACSL_HAS_OCAML312 = no
 else

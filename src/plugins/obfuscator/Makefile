@@ -28,7 +28,7 @@ FRAMAC_LIBDIR :=$(shell frama-c-config -print-libpath)
 endif
 PLUGIN_DIR ?=.
 
-PLUGIN_ENABLE:=yes
+PLUGIN_ENABLE:=no
 PLUGIN_NAME:=Obfuscator
 
 PLUGIN_CMO:= options \

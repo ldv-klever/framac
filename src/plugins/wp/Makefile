@@ -53,7 +53,7 @@ PLUGIN_GUI_CMO:= \
 	GuiNavigator
 endif
 
-PLUGIN_ENABLE:=yes
+PLUGIN_ENABLE:=no
 PLUGIN_NAME:=Wp
 PLUGIN_CMO:= \
 	rformat wprop \
@@ -257,8 +257,8 @@ wp-coq: coqwpcompile
 wp-why3:  why3compile
 	@echo "Run 'make wp-coq-install' to install all precompiled libraries"
 
-WP_COQC_ENABLED=no
-WP_WHY3COQC_ENABLED=no
+WP_COQC_ENABLED=
+WP_WHY3COQC_ENABLED=
 
 include $(Wp_DIR)/share/Makefile
 

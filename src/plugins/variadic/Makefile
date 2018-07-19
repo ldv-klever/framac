@@ -34,7 +34,7 @@ endif
 ###################
 
 PLUGIN_DIR ?= .
-PLUGIN_ENABLE := yes
+PLUGIN_ENABLE := no
 PLUGIN_NAME := Variadic
 PLUGIN_CMI := format_types va_types
 PLUGIN_CMO := options extends va_build environment \
