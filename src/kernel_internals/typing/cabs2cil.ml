@@ -7221,6 +7221,7 @@ and doExp local_env
             doExp (no_paren_local_env local_env) asconst e3 what'
           in
           let tresult = conditionalConversion t2 t3 in
+          let ttmp = typeRemoveAttributes ["const"] tresult in
           if not (isEmpty se2) then
             ConditionalSideEffectHook.apply (e,e2);
           if not (isEmpty se3) then
@@ -7254,7 +7255,7 @@ and doExp local_env
                let descr =
                  Pretty_utils.sfprintf "%a" Cprint.print_expression e1
                in
-               let tmp = newTempVar descr true tresult in
+               let tmp = newTempVar descr true ttmp in
                let tmp_var = var tmp in
                let tmp_lval = new_exp ~loc:e.expr_loc (Lval (tmp_var)) in
                let (r1, se1, _, _) =
@@ -7319,7 +7320,7 @@ and doExp local_env
               | None -> (* has form "e1 ? : e3"  *)
                 let descr = Pretty_utils.sfprintf "%a" Cprint.print_expression e1
                 in
-                let tmp = newTempVar descr true tresult in
+                let tmp = newTempVar descr true ttmp in
                 let tmp_var = var tmp in
                 let tmp_lval = new_exp ~loc:e.expr_loc (Lval (tmp_var)) in
                 let (r1,se1, _, _) =
@@ -7336,7 +7337,7 @@ and doExp local_env
                   (r1@r3)
                   ((empty @@ (se1, ghost)) @@
                    (ifChunk ~ghost tmp_lval loc skipChunk se3, ghost))
-                  tmp_lval
+                  (snd (castTo ttmp tresult tmp_lval))
                   tresult
               | Some e2' ->
                 let is_real, lv, r, lvt, scope_chunk =
@@ -7349,7 +7350,7 @@ and doExp local_env
                         Cil_descriptive_printer.pp_exp e2'
                         Cil_descriptive_printer.pp_exp e3'
                     in
-                    let tmp = newTempVar descr true tresult in
+                    let tmp = newTempVar descr true ttmp in
                     false, var tmp, [], tresult,
                     local_var_chunk empty tmp
                 in
@@ -7366,7 +7367,7 @@ and doExp local_env
                 finishExp
                   (r2@r3)
                   (scope_chunk @@ (cond, ghost))
-                  (new_exp ~loc (Lval lv)) tresult
+                  (snd (castTo ttmp tresult (new_exp ~loc (Lval lv)))) tresult
             end
         end
       end
