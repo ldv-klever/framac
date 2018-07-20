@@ -126,6 +126,19 @@ src/plugins/value/domains/apron/apron_domain.ml
 src/plugins/wp/Wp.mli
 src/plugins/wp/share/instwp
 src/plugins/wp/tests/wp_usage/save_load.sav
+src/kernel_services/ast_queries/json_compilation_database.ml
+src/libraries/stdlib/transitioning.ml
+src/plugins/qed/Qed.mli
+src/plugins/e-acsl/tests/ptests_config
+src/plugins/aorai/Makefile
+src/plugins/e-acsl/Makefile
+src/plugins/loop_analysis/Makefile
+src/plugins/nonterm/Makefile
+src/plugins/obfuscator/Makefile
+src/plugins/report/Makefile
+src/plugins/security_slicing/Makefile
+src/plugins/variadic/Makefile
+src/plugins/wp/Makefile
 
 # Test results
 src/plugins/report/tests/report/result/
