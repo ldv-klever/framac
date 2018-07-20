@@ -5014,7 +5014,6 @@ and doType (ghost:bool) isFuncArg
             then
               Kernel.error ~once:true ~current:true
                 "zero-length arrays only allowed for GCC/MSVC";
-
             Some len'
       in
       let al' = doAttributes ghost al in
