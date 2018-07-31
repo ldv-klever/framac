@@ -142,13 +142,6 @@ let axiomatic_for_behavior fvar args beh l =
    * function after axiomatic { requires pred }
    *)
 
-(** Annotation that marks functions as lemma-functions *)
-let () = Logic_typing.register_behavior_extension
-  "lemmafn" (fun ~typing_context ~loc l -> Ext_terms [tinteger 1])
-
-let beh_is_lemma beh =
-  List.exists (fun (_, extname, _) -> extname = "lemmafn") beh.b_extended
-
 (** If a functions is marked with the annotation,
  *  make sure the function is a valid lemma-function
  *  and return the default behavior *)
@@ -159,22 +152,22 @@ let check_annot_get_beh f =
   | _ -> Kernel.fatal "abrupt termination for lemma-functions is not allowed");
   if (List.length f.sspec.spec_behavior = 1) then (
     let beh = (List.hd f.sspec.spec_behavior) in
-    if (beh_is_lemma beh) then (
+    if f.sspec.spec_lemma then (
       if not (beh.b_name = default_behavior_name) then
         Kernel.fatal "behavior name for lemma-function is not default";
       if (beh.b_assigns = WritesAny) then
         beh.b_assigns <- Writes [];
       if (beh.b_assigns <> Writes []) then
-        Kernel.fatal "lemma-function with non-empty \assigns";
+        Kernel.fatal "lemma-function with non-empty \\assigns";
       if (beh.b_allocation = FreeAllocAny) then
         beh.b_allocation <- FreeAlloc ([], []);
       if (beh.b_allocation <> FreeAlloc ([], [])) then
-        Kernel.fatal "lemma-function with non-empty \allocates";
+        Kernel.fatal "lemma-function with non-empty \\allocates";
       Some beh
     ) else None
   ) else (
     List.iter (fun beh ->
-      if (beh_is_lemma beh) then
+      if f.sspec.spec_lemma then
         Kernel.fatal "lemma-function with number of behaviors != 1"
     ) f.sspec.spec_behavior;
     None

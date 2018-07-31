@@ -4032,6 +4032,7 @@ let add_label info lab =
     let disjoint = cleanup_duplicate disjoint in
     { Cil_types.spec_behavior = b;
       spec_variant = v;
+      spec_lemma = s.spec_lemma;
       spec_terminates = t;
       spec_complete_behaviors = complete;
       spec_disjoint_behaviors = disjoint;

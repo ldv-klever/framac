@@ -1047,11 +1047,12 @@ spec:
 ;
 
 contract:
-| requires terminates decreases simple_clauses behaviors complete_or_disjoint
-    { let requires=$1 in
-      let (allocation,assigns,post_cond,extended) = $4 in
-      let behaviors = $5 in
-      let (completes,disjoints) = $6 in
+| lemma requires terminates decreases ne_simple_clauses behaviors complete_or_disjoint
+    { let lemma = $1 in
+      let requires=$2 in
+      let (allocation,assigns,post_cond,extended) = $5 in
+      let behaviors = $6 in
+      let (completes,disjoints) = $7 in
       let behaviors =
         if requires <> [] || post_cond <> [] ||
 	   allocation <> FreeAllocAny ||
@@ -1060,55 +1061,56 @@ contract:
           (Cabshelper.mk_behavior
              ~requires ~post_cond ~assigns ~allocation ~extended ())
           :: behaviors
-        else if $2<>None || $3<>None || 
+        else if $3<>None || $4<>None || 
                 behaviors<>[] || completes<>[] ||disjoints<>[]
         then behaviors
         else raise (Not_well_formed (loc(),"Empty annotation is not allowed"))
       in
-        { spec_terminates = $2;
-          spec_variant = $3;
+        { spec_terminates = $3;
+          spec_variant = $4;
+          spec_lemma = $1;
           spec_behavior = behaviors;
           spec_complete_behaviors = completes;
           spec_disjoint_behaviors = disjoints;
         }, loc()
     }
-| requires ne_terminates REQUIRES { clause_order 3 "requires" "terminates" }
-| requires terminates ne_decreases REQUIRES
+| lemma requires ne_terminates REQUIRES { clause_order 3 "requires" "terminates" }
+| lemma  requires terminates ne_decreases REQUIRES
       { clause_order 4 "requires" "decreases" }
-| requires terminates ne_decreases TERMINATES
+| lemma  requires terminates ne_decreases TERMINATES
       { clause_order 4 "terminates" "decreases" }
-| requires terminates decreases ne_simple_clauses REQUIRES
+| lemma  requires terminates decreases ne_simple_clauses REQUIRES
       { clause_order 5 "requires" "post-condition, assigns or allocates" }
-| requires terminates decreases ne_simple_clauses TERMINATES
+| lemma  requires terminates decreases ne_simple_clauses TERMINATES
       { clause_order 5 "terminates" "post-condition, assigns or allocates" }
-| requires terminates decreases ne_simple_clauses DECREASES
+| lemma  requires terminates decreases ne_simple_clauses DECREASES
       { clause_order 5 "decreases" "post-condition, assigns or allocates" }
-| requires terminates decreases simple_clauses ne_behaviors TERMINATES
+| lemma  requires terminates decreases ne_simple_clauses ne_behaviors TERMINATES
       { clause_order 6 "terminates" "behavior" }
-| requires terminates decreases simple_clauses ne_behaviors DECREASES
+| lemma  requires terminates decreases ne_simple_clauses ne_behaviors DECREASES
       { clause_order 6 "decreases" "behavior" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   REQUIRES
       { clause_order 7 "requires" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   TERMINATES
       { clause_order 7 "terminates" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   DECREASES
       { clause_order 7 "decreases" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   BEHAVIOR
       { clause_order 7 "behavior" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   ASSIGNS
       { clause_order 7 "assigns" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   ALLOCATES
       { clause_order 7 "allocates" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   FREES
       { clause_order 7 "frees" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   post_cond_kind
       { clause_order 7 "post-condition" "complete or disjoint" }
 ;
@@ -1129,6 +1131,11 @@ clause_kw:
    recognized as identifiers... */
 | IDENTIFIER { $1 }
 | EOF { "end of annotation" }
+
+lemma:
+| /* epsilon */ { false }
+| LEMMA { true }
+;
 
 requires:
 | /* epsilon */ { [] }
@@ -1845,6 +1852,21 @@ post_cond:
 ;
 
 is_acsl_spec:
+| post_cond                     { snd $1 }
+| ASSIGNS                       { "assigns" }
+| ALLOCATES                     { "allocates" }
+| FREES                         { "frees" }
+| BEHAVIOR                      { "behavior" }
+| maybe_abstract LEMMA REQUIRES { "lemma" }
+| maybe_abstract LEMMA ENSURES  { "lemma" }
+| REQUIRES                      { "requires" }
+| TERMINATES                    { "terminates" }
+| COMPLETE                      { "complete" }
+| DECREASES                     { "decreases" }
+| DISJOINT                      { "disjoint" }
+;
+
+is_acsl_spec_kw:
 | post_cond  { snd $1 }
 | ASSIGNS    { "assigns" }
 | ALLOCATES  { "allocates" }
@@ -1890,7 +1912,6 @@ is_ext_spec:
 | CONTRACT { "contract" }
 | FUNCTION { "function" }
 | MODULE   { "module" }
-| INCLUDE  { "include" }
 | EXT_AT   { "at" }
 | EXT_LET  { "let" }
 ;
@@ -1900,10 +1921,10 @@ keyword:
 | non_logic_keyword { $1 }
 
 non_logic_keyword:
-| c_keyword      { $1 }
-| acsl_c_keyword { $1 }
-| is_ext_spec    { $1 }
-| is_acsl_spec   { $1 }
+| c_keyword       { $1 }
+| acsl_c_keyword  { $1 }
+| is_ext_spec     { $1 }
+| is_acsl_spec_kw { $1 }
 | is_acsl_decl_or_code_annot { $1 }
 | is_acsl_other  { $1 }
 | CUSTOM { "custom" }

@@ -644,6 +644,7 @@ type attributeClass =
  let empty_funspec () =
    { spec_behavior = [];
      spec_variant = None;
+     spec_lemma = false;
      spec_terminates = None;
      spec_complete_behaviors = [];
      spec_disjoint_behaviors = [] }

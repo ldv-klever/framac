@@ -79,6 +79,12 @@ val decreases:
     function. Meaning of [emitter] and [populate] is similar to {!funspec}. 
     @raise No_funspec whenever the given function has no specification *)
 
+val lemma:
+  ?emitter:Emitter.t -> ?populate:bool -> kernel_function -> bool
+(** Get the lemma flag of the contract associated to the given
+    function. Meaning of [emitter] and [populate] is similar to {!funspec}. 
+    @raise No_funspec whenever the given function has no specification *)
+
 val terminates:
   ?emitter:Emitter.t -> ?populate:bool -> kernel_function -> 
   identified_predicate option
@@ -256,6 +262,14 @@ val fold_decreases:
   (Emitter.t -> variant -> 'a -> 'a) -> kernel_function -> 'a -> 'a
   (** apply f to the decreases term if any. *)
 
+val iter_lemma:
+  (Emitter.t -> bool -> unit) -> kernel_function -> unit
+  (** apply f to the lemma flag. *)
+
+val fold_lemma:
+  (Emitter.t -> bool -> 'a -> 'a) -> kernel_function -> 'a -> 'a
+  (** apply f to the lemma flag and accumulator. *)
+
 (**************************************************************************)
 (** {2 Adding annotations} *)
 (**************************************************************************)
@@ -325,6 +339,9 @@ val add_decreases: Emitter.t -> kernel_function -> variant -> unit
 
     @modify Aluminium-20160501 restructuration of annotations management
 *)
+
+val set_lemma: Emitter.t -> kernel_function -> bool -> unit
+(** Set the lemma flag of the given function. *)
 
 val add_terminates: identified_predicate contract_component_addition
 (** Add a terminates clause into a contract. 

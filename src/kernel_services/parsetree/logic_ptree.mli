@@ -307,6 +307,9 @@ type spec = {
   mutable spec_variant : variant option;
   (** variant for recursive functions. *)
 
+  mutable spec_lemma : bool;
+  (** [true] for lemma functions *)
+
   mutable spec_terminates: lexpr option;
   (** termination condition. *)
 

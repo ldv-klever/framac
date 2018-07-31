@@ -254,6 +254,8 @@ let merge_variant fresh old = match fresh.spec_variant, old.spec_variant with
   | Some _, Some _ -> assert false
   | None, (Some _ as v) -> fresh.spec_variant <- v
 
+let merge_lemma fresh old = fresh.spec_lemma <- fresh.spec_lemma || old.spec_lemma
+
 let merge_terminates fresh old =
   match fresh.spec_terminates, old.spec_terminates with
   | _, None -> ()
@@ -272,6 +274,7 @@ let merge_disjoint fresh old =
 let merge_funspec s1 s2 =
   merge_behaviors s1 s2;
   merge_variant s1 s2;
+  merge_lemma s1 s2;
   merge_terminates s1 s2;
   merge_complete s1 s2;
   merge_disjoint s1 s2
@@ -452,6 +455,8 @@ let behaviors =
 
 let decreases = generic_funspec merge_variant (fun x -> x.spec_variant)
 
+let lemma = generic_funspec merge_lemma (fun x -> x.spec_lemma)
+
 let terminates = generic_funspec merge_terminates (fun x -> x.spec_terminates)
 
 let complete =
@@ -600,6 +605,7 @@ let iter_disjoint f =
 
 let iter_terminates f = iter_spec_gen (fun s -> s.spec_terminates) Extlib.may f
 let iter_decreases f = iter_spec_gen (fun s -> s.spec_variant) Extlib.may f
+let iter_lemma f = iter_spec_gen (fun s -> s.spec_lemma) Extlib.id f
 
 let iter_bhv_gen get iter f kf b =
   let get spec =
@@ -655,6 +661,9 @@ let fold_terminates f =
 
 let fold_decreases f =
   fold_spec_gen (fun s -> s.spec_variant) Extlib.opt_fold f
+
+let fold_lemma f =
+  fold_spec_gen (fun s -> s.spec_lemma) Extlib.id f
 
 let fold_bhv_gen get fold f kf b acc =
   let get spec =
@@ -813,6 +822,7 @@ let is_same_behavior b1 b2 = b1.b_name = b2.b_name
 let mk_spec bhv variant terminates complete disjoint =
   { spec_behavior = bhv;
     spec_variant = variant;
+    spec_lemma = false;
     spec_terminates = terminates;
     spec_complete_behaviors = complete;
     spec_disjoint_behaviors = disjoint; }
@@ -891,6 +901,10 @@ let add_decreases e kf v =
    | Some _ -> Kernel.fatal "already a variant for function %a" Kf.pretty kf
    | None -> emit_spec.spec_variant <- Some v);
   Property_status.register (Property.ip_of_decreases kf Kglobal v)
+
+let set_lemma e kf v =
+  let emit_spec = get_spec_e e kf () in
+  emit_spec.spec_lemma <- v
 
 let add_terminates e kf ?stmt ?active t =
   let full_spec = get_spec_all kf ?stmt ?active () in

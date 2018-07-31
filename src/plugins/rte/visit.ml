@@ -620,6 +620,7 @@ class annot_visitor kf to_annot on_alarm = object (self)
 	Some
 	  { spec_behavior = List.rev new_behaviors ;
 	    spec_variant = None ;
+      spec_lemma = false ;
 	    spec_terminates = None ;
 	    spec_complete_behaviors = [] ;
 	    spec_disjoint_behaviors = [] }

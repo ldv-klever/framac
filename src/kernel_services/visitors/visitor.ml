@@ -401,6 +401,9 @@ object(self)
     let old_decreases =
       Annotations.fold_decreases (fun e d _ -> Some (e,d)) kf None
     in
+    let old_lemma =
+      Annotations.fold_lemma (fun e d _ -> d) kf false
+    in
     let spec =
       { spec_behavior = snd (List.split old_behaviors);
         spec_complete_behaviors = snd (List.split old_complete);
@@ -408,7 +411,8 @@ object(self)
         spec_terminates =
           (Extlib.opt_map snd) old_terminates;
         spec_variant = 
-          (Extlib.opt_map snd) old_decreases
+          (Extlib.opt_map snd) old_decreases;
+        spec_lemma = old_lemma
       }
     in
     let res = self#vspec spec in
