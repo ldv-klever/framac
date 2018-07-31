@@ -82,7 +82,7 @@ val decreases:
 val lemma:
   ?emitter:Emitter.t -> ?populate:bool -> kernel_function -> bool
 (** Get the lemma flag of the contract associated to the given
-    function. Meaning of [emitter] and [populate] is similar to {!funspec}. 
+    function. Meaning of [emitter] and [populate] is similar to {!funspec}.
     @raise No_funspec whenever the given function has no specification *)
 
 val terminates:

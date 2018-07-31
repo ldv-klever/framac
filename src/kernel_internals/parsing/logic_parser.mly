@@ -1075,42 +1075,42 @@ contract:
         }, loc()
     }
 | lemma requires ne_terminates REQUIRES { clause_order 3 "requires" "terminates" }
-| lemma  requires terminates ne_decreases REQUIRES
+| lemma requires terminates ne_decreases REQUIRES
       { clause_order 4 "requires" "decreases" }
-| lemma  requires terminates ne_decreases TERMINATES
+| lemma requires terminates ne_decreases TERMINATES
       { clause_order 4 "terminates" "decreases" }
-| lemma  requires terminates decreases ne_simple_clauses REQUIRES
+| lemma requires terminates decreases ne_simple_clauses REQUIRES
       { clause_order 5 "requires" "post-condition, assigns or allocates" }
-| lemma  requires terminates decreases ne_simple_clauses TERMINATES
+| lemma requires terminates decreases ne_simple_clauses TERMINATES
       { clause_order 5 "terminates" "post-condition, assigns or allocates" }
-| lemma  requires terminates decreases ne_simple_clauses DECREASES
+| lemma requires terminates decreases ne_simple_clauses DECREASES
       { clause_order 5 "decreases" "post-condition, assigns or allocates" }
-| lemma  requires terminates decreases ne_simple_clauses ne_behaviors TERMINATES
+| lemma requires terminates decreases ne_simple_clauses ne_behaviors TERMINATES
       { clause_order 6 "terminates" "behavior" }
-| lemma  requires terminates decreases ne_simple_clauses ne_behaviors DECREASES
+| lemma requires terminates decreases ne_simple_clauses ne_behaviors DECREASES
       { clause_order 6 "decreases" "behavior" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   REQUIRES
       { clause_order 7 "requires" "complete or disjoint" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   TERMINATES
       { clause_order 7 "terminates" "complete or disjoint" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   DECREASES
       { clause_order 7 "decreases" "complete or disjoint" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   BEHAVIOR
       { clause_order 7 "behavior" "complete or disjoint" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   ASSIGNS
       { clause_order 7 "assigns" "complete or disjoint" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   ALLOCATES
       { clause_order 7 "allocates" "complete or disjoint" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   FREES
       { clause_order 7 "frees" "complete or disjoint" }
-| lemma  requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
   post_cond_kind
       { clause_order 7 "post-condition" "complete or disjoint" }
 ;
