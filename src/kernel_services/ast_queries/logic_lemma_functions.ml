@@ -81,7 +81,7 @@ let remove_old pred = Visitor.visitFramacPredicate (object
 (** Append \requires p(1) to a function's specification (to the default behavior) *)
 let add_usage_of_pred f p =
   let app = papp (p, [], [tinteger 1]) in
-  match Cil.find_default_behavior f.sspec with
+  match Cil.find_default_behavior @@ (Globals.Functions.find_by_name f.svar.vname).spec with
   | Some beh ->
     beh.b_requires <- (new_predicate app) :: beh.b_requires
   | None ->
