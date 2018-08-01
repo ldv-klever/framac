@@ -22,7 +22,10 @@
 
 open Cil
 open Cil_types
+open Cil_datatype
 open Logic_const
+
+open Extlib
 
 (** Lemma-Functions **
  *
@@ -109,10 +112,29 @@ let lemma_for_behavior fvar args beh =
       Kernel.fatal "postcondition of unsupported kind Exits for lemma-function";
     pred.ip_content) beh.b_post_cond in
   let postcond_pred = List.fold_left (fun a b -> pand (a, b)) ptrue postconds in
-  let arg_vars = List.map cvar_to_lvar args in
+  let arg_vars =
+    List.map
+      (fun vi ->
+        let lv = cvar_to_lvar vi in
+        lv, Cil_const.make_logic_var_quant lv.lv_name lv.lv_type)
+    args
+  in
+  let precond_pred, postcond_pred =
+    let update_vars =
+      Visitor.visitFramacPredicate
+        (object
+          inherit Visitor.frama_c_copy (Project.current ())
+          val var_map = List.fold_right (uncurry Logic_var.Map.add ) arg_vars Logic_var.Map.empty
+          method! vlogic_var_use lv =
+            try ChangeTo (Logic_var.Map.find lv var_map)
+            with Not_found -> JustCopy
+        end)
+    in
+    update_vars precond_pred, update_vars postcond_pred
+  in
   (* not using the pimplies function to avoid collapsing to just "true" right here *)
   let impl_pred = unamed (Pimplies (precond_pred, postcond_pred)) in
-  let pred_with_args = pforall (arg_vars, impl_pred) in
+  let pred_with_args = pforall (List.map snd arg_vars, impl_pred) in
   let pred_with_ret = match (cvar_to_lvar fvar).lv_type with
     | Ctype (TFun (ret_typ, _, _, _)) when ret_typ <> voidType ->
         let ret_var = Cil_const.make_logic_var_formal "result" (Ctype ret_typ) in
