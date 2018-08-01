@@ -122,9 +122,10 @@ let lemma_for_behavior fvar args beh =
   let precond_pred, postcond_pred =
     let update_vars =
       Visitor.visitFramacPredicate
-        (object
-          inherit Visitor.frama_c_copy (Project.current ())
+        (object(self)
+          inherit Visitor.frama_c_refresh (Project.current ())
           val var_map = List.fold_right (uncurry Logic_var.Map.add ) arg_vars Logic_var.Map.empty
+
           method! vlogic_var_use lv =
             try ChangeTo (Logic_var.Map.find lv var_map)
             with Not_found -> JustCopy
