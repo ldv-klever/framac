@@ -135,6 +135,7 @@ let axiomatic_for_behavior fvar args beh l =
       lemma;
       pred_def
     ], [], l) in
+  Logic_utils.add_logic_function l pred;
   Annotations.add_global Emitter.end_user pred_def;
   Annotations.add_global Emitter.end_user axiomatic;
   (GAnnot (axiomatic, l), pred)
