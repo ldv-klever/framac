@@ -167,7 +167,7 @@ let check_annot_get_beh f =
       Some beh
     ) else None
   ) else (
-    List.iter (fun beh ->
+    List.iter (fun _beh ->
       if f.sspec.spec_lemma then
         Kernel.fatal "lemma-function with number of behaviors != 1"
     ) f.sspec.spec_behavior;
