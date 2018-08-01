@@ -80,7 +80,7 @@ let remove_old pred = Visitor.visitFramacPredicate (object
 
 (** Append \requires p(1) to a function's specification (to the default behavior) *)
 let add_usage_of_pred f p =
-  let app = papp (p, [], [tinteger 1]) in
+  let app = papp (p, [], []) in
   match Cil.find_default_behavior @@ (Globals.Functions.find_by_name f.svar.vname).spec with
   | Some beh ->
     beh.b_requires <- (new_predicate app) :: beh.b_requires
@@ -128,7 +128,7 @@ let axiomatic_for_behavior fvar args beh l =
   let lemma = lemma_for_behavior fvar args beh in
   let pred_name = "LF__Predicate__" ^ fvar.vname in
   let pred = { (Cil_const.make_logic_info pred_name) with
-    l_profile = [Cil_const.make_logic_var_formal "x" Linteger];
+    l_profile = [];
     l_body = LBpred ptrue } in
   let pred_def = Dfun_or_pred (pred, l) in
   let axiomatic = Daxiomatic ("LF__Axiomatic__" ^ fvar.vname, [
