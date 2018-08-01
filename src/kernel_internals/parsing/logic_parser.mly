@@ -933,7 +933,7 @@ ext_global_clauses:
 ;
 
 ext_global_clause:
-| decl  { Ext_decl (loc_decl $1) }
+| GLOBAL decl  { Ext_decl (loc_decl $2) }
 | EXT_LET any_identifier EQUAL full_lexpr SEMICOLON { Ext_macro (false, $2, $4) }
 | GLOBAL EXT_LET any_identifier EQUAL full_lexpr SEMICOLON { Ext_macro (true, $3, $5) }
 | INCLUDE string SEMICOLON { let b,s = $2 in Ext_include(b,s, loc()) }
@@ -1047,7 +1047,7 @@ spec:
 ;
 
 contract:
-| lemma requires terminates decreases ne_simple_clauses behaviors complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors complete_or_disjoint
     { let lemma = $1 in
       let requires=$2 in
       let (allocation,assigns,post_cond,extended) = $5 in
@@ -1074,43 +1074,43 @@ contract:
           spec_disjoint_behaviors = disjoints;
         }, loc()
     }
-| lemma requires ne_terminates REQUIRES { clause_order 3 "requires" "terminates" }
-| lemma requires terminates ne_decreases REQUIRES
+| is_lemma requires ne_terminates REQUIRES { clause_order 3 "requires" "terminates" }
+| is_lemma requires terminates ne_decreases REQUIRES
       { clause_order 4 "requires" "decreases" }
-| lemma requires terminates ne_decreases TERMINATES
+| is_lemma requires terminates ne_decreases TERMINATES
       { clause_order 4 "terminates" "decreases" }
-| lemma requires terminates decreases ne_simple_clauses REQUIRES
+| is_lemma requires terminates decreases ne_simple_clauses REQUIRES
       { clause_order 5 "requires" "post-condition, assigns or allocates" }
-| lemma requires terminates decreases ne_simple_clauses TERMINATES
+| is_lemma requires terminates decreases ne_simple_clauses TERMINATES
       { clause_order 5 "terminates" "post-condition, assigns or allocates" }
-| lemma requires terminates decreases ne_simple_clauses DECREASES
+| is_lemma requires terminates decreases ne_simple_clauses DECREASES
       { clause_order 5 "decreases" "post-condition, assigns or allocates" }
-| lemma requires terminates decreases ne_simple_clauses ne_behaviors TERMINATES
+| is_lemma requires terminates decreases simple_clauses ne_behaviors TERMINATES
       { clause_order 6 "terminates" "behavior" }
-| lemma requires terminates decreases ne_simple_clauses ne_behaviors DECREASES
+| is_lemma requires terminates decreases simple_clauses ne_behaviors DECREASES
       { clause_order 6 "decreases" "behavior" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   REQUIRES
       { clause_order 7 "requires" "complete or disjoint" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   TERMINATES
       { clause_order 7 "terminates" "complete or disjoint" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   DECREASES
       { clause_order 7 "decreases" "complete or disjoint" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   BEHAVIOR
       { clause_order 7 "behavior" "complete or disjoint" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   ASSIGNS
       { clause_order 7 "assigns" "complete or disjoint" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   ALLOCATES
       { clause_order 7 "allocates" "complete or disjoint" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   FREES
       { clause_order 7 "frees" "complete or disjoint" }
-| lemma requires terminates decreases ne_simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   post_cond_kind
       { clause_order 7 "post-condition" "complete or disjoint" }
 ;
@@ -1132,7 +1132,7 @@ clause_kw:
 | IDENTIFIER { $1 }
 | EOF { "end of annotation" }
 
-lemma:
+is_lemma:
 | /* epsilon */ { false }
 | LEMMA { true }
 ;
