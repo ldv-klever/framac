@@ -3008,7 +3008,7 @@ let add_label info lab =
       | PLif (tp1, t2, t3) ->
           let tp1 =
             try
-              `Term (type_bool_term ctxt env tp1)
+              `Term (type_bool_term { ctxt with silent = true } env tp1)
             with
             | Backtrack ->
               (* Seems OK since the first operand should be either term or predicate in any case, if one of the
