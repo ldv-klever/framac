@@ -736,6 +736,17 @@ module LoadModule =
 let () = LoadModule.add_aliases [ "-load-script" ]
 
 let () = Parameter_customize.set_group saveload
+let () = Parameter_customize.set_cmdline_stage Cmdline.Early
+let () = Parameter_customize.do_not_projectify ()
+module Enable_findlib =
+  True
+    (struct
+      let option_name = "-findlib"
+      let module_name = "Enable_findlib"
+      let help = "Enable Findlib package plugins"
+    end)
+
+let () = Parameter_customize.set_group saveload
 let () = Parameter_customize.set_cmdline_stage Cmdline.Extending
 let () = Parameter_customize.do_not_projectify ()
 module AutoLoadPlugins =
@@ -747,11 +758,10 @@ module AutoLoadPlugins =
     end)
 
 let bootstrap_loader () =
-  begin
-    Dynamic.set_module_load_path (AddPath.get ());
-    if AutoLoadPlugins.get () then Dynamic.load_plugin_path () ;
-    List.iter Dynamic.load_module (LoadModule.get()) ;
-  end
+  Dynamic.set_module_load_path (AddPath.get ());
+  if Enable_findlib.get () then Findlib.init ~env_ocamlpath:(Dynamic.get_findlib_path ()) ();
+  if AutoLoadPlugins.get () then Dynamic.load_plugin_path () ;
+  List.iter Dynamic.load_module (LoadModule.get())
 
 let () = Cmdline.load_all_plugins := bootstrap_loader
 
