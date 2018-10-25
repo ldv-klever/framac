@@ -2363,6 +2363,10 @@ let copy_logic_label is_copy l =
              if needed. *)
   end else l
 
+let add_logic_function, add_logic_type =
+  let error (source, _) f = Kernel.abort ~source f in
+  Logic_env.(add_logic_function_gen { error } alphabetafalse, add_logic_type_gen { error })
+
 let rec visitCilTerm vis t =
   let oldloc = CurrentLoc.get () in
   CurrentLoc.set t.term_loc;
@@ -3065,12 +3069,7 @@ and childrenSpec vis s =
    CurrentLoc.set oldloc;
    res
 
- and childrenAnnotation =
-   let add_logic_function, add_logic_type =
-     let error (source, _) f = Kernel.abort ~source f in
-     Logic_env.(add_logic_function_gen { error } alphabetafalse, add_logic_type_gen { error })
-   in
-   fun vis a ->
+ and childrenAnnotation vis a =
    match a with
      | Dfun_or_pred (li,loc) ->
 	 let li' = visitCilLogicInfo vis li in
