@@ -1,8 +1,8 @@
 (**************************************************************************)
 (*                                                                        *)
-(*  This file is part of Frama-C.                                         *)
+(*  This file is part of the Frama-C's E-ACSL plug-in.                    *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2012-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,7 +23,7 @@
 (** Interval inference for terms.
 
     Compute the smallest interval that contains all the possible values of a
-    given integer term. The interval of C variables is directly infered from
+    given integer term. The interval of C variables is directly inferred from
     their C type. The interval of logic variables must be registered from
     outside before computing the interval of a term containing such variables
     (see module {!Interval.Env}).
@@ -66,6 +66,7 @@ module Env: sig
   val clear: unit -> unit
   val add: Cil_types.logic_var -> Ival.t -> unit
   val remove: Cil_types.logic_var -> unit
+  val replace: Cil_types.logic_var -> Ival.t -> unit
 end
 
 (* ************************************************************************** *)

@@ -1,8 +1,8 @@
 /**************************************************************************/
 /*                                                                        */
-/*  This file is part of Frama-C.                                         */
+/*  This file is part of the Frama-C's E-ACSL plug-in.                    */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2012-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -880,6 +880,7 @@ static void set_heap_segment(void *ptr, size_t size, size_t alloc_size,
   }
 }
 
+extern int MSPACES_INIT;
 /*! \brief Replacement for a malloc function that additionally tracks the
  * allocated memory block.
  *
@@ -893,6 +894,10 @@ static void set_heap_segment(void *ptr, size_t size, size_t alloc_size,
  *    behaviour is as if the size were some non-zero value, except that the
  *    returned pointer shall not be used to access an object." */
 void* malloc(size_t size) {
+  if(! MSPACES_INIT) {
+    mspaces_init();
+    MSPACES_INIT = 1;
+  }
   size_t alloc_size = ALLOC_SIZE(size);
 
   /* Return NULL if the size is too large to be aligned */

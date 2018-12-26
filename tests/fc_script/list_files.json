@@ -1,0 +1,18 @@
+[
+    {
+        "arguments": [
+            "cc",
+            "main.c"
+        ],
+        "directory": "tests/fc_script",
+        "file": "main.c"
+    },
+    { "directory": "tests/fc_script",
+      "command": "gcc -DUH",
+      "file": "main2.c"
+    },
+    { "directory": "tests/fc_script",
+      "command": "gcc",
+      "file": "main3.c"
+    }
+]

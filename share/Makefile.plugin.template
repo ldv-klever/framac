@@ -128,12 +128,23 @@ PLUGIN_INTERNAL_TEST?= # Set it to a non-empty value if the tests of the plugin
 # ------------
 PLUGIN_DISTRIBUTED?= # should the plugin be included in the distribution
                      # (yes/no)
-PLUGIN_DISTRIB_BIN?= # should the plugin be included in binary distributions
-                     # (defaults to ${PLUGIN_DISTRIBUTED})
 PLUGIN_DISTRIB_EXTERNAL?= # list of files that should be distributed within the
                           # source distribution for this plug-in. They will be
                           # put at their proper place in the frama-c-$(VERSION)
                           # directory for a release.
+PLUGIN_DISTRIB_TESTS?= # list of files that should be also distributed without
+                       # headers checking.
+PLUGIN_HEADER_SPEC?=$(DEFAULT_HEADER_SPEC) # list of files containing header
+                                           # specifications.
+PLUGIN_HEADER_DIRS?=$(DEFAULT_HEADER_DIRS) # list of directories containing
+                                           # open/close-source header files.
+PLUGIN_HEADER_EXCEPTIONS?=$(DEFAULT_HEADER_EXCEPTIONS) # list of distributed files allowed
+                                                       # to have no entry into the
+                                                       # PLUGIN_HEADER_SPEC files
+PLUGIN_CEA_PROPRIETARY_FILES?=$(DEFAULT_CEA_PROPRIETARY_FILES) # list of files that cannot be
+                                                               # part of an OPEN_SOURCE distribution
+PLUGIN_CEA_PROPRIETARY_HEADERS?= # list of licenses that cannot
+                                 # be part of an OPEN_SOURCE distribution.
 
 # Kernel developers only
 # ----------------------
@@ -178,7 +189,6 @@ INSTALLED_PLUGIN_DIR:=$(FRAMAC_ROOT_SRCDIR)/lib/plugins
 # Also inform the main Makefile that there's another plug-in to be
 # considered
 PLUGIN_LIST+=$(PLUGIN_DIR)/@PLUGIN_NAME@
-
 else
 
 INSTALLED_PLUGIN_DIR:=$(PLUGIN_INSTALL_DIR)
@@ -228,6 +238,34 @@ PLUGIN_ML_SRC:=$(patsubst %.ml*,%.ml,$(PLUGIN_SRC)) \
 
 ifneq ($(PLUGIN_ENABLE),no)
 
+# for `check-header` target even if the plugin is not distributed
+ifneq ("$(strip $(PLUGIN_HEADER_SPEC))","")
+# Don't remove the '/./' because it is used as separator:
+# i.e. filenames contained into the spec file 'src/plugins/MY-PLUGIN/./headers/header_spec.txt'
+# are considered being relative from 'src/plugins/MY-PLUGIN/'.
+# The wildcard is used in order to add only existing files.
+PLUGIN_HEADER_SPEC_LIST +=$(strip $(wildcard $(PLUGIN_DIR)/./$(PLUGIN_HEADER_SPEC)))
+endif
+
+ifneq ("$(strip $(PLUGIN_HEADER_DIRS))","")
+# The wildcard is used in order to add only existing directory.
+PLUGIN_HEADER_DIRS_LIST +=$(wildcard $(addprefix $(PLUGIN_DIR)/,$(PLUGIN_HEADER_DIRS)))
+endif
+
+ifneq ("$(strip $(PLUGIN_HEADER_EXCEPTIONS))","")
+PLUGIN_HEADER_EXCEPTIONS_LIST +=$(addprefix $(PLUGIN_DIR)/,$(PLUGIN_HEADER_EXCEPTIONS))
+endif
+
+ifneq ("$(strip $(PLUGIN_CEA_PROPRIETARY_HEADERS))","")
+PLUGIN_CEA_PROPRIETARY_HEADERS_LIST +=$(PLUGIN_CEA_PROPRIETARY_HEADERS)
+endif
+
+ifneq ("$(strip $(PLUGIN_CEA_PROPRIETARY_FILES))","")
+# Files that cannot be part of an OPEN_SOURCE distribution.
+# The wildcard is used in order to add only existing files.
+PLUGIN_CEA_PROPRIETARY_FILE_LIST +=$(wildcard $(addprefix $(PLUGIN_DIR)/,$(PLUGIN_CEA_PROPRIETARY_FILES)))
+endif
+
 ifneq ($(PLUGIN_DISTRIBUTED),no)
 PLUGIN_DISTRIBUTED_LIST += $(PLUGIN_SRC)
 
@@ -249,22 +287,14 @@ ifneq ("$(strip $(PLUGIN_DISTRIB_EXTERNAL))","")
 PLUGIN_DIST_EXTERNAL_LIST += \
        $(addprefix $(PLUGIN_DIR)/,$(PLUGIN_DISTRIB_EXTERNAL))
 endif
+ifneq ("$(strip $(PLUGIN_DISTRIB_TESTS))","")
+PLUGIN_DIST_TESTS_LIST += \
+       $(addprefix $(PLUGIN_DIR)/,$(PLUGIN_DISTRIB_TESTS))
+endif
 endif #PLUGIN_DISTRIBUTED
 endif #PLUGIN_ENABLE
-ifndef ($(PLUGIN_DISTRIB_BIN))
-PLUGIN_DISTRIB_BIN:=$(PLUGIN_DISTRIBUTED)
-endif
 
 PLUGIN_OPT:=`echo "@PLUGIN_NAME@" | tr 'A-Z' 'a-z' `
-
-ifneq ("$(PLUGIN_DISTRIB_BIN)","no")
-CONFIG_DISTRIB_BIN += "--enable-$(PLUGIN_OPT)"
-ifeq ("$(PLUGIN_HAS_EXT_DOC)","yes")
-PLUGIN_BIN_DOC_LIST+=doc/plugins/$(PLUGIN_BASE).pdf
-endif
-else
-CONFIG_DISTRIB_BIN += "--disable-$(PLUGIN_OPT)"
-endif
 
 # Export some variables which can be safely used outside/inside Makefile.plugin
 # even if the plug-in is not enabled
@@ -315,11 +345,6 @@ TARGET_TOP_CMA:=
 endif
 
 TARGET_TOP_CMX:= $(TARGET_TOP_CMO:.cmo=.cmx)
-ifdef PLUGIN_EXTRA_OPT
-TARGET_TOP_CMXA:= $(TARGET_TOP_CMO:.cmo=.cmxa)
-else
-TARGET_TOP_CMXA:=
-endif
 
 TARGET_TOP_CMXS:= $(TARGET_TOP_CMX:.cmx=.cmxs)
 
@@ -330,7 +355,6 @@ TARGET_GUI_CMO:= $(PLUGIN_LIB_DIR)/gui/@PLUGIN_NAME@.cmo
 TARGET_GUI_CMI:= $(TARGET_GUI_CMO:.cmo=.cmi)
 TARGET_GUI_CMX:= $(TARGET_GUI_CMO:.cmo=.cmx)
 TARGET_GUI_CMA:= $(TARGET_GUI_CMO:.cmo=.cma)
-TARGET_GUI_CMXA:= $(TARGET_GUI_CMX:.cmx=.cmxa)
 TARGET_GUI_CMXS:= $(TARGET_GUI_CMO:.cmo=.cmxs)
 else
 TARGET_GUI_MLI:=
@@ -338,7 +362,6 @@ TARGET_GUI_CMO:=
 TARGET_GUI_CMI:=
 TARGET_GUI_CMX:=
 TARGET_GUI_CMA:=
-TARGET_GUI_CMXA:=
 endif
 
 # Meta-variables for the targets:
@@ -349,14 +372,12 @@ endif
 @PLUGIN_NAME@_TARGET_TOP_CMO:=$(TARGET_TOP_CMO)
 @PLUGIN_NAME@_TARGET_TOP_CMA:=$(TARGET_TOP_CMA)
 @PLUGIN_NAME@_TARGET_TOP_CMX:=$(TARGET_TOP_CMX)
-@PLUGIN_NAME@_TARGET_TOP_CMXA:=$(TARGET_TOP_CMXA)
 @PLUGIN_NAME@_TARGET_TOP_CMXS:=$(TARGET_TOP_CMXS)
-@PLUGIN_NAME@_TARGET_GUI_MLI:=$(TARGET_GUI_CMI)
+@PLUGIN_NAME@_TARGET_GUI_MLI:=$(TARGET_GUI_MLI)
 @PLUGIN_NAME@_TARGET_GUI_CMI:=$(TARGET_GUI_CMI)
 @PLUGIN_NAME@_TARGET_GUI_CMO:=$(TARGET_GUI_CMO)
 @PLUGIN_NAME@_TARGET_GUI_CMA:=$(TARGET_GUI_CMA)
 @PLUGIN_NAME@_TARGET_GUI_CMX:=$(TARGET_GUI_CMX)
-@PLUGIN_NAME@_TARGET_GUI_CMXA:=$(TARGET_GUI_CMXA)
 @PLUGIN_NAME@_TARGET_GUI_CMXS:=$(TARGET_GUI_CMXS)
 
 # Some meta-variables for compilation flags
@@ -443,9 +464,14 @@ PLUGIN_DESCRIPTION :="Frama-C @PLUGIN_NAME@ plug-in"
 endif
 ifeq ($(PLUGIN_VERSION),)
 ifeq ($(FRAMAC_INTERNAL),yes)
+ifeq ($(FRAMAC_ROOT_SRCDIR),)
 PLUGIN_VERSION :=$(shell cat VERSION)
 else
-PLUGIN_VERSION :=$(shell frama-c -print-version)
+# To remove "cat: VERSION: No such file or directory" in EXECNOW target performing make commands under a plugin directory
+PLUGIN_VERSION :=$(shell cat $(FRAMAC_ROOT_SRCDIR)/VERSION)
+endif
+else
+PLUGIN_VERSION :=$(shell frama-c-config -print-version)
 endif
 endif
 # registering package description for later use
@@ -457,11 +483,7 @@ META.$(PLUGIN_PKG).BYTE :=@PLUGIN_NAME@.cma
 else
 META.$(PLUGIN_PKG).BYTE :=@PLUGIN_NAME@.cmo
 endif
-ifdef PLUGIN_EXTRA_OPT
-META.$(PLUGIN_PKG).NATIVE :=@PLUGIN_NAME@.cmxa
-else
 META.$(PLUGIN_PKG).NATIVE :=@PLUGIN_NAME@.cmx
-endif
 META.$(PLUGIN_PKG).PLUGIN :=@PLUGIN_NAME@.cmxs
 
 ifeq ($(FRAMAC_INTERNAL),yes)
@@ -581,13 +603,6 @@ $(TARGET_TOP_CMA): $(PLUGIN_EXTRA_BYTE) $(TARGET_TOP_CMO)
 	  -a $(@PLUGIN_NAME@_EXTRA_BYTE) $(@:.cma=.cmo)
 endif
 
-ifdef PLUGIN_EXTRA_OPT
-$(TARGET_TOP_CMXA): $(PLUGIN_EXTRA_OPT) $(TARGET_TOP_CMX)
-	$(PRINT_PACKING) $@
-	$(OCAMLOPT) -o $(call winpath,$@) -a $(@PLUGIN_NAME@_EXTRA_OPT) \
-	  $(@:.cmxa=.cmx)
-endif
-
 ifeq ($(HAS_GUI),yes)
 # packing gui files
 ###################
@@ -639,12 +654,6 @@ $(TARGET_GUI_CMA): $(PLUGIN_EXTRA_BYTE) $(TARGET_GUI_CMO)
 	  -a $(@PLUGIN_NAME@_EXTRA_BYTE) $(@:.cma=.cmo)
 endif
 
-ifdef PLUGIN_EXTRA_OPT
-$(TARGET_GUI_CMXA): $(PLUGIN_EXTRA_OPT) $(TARGET_GUI_CMX)
-	$(PRINT_PACKING) $@
-	$(OCAMLOPT) -o $(call winpath,$@) -a $(@PLUGIN_NAME@_EXTRA_OPT) \
-	  $(@:.cmxa=.cmx)
-endif
 else
 # No specific gui items
 TARGET_GUI_MLI:=
@@ -678,7 +687,9 @@ endif
 @PLUGIN_NAME@_INTRO:=$(PLUGIN_INTRO)
 ifdef PLUGIN_INTRO
 @PLUGIN_NAME@_CAT_INTRO:= cp -f $(PLUGIN_INTRO) $(PLUGIN_DOC_DIR)/@PLUGIN_NAME@.txt
+ifeq ($(PLUGIN_DISTRIBUTED),yes)
 PLUGIN_DIST_EXTERNAL_LIST+= $(PLUGIN_INTRO)
+endif
 else
 @PLUGIN_NAME@_CAT_INTRO:= echo "" > $(PLUGIN_DOC_DIR)/@PLUGIN_NAME@.txt
 endif
@@ -692,7 +703,7 @@ else
 DOC_INTRO:=
 endif
 
-$(PLUGIN_DOC_DIR)/@PLUGIN_NAME@.txt: $(DOC_INTRO) $(PLUGIN_INTRO)
+$(@PLUGIN_NAME@_DOC_DIR)/@PLUGIN_NAME@.txt: $(DOC_INTRO) $(@PLUGIN_NAME@_INTRO)
 	$(PRINT_MAKING) "$@"
 	$(MKDIR) $(dir $@)
 	$(@PLUGIN_NAME@_CAT_INTRO)
@@ -708,7 +719,7 @@ $(PLUGIN_DOC_DIR)/@PLUGIN_NAME@.txt: $(DOC_INTRO) $(PLUGIN_INTRO)
 	  cat $(DOC_DIR)/intro_plugin_default.txt >> $@ ; \
 	fi
 	$(ISED) -e "s/_PluginName_/@PLUGIN_NAME@/g" \
-                -e "/^#*/d" $@
+                -e "/^#\*/d" $@
 
 ifeq ($(FRAMAC_INTERNAL),yes)
 OCAMLDOC_GEN:=$(DOC_PLUGIN)
@@ -737,8 +748,8 @@ endif
 .PHONY: @PLUGIN_NAME@_DOC
 @PLUGIN_NAME@_DOC: $(OCAMLDOC_DEPEND) \
 		    $(OCAMLDOC_GEN) \
-		    $(PLUGIN_DOC_DIR)/@PLUGIN_NAME@.txt \
-		    $(PLUGIN_DOC_DIR)/modules.svg \
+		    $(@PLUGIN_NAME@_DOC_DIR)/@PLUGIN_NAME@.txt \
+		    $(@PLUGIN_NAME@_DOC_DIR)/modules.svg \
 		    $(DOC_PLUGIN)
 	$(PRINT_DOC) @PLUGIN_NAME@
 	$(MKDIR) $(@PLUGIN_NAME@_DOC_DIR)
@@ -862,7 +873,7 @@ endif # PLUGIN_ENABLE
 # dependencies. Otherwise usual dependency for $(PLUGIN_DIR)/.depend.
 .PHONY: $(@PLUGIN_NAME@_DIR)/@PLUGIN_NAME@_DEP_REDO
 $(@PLUGIN_NAME@_DIR)/@PLUGIN_NAME@_DEP_REDO $(@PLUGIN_NAME@_DIR)/.depend: \
-	$(PLUGIN_GENERATED) $(TARGET_MLI) $(TARGET_GUI_MLI)
+	$(PLUGIN_GENERATED)
 	$(PRINT_DEP) $(@PLUGIN_NAME@_DIR)/.depend
 	$(RM) $(@PLUGIN_NAME@_DIR)/.depend
 	$(OCAMLDEP) $(INCLUDES) \
@@ -927,7 +938,7 @@ $(PLUGIN_DIR)/@PLUGIN_NAME@_CLEAN:
 	$(RM) $(dir $@)*~ $(dir $@)*.cm* $(dir $@)*.o $(dir $@)*.annot
 	$(RM) $(foreach d,$(@:%CLEAN=%TESTS_LIB_OPT),\
 		$(foreach f,$($(notdir $d)),\
-		$f $(f:.cmx=.cmo) $(f:.cmx=.opt) $(f:.cmx=.byte) $(f:.cmx=.o)))
+		$f $(f:.cmx=.cm*) $(f:.cmx=.opt) $(f:.cmx=.byte) $(f:.cmx=.o)))
 	$(RM) -f $(@PLUGIN_NAME@_CHECK_PLUGIN_MLI)
 
 
@@ -967,9 +978,6 @@ PLUGIN_DYN_DEP_GUI_CMX_LIST += $(PLUGIN_GUI_CMX)
 PLUGIN_DYN_CMX_LIST	+= $(TARGET_TOP_CMXS) $(TARGET_TOP_CMX)
       # If P1 depends on P2, then dynamically link P1.cmxs requires to have 
       # compiled P1's sources wrt the P2's .cmx.
-ifdef PLUGIN_EXTRA_OPT
-PLUGIN_DYN_CMX_LIST	+= $(TARGET_TOP_CMXA)
-endif #EXTRA_OPT
 ifeq ($(HAS_GUI),yes)
 PLUGIN_DYN_GUI_CMX_LIST += $(TARGET_GUI_CMXS)
 endif # HAS_GUI
@@ -981,6 +989,7 @@ PLUGIN_DOC_DIRS += $(PLUGIN_BASE)
 
 ifeq ($(PLUGIN_DISTRIBUTED),yes)
 PLUGIN_DISTRIBUTED_NAME_LIST += @PLUGIN_NAME@
+PLUGIN_DISTRIBUTED_DIR_LIST += @PLUGIN_NAME@
 endif
 
 else
@@ -1021,8 +1030,8 @@ PLUGIN_TESTS_DIRS:=
 PLUGIN_DEPENDS:=
 PLUGIN_DEPENDENCIES:=
 PLUGIN_DISTRIBUTED:=
-PLUGIN_DISTRIB_BIN:=
 PLUGIN_DISTRIB_EXTERNAL:=
+PLUGIN_DISTRIB_TESTS:=
 PLUGIN_HAS_EXT_DOC:=
 PLUGIN_NO_DEFAULT_TEST:=
 PLUGIN_TESTS_DIRS_DEFAULT:=
@@ -1035,6 +1044,11 @@ PLUGIN_EXTRA_OPT:=
 PLUGIN_EXTRA_DIRS:=
 PLUGIN_INTERNAL_TEST:=
 PLUGIN_DOC_DIR:=
+PLUGIN_HEADER_SPEC:=$(DEFAULT_HEADER_SPEC)
+PLUGIN_HEADER_DIRS:=$(DEFAULT_HEADER_DIRS)
+PLUGIN_HEADER_EXCEPTIONS:=$(DEFAULT_HEADER_EXCEPTIONS)
+PLUGIN_CEA_PROPRIETARY_FILES:=$(DEFAULT_CEA_PROPRIETARY_FILES)
+PLUGIN_CEA_PROPRIETARY_HEADERS:=
 endif
 
 ###############################################################################
