@@ -24,6 +24,16 @@
 
 open Cil_types
 
+let extensions = ref Datatype.String.Map.empty
+
+let is_extension s = Datatype.String.Map.mem s !extensions
+
+let extension_category s = Datatype.String.Map.find_opt s !extensions
+
+let register_extension s cat =
+  if not (is_extension s) then
+    extensions := Datatype.String.Map.add s cat !extensions
+
 module CurrentLoc = Cil_const.CurrentLoc
 
 let error (b,_e) fstring =
@@ -36,20 +46,20 @@ module Logic_builtin =
     (Datatype.String.Hashtbl)
     (Cil_datatype.Builtin_logic_info)
     (struct
-       let name = "Logic_env.Logic_builtin"
-       let dependencies = []
-       let size = 17
-     end)
+      let name = "Logic_env.Logic_builtin"
+      let dependencies = []
+      let size = 17
+    end)
 
 module Logic_info =
   State_builder.Hashtbl
     (Datatype.String.Hashtbl)
     (Cil_datatype.Logic_info)
     (struct
-       let name = "Logic_env.Logic_info"
-       let dependencies = [ Logic_builtin.self ]
-       let size = 17
-     end)
+      let name = "Logic_env.Logic_info"
+      let dependencies = [ Logic_builtin.self ]
+      let size = 17
+    end)
 
 module Logic_builtin_used =
   State_builder.Hashtbl
@@ -59,17 +69,17 @@ module Logic_builtin_used =
       let name = "Logic_env.Logic_builtin_used"
       let dependencies = [ Logic_builtin.self; Logic_info.self ]
       let size = 17
-     end)
+    end)
 
 module Logic_type_builtin =
   State_builder.Hashtbl
     (Datatype.String.Hashtbl)
     (Cil_datatype.Logic_type_info)
     (struct
-       let name = "Logic_env.Logic_type_builtin"
-       let dependencies = []
-       let size = 17
-     end)
+      let name = "Logic_env.Logic_type_builtin"
+      let dependencies = []
+      let size = 17
+    end)
 
 
 let is_builtin_logic_type = Logic_type_builtin.mem
@@ -79,40 +89,40 @@ module Logic_type_info =
     (Datatype.String.Hashtbl)
     (Cil_datatype.Logic_type_info)
     (struct
-       let name = "Logic_env.Logic_type_info"
-       let dependencies = [ Logic_type_builtin.self ]
-       let size = 17
-     end)
+      let name = "Logic_env.Logic_type_info"
+      let dependencies = [ Logic_type_builtin.self ]
+      let size = 17
+    end)
 
 module Logic_ctor_builtin =
   State_builder.Hashtbl
     (Datatype.String.Hashtbl)
     (Cil_datatype.Logic_ctor_info)
     (struct
-       let name = "Logic_env.Logic_ctor_builtin"
-       let dependencies = []
-       let size = 17
-     end)
+      let name = "Logic_env.Logic_ctor_builtin"
+      let dependencies = []
+      let size = 17
+    end)
 
 module Logic_ctor_info =
   State_builder.Hashtbl
     (Datatype.String.Hashtbl)
     (Cil_datatype.Logic_ctor_info)
     (struct
-       let name = "Logic_env.Logic_ctor_info"
-       let dependencies = [ Logic_ctor_builtin.self ]
-       let size = 17
-     end)
+      let name = "Logic_env.Logic_ctor_info"
+      let dependencies = [ Logic_ctor_builtin.self ]
+      let size = 17
+    end)
 
 module Lemmas =
   State_builder.Hashtbl
     (Datatype.String.Hashtbl)
     (Cil_datatype.Global_annotation)
     (struct
-        let name = "Logic_env.Lemmas"
-        let dependencies = []
-        let size = 17
-     end)
+      let name = "Logic_env.Lemmas"
+      let dependencies = []
+      let size = 17
+    end)
 
 module Model_info =
   State_builder.Hashtbl
@@ -122,7 +132,7 @@ module Model_info =
       let name = "Logic_env.Model_info"
       let dependencies = []
       let size = 17
-     end)
+    end)
 
 module Forward_decls =
   State_builder.Hashtbl
@@ -315,8 +325,8 @@ let find_model_field s typ =
          than TNamed. We want to go step by step.
       *)
       (match typ with
-        | TNamed(ti,_) -> find_cons ti.ttype
-        | _ -> raise e)
+       | TNamed(ti,_) -> find_cons ti.ttype
+       | _ -> raise e)
   in find_cons typ
 
 let add_model_field m =
@@ -339,14 +349,14 @@ let builtin_states =
 
 module Builtins= struct
   include Hook.Make(struct end)
-    (* ensures we do not apply the hooks twice *)
+  (* ensures we do not apply the hooks twice *)
   module Applied =
     State_builder.False_ref
       (struct
         let name = "Logic_env.Builtins.Applied"
         let dependencies = builtin_states
-         (* if the built-in states are not kept, hooks must be replayed. *)
-       end)
+        (* if the built-in states are not kept, hooks must be replayed. *)
+      end)
 
   let apply () =
     Kernel.feedback ~level:5 "Applying logic built-ins hooks for project %s"
@@ -484,8 +494,8 @@ let prepare_tables =
 
 (** C typedefs *)
 (**
-  -  true => identifier is a type name
-  -  false => identifier is a plain identifier
+   -  true => identifier is a type name
+   -  false => identifier is a plain identifier
 *)
 let typenames: (string, bool) Hashtbl.t = Hashtbl.create 13
 

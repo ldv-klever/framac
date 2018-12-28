@@ -76,11 +76,11 @@ let dbgToken (t: token) =
     let dprintf fmt = Kernel.debug fmt in
     (match t with
          IDENT n -> dprintf "IDENT(%s)\n" n
-       | LBRACE l -> dprintf "LBRACE(%d)\n" (fst l).Lexing.pos_lnum
-       | RBRACE l -> dprintf "RBRACE(%d)\n" (fst l).Lexing.pos_lnum
-       | IF l -> dprintf "IF(%d)\n" (fst l).Lexing.pos_lnum
-       | SWITCH l -> dprintf "SWITCH(%d)\n" (fst l).Lexing.pos_lnum
-       | RETURN l -> dprintf "RETURN(%d)\n" (fst l).Lexing.pos_lnum
+       | LBRACE l -> dprintf "LBRACE(%d)\n" (fst l).Filepath.pos_lnum
+       | RBRACE l -> dprintf "RBRACE(%d)\n" (fst l).Filepath.pos_lnum
+       | IF l -> dprintf "IF(%d)\n" (fst l).Filepath.pos_lnum
+       | SWITCH l -> dprintf "SWITCH(%d)\n" (fst l).Filepath.pos_lnum
+       | RETURN l -> dprintf "RETURN(%d)\n" (fst l).Filepath.pos_lnum
        | _ -> ()) ;
     t
   end else
@@ -398,7 +398,7 @@ let annot_lex initial rule lexbuf =
     Buffer.clear buf;
     rule lexbuf
   with Parsing.Parse_error ->
-    let source = Lexing.lexeme_start_p lexbuf in
+    let source = Cil_datatype.Position.of_lexing_pos (Lexing.lexeme_start_p lexbuf) in
     Kernel.warning ~wkey:Kernel.wkey_annot_error ~source "skipping annotation";
     initial lexbuf
 
@@ -407,11 +407,11 @@ let make_annot default lexbuf s =
   match Logic_lexer.annot (start, s) with
   | Some (stop, token) ->
     lexbuf.Lexing.lex_curr_p <-
-    Lexing.{ stop with
+    Lexing.{ (Cil_datatype.Position.to_lexing_pos stop) with
              pos_cnum = stop.pos_cnum + start.pos_cnum;
              pos_bol = if stop.pos_lnum <> start.pos_lnum then stop.pos_bol + start.pos_cnum else start.pos_bol };
     (* The filename has already been normalized, so we must reuse it "as is". *)
-    E.setCurrentFile ~normalize:false stop.Lexing.pos_fname;
+    E.setCurrentFile (stop.Filepath.pos_path :> string);
     (match token with
 
     | Logic_ptree.Adecl d -> DECL d
@@ -569,25 +569,25 @@ rule initial = parse
       let start = Lexing.lexeme_start_p lexbuf in
       let content = chr lexbuf in
       let last = Lexing.lexeme_end_p lexbuf in
-      CST_CHAR (content, (start,last))
+      CST_CHAR (content, Cil_datatype.Location.of_lexing_loc (start,last))
     }
 |		"L'"			{
       let start = Lexing.lexeme_start_p lexbuf in
       let content = chr lexbuf in
       let last = Lexing.lexeme_end_p lexbuf in
-      CST_WCHAR (content, (start,last))
+      CST_WCHAR (content, Cil_datatype.Location.of_lexing_loc (start,last))
     }
 |		'"'			{  
       let start = Lexing.lexeme_start_p lexbuf in
       let content = str lexbuf in
       let last = Lexing.lexeme_end_p lexbuf in
-      CST_STRING (content, (start,last))
+      CST_STRING (content, Cil_datatype.Location.of_lexing_loc (start,last))
     }
 |		"L\""			{
       let start = Lexing.lexeme_start_p lexbuf in
       let content = str lexbuf in
       let last = Lexing.lexeme_end_p lexbuf in
-      CST_WSTRING(content, (start,last))
+      CST_WSTRING(content, Cil_datatype.Location.of_lexing_loc (start,last))
     }
 |		floatnum		{CST_FLOAT (Lexing.lexeme lexbuf, currentLoc ())}
 |		binarynum               { (* GCC Extension for binary numbers *) 

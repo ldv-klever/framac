@@ -42,7 +42,7 @@ int bor(int a,int b, int c) { return a | b | c ; }
 /*@ ensures \result == (int) (a ^ b);
   @ behavior bit1:
   @   assumes a == -1 && 0xFF==(0xF0^b);
-  @   ensures \result != ~0xF;
+  @   ensures \result == ~0x0F;
   @ behavior bit2:
   @   assumes a == b;
   @   ensures \result == 0;
@@ -73,3 +73,30 @@ int lshift(int a,int n) { return a << n ; }
 */
 int rshift(int a,int n) { return a >> n ; }
 
+/*@ behavior true:
+  @   assumes a == 1 || b == 1;
+  @   ensures \result == 1;
+  @  behavior false:
+  @   assumes !(a == 1 || b == 1);
+  @   ensures \result == 0;
+ */
+_Bool bor_bool(_Bool a, _Bool b) { return (_Bool)(((int)a | (int)b) != 0); }
+
+
+/*@ behavior true:
+  @   assumes a == 1 && b == 1;
+  @   ensures \result == 1;
+  @  behavior false:
+  @   assumes !(a == 1 && b == 1);
+  @   ensures \result == 0;
+ */
+_Bool band_bool(_Bool a, _Bool b) { return (_Bool)(((int)a & (int)b) != 0); }
+
+/*@ behavior true:
+  @   assumes (a == 1 && b == 0) || (a == 0 && b == 1);
+  @   ensures \result == 1;
+  @  behavior false:
+  @   assumes !((a == 1 && b == 0) || (a == 0 && b == 1)) ;
+  @   ensures \result == 0;
+ */
+_Bool bxor_bool(_Bool a, _Bool b) { return (_Bool)(((int)a ^ (int)b) != 0); }

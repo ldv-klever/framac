@@ -1,8 +1,8 @@
 (**************************************************************************)
 (*                                                                        *)
-(*  This file is part of Frama-C.                                         *)
+(*  This file is part of the Frama-C's E-ACSL plug-in.                    *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2012-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -50,7 +50,7 @@ open Cil_types
 (** {2 Datatypes} *)
 (******************************************************************************)
 
-(** Possible types infered by the system. *)
+(** Possible types inferred by the system. *)
 type integer_ty = private
   | Gmp
   | C_type of ikind
@@ -72,6 +72,9 @@ val typ_of_integer_ty: integer_ty -> typ
 (** @return the C type corresponding to an {!integer_ty}. That is [Gmpz.t ()]
     for [Gmp] and [TInt(ik, [[]])] for [Ctype ik].
     @raise Not_an_integer in case of {!Other}. *)
+
+val integer_ty_of_typ: typ -> integer_ty
+(** Reverse of [typ_of_integer_ty] *)
 
 val join: integer_ty -> integer_ty -> integer_ty
 (** {!integer_ty} is a join-semi-lattice if you do not consider [Other]. If
@@ -102,15 +105,15 @@ val clear: unit -> unit
     predicate. *)
 
 val get_integer_ty: term -> integer_ty
-(** @return the infered type for the given term. *)
+(** @return the inferred type for the given term. *)
 
 val get_integer_op: term -> integer_ty
-(** @return the infered type for the top operation of the given term.
+(** @return the inferred type for the top operation of the given term.
     It is meaningless to call this function over a non-arithmetical/logical
     operator. *)
 
 val get_integer_op_of_predicate: predicate -> integer_ty
-(** @return the infered type for the top operation of the given predicate. *)
+(** @return the inferred type for the top operation of the given predicate. *)
 
 val get_typ: term -> typ
 (** Get the type which the given term must be generated to. *)
@@ -128,6 +131,15 @@ val get_cast_of_predicate: predicate -> typ option
 val unsafe_set: term -> ?ctx:integer_ty -> integer_ty -> unit
 (** Register that the given term has the given type in the given context (if
     any). No verification is done. *)
+
+
+(*****************************************************************************)
+(* Utils *)
+(*****************************************************************************)
+
+val ty_of_interv: ?ctx:integer_ty -> Ival.t -> integer_ty
+(* Compute the smallest type (bigger than [int]) which can contain the whole
+   interval. It is the \theta operator of the JFLA's paper. *)
 
 (******************************************************************************)
 (** {2 Internal stuff} *)

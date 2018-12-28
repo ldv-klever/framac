@@ -22,15 +22,19 @@ FRAMAC_CONFIG ?= frama-c-config
 ###############################################################################
 
 # EDIT VARIABLES AND TARGETS BELOW AS NEEDED
+# The flags below are only suggestions to use with Eva, and can be removed
 
 # (Optional) preprocessing flags, usually handled by -json-compilation-database
 CPPFLAGS    +=
 
 # (Optional) Frama-C general flags (parsing and kernel)
-FCFLAGS     +=
+FCFLAGS     += \
+  -kernel-warn-key annot:missing-spec=abort \
+  -kernel-warn-key typing:implicit-function-declaration=abort \
 
 # (Optional) Eva-specific flags
-EVAFLAGS    +=
+EVAFLAGS    += \
+  -eva-warn-key builtins:missing-spec=abort \
 
 # (MANDATORY) Name of the main target
 MAIN_TARGET :=
@@ -46,8 +50,9 @@ TARGETS = $(MAIN_TARGET).eva
 # Default target
 all: $(TARGETS)
 
-# (MANDATORY) List of source files used by MAIN_TARGET, usually obtained
-# via a JSON compilation database + analysis-scripts/list_files.py
+# (MANDATORY) List of source files used by MAIN_TARGET.
+# If there is a JSON compilation database,
+# 'frama-c-script list-files' can help obtain it
 $(MAIN_TARGET).parse:
 
 
@@ -59,7 +64,7 @@ gui: $(MAIN_TARGET).eva.gui
 # Run 'make <TARGET>.eva.loop' to obtain a .loop file, fine-tune it by hand,
 # then rename it to <TARGET>.slevel to prevent it from being overwritten.
 # If such file exists, use it to define per-function slevel values.
-ifneq (,$(MAIN_TARGET).slevel)
+ifneq (,$(wildcard $(MAIN_TARGET).slevel))
 $(MAIN_TARGET).eva: \
   EVAFLAGS += $(shell cat $(MAIN_TARGET).slevel | tr -d '\n\\')
 endif

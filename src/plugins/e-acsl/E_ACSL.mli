@@ -1,8 +1,8 @@
 (**************************************************************************)
 (*                                                                        *)
-(*  This file is part of Frama-C.                                         *)
+(*  This file is part of the Frama-C's E-ACSL plug-in.                    *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2012-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,7 @@ module Translate: sig
   exception No_simple_translation of term
   val term_to_exp: typ option -> term -> exp
 (** @raise New_typing_error when the given term cannot be typed (something wrong
-    happends with this term)
+    happened with this term)
     @raise Not_yet when the given term contains an unsupported construct.
     @raise No_simple_translation when the given term cannot be translated into
     a single expression. *)

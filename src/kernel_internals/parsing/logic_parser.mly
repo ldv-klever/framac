@@ -30,7 +30,15 @@
   open Logic_ptree
   open Logic_utils
 
-  let loc () = (symbol_start_pos (), symbol_end_pos ())
+  let loc () =
+    Cil_datatype.Location.of_lexing_loc
+      (symbol_start_pos (), symbol_end_pos ())
+  let lexeme_start nb =
+    Cil_datatype.Position.of_lexing_pos (Parsing.rhs_start_pos nb)
+  let lexeme_end nb =
+    Cil_datatype.Position.of_lexing_pos (Parsing.rhs_end_pos nb)
+  let lexeme_loc nb = (lexeme_start nb, lexeme_end nb)
+
   let info x = { lexpr_node = x; lexpr_loc = loc () }
   let loc_info loc x = { lexpr_node = x; lexpr_loc = loc }
   let loc_start x = fst x.lexpr_loc
@@ -54,14 +62,14 @@
   let clause_order i name1 name2 =
     raise
       (Not_well_formed
-         ((rhs_start_pos i, rhs_end_pos i),
+         (lexeme_loc i,
           "wrong order of clause in contract: "
           ^ name1 ^ " after " ^ name2 ^ "."))
 
   let missing i token next_token =
     raise
       (Not_well_formed
-         ((rhs_start_pos i, rhs_end_pos i),
+         (lexeme_loc i,
           Format.asprintf "expecting '%s' before %s" token next_token))
 
   type sense_of_relation = Unknown | Disequal | Less | Greater
@@ -207,9 +215,6 @@
       "parsing obsolete ACSL construct '%s'. '%s' should be used instead."
       name now
 
-  let check_registered kw =
-    if Logic_utils.is_extension kw then kw else raise Parsing.Parse_error
-
   let escape =
     let regex1 = Str.regexp "\\(\\(\\\\\\\\\\)*[^\\]\\)\\(['\"]\\)" in
     let regex2 = Str.regexp "\\(\\\\\\\\\\)*\\\\$" in
@@ -246,6 +251,7 @@
 %token MINUS_MOD PLUS_MOD STAR_MOD SLASH_MOD PERCENT_MOD
 %token GLOBAL INVARIANT VARIANT DECREASES FOR LABEL ASSERT SEMICOLON NULL EMPTY
 %token REQUIRES ENSURES ALLOCATES FREES ASSIGNS LOOP NOTHING SLICE IMPACT JESSIE PRAGMA FROM
+%token <string> EXT_CODE_ANNOT EXT_GLOBAL EXT_CONTRACT
 %token EXITS BREAKS CONTINUES RETURNS
 %token VOLATILE READS WRITES
 %token LOGIC PREDICATE INDUCTIVE AXIOMATIC AXIOM LEMMA LBRACE RBRACE
@@ -419,7 +425,7 @@ rel_list:
       in
       $1,$2,sense,Some oth_rel
     else begin
-      let loc = Parsing.rhs_start_pos 1, Parsing.rhs_end_pos 3 in
+      let loc = lexeme_start 1, lexeme_end 3 in
       raise (Not_well_formed(loc,"Inconsistent relation chain."));
     end
   }
@@ -1174,19 +1180,19 @@ ne_simple_clauses:
       let a = concat_assigns assigns $2
       in allocation,a,post_cond,extended
     }
-| grammar_extension SEMICOLON simple_clauses
-    { let allocation,assigns,post_cond,extended = $3 in
-      allocation,assigns,post_cond,$1::extended
+| EXT_CONTRACT grammar_extension SEMICOLON simple_clauses
+    { let allocation,assigns,post_cond,extended = $4 in
+      allocation,assigns,post_cond,($1,$2)::extended
     }
 | post_cond_kind full_lexpr clause_kw { missing 2 ";" $3 }
 | allocation clause_kw { missing 1 ";" $2 }
 | ASSIGNS full_assigns clause_kw { missing 2 ";" $3 }
-| grammar_extension clause_kw { missing 1 ";" $2 }
+| EXT_CONTRACT grammar_extension clause_kw { missing 1 ";" $3 }
 ;
 
 grammar_extension:
 /* Grammar Extensibility for plugins */
-| grammar_extension_name full_zones { $1,$2 }
+| full_zones { $1 }
 ;
 
 post_cond_kind:
@@ -1262,7 +1268,7 @@ ne_zones:
 
 annot:
 | annotation EOF  { $1 }
-| is_spec any EOF { Aspec }
+| is_acsl_spec any EOF { Aspec }
 | decl_list EOF   { Adecl ($1) }
 | CUSTOM any_identifier COLON custom_tree EOF { Acustom(loc (),$2, $4) }
 ;
@@ -1292,6 +1298,23 @@ annotation:
           (Not_well_formed (loc(),
                             "Only one code annotation is allowed per comment"))
       }
+| EXT_CODE_ANNOT grammar_extension SEMICOLON
+  {
+    let open Cil_types in
+    let ext = $1 in
+    match Logic_env.extension_category ext with
+    | Some (Ext_code_annot (Ext_here | Ext_next_stmt | Ext_next_both)) ->
+      Acode_annot (loc(), Logic_ptree.AExtended([],false,(ext,$2)))
+    | Some (Ext_code_annot Ext_next_loop) ->
+      raise
+        (Not_well_formed
+          (lexeme_loc 1,
+             ext ^ " is not a loop annotation extension. It can't be used as \
+                     plain code annotation extension"))
+    | Some (Ext_contract | Ext_global) | None ->
+      Kernel.fatal ~source:(lexeme_start 1)
+        "%s is not a code annotation extension. Parser got wrong lexeme" ext
+  }
 | full_identifier_or_typename { Aattribute_annot (loc (), $1) }
 | CHAR STAR full_identifier_or_typename EQUAL { Aliteral_annot $3 }
 | PERCENT { Amodulo_op_annot }
@@ -1304,7 +1327,7 @@ loop_annotations:
 | loop_annot_stack
     { let (i,fa,a,b,v,p, e) = $1 in
       let invs = List.map (fun i -> AInvariant([],true,i)) i in
-      let ext = List.map (fun x -> AExtended([],x)) e in
+      let ext = List.map (fun x -> AExtended([],true, x)) e in
       let oth = match a with
         | WritesAny -> b
         | Writes _ ->
@@ -1332,7 +1355,7 @@ loop_annot_stack:
     { let (i,fa,a,b,v,p,e) = $4 in
       let behav = $2 in
       let invs = List.map (fun i -> AInvariant(behav,true,i)) i in
-      let ext = List.map (fun x -> AExtended(behav,x)) e in
+      let ext = List.map (fun x -> AExtended(behav,true,x)) e in
       let oth = concat_loop_assigns_allocation b behav a fa in
       ([],FreeAllocAny,WritesAny,invs@ext@oth,v,p,[])
     }
@@ -1394,7 +1417,19 @@ loop_variant:
 
 /* Grammar Extensibility for plugins */
 loop_grammar_extension:
-| LOOP grammar_extension SEMICOLON { $2 }
+| LOOP EXT_CODE_ANNOT grammar_extension SEMICOLON {
+  let open Cil_types in
+  let ext = $2 in
+  match Logic_env.extension_category ext with
+  | Some (Ext_code_annot (Ext_next_loop | Ext_next_both)) -> (ext, $3)
+  | Some (Ext_code_annot (Ext_here | Ext_next_stmt)) ->
+    raise
+      (Not_well_formed
+         (lexeme_loc 2, ext ^ " is not a loop annotation extension"))
+  | Some (Ext_contract | Ext_global) | None ->
+    Kernel.fatal ~source:(lexeme_start 2)
+      "%s is not a code annotation extension. Parser got wrong lexeme." ext
+}
 ;
 
 loop_pragma:
@@ -1469,6 +1504,7 @@ decl:
 | type_annot {LDtype_annot $1}
 | model_annot {LDmodel_annot $1}
 | logic_def  { $1 }
+| EXT_GLOBAL grammar_extension SEMICOLON { LDextended ($1, $2) }
 | deprecated_logic_decl { $1 }
 | import { $1 }
 ;
@@ -1813,6 +1849,7 @@ post_cond:
 
 is_acsl_spec:
 | post_cond  { snd $1 }
+| EXT_CONTRACT   { $1 }
 | ASSIGNS    { "assigns" }
 | ALLOCATES  { "allocates" }
 | FREES      { "frees" }
@@ -1873,23 +1910,6 @@ non_logic_keyword:
 | is_acsl_decl_or_code_annot { $1 }
 | is_acsl_other  { $1 }
 | CUSTOM { "custom" }
-;
-
-/* ACSL extension language */
-grammar_extension_name:
-| full_identifier_or_typename { check_registered $1 }
-| is_acsl_other { check_registered $1 }
-| c_keyword     { check_registered $1 }
-;
-
-/* Spec are parsed after the function prototype itself. This rule distinguishes
-   between spec and other annotations by the first keyword of the annotation.
-   in order to return the appropriate token in clexer.mll
-*/
-is_spec:
-| is_acsl_spec { () }
-/* Incompatible with logic annotations in code, for now extensions can only be added at the end of specs */
-// | grammar_extension_name { () } /* ACSL extension language */
 ;
 
 bs_keyword:
@@ -1997,6 +2017,8 @@ wildcard:
 | STRING_LITERAL { () }
 | TILDE { () }
 | IN { () }
+| EXT_GLOBAL { () }
+| EXT_CODE_ANNOT { () }
 ;
 
 any:

@@ -24,7 +24,7 @@
 
 FRAMAC_SRC=.
 MAKECONFIG_DIR=share
-
+PLUGIN_TESTS_LIST:=
 include share/Makefile.common
 include share/Makefile.dynamic_config.internal
 
@@ -37,8 +37,8 @@ endif
 # Frama-C Version #
 ###################
 
-VERSION:=$(shell $(SED) -e 's/\(\.*\)/\1/' VERSION)
-VERSION_PREFIX = $(shell $(SED) -e 's/\([a-zA-Z]\+-[0-9]\+\).*/\1/' VERSION)
+VERSION:=$(shell $(CAT) VERSION)
+VERSION_CODENAME:=$(shell $(CAT) VERSION_CODENAME)
 
 ###########################
 # Global plugin variables #
@@ -82,16 +82,31 @@ PLUGIN_DIST_TARGET_LIST:=
 PLUGIN_DIST_DOC_LIST:=
 PLUGIN_BIN_DOC_LIST:=
 PLUGIN_DIST_EXTERNAL_LIST:=
-PLUGIN_TESTS_LIST:=
+PLUGIN_DIST_TESTS_LIST:=
 PLUGIN_DISTRIBUTED_NAME_LIST:=
+
+PLUGIN_HEADER_SPEC_LIST :=
+PLUGIN_HEADER_DIRS_LIST :=
+PLUGIN_HEADER_EXCEPTIONS_LIST :=
+PLUGIN_CEA_PROPRIETARY_HEADERS_LIST :=
+PLUGIN_CEA_PROPRIETARY_FILES_LIST :=
+
+# default value used for HEADER_SPEC and PLUGIN_HEADER_SPEC
+DEFAULT_HEADER_SPEC := headers/header_spec.txt
+# default value used for HEADER_DIRS and PLUGIN_HEADER_DIRS
+DEFAULT_HEADER_DIRS := headers
+# default value used for HEADER_EXCEPTIONS and PLUGIN_HEADER_EXCEPTIONS
+DEFAULT_HEADER_EXCEPTIONS := configure
+# default value used for CEA_PROPRIETARY_FILES and PLUGIN_CEA_PROPRIETARY_FILES
+DEFAULT_CEA_PROPRIETARY_FILES := tests/non-free/%
+# default value used for CEA_PROPRIETARY_HEADERS and PLUGIN_CEA_PROPRIETARY_HEADERS
+DEFAULT_CEA_PROPRIETARY_HEADERS := CEA_PROPRIETARY
+
+MERLIN_PACKAGES:=
 
 ###############################
 # Additional global variables #
 ###############################
-
-# put here any config option for the binary distribution outside of
-# plugins
-CONFIG_DISTRIB_BIN:=
 
 # Directories containing some source code
 SRC_DIRS= ptests $(PLUGIN_LIB_DIR) $(FRAMAC_SRC_DIRS)
@@ -110,25 +125,29 @@ else
 GUI_INCLUDES =
 endif
 
-# Files for which dependencies must be computed computed.
+# Files for which dependencies must be computed.
 # Other files are added later in this Makefile.
 FILES_FOR_OCAMLDEP+=$(PLUGIN_LIB_DIR)/*.mli
 
 BFLAGS	= $(PACKAGES) $(FLAGS) $(DEBUG) $(INCLUDES) \
-		$(FRAMAC_USER_FLAGS)
+		$(FRAMAC_USER_BFLAGS)
 OFLAGS	= $(PACKAGES) $(FLAGS) $(DEBUG) $(INCLUDES) -compact \
-		$(FRAMAC_USER_FLAGS)
+		$(FRAMAC_USER_OFLAGS)
 
 BLINKFLAGS += -linkpkg $(BFLAGS) -linkall -custom
 OLINKFLAGS += -linkpkg $(OFLAGS) -linkall
 
-DOC_FLAGS= -colorize-code -stars -m A -hide-warnings $(PACKAGES) $(INCLUDES) $(GUI_INCLUDES)
+DOC_FLAGS= -colorize-code -stars -m A $(PACKAGES) $(INCLUDES) $(GUI_INCLUDES)
+
+ifneq ($(VERBOSEMAKE),yes)
+DOC_FLAGS+= -hide-warnings
+endif
 
 lib:
 	mkdir -p lib lib/gui lib/plugins
 # Files that depend on external libraries -namely Zarith- whose interface
 # has not been explicitely declared -opaque, hence would trigger warning 58.
-# This can't be solve by Frama-C itself, we can only wait for an update of
+# This can't be solved by Frama-C itself, we can only wait for an update of
 # said library.
 
 NON_OPAQUE_DEPS:=
@@ -216,7 +235,8 @@ clean-check-libc:
 DISTRIB_FILES:=\
       $(wildcard bin/migration_scripts/*2*.sh) bin/local_export.sh                        \
       bin/frama-c bin/frama-c.byte bin/frama-c-gui bin/frama-c-gui.byte \
-      bin/frama-c-config share/frama-c.WIN32.rc share/frama-c.Unix.rc   \
+      bin/frama-c-config bin/frama-c-script                             \
+      share/frama-c.WIN32.rc share/frama-c.Unix.rc                      \
       $(ICONS) $(THEME_ICONS_DEFAULT) $(THEME_ICONS_COLORBLIND)         \
       $(THEME_ICONS_FLAT)                                               \
       man/frama-c.1 doc/README						\
@@ -231,12 +251,16 @@ DISTRIB_FILES:=\
       $(filter-out ptests/ptests_config.ml,$(wildcard ptests/*.ml*))   \
       configure.in Makefile Makefile.generating				\
       Changelog config.h.in						\
-      VERSION $(wildcard licenses/*)                                    \
+      VERSION VERSION_CODENAME $(wildcard licenses/*)                   \
       $(LIBC_FILES)							\
       share/analysis-scripts/cmd-dep.sh                                 \
+      share/analysis-scripts/concat-csv.sh                              \
+      $(wildcard share/analysis-scripts/examples/*)                     \
+      share/analysis-scripts/flamegraph.pl                              \
       share/analysis-scripts/frama-c.mk                                 \
       share/analysis-scripts/list_files.py                              \
       share/analysis-scripts/parse-coverage.sh                          \
+      share/analysis-scripts/summary.sh                                 \
       share/analysis-scripts/README.md                                  \
       share/analysis-scripts/template.mk                                \
       $(wildcard share/emacs/*.el) share/autocomplete_frama-c           \
@@ -272,9 +296,10 @@ DISTRIB_FILES:=\
       INSTALL.md README.md .make-clean	                        \
       .make-clean-stamp .force-reconfigure 	\
       opam/opam opam/descr \
-      opam/files/run_autoconf_if_needed.sh
 
-DISTRIB_TESTS=$(filter-out tests/non-free/%,$(shell git ls-files tests src/plugins/aorai/tests src/plugins/report/tests src/plugins/wp/tests))
+# Test files to be included in the distribution (without header checking).
+# Plug-ins should use PLUGIN_DISTRIB_TESTS to export their test files. 
+DISTRIB_TESTS=$(shell git ls-files tests src/plugins/aorai/tests src/plugins/report/tests src/plugins/wp/tests)
 
 
 # files that are needed to compile API documentation of external plugins
@@ -403,6 +428,7 @@ LIB_CMO =\
 	src/libraries/datatype/structural_descr \
 	src/libraries/datatype/type \
 	src/libraries/datatype/descr \
+	src/libraries/utils/filepath \
 	src/libraries/utils/pretty_utils \
 	src/libraries/utils/hook \
 	src/libraries/utils/bag \
@@ -414,7 +440,6 @@ LIB_CMO =\
 	src/libraries/utils/qstack \
 	src/libraries/utils/leftistheap \
 	src/libraries/stdlib/integer \
-	src/libraries/utils/filepath \
 	src/libraries/utils/json \
 	src/libraries/utils/rich_text
 
@@ -518,7 +543,6 @@ KERNEL_CMO=\
 	src/kernel_internals/typing/rmtmps.cmo                        \
 	src/kernel_internals/typing/oneret.cmo                        \
 	src/kernel_internals/typing/frontc.cmo                        \
-	src/kernel_services/analysis/dataflow.cmo                       \
 	src/kernel_services/analysis/ordered_stmt.cmo                   \
 	src/kernel_services/analysis/wto_statement.cmo                  \
 	src/kernel_services/analysis/dataflows.cmo                      \
@@ -528,13 +552,15 @@ KERNEL_CMO=\
 	src/kernel_services/analysis/service_graph.cmo                  \
 	src/kernel_services/analysis/undefined_sequence.cmo             \
 	src/kernel_services/analysis/interpreted_automata.cmo           \
-	src/kernel_services/ast_printing/description.cmo                \
 	src/kernel_services/ast_data/alarms.cmo                         \
+	src/kernel_services/ast_printing/description.cmo                \
 	src/kernel_services/abstract_interp/lattice_messages.cmo        \
 	src/kernel_services/abstract_interp/abstract_interp.cmo         \
 	src/kernel_services/abstract_interp/bottom.cmo                  \
 	src/kernel_services/abstract_interp/int_Base.cmo                \
 	src/kernel_services/analysis/bit_utils.cmo                      \
+	src/kernel_services/abstract_interp/fc_float.cmo                \
+	src/kernel_services/abstract_interp/float_interval.cmo          \
 	src/kernel_services/abstract_interp/fval.cmo                    \
 	src/kernel_services/abstract_interp/ival.cmo                    \
 	src/kernel_services/abstract_interp/base.cmo                    \
@@ -578,6 +604,8 @@ MLI_ONLY+=\
 	src/kernel_services/ast_data/cil_types.mli                           \
 	src/kernel_services/parsetree/logic_ptree.mli                             \
 	src/kernel_services/ast_printing/printer_api.mli                     \
+	src/kernel_services/abstract_interp/float_sig.mli                    \
+	src/kernel_services/abstract_interp/float_interval_sig.mli           \
 	src/kernel_services/abstract_interp/lattice_type.mli                 \
 	src/kernel_services/abstract_interp/int_Intervals_sig.mli            \
 	src/kernel_services/abstract_interp/offsetmap_lattice_with_isotropy.mli \
@@ -694,7 +722,7 @@ PLUGIN_CMO:= metrics_parameters css_html metrics_base metrics_acsl \
 	     metrics_cabs metrics_cilast metrics_coverage \
 	     register
 PLUGIN_GUI_CMO:= metrics_gui register_gui
-PLUGIN_DEPENDENCIES:=Value
+PLUGIN_DEPENDENCIES:=Eva
 PLUGIN_INTERNAL_TEST:=yes
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -711,24 +739,77 @@ PLUGIN_GUI_CMO:=cg_viewer
 PLUGIN_CMI:= callgraph_api
 PLUGIN_INTERNAL_TEST:=yes
 PLUGIN_TESTS_DIRS:=callgraph
+PLUGIN_TESTS_LIB:=tests/callgraph/function_pointer.ml
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
 
 ##################
-# Value analysis #
+# Evolved Value Analysis #
 ##################
 
-PLUGIN_ENABLE:=$(ENABLE_VALUE_ANALYSIS)
-PLUGIN_NAME:=Value
+PLUGIN_ENABLE:=$(ENABLE_EVA)
+PLUGIN_NAME:=Eva
 PLUGIN_DIR:=src/plugins/value
 PLUGIN_EXTRA_DIRS:=engine values domains domains/cvalue domains/apron \
-	domains/gauges domains/equality legacy slevel utils gui_files
+	domains/gauges domains/equality legacy slevel utils gui_files \
+	values/numerors domains/numerors
+
+# Files for the binding to Apron domains. Only available if Apron is available.
+ifeq ($(HAS_APRON),yes)
+PLUGIN_REQUIRES+= apron.octMPQ apron.boxMPQ apron.polkaMPQ apron.apron gmp
+src/plugins/value/domains/apron/apron_domain.ml: \
+		src/plugins/value/domains/apron/apron_domain.ok.ml \
+		share/Makefile.config
+	$(CP_IF_DIFF) $< $@
+	$(CHMOD_RO) $@
+else
+src/plugins/value/domains/apron/apron_domain.ml: \
+		src/plugins/value/domains/apron/apron_domain.ko.ml \
+		share/Makefile.config
+	$(CP_IF_DIFF) $< $@
+	$(CHMOD_RO) $@
+endif
+PLUGIN_GENERATED+= src/plugins/value/domains/apron/apron_domain.ml
+PLUGIN_DISTRIB_EXTERNAL+= \
+	domains/apron/apron_domain.ok.ml domains/apron/apron_domain.ko.ml
+
+# Files for the numerors domain. Only available is MPFR is available.
+NUMERORS_FILES:= \
+	values/numerors/numerors_utils values/numerors/numerors_float \
+	values/numerors/numerors_interval values/numerors/numerors_arithmetics \
+	values/numerors/numerors_value
+
+ifeq ($(HAS_MPFR),yes)
+PLUGIN_REQUIRES+= gmp
+PLUGIN_TESTS_DIRS+=value/numerors
+NUMERORS_CMO:= $(NUMERORS_FILES)
+src/plugins/value/domains/numerors/numerors_domain.ml: \
+		src/plugins/value/domains/numerors/numerors_domain.ok.ml \
+		share/Makefile.config
+	$(CP_IF_DIFF) $< $@
+	$(CHMOD_RO) $@
+else
+# Do not compile numerors files, but include them in the distributed files.
+NUMERORS_CMO:=
+PLUGIN_DISTRIB_EXTERNAL+= $(addsuffix .ml,$(NUMERORS_FILES))
+PLUGIN_DISTRIB_EXTERNAL+= $(addsuffix .mli,$(NUMERORS_FILES))
+src/plugins/value/domains/numerors/numerors_domain.ml: \
+		src/plugins/value/domains/numerors/numerors_domain.ko.ml \
+		share/Makefile.config
+	$(CP_IF_DIFF) $< $@
+	$(CHMOD_RO) $@
+endif
+PLUGIN_GENERATED+= src/plugins/value/domains/numerors/numerors_domain.ml
+PLUGIN_DISTRIB_EXTERNAL+= \
+	domains/numerors/numerors_domain.ok.ml \
+	domains/numerors/numerors_domain.ko.ml
+
 # General rules for ordering files within PLUGIN_CMO:
 # - try to keep the legacy Value before Eva
 PLUGIN_CMO:= slevel/split_strategy value_parameters \
 	utils/value_perf utils/value_util utils/red_statuses \
 	utils/mark_noresults \
-	utils/widen_hints_ext utils/widen \
+	utils/widen_hints_ext utils/widen utils/unroll_annots \
 	engine/split_return \
 	slevel/per_stmt_slevel \
 	utils/library_functions \
@@ -750,14 +831,17 @@ PLUGIN_CMO:= slevel/split_strategy value_parameters \
 	domains/offsm_domain \
 	domains/symbolic_locs\
 	domains/sign_domain \
+	$(NUMERORS_CMO) domains/numerors/numerors_domain \
 	domains/cvalue/warn domains/cvalue/locals_scoping \
+	domains/cvalue/cvalue_offsetmap \
+	utils/value_results \
 	domains/cvalue/builtins domains/cvalue/builtins_malloc \
 	domains/cvalue/builtins_string domains/cvalue/builtins_misc \
-	$(sort $(patsubst src/plugins/value/%.ml,%,\
-	   $(wildcard src/plugins/value/domains/cvalue/builtins_nonfree*.ml))) \
+	domains/cvalue/builtins_memory domains/cvalue/builtins_print_c \
+	domains/cvalue/builtins_watchpoint \
 	domains/cvalue/builtins_float domains/cvalue/builtins_split \
 	domains/inout_domain \
-	utils/value_results utils/state_import \
+	utils/state_import \
 	legacy/eval_terms legacy/eval_annots \
 	domains/powerset engine/transfer_logic \
 	domains/cvalue/cvalue_transfer domains/cvalue/cvalue_init \
@@ -765,35 +849,23 @@ PLUGIN_CMO:= slevel/split_strategy value_parameters \
 	domains/cvalue/cvalue_domain \
 	engine/subdivided_evaluation engine/evaluation \
 	engine/recursion engine/transfer_stmt engine/transfer_specification \
-	engine/partitioning engine/mem_exec engine/partitioned_dataflow \
+	engine/partitioning engine/mem_exec \
+	engine/legacy_partitioning engine/basic_partitioning \
+	engine/loop_partitioning engine/partitioned_dataflow \
 	engine/initialization engine/abstractions \
 	engine/compute_functions engine/analysis register
 PLUGIN_CMI:= values/abstract_value values/abstract_location \
+	engine/state_partitioning \
 	domains/abstract_domain domains/simpler_domains
 PLUGIN_DEPENDENCIES:=Callgraph LoopAnalysis RteGen
-
-ifeq ($(HAS_APRON),yes)
-PLUGIN_REQUIRES:= apron.octMPQ apron.boxMPQ apron.polkaMPQ apron.apron gmp
-src/plugins/value/domains/apron/apron_domain.ml: \
-		src/plugins/value/domains/apron/apron_domain.ok.ml share/Makefile.config
-	$(CP_IF_DIFF) $< $@
-	$(CHMOD_RO) $@
-else
-PLUGIN_REQUIRES:=
-src/plugins/value/domains/apron/apron_domain.ml: \
-		src/plugins/value/domains/apron/apron_domain.ko.ml share/Makefile.config
-	$(CP_IF_DIFF) $< $@
-	$(CHMOD_RO) $@
-endif
-GENERATED += src/plugins/value/domains/apron/apron_domain.ml
-PLUGIN_DISTRIB_EXTERNAL:=domains/apron/apron_domain.ok.ml domains/apron/apron_domain.ko.ml
 
 # These files are used by the GUI, but do not depend on Lablgtk
 VALUE_GUI_AUX:=gui_files/gui_types gui_files/gui_eval \
 		gui_files/gui_callstacks_filters
 PLUGIN_GUI_CMO:=$(VALUE_GUI_AUX) gui_files/gui_callstacks_manager \
 		gui_files/gui_red gui_files/register_gui
-PLUGIN_NO_TEST:=yes
+
+PLUGIN_INTERNAL_TEST:= yes
 PLUGIN_DISTRIBUTED:=yes
 VALUE_TYPES:=$(addprefix src/plugins/value_types/,\
 		cilE cvalue precise_locs value_types widen_type)
@@ -814,7 +886,7 @@ PLUGIN_CMO:= options register
 PLUGIN_GUI_CMO:=register_gui
 PLUGIN_INTRO:=doc/code/intro_occurrence.txt
 PLUGIN_INTERNAL_TEST:=yes
-PLUGIN_DEPENDENCIES:=Value
+PLUGIN_DEPENDENCIES:=Eva
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
 ################################################
@@ -846,7 +918,7 @@ PLUGIN_INTERNAL_TEST:=yes
 FROM_TYPES:=src/plugins/value_types/function_Froms
 PLUGIN_TYPES_CMO:=$(FROM_TYPES)
 PLUGIN_TYPES_TODOC:=$(addsuffix .mli,$(FROM_TYPES))
-PLUGIN_DEPENDENCIES:=Callgraph Value Postdominators
+PLUGIN_DEPENDENCIES:=Callgraph Eva Postdominators
 
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -861,7 +933,7 @@ PLUGIN_CMO:= users_register
 PLUGIN_NO_TEST:=yes
 PLUGIN_DISTRIBUTED:=yes
 PLUGIN_INTERNAL_TEST:=yes
-PLUGIN_DEPENDENCIES:=Callgraph Value
+PLUGIN_DEPENDENCIES:=Callgraph Eva
 
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -873,10 +945,10 @@ PLUGIN_ENABLE:=$(ENABLE_CONSTANT_PROPAGATION)
 PLUGIN_NAME:=Constant_Propagation
 PLUGIN_DIR:=src/plugins/constant_propagation
 PLUGIN_CMO:= propagationParameters \
-	register
+	api
 PLUGIN_DISTRIBUTED:=yes
 PLUGIN_INTERNAL_TEST:=yes
-PLUGIN_DEPENDENCIES:=Value
+PLUGIN_DEPENDENCIES:=Eva
 
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -908,7 +980,7 @@ PLUGIN_INTERNAL_TEST:=yes
 INOUT_TYPES:=src/plugins/value_types/inout_type
 PLUGIN_TYPES_CMO:=$(INOUT_TYPES)
 PLUGIN_TYPES_TODOC:=$(addsuffix .mli,$(INOUT_TYPES))
-PLUGIN_DEPENDENCIES:=Callgraph Value From
+PLUGIN_DEPENDENCIES:=Callgraph Eva From
 
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -924,7 +996,7 @@ PLUGIN_GUI_CMO:= register_gui
 PLUGIN_DISTRIBUTED:=yes
 # PLUGIN_UNDOC:=impact_gui.ml
 PLUGIN_INTERNAL_TEST:=yes
-PLUGIN_DEPENDENCIES:=Inout Value Pdg Slicing
+PLUGIN_DEPENDENCIES:=Inout Eva Pdg Slicing
 
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -950,7 +1022,7 @@ PLUGIN_TYPES_CMO:=$(PDG_TYPES)
 
 PLUGIN_INTRO:=doc/code/intro_pdg.txt
 PLUGIN_TYPES_TODOC:=$(addsuffix .mli,$(PDG_TYPES))
-PLUGIN_DEPENDENCIES:=Callgraph Value From
+PLUGIN_DEPENDENCIES:=Callgraph Eva From
 PLUGIN_DISTRIBUTED:=yes
 PLUGIN_INTERNAL_TEST:=yes
 
@@ -965,7 +1037,7 @@ PLUGIN_NAME:=Scope
 PLUGIN_DIR:=src/plugins/scope
 PLUGIN_CMO:= datascope zones defs
 PLUGIN_GUI_CMO:=dpds_gui
-PLUGIN_DEPENDENCIES:=Value Inout
+PLUGIN_DEPENDENCIES:=Eva Inout
 PLUGIN_INTRO:=doc/code/intro_scope.txt
 PLUGIN_DISTRIBUTED:=yes
 PLUGIN_INTERNAL_TEST:=yes
@@ -982,7 +1054,7 @@ PLUGIN_CMO:= sparecode_params globs spare_marks transform register
 PLUGIN_INTRO:=doc/code/intro_sparecode.txt
 PLUGIN_DISTRIBUTED:=yes
 PLUGIN_INTERNAL_TEST:=yes
-PLUGIN_DEPENDENCIES:=Pdg Value Users
+PLUGIN_DEPENDENCIES:=Pdg Eva Users
 
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -1025,7 +1097,7 @@ PLUGIN_TESTS_LIB:= tests/slicing/libSelect.ml tests/slicing/libAnim.ml \
 	tests/slicing/adpcm.ml
 PLUGIN_DISTRIBUTED:=yes
 PLUGIN_INTERNAL_TEST:=yes
-PLUGIN_DEPENDENCIES:=Pdg Callgraph Value
+PLUGIN_DEPENDENCIES:=Pdg Callgraph Eva
 
 $(eval $(call include_generic_plugin_Makefile,$(PLUGIN_NAME)))
 
@@ -1261,13 +1333,6 @@ acsl_tests: byte
 	$(PRINT_EXEC) acsl_tests
 	find doc/speclang -name \*.c -exec ./bin/toplevel.byte$(EXE) {} \; > /dev/null
 
-# Non-plugin test directories containing some ML files to compile
-TEST_DIRS_AS_PLUGIN=dynamic dynamic_plugin journal saveload spec misc syntax cil pretty_printing non-free libc value callgraph
-ifeq ("$(HAS_YOJSON)","yes")
-TEST_DIRS_AS_PLUGIN += jcdb
-endif
-PLUGIN_TESTS_LIST += $(TEST_DIRS_AS_PLUGIN)
-
 LONELY_TESTS_ML_FILES=$(wildcard $(TEST_DIRS_AS_PLUGIN:%=tests/%/*.ml))
 LONELY_TESTS_BYTE_FILES=$(LONELY_TESTS_ML_FILES:%.ml=%.cmo)
 LONELY_TESTS_OPT_FILES=$(LONELY_TESTS_ML_FILES:%.ml=%.cmx)
@@ -1280,8 +1345,26 @@ $(LONELY_TESTS_DYN_FILES): OFLAGS+=$(TEST_DIRS_AS_PLUGIN:%=-I tests/%)
            $(LONELY_TESTS_BYTE_FILES) \
            $(LONELY_TESTS_BYTE_FILES:%.cmo=%.cmi)
 
-# Tests directories without .ml but that must be tested anyway
-PLUGIN_TESTS_LIST += cil
+bin/ocamldep_transitive_closure: devel_tools/ocamldep_transitive_closure.ml
+	$(OCAMLOPT) -package ocamlgraph -package str -linkpkg -o $@ $<
+
+tests/crowbar/.%.depend: tests/crowbar/%.ml
+	$(OCAMLDEP) $(INCLUDES) $< > $@
+
+tests/crowbar/%: tests/crowbar/%.ml tests/crowbar/.%.depend .depend \
+                 bin/ocamldep_transitive_closure bin/toplevel.opt
+	$(OCAMLOPT) $(OLINKFLAGS) -w -42 -package crowbar -o $@ \
+        $(GEN_C_BINDINGS) \
+        $$(bin/ocamldep_transitive_closure -root tests/crowbar/$*.cmx \
+             -deps tests/crowbar/.$*.depend -deps .depend) \
+        $<
+
+crowbar-%: tests/crowbar/%
+	$<
+
+crowbar-afl-%: tests/crowbar/%
+	$(MKDIR) tests/crowbar/output-$*
+	afl-fuzz -i tests/crowbar/input -o tests/crowbar/output-$* $< @@
 
 ##############
 # Emacs tags #
@@ -1352,6 +1435,7 @@ plugins-doc:
 STDLIB_FILES:=\
 	array \
 	buffer \
+        bytes \
 	char \
 	format \
 	hashtbl \
@@ -1360,14 +1444,23 @@ STDLIB_FILES:=\
 	map \
 	marshal \
 	obj \
-	pervasives \
+        parsing \
 	printf \
 	queue \
 	scanf \
 	set \
 	stack \
 	string \
-	sys
+	sys \
+        weak
+
+ifeq ($(HAS_OCAML403),yes)
+  STDLIB_FILES+=ephemeron
+endif
+
+ifeq ($(HAS_OCAML407),no)
+  STDLIB_FILES+=pervasives
+endif
 
 STDLIB_FILES:=$(patsubst %,$(OCAMLLIB)/%.mli,$(STDLIB_FILES))
 
@@ -1495,19 +1588,82 @@ check-devguide: $(CHECK_CODE) $(DOC_DEPEND) $(DOC_DIR)/kernel-doc.ocamldoc
 
 # We're interested by any .ml[i]? file in src, except for scripts in test
 # directories, and generated files (in particular lexers and parsers)
+# Note: the find command below is *very* ugly, but it should be POSIX-compliant.
 
-ALL_ML_FILES:=$(shell find src -name '*.ml' -o -name '*.mli' -o -path '*/tests' -prune -false)
+ALL_ML_FILES:=$(shell find src -name '*.ml' -print -o -name '*.mli' -print -o -path '*/tests' -prune '!' -name '*')
+MANUAL_ML_FILES:=$(filter-out $(GENERATED) $(PLUGIN_GENERATED_LIST), $(ALL_ML_FILES))
 
 # Allow control of files to be linted/fixed by external sources
 # (e.g. pre-commit hook that will concentrate on files which have changed)
 
-MANUAL_ML_FILES?=$(filter-out $(GENERATED) $(PLUGIN_GENERATED_LIST), $(ALL_ML_FILES))
+sinclude .Makefile.lint
 
-INDENT_TARGET= $(patsubst %,%.indent,$(MANUAL_ML_FILES))
+HAS_GIT_FILE:=$(wildcard .git/HEAD)
 
-LINT_TARGET= $(patsubst %,%.lint,$(MANUAL_ML_FILES))
+ifeq ("$(HAS_GIT_FILE)","")
+LINT_OTHER_SOURCES:=
+else
+LINT_OTHER_SOURCES:=\
+  $(filter-out \
+    $(shell git ls-tree --name-only HEAD src/plugins/*), \
+    $(wildcard src/plugins/*))
+endif
 
-FIX_SYNTAX_TARGET=$(patsubst %,%.fix-syntax,$(MANUAL_ML_FILES))
+$(foreach dir,$(LINT_OTHER_SOURCES),$(eval sinclude $(dir)/.Makefile.lint))
+
+ML_LINT_MISSING:=$(filter-out $(MANUAL_ML_FILES), $(ML_LINT_KO))
+
+# By default, also checks files with unknown status:
+# this requires new files to pass lint checker from the beginning
+
+ML_LINT_CHECK?=$(filter-out $(ML_LINT_KO), $(MANUAL_ML_FILES))
+
+# this NEWLINE variable containing a literal newline character is used to avoid
+# the error "argument list too long", in some instances of "foreach".
+# For details, see https://stackoverflow.com/questions/7039811
+define NEWLINE
+
+
+endef
+
+# pre-requisite intentionally left blank: this target should only be used
+# if the file is not present to generate it once and forall,
+# and be edited manually afterwards
+# double colon here tells make not to attempt updating the .Makefile.lint
+# if it does not exist, but just to ignore it.
+.Makefile.lint::
+	echo "ML_LINT_KO:=" >> $@
+	$(foreach file,$(sort $(MANUAL_ML_FILES)), \
+            if ! $(MAKE) ML_LINT_CHECK=$(file) lint; \
+            then echo "ML_LINT_KO+=$(file)" >> $@; fi;$(NEWLINE) )
+
+$(foreach dir,$(LINT_OTHER_SOURCES),\
+  $(eval $(dir)/.Makefile.lint:: ; \
+     $(foreach file, $(sort $(filter $(dir)/%, $(MANUAL_ML_FILES))), \
+            if ! $$(MAKE) ML_LINT_CHECK=$(file) lint; \
+            then echo "ML_LINT_KO+=$(file)" >> $$@; fi; )))
+
+.PHONY: stats-lint
+stats-lint:
+	echo \
+         "scale = 2; bad = $(words $(ML_LINT_MISSING)); \
+          all = $(words $(sort $(MANUAL_ML_FILES))); \
+	  fail = $(words $(ML_LINT_KO)); \
+          \"lint coverage: \"; \
+          ((all - fail) * 100) / all; " | bc
+	echo "number of files supposed to pass lint: $(words $(ML_LINT_CHECK))"
+	echo "number of files supposed to fail lint: $(words $(ML_LINT_KO))"
+ifneq ($(strip $(ML_LINT_MISSING)),)
+	echo "number of files missing from src/ : $(words $(ML_LINT_MISSING))"
+	$(foreach file, $(ML_LINT_MISSING), echo $(file);)
+	exit 1
+endif
+
+INDENT_TARGET= $(patsubst %,%.indent,$(ML_LINT_CHECK))
+
+LINT_TARGET= $(patsubst %,%.lint,$(ML_LINT_CHECK))
+
+FIX_SYNTAX_TARGET=$(patsubst %,%.fix-syntax,$(ML_LINT_CHECK))
 
 .PHONY: $(INDENT_TARGET) $(LINT_TARGET) $(FIX_SYNTAX_TARGET) \
         indent lint fix-syntax
@@ -1538,14 +1694,15 @@ $(LINT_TARGET): %.lint: %
           echo "$$OK_SPACE lines with spaces at end of line"; \
           test $$OK_NL -eq 0 || echo "No newline at end of file"; \
           test $$OK_EMPTY -eq 0 || echo "Empty line(s) at end of file"; \
-          echo "Please run make $<.fix-syntax before proceeding"; \
+          echo "Please run make ML_LINT_CHECK=$< fix-syntax"; \
           exit 1 ; \
         fi
 	ocp-indent $< > $<.tmp;
 	if cmp -s $< $<.tmp; \
         then rm -f $<.tmp; \
         else \
-          echo "File $< is not indented correctly. please run make $<.indent";\
+          echo "File $< is not indented correctly."; \
+          echo "Please run make ML_LINT_CHECK=$< indent";\
           rm $<.tmp; \
           exit 1; \
         fi
@@ -1648,10 +1805,18 @@ install:: install-lib
 	  $(FRAMAC_DATADIR)
 	$(MKDIR) $(FRAMAC_DATADIR)/analysis-scripts
 	$(CP) share/analysis-scripts/cmd-dep.sh \
+	  share/analysis-scripts/concat-csv.sh \
+	  share/analysis-scripts/flamegraph.pl \
 	  share/analysis-scripts/frama-c.mk \
 	  share/analysis-scripts/parse-coverage.sh \
 	  share/analysis-scripts/README.md \
+	  share/analysis-scripts/list_files.py \
+	  share/analysis-scripts/summary.sh \
+	  share/analysis-scripts/template.mk \
 	  $(FRAMAC_DATADIR)/analysis-scripts
+	$(MKDIR) $(FRAMAC_DATADIR)/analysis-scripts/examples
+	$(CP) share/analysis-scripts/examples/* \
+	  $(FRAMAC_DATADIR)/analysis-scripts/examples
 	$(MKDIR) $(FRAMAC_DATADIR)/emacs
 	$(CP) $(wildcard share/emacs/*.el) $(FRAMAC_DATADIR)/emacs
 	$(CP) share/frama-c.rc $(ICONS) $(FRAMAC_DATADIR)
@@ -1687,6 +1852,9 @@ install:: install-lib
 	      $(BINDIR)/ptests.$(PTESTSBEST)$(EXE)
 	if [ -x bin/fc-config$(EXE) ] ; then \
 		$(CP) bin/fc-config$(EXE) $(BINDIR)/frama-c-config$(EXE); \
+	fi
+	if [ -x bin/frama-c-script ] ; then \
+		$(CP) bin/frama-c-script $(BINDIR)/frama-c-script; \
 	fi
 	$(PRINT_INSTALL) config files
 	$(CP) $(addprefix ptests/,$(PTESTS_FILES)) $(FRAMAC_LIBDIR)
@@ -1730,24 +1898,59 @@ uninstall::
 # Generating headers
 ####################
 
-CEA_PROPRIETARY:= \
-	src/*/*/*nonfree*.ml*
+# Default header specification files
+HEADER_SPEC := $(DEFAULT_HEADER_SPEC)
+# The list can be extended by external plugins using PLUGIN_HEADER_SPEC variable
+HEADER_SPEC += $(PLUGIN_HEADER_SPEC_LIST)
+# Default list of header specification files can be overloaded.
+HEADER_SPEC_FILE?=$(HEADER_SPEC)
 
-.PHONY: headers
+# Default directory (containing subdirectories open-source and close-source)
+HEADER_DIRS := $(DEFAULT_HEADER_DIRS)
+# The list can be extended by external plugins using PLUGIN_HEADER_DIRS variable
+HEADER_DIRS += $(PLUGIN_HEADER_DIRS_LIST)
+# Takes into account the kind of distribution (open-souce/close-source)
+DISTRIB_HEADER_DIRS?=$(addsuffix /$(DISTRIB_HEADERS),$(HEADER_DIRS))
 
-HEADER_SPEC_FILE?=headers/header_spec.txt
+# List of distributed files allowed to have no entry into the HEADER_SPEC_FILE
+HEADER_EXCEPTIONS := $(DEFAULT_HEADER_EXCEPTIONS)
+HEADER_EXCEPTIONS += opam/files $(wildcard $(PLUGIN_HEADER_EXCEPTIONS_LIST))
+
+# List of headers that cannot be part of an open-source distribution
+CEA_PROPRIETARY_HEADERS := $(DEFAULT_CEA_PROPRIETARY_HEADERS)
+CEA_PROPRIETARY_HEADERS += $(PLUGIN_CEA_PROPRIETARY_HEADERS_LIST)
+
+# List of files that cannot be part of an open-source distribution
+CEA_PROPRIETARY_FILES := $(DEFAULT_CEA_PROPRIETARY_FILES)
+CEA_PROPRIETARY_FILES += $(PLUGIN_CEA_PROPRIETARY_FILES_LIST)
 
 HDRCK=./headers/hdrck$(EXE)
 
-# OPEN_SOURCE: set it to 'yes' if you want to apply open source headers
+HDRCK_EXTRA?=$(STRICT_HEADERS)
+# Can be set to "-exit-on-warning"
+ifeq ($(HDRCK_EXTRA),no)
+HDRCK_EXTRA:=""
+else
+ifeq ($(HDRCK_EXTRA),yes)
+HDRCK_EXTRA:="-exit-on-warning"
+endif
+endif
+
+.PHONY: headers
+
+# OPEN_SOURCE: set it to 'no' if you want to apply close source headers.
+# STRICT_HEADERS: set it to 'yes' if you want to consider warnings as errors
 headers:: $(HDRCK)
-	$(PRINT) "Applying $(DISTRIB_HEADERS) headers (OPEN_SOURCE=$(OPEN_SOURCE))..."
+	$(PRINT) "|$(OPEN_SOURCE)|$(SPECIFIED_OPEN_SOURCE)|"
+	$(PRINT) "Applying $(HDRCK_DISTRIB_HEADERS) headers (OPEN_SOURCE=$(HDRCK_OPEN_SOURCE))..."
+	$(PRINT) "- HEADER_SPEC_FILE=$(HEADER_SPEC_FILE)"
+	$(PRINT) "- DISTRIB_HEADER_DIRS=$(HDRCK_DISTRIB_HEADER_DIRS)"
 	$(HDRCK) \
-		-update -C . -header-dirs headers/$(DISTRIB_HEADERS) \
+		$(HDRCK_EXTRA) \
+		-update -C . \
+		$(addprefix -header-dirs ,$(HDRCK_DISTRIB_HEADER_DIRS)) \
 		-headache-config-file ./headers/headache_config.txt \
 		$(HEADER_SPEC_FILE)
-
-HEADER_EXCEPTIONS+=$(wildcard src/plugins/*/configure) opam/files
 
 hdrck: $(HDRCK)
 
@@ -1766,8 +1969,10 @@ hdrck-clean:
 clean:: hdrck-clean
 
 CURRENT_HEADERS?=open-source
+CURRENT_HEADER_DIRS?=$(addsuffix /$(CURRENT_HEADERS),$(HEADER_DIRS))
 
 # OPEN_SOURCE: set it to 'yes' if you want to check open source headers
+# STRICT_HEADERS: set it to 'yes' if you want to consider warnings as errors
 # The target check-headers does the following checks:
 # 1. Checks entries of HEADER_SPEC_FILE
 # 2. Checks that every DISTRIB_FILES (except HEADER_EXCEPTIONS) have an entry
@@ -1780,6 +1985,9 @@ CURRENT_HEADERS?=open-source
 .PHONY: check-headers
 check-headers: $(HDRCK)
 	$(PRINT) "Checking $(DISTRIB_HEADERS) headers (OPEN_SOURCE=$(OPEN_SOURCE), CURRENT_HEADERS=$(CURRENT_HEADERS))..."
+	$(PRINT) "- HEADER_SPEC_FILE=$(HEADER_SPEC_FILE)"
+	$(PRINT) "- CURRENT_HEADER_DIRS=$(CURRENT_HEADER_DIRS)"
+	$(PRINT) "- FORBIDDEN_HEADERS=$(DISTRIB_PROPRIETARY_HEADERS)"
 	 # Workaround to avoid "argument list too long" in make 3.82+ without
 	 # using 'file' built-in, only available on make 4.0+
 	 # for make 4.0+, using the 'file' function could be a better solution,
@@ -1794,11 +2002,14 @@ check-headers: $(HDRCK)
 		echo "Checking that distributed files do not use iso-8859..."; \
 		file --mime-encoding -f file_list_to_check.tmp | \
 			grep "iso-8859" \
-			| $(SED) "s/^/error: invalid encoding in /" || true; \
+			| $(SED) "s/^/error: invalid encoding in /" \
+			| ( ! grep "error: invalid encoding" ); \
 	else echo "command 'file' not found, skipping encoding checks"; \
 	fi
 	$(HDRCK) \
-		-header-dirs headers/$(CURRENT_HEADERS) \
+		$(HDRCK_EXTRA) \
+		$(addprefix -header-dirs ,$(CURRENT_HEADER_DIRS)) \
+		$(addprefix -forbidden-headers ,$(DISTRIB_PROPRIETARY_HEADERS)) \
 		-headache-config-file ./headers/headache_config.txt \
 		-distrib-file file_list_to_check.tmp \
 		-header-except-file file_list_exceptions.tmp \
@@ -1945,7 +2156,12 @@ PLUGIN_DEP_LIST:=$(PLUGIN_LIST)
 
 .PHONY: depend
 
-.depend depend:: $(GENERATED) share/Makefile.dynamic_config
+# in case .depend is absent, we will make it. Otherwise, it will be left
+# untouched. Only make depend will force a recomputation of dependencies
+.depend: $(GENERATED) share/Makefile.dynamic_config
+	$(MAKE) depend
+
+depend:: $(GENERATED) share/Makefile.dynamic_config
 	$(PRINT_MAKING) .depend
 	$(RM) .depend
 	$(OCAMLDEP) $(INCLUDES) $(FILES_FOR_OCAMLDEP) > .depend
@@ -1962,7 +2178,9 @@ $(PLUGIN_LIB_DIR)/.placeholders_ready:
 ifneq ($(MAKECMDGOALS),clean)
 ifneq ($(MAKECMDGOALS),distclean)
 ifneq ($(MAKECMDGOALS),smartclean)
+ifneq ($(MAKECMDGOALS),depend)
 sinclude .depend
+endif
 endif
 endif
 endif
@@ -2003,7 +2221,7 @@ GENERATED+=ptests/ptests_config.ml tests/ptests_config
 # Source distribution #
 #######################
 
-.PHONY: src-distrib bin-distrib
+.PHONY: src-distrib
 
 STANDALONE_PLUGINS_FILES = \
 	$(addprefix src/dummy/hello_world/,hello_world.ml Makefile) \
@@ -2012,66 +2230,66 @@ STANDALONE_PLUGINS_FILES = \
 DISTRIB_FILES += $(wildcard $(PLUGIN_DISTRIBUTED_LIST)                   \
                     $(PLUGIN_DIST_EXTERNAL_LIST)                         \
                     $(PLUGIN_DIST_DOC_LIST) $(STANDALONE_PLUGINS_FILES))
+DISTRIB_FILES:=$(filter-out $(GENERATED) $(PLUGIN_GENERATED_LIST),\
+                  $(DISTRIB_FILES))
 
+DISTRIB_TESTS += $(wildcard $(PLUGIN_DIST_TESTS_LIST)) 
+
+
+SPECIFIED_OPEN_SOURCE:=$(OPEN_SOURCE)
 OPEN_SOURCE  ?= no
 
 ifneq ($(OPEN_SOURCE),yes)
 # close source version
 DISTRIB_HEADERS:=close-source
-DISTRIB_EXCLUDE=
-DISTRIB_PROPRIETARY_HEADERS =
+DISTRIB_PROPRIETARY_HEADERS:=
 else
 # open source version
 DISTRIB_HEADERS:=open-source
-# files that can be distributed
-DISTRIB_FILES := $(filter-out \
-			src/plugins/value/domains/cvalue/builtins_nonfree%,\
-                    $(DISTRIB_FILES))
-# files excluded to the final tarball
-DISTRIB_EXCLUDE=--exclude \"*/non-free/*\"
 # for checking that distributed files aren't under proprietary licence.
-DISTRIB_PROPRIETARY_HEADERS = --no-headers CEA_PROPRIETARY
+DISTRIB_PROPRIETARY_HEADERS:=$(CEA_PROPRIETARY_HEADERS)
+# DISTRIB_TESTS contents files that can be distributed without header checking
+DISTRIB_TESTS:=$(filter-out $(CEA_PROPRIETARY_FILES) ,\
+                  $(DISTRIB_TESTS))
+# DISTRIB_FILES contents files that can be distributed with header checking
+DISTRIB_FILES:=$(filter-out $(CEA_PROPRIETARY_FILES) ,\
+                  $(DISTRIB_FILES))
 endif
 
-DISTRIB_FILES:=$(filter-out $(GENERATED) $(PLUGIN_GENERATED_LIST),\
-                  $(DISTRIB_FILES))
+# Set some variables for `headers`target.
+ifeq ($(OPEN_SOURCE),$(SPECIFIED_OPEN_SOURCE))
+# The OPEN_SOURCE variable is specified. So, use it for `make headers`
+HDRCK_OPEN_SOURCE=$(SPECIFIED_OPEN_SOURCE)
+HDRCK_DISTRIB_HEADERS=$(DISTRIB_HEADERS)
+HDRCK_DISTRIB_HEADER_DIRS=$(DISTRIB_HEADER_DIRS)
+else
+# The OPEN_SOURCE variable is unspecified. So, use open-source default for `make headers`
+HDRCK_OPEN_SOURCE=unspecified
+HDRCK_DISTRIB_HEADERS=open-source
+HDRCK_DISTRIB_HEADER_DIRS?=$(addsuffix /$(HDRCK_DISTRIB_HEADERS),$(HEADER_DIRS))
+endif
 
 # Variables governing the name of the generated .tar.gz.
 # Optionally define them as empty to silence warnings about undefined variables
-GITVERSION ?=
 CLIENT ?=
-
-ifeq ("$(GITVERSION)","")
-VERSION_NAME:=$(VERSION)
-else
-VERSION_NAME:=$(shell git describe --tags --match $(VERSION_PREFIX) --dirty)
-endif
 
 DISTRIB_DIR=tmp
 ifeq ("$(CLIENT)","")
-VERSION_NAME:=$(VERSION_NAME)
+VERSION_NAME:=$(VERSION)
 else
-VERSION_NAME:=$(VERSION_NAME)-$(CLIENT)
+VERSION_NAME:=$(VERSION)-$(CLIENT)
 endif
 
-DISTRIB?=frama-c-$(VERSION_NAME)
+DISTRIB?=frama-c-$(VERSION_NAME)-$(VERSION_CODENAME)
 CLIENT_DIR=$(DISTRIB_DIR)/$(DISTRIB)
 
-# this NEWLINE variable containing literal newline character is used to avoid
-# the error "argument list too long" in target src-distrib, with gmake 3.82.
-define NEWLINE
-
-
-endef
 
 # useful parameters:
 # CLIENT: name of the client (in the version number, the archive name, etc)
 # DISTRIB: name of the generated tarball and of the root tarball directory
 # OPEN_SOURCE: set it to 'yes' if you want to exclude close source files
-# GITVERSION: set it to 'yes" if you want to use git to generate the version
-#             number ("distance" to the last tag) + hash of the commit
 # note: make headers has to be applied...
-src-distrib: $(HDRCK)
+src-distrib: $(HDRCK) check-headers
 ifeq ("$(CLIENT)","")
 	$(PRINT_BUILD) "$(DISTRIB_HEADERS) tarball $(DISTRIB) (OPEN_SOURCE=$(OPEN_SOURCE))"
 else
@@ -2095,18 +2313,18 @@ endif
 	$(MKDIR) $(CLIENT_DIR)/bin
 	$(MKDIR) $(CLIENT_DIR)/lib/plugins
 	$(MKDIR) $(CLIENT_DIR)/lib/gui
-	$(MKDIR) $(CLIENT_DIR)/tests/non-free
 	$(RM) ../$(DISTRIB).tar.gz
 	$(PRINT) "Updating files to archive with $(DISTRIB_HEADERS) headers"
 	$(HDRCK) \
-		-update -C $(CLIENT_DIR) -header-dirs headers/$(DISTRIB_HEADERS) \
+		$(HDRCK_EXTRA) \
+		-update -C $(CLIENT_DIR) \
+		$(addprefix -header-dirs ,$(DISTRIB_HEADER_DIRS)) \
 		-headache-config-file ./headers/headache_config.txt \
 		$(HEADER_SPEC_FILE)
 	$(PRINT_TAR) $(DISTRIB).tar.gz
 	(cd $(DISTRIB_DIR); $(TAR) cf - \
 			--numeric-owner --owner=0 --group=0 --sort=name \
 			--mtime="$$(date +"%F") Z" --mode='a+rw' \
-			$(DISTRIB_EXCLUDE) \
 			--exclude "*autom4te.cache*" \
 			$(DISTRIB) | gzip -9 -n > ../$(DISTRIB).tar.gz \
 	)
@@ -2114,20 +2332,13 @@ endif
 	$(RM) -r $(DISTRIB_DIR)
 
 doc-companions:
-	$(MAKE) -C doc/developer archives VERSION=$(VERSION)
-	$(MV) doc/developer/hello-$(VERSION).tar.gz hello-$(VERSION).tar.gz
-	$(ECHO) "The documentation companion hello-$(VERSION).tar.gz has been generated."
+	$(MAKE) -C doc/developer archives VERSION=$(VERSION)-$(VERSION_CODENAME)
+	$(MV) doc/developer/hello-$(VERSION)-$(VERSION_CODENAME).tar.gz hello-$(VERSION)-$(VERSION_CODENAME).tar.gz
+	$(ECHO) "The documentation companion hello-$(VERSION)-$(VERSION_CODENAME).tar.gz has been generated."
 
 clean-distrib: dist-clean
 	$(PRINT_RM) distrib
 	$(RM) -r $(DISTRIB_DIR) $(DISTRIB).tar.gz
-
-bin-distrib: depend configure Makefile
-	$(PRINT_MAKING) bin-distrib
-	$(RM) -r $(VERSION)
-	./configure $(CONFIG_DISTRIB_BIN)
-	$(QUIET_MAKE) DESTDIR=$(FRAMAC_SRC)/$(VERSION) install
-	$(CP) README $(VERSION)
 
 create_lib_to_install_list = $(addprefix $(FRAMAC_LIB)/,$(call map,notdir,$(1)))
 
@@ -2163,6 +2374,8 @@ $(eval $(foreach file,$(LIB_OPT_TO_INSTALL),$(call copy_in_lib,$(file))))
 ################
 
 $(NON_OPAQUE_DEPS:%=%.cmx): OFLAGS := $(OFLAGS) -w -58
+
+$(CROWBAR_AFL_TARGET:%=%.cmx): OFLAGS:=$(OFLAGS) -afl-instrument
 
 include share/Makefile.generic
 

@@ -349,6 +349,7 @@ struct
       let deps = Function_Froms.Deps.add_indirect_dep deps_right all_indirect in
       { state with deps_table =
           Function_Froms.Memory.add_binding_precise_loc
+            ~for_writing:(not init)
             ~exact state.deps_table loc deps }
 
     let transfer_call stmt dest f args _loc state =
@@ -421,44 +422,46 @@ struct
             (* Treatement for the possible assignment
                      of the call result *)
             match dest with
-                  | None -> state
-                  | Some lv ->
-                    let return_from = froms_call.Function_Froms.deps_return in
-                    let deps_ret = subst_before_call return_from in
-              transfer_assign stmt ~init:false lv deps_ret state
-              in
-              let f f acc =
-                let p = do_on f in
-                match acc with
-                  | None -> Some p
-                  | Some acc_memory ->
-                    Some
-                      {state with
-                        deps_table = Function_Froms.Memory.join
-                          p.deps_table
-                          acc_memory.deps_table}
-              in
-              let result =
-                try
-                  (match Kernel_function.Hptset.fold f called_vinfos None with
-                    | None -> state
-                    | Some s -> s);
-                with Call_did_not_take_place -> state
-              in
-              if not (Db.From.Record_From_Callbacks.is_empty ())
-              then
-                Stmt.Hashtbl.replace
-                  callwise_states_with_formals
-                  stmt
-                  !states_with_formals;
-              result
+            | None -> state
+            | Some lv ->
+              let return_from = froms_call.Function_Froms.deps_return in
+              let deps_ret = subst_before_call return_from in
+              let init = Cil.is_mutable_or_initialized lv in
+              transfer_assign stmt ~init lv deps_ret state
+      in
+      let f f acc =
+        let p = do_on f in
+        match acc with
+        | None -> Some p
+        | Some acc_memory ->
+          Some
+            {state with
+             deps_table = Function_Froms.Memory.join
+                 p.deps_table
+                 acc_memory.deps_table}
+      in
+      let result =
+        try
+          (match Kernel_function.Hptset.fold f called_vinfos None with
+           | None -> state
+           | Some s -> s);
+        with Call_did_not_take_place -> state
+      in
+      if not (Db.From.Record_From_Callbacks.is_empty ())
+      then
+        Stmt.Hashtbl.replace
+          callwise_states_with_formals
+          stmt
+          !states_with_formals;
+      result
 
     let transfer_instr stmt (i: instr) (state: t) =
       !Db.progress ();
       match i with
         | Set (lv, exp, _) ->
               let comp_vars = find stmt state.deps_table exp in
-              transfer_assign stmt ~init:false lv comp_vars state
+              let init = Cil.is_mutable_or_initialized lv in
+              transfer_assign stmt ~init lv comp_vars state
         | Local_init(v, AssignInit i, _) ->
           let implicit = true in
           let rec aux lv i acc =

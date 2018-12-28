@@ -171,6 +171,9 @@ and lexpr_node =
   | PLrepeat of lexpr * lexpr
       (** repeat a list of elements a number of times. *)
 
+
+type extension = string * lexpr list
+
 (** type invariant. *)
 type type_annot =  {inv_name: string;
                     this_type : logic_type;
@@ -255,6 +258,8 @@ and decl_node =
   | LDvolatile of lexpr list * (string option * string option)
     (** volatile clause read/write. *)
   | LDimport of string * string list (** import logic names from the specified file *)
+      (** volatile clause read/write. *)
+  | LDextended of extension (** extended global annotation. *)
 
 (** dependencies of an assigned location. *)
 and deps =
@@ -278,9 +283,6 @@ and allocation =
 
 (** variant of a loop or a recursive function. *)
 and variant = lexpr * string option
-
-
-type extension = string * lexpr list
 
 (** Behavior in a specification. This type shares the name of its constructors
     with {!Cil_types.behavior}. *)
@@ -375,9 +377,11 @@ type code_annot =
       @since Oxygen-20120901 when [b_allocation] has been added.  *)
 
   | APragma of pragma (** pragma. *)
-  | AExtended of string list * extension
-    (** extension in a loop annotation.
-        @since Silicon-20161101 *)
+  | AExtended of string list * bool * extension
+    (** extension in a code or loop (when boolean flag is true) annotation.
+        @since Silicon-20161101
+        @modify 18.0-Argon
+    *)
 
 (** custom trees *)
 

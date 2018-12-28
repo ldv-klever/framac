@@ -123,6 +123,7 @@ src/plugins/print_api/grammar.ml
 src/plugins/print_api/grammar.mli
 src/plugins/print_api/lexer.ml
 src/plugins/value/domains/apron/apron_domain.ml
+src/plugins/value/domains/numerors/numerors_domain.ml
 src/plugins/wp/Wp.mli
 src/plugins/wp/share/instwp
 src/plugins/wp/tests/wp_usage/save_load.sav
@@ -131,7 +132,10 @@ src/libraries/stdlib/transitioning.ml
 src/plugins/qed/Qed.mli
 src/plugins/e-acsl/tests/ptests_config
 src/plugins/aorai/Makefile
+src/plugins/aorai/configure
 src/plugins/e-acsl/Makefile
+src/plugins/e-acsl/configure
+src/plugins/e-acsl/doc/doxygen/doxygen.cfg
 src/plugins/loop_analysis/Makefile
 src/plugins/nonterm/Makefile
 src/plugins/obfuscator/Makefile
@@ -139,6 +143,12 @@ src/plugins/report/Makefile
 src/plugins/security_slicing/Makefile
 src/plugins/variadic/Makefile
 src/plugins/wp/Makefile
+src/plugins/loop_analysis/configure
+src/plugins/nonterm/configure
+src/plugins/obfuscator/configure
+src/plugins/report/configure
+src/plugins/security_slicing/configure
+src/plugins/variadic/configure
 
 # Test results
 src/plugins/report/tests/report/result/

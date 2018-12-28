@@ -1,8 +1,8 @@
 (**************************************************************************)
 (*                                                                        *)
-(*  This file is part of Frama-C.                                         *)
+(*  This file is part of the Frama-C's E-ACSL plug-in.                    *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2012-2018                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -61,6 +61,7 @@ module Env = struct
   let clear () = Logic_var.Hashtbl.clear tbl
   let add = Logic_var.Hashtbl.add tbl
   let remove = Logic_var.Hashtbl.remove tbl
+  let replace = Logic_var.Hashtbl.replace tbl
   let find = Logic_var.Hashtbl.find tbl
 end
 
@@ -190,10 +191,15 @@ let rec infer t =
   | Tunion _ -> Error.not_yet "tset union"
   | Tinter _ -> Error.not_yet "tset intersection"
   | Tcomprehension (_,_,_) -> Error.not_yet "tset comprehension"
-  | Trange (_,_) -> Error.not_yet "trange"
   | Toffset_max _ | Toffset_min _ -> Error.not_yet "Jessie offset"
   | TOffsetOf _ -> Error.not_yet "offsetof macro"
   | Tpif _ -> Error.not_yet "predicate if-then-else"
+  | Trange(Some n1, Some n2) ->
+    let i1 = infer n1 in
+    let i2 = infer n2 in
+    Ival.join i1 i2
+  | Trange(None, _) | Trange(_, None) ->
+    Options.abort "unbounded ranges are not part of E-ACSl"
 
   | Tlet (li,t) ->
     let li_t = Misc.term_of_li li in

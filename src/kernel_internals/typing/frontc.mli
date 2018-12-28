@@ -49,7 +49,7 @@ val setMSVCMode: unit -> unit
       @plugin development guide *)
 val add_syntactic_transformation: (Cabs.file -> Cabs.file) -> unit
 
-val parse_to_cabs : string -> Cabs.file
+val parse_to_cabs : Datatype.Filepath.t -> Cabs.file
 
 (** the main command to parse a file. *)
 val parse: stage:[ `Names

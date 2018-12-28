@@ -48,9 +48,6 @@ Require Import Psatz.
 
 Open Local Scope Z_scope.
 
-Ltac autozbits := autorewrite with zbits ; auto with zarith.
-Hint Rewrite Bits.Zbit_of_zero Bits.Zbit_of_mone : zbits.
-
 Local Ltac omegaContradiction := cut False; [contradiction|omega].
 
 Local Ltac caseEq name :=
@@ -633,7 +630,7 @@ Proof.
   (** base *) simpl.
   + intros. (replace (two_power_nat 0) with 1 by forward).
     rewrite Z.mod_1_r.
-    autozbits.
+    auto_bits.
   + induction m.
     (** base *)
     * intros.
@@ -2028,6 +2025,12 @@ Proof.
   intuition.
 Qed.
 
+Lemma lxor_discrimination_inv: forall x y z:Z,
+  x = lxor y z -> lxor x y = z.
+Proof.
+  linear3.
+Qed.
+
 Lemma land_system: forall x1 x2 y1 y2 z:Z,
   (x1 = land z y1 /\ x2 = land z y2) <-> lor x1 x2 = land z (lor (land (lnot x1) (land (lnot x2) (lor y1 y2))) 
                                                        (lor (land x1 (land y1 (lnot (lxor x2 y2))))
@@ -2361,9 +2364,14 @@ Ltac rewrite_cst :=
         | COMPUTE1 zbit_test_def Cst_Z Cst_Z
         ].
 *)
-	
+
+Ltac auto_zbits := autorewrite with zbits ; auto_bits.
+Hint Rewrite lnot_0 land_0 lor_0 lxor_0
+             lnot_1 land_1 lor_1 lxor_1
+             lor_0 lor_1 land_idemp lor_idemp lxor_nilpotent: zbits.
+
 (** Example of use. *)
-(*			
+(*
 Remark rewrite_cst_example: forall x, x + (land 0 (zlnot (land 0 5))) = x + Z_of_nat (ZxHpos 0).
 Proof.
   repeat rewrite_cst.

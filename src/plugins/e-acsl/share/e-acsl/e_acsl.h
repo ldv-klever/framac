@@ -1,8 +1,8 @@
 /**************************************************************************/
 /*                                                                        */
-/*  This file is part of Frama-C.                                         */
+/*  This file is part of the Frama-C's E-ACSL plug-in.                    */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2012-2018                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -84,6 +84,7 @@
 
 /* Memory state initialization */
 #define memory_clean          export_alias(memory_clean)
+#define mspaces_init          export_alias(mspaces_init)
 #define memory_init           export_alias(memory_init)
 
 /* Heap size */
@@ -174,6 +175,10 @@ int posix_memalign(void **memptr, size_t alignment, size_t size)
 /************************************************************************/
 /*** Memory tracking {{{ ***/
 /************************************************************************/
+
+/*! \brief Initialize memory locations. */
+void mspaces_init()
+  __attribute__((FC_BUILTIN));
 
 /*! \brief Initialize memory tracking state.
  * Called before any other statement in \p main */

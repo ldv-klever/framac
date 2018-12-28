@@ -392,6 +392,8 @@ let rec print_decl fmt d =
       fprintf fmt "@[<2>import@ \"%s\" %a;@]"
         file
         (pp_list ~pre:"(" ~sep:",@ " ~suf:")" pp_print_string) names
+    | LDextended (s,l) ->
+      fprintf fmt "@[<2>%s@ %a@]" s (pp_list ~sep:",@ " print_lexpr) l
 
 let print_deps fmt deps =
   match deps with
@@ -508,8 +510,11 @@ let print_code_annot fmt ca =
     | AAllocation (bhvs,fa) ->
         fprintf fmt "%a%a" print_behaviors bhvs (print_allocation ~isloop:true) fa
     | APragma p -> print_pragma fmt p
-    | AExtended (bhvs,e) ->
-      fprintf fmt "%aloop %a" print_behaviors bhvs print_extension e
+    | AExtended (bhvs, is_loop, e) ->
+      fprintf fmt "%a%s%a"
+        print_behaviors bhvs
+        (if is_loop then " loop " else "")
+        print_extension e
 (*
 Local Variables:
 compile-command: "make -C ../../.."
