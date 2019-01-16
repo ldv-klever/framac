@@ -7352,7 +7352,6 @@ let has_flexible_array_member t =
   let is_flexible_array t =
     match unrollType t with
     | TArray (_, None, _, _) -> true
-    | TArray (_, Some z, _, _) -> gccMode() && isZero z
     | _ -> false
   in
   match unrollType t with
