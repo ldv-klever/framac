@@ -5250,7 +5250,7 @@ and makeCompType ghost (isstruct: bool)
       if Cil.isFunctionType ftype then
           Kernel.error ~current:true
             "field `%s' declared as a function" n
-      else if Cil.has_flexible_array_member ftype then
+      else if not (gccMode ()) && Cil.has_flexible_array_member ftype then
         Kernel.error ~current:true
           "field `%s' declared with a type containing a flexible array member."
           n
