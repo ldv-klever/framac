@@ -268,10 +268,10 @@ let oneret ?(callback: callback option) (f: fundec) : unit =
       d_loc l);
      *)
       if hasRet && retval = None then
-        Kernel.fatal ~current:true
+        Kernel.warning ~current:true
 	  "Found return without value in function %s" fname;
       if not hasRet && retval <> None then
-        Kernel.fatal ~current:true "Found return in subroutine %s" fname;
+        Kernel.warning ~current:true "Found return in subroutine %s" fname;
     (* Keep this statement because it might have labels. But change it to
      * an instruction that sets the return value (if any). *)
       s.skind <- begin
