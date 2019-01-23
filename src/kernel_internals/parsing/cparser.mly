@@ -327,7 +327,7 @@ let in_block l =
 %token<Cabs.cabsloc> ENUM STRUCT TYPEDEF UNION
 %token<Cabs.cabsloc> SIGNED UNSIGNED LONG SHORT
 %token<Cabs.cabsloc> VOLATILE EXTERN STATIC CONST RESTRICT AUTO REGISTER
-%token<Cabs.cabsloc> THREAD
+%token<Cabs.cabsloc> THREAD NORETURN
 
 %token<Cabs.cabsloc> SIZEOF ALIGNOF
 
@@ -1450,6 +1450,7 @@ attribute_nocv:
 |   MSATTR                              { (fst $1, []), snd $1 }
                                         /* ISO 6.7.3 */
 |   THREAD                              { ("__thread",[]), $1 }
+|   NORETURN                            { ("__noreturn__",[]), $1 }
 ;
 
 attribute_nocv_list:

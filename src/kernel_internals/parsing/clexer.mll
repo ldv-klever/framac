@@ -196,6 +196,12 @@ let init_lexicon _ =
             THREAD loc
           else
             IDENT "__thread"));
+      ("_Noreturn",
+       (fun loc ->
+          if Kernel.C11.get () then
+            NORETURN loc
+          else
+            IDENT "_Noreturn"))
     ]
 
 
