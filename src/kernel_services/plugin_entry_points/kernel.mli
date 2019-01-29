@@ -259,6 +259,9 @@ module PrintLibc: Parameter_sig.Bool
 module PrintComments: Parameter_sig.Bool
   (** Behavior of option "-keep-comments" *)
 
+module PrintLineDirectives: Parameter_sig.Bool
+  (** Behavior of option "-print-lines" *)
+
 module PrintReturn : Parameter_sig.Bool
   (** Behavior of option "-print-return"
       @since Sulfur-20171101 *)

@@ -560,6 +560,16 @@ module PrintComments =
 
 let () = Parameter_customize.set_group inout_source
 let () = Parameter_customize.do_not_projectify ()
+module PrintLineDirectives =
+  False
+    (struct
+      let module_name = "PrintLineDirecives"
+      let option_name = "-print-lines"
+      let help = "print #line directives in C code"
+    end)
+
+let () = Parameter_customize.set_group inout_source
+let () = Parameter_customize.do_not_projectify ()
 module PrintLibc =
   Bool
     (struct

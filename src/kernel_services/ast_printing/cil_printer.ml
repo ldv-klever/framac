@@ -150,6 +150,17 @@ let state =
     line_length = 80;
     warn_truncate = true }
 
+let () =
+  Kernel.PrintLineDirectives.add_set_hook
+    (fun _ b ->
+       if b then begin
+         state.print_cil_as_is <- true;
+         state.line_directive_style <- Some Line_preprocessor_input
+       end else begin
+         state.print_cil_as_is <- false;
+         state.line_directive_style <- None
+       end)
+
 (* Parentheses/precedence level. An expression "a op b" is printed
    parenthesized if its parentheses level is >= that that of its context.
    Identifiers have the lowest level and weakly binding operators (e.g. |)
