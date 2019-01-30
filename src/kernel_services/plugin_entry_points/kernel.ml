@@ -570,6 +570,16 @@ module PrintLineDirectives =
 
 let () = Parameter_customize.set_group inout_source
 let () = Parameter_customize.do_not_projectify ()
+module PrintAnnot =
+  True
+    (struct
+      let module_name = "PrintAnnot"
+      let option_name = "-print-annot"
+      let help = "print annotations"
+    end)
+
+let () = Parameter_customize.set_group inout_source
+let () = Parameter_customize.do_not_projectify ()
 module PrintLibc =
   Bool
     (struct

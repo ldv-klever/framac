@@ -2018,7 +2018,7 @@ let () = Ast.set_default_initialization
      else init_from_cmdline ())
 
 let pp_file_to fmt_opt =
-  let pp_ast = Printer.pp_file in
+  let pp_ast = (if not @@ Kernel.PrintAnnot.get () then Printer.without_annot else Extlib.id) Printer.pp_file in
   let ast = Ast.get () in
   (match fmt_opt with
     | None -> Kernel.CodeOutput.output (fun fmt -> pp_ast fmt ast)
