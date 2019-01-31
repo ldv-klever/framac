@@ -1294,10 +1294,10 @@ class cil_printer () = object (self)
       ()
 
     | Some style  ->
-      let directive = match style with
-	| Line_comment | Line_comment_sparse -> "//#line"
-	| Line_preprocessor_output when not (Cil.msvcMode ()) -> "#"
-	| Line_preprocessor_output | Line_preprocessor_input -> "#line"
+      let directive, pretty_path = match style with
+	| Line_comment | Line_comment_sparse -> "//#line", Datatype.Filepath.pretty
+	| Line_preprocessor_output when not (Cil.msvcMode ()) -> "#", Datatype.Filepath.pretty
+	| Line_preprocessor_output | Line_preprocessor_input -> "#line", Datatype.Filepath.pp_abs
       in
       let pos = fst l in
       lastLineNumber <- pos.Filepath.pos_lnum;
@@ -1305,7 +1305,7 @@ class cil_printer () = object (self)
         if forcefile || pos.Filepath.pos_path <> lastFileName then begin
           lastFileName <- pos.Filepath.pos_path;
           Format.asprintf " \"%a\""
-            Datatype.Filepath.pretty pos.Filepath.pos_path
+            pretty_path pos.Filepath.pos_path
 	end else
 	  ""
       in
