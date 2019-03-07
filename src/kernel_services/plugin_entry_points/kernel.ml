@@ -1192,6 +1192,24 @@ module Keep_unused_specified_functions =
         end)
 
 let () = Parameter_customize.set_group normalisation
+let () = Parameter_customize.set_negative_option_name "-remove-unused-static-functions"
+module Keep_unused_static_functions =
+  True(struct
+          let option_name = "-keep-unused-static-functions"
+          let module_name = "Keep_unused_static_functions"
+          let help = "keep unused static functions"
+        end)
+
+let () = Parameter_customize.set_group normalisation
+let () = Parameter_customize.set_negative_option_name "-remove-unused-inline-functions"
+module Keep_unused_inline_functions =
+  True(struct
+          let option_name = "-keep-unused-inline-functions"
+          let module_name = "Keep_unused_inline_functions"
+          let help = "keep unused inline functions"
+        end)
+
+let () = Parameter_customize.set_group normalisation
 module SimplifyTrivialLoops =
   True(struct
           let option_name = "-simplify-trivial-loops"

@@ -399,7 +399,13 @@ module KeepSwitch: Parameter_sig.Bool
   (** Behavior of option "-keep-switch" *)
 
 module Keep_unused_specified_functions: Parameter_sig.Bool
-(** Behavior of option "-keep-unused-specified-function". *)
+(** Behavior of option "-keep-unused-specified-functions". *)
+
+module Keep_unused_static_functions: Parameter_sig.Bool
+(** Behavior of option "-keep-unused-static-functions". *)
+
+module Keep_unused_inline_functions: Parameter_sig.Bool
+(** Behavior of option "-keep-unused-inline-functions". *)
 
 module SimplifyTrivialLoops: Parameter_sig.Bool
 (** Behavior of option "-simplify-trivial-loops". *)

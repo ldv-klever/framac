@@ -53,6 +53,10 @@ let keepUnused = ref false
 let rmUnusedInlines = ref false
 let rmUnusedStatic = ref false
 
+let () =
+  Kernel.Keep_unused_inline_functions.add_update_hook (fun _ f -> rmUnusedInlines := not f);
+  Kernel.Keep_unused_static_functions.add_update_hook (fun _ f -> rmUnusedStatic := not f)
+
 (***********************************************************************
  *
  *  Clearing of "referenced" bits
