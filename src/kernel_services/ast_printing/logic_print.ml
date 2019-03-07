@@ -370,12 +370,23 @@ let rec print_decl fmt d =
           (pp_list ~pre:"<@[" ~sep:",@ " ~suf:"@>}" pp_print_string) tvar
           (pp_list ~sep:",@ " print_typed_ident) prms
           (pp_list ~sep:"@\n" print_case) cases
-    | LDlemma(name,is_axiom,labels,tvar,body) ->
-        fprintf fmt "@[<2>%a@ %s%a%a:@ %a;@]"
+    | LDlemma(name,is_axiom,is_abstract,labels,tvar,body) ->
+        fprintf fmt "@[<2>%a@ %a@ %s%a%a:@ %a;@]"
+          (pp_cond ~pr_false:"" is_abstract) "abstract"
           (pp_cond ~pr_false:"lemma" is_axiom) "axiom" name
           (pp_list ~pre:"{@[" ~sep:",@ " ~suf:"@]}" pp_print_string) labels
           (pp_list ~pre:"<@[" ~sep:",@ " ~suf:"@>}" pp_print_string) tvar
           print_lexpr body
+    | LDinclude(name,types,functions,lemmas) ->
+        let pp_print_subst fmt (id_from, id_to) =
+          fprintf fmt "%s@ =@ %s" id_from id_to in
+        let pp_print_type_subst fmt (id_from, id_to) =
+          fprintf fmt "%a@ =@ %a" (print_logic_type None) id_from
+            (print_logic_type None) id_to in
+        fprintf fmt "@[<2>include@ %s@ \\with %a%a%a;@]" name
+          (pp_list ~pre:"type " ~sep:",@ type " ~suf:", " pp_print_type_subst) types
+          (pp_list ~pre:"function " ~sep:",@ function " ~suf:", " pp_print_subst) functions
+          (pp_list ~pre:"lemma " ~sep:",@ lemma " ~suf:", " pp_print_subst) lemmas
     | LDaxiomatic (s,d) ->
         fprintf fmt "@[<2>axiomatic@ %s@ {@\n%a@]@\n}" s
           (pp_list ~sep:"@\n" print_decl) d

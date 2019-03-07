@@ -95,6 +95,7 @@ let refresh_behavior b =
 let refresh_spec s =
   { spec_behavior = List.map refresh_behavior s.spec_behavior;
     spec_variant = s.spec_variant;
+    spec_lemma = s.spec_lemma;
     spec_terminates = Extlib.opt_map refresh_predicate s.spec_terminates;
     spec_complete_behaviors = s.spec_complete_behaviors;
     spec_disjoint_behaviors = s.spec_disjoint_behaviors;

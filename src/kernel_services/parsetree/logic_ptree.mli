@@ -241,17 +241,21 @@ and decl_node =
         (** [LDinductive_def(name,labels,type_params, parameters, indcases)]
             represents an inductive definition of a new predicate.
          *)
-  | LDlemma of string * bool * string list * string list * lexpr
-      (** LDlemma(name,is_axiom,labels,type_params,property) represents
+  | LDlemma of string * bool * bool * string list * string list * lexpr
+      (** LDlemma(name,is_axiom,is_abstract,labels,type_params,property) represents
           a lemma or an axiom [name].
-          [is_axiom] is true for an axiom and false for a lemma. [labels]
-          is the list of label arguments and
+          [is_axiom] is true for an axiom and false for a lemma.
+          [is_abstract] is a flag for flipping is_axiom on inclusion.
+          [labels] is the list of label arguments and
           [type_params] the list of type parameters. Last, [property] is the
           statement of the lemma.
        *)
   | LDaxiomatic of string * decl list
         (** [LDaxiomatic(id,decls)]
             represents a block of axiomatic definitions.*)
+  | LDinclude of string * (logic_type * logic_type) list * (string * string) list * (string * string) list (** axiomatic inclusion *)
+        (** LDinclude(name,types,functions,lemmas)
+            an inclusion statement (with substitutions) for axiomatics. *)
   | LDinvariant of string * lexpr (** global invariant. *)
   | LDtype_annot of type_annot    (** type invariant. *)
   | LDmodel_annot of model_annot    (** model field. *)
@@ -304,6 +308,9 @@ type spec = {
 
   mutable spec_variant : variant option;
   (** variant for recursive functions. *)
+
+  mutable spec_lemma : bool;
+  (** [true] for lemma functions *)
 
   mutable spec_terminates: lexpr option;
   (** termination condition. *)

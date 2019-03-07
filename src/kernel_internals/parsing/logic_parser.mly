@@ -225,6 +225,19 @@
   let cv_const = Attr ("const", [])
   let cv_volatile = Attr ("volatile", [])
 
+  type subst_type =
+    | Type of logic_type * logic_type
+    | Function of string * string
+    | Lemma of string * string
+
+  let sort_substs ss =
+    let rec sort_substs_inner ts fs ls ss = match ss with
+      | []                              -> (ts, fs, ls)
+      | Type     (id_from, id_to) :: tl -> sort_substs_inner ((id_from, id_to)::ts) fs ls tl
+      | Function (id_from, id_to) :: tl -> sort_substs_inner ts ((id_from, id_to)::fs) ls tl
+      | Lemma    (id_from, id_to) :: tl -> sort_substs_inner ts fs ((id_from, id_to)::ls) tl in
+    sort_substs_inner [] [] [] ss
+
 %}
 
 /*****************************************************************************/
@@ -254,7 +267,7 @@
 %token <string> EXT_CODE_ANNOT EXT_GLOBAL EXT_CONTRACT
 %token EXITS BREAKS CONTINUES RETURNS
 %token VOLATILE READS WRITES
-%token LOGIC PREDICATE INDUCTIVE AXIOMATIC AXIOM LEMMA LBRACE RBRACE
+%token LOGIC PREDICATE INDUCTIVE ABSTRACT AXIOMATIC AXIOM LEMMA LBRACE RBRACE
 %token GHOST MODEL CASE
 %token VOID CHAR SIGNED UNSIGNED SHORT LONG DOUBLE STRUCT ENUM UNION
 %token BSUNION INTER
@@ -926,7 +939,7 @@ ext_global_clauses:
 ;
 
 ext_global_clause:
-| decl  { Ext_decl (loc_decl $1) }
+| GLOBAL decl  { Ext_decl (loc_decl $2) }
 | EXT_LET any_identifier EQUAL full_lexpr SEMICOLON { Ext_macro (false, $2, $4) }
 | GLOBAL EXT_LET any_identifier EQUAL full_lexpr SEMICOLON { Ext_macro (true, $3, $5) }
 | INCLUDE string SEMICOLON { let b,s = $2 in Ext_include(b,s, loc()) }
@@ -1040,11 +1053,12 @@ spec:
 ;
 
 contract:
-| requires terminates decreases simple_clauses behaviors complete_or_disjoint
-    { let requires=$1 in
-      let (allocation,assigns,post_cond,extended) = $4 in
-      let behaviors = $5 in
-      let (completes,disjoints) = $6 in
+| is_lemma requires terminates decreases simple_clauses behaviors complete_or_disjoint
+    { let lemma = $1 in
+      let requires=$2 in
+      let (allocation,assigns,post_cond,extended) = $5 in
+      let behaviors = $6 in
+      let (completes,disjoints) = $7 in
       let behaviors =
         if requires <> [] || post_cond <> [] ||
 	   allocation <> FreeAllocAny ||
@@ -1053,55 +1067,56 @@ contract:
           (Cabshelper.mk_behavior
              ~requires ~post_cond ~assigns ~allocation ~extended ())
           :: behaviors
-        else if $2<>None || $3<>None || 
+        else if $3<>None || $4<>None || 
                 behaviors<>[] || completes<>[] ||disjoints<>[]
         then behaviors
         else raise (Not_well_formed (loc(),"Empty annotation is not allowed"))
       in
-        { spec_terminates = $2;
-          spec_variant = $3;
+        { spec_terminates = $3;
+          spec_variant = $4;
+          spec_lemma = $1;
           spec_behavior = behaviors;
           spec_complete_behaviors = completes;
           spec_disjoint_behaviors = disjoints;
         }, loc()
     }
-| requires ne_terminates REQUIRES { clause_order 3 "requires" "terminates" }
-| requires terminates ne_decreases REQUIRES
+| is_lemma requires ne_terminates REQUIRES { clause_order 3 "requires" "terminates" }
+| is_lemma requires terminates ne_decreases REQUIRES
       { clause_order 4 "requires" "decreases" }
-| requires terminates ne_decreases TERMINATES
+| is_lemma requires terminates ne_decreases TERMINATES
       { clause_order 4 "terminates" "decreases" }
-| requires terminates decreases ne_simple_clauses REQUIRES
+| is_lemma requires terminates decreases ne_simple_clauses REQUIRES
       { clause_order 5 "requires" "post-condition, assigns or allocates" }
-| requires terminates decreases ne_simple_clauses TERMINATES
+| is_lemma requires terminates decreases ne_simple_clauses TERMINATES
       { clause_order 5 "terminates" "post-condition, assigns or allocates" }
-| requires terminates decreases ne_simple_clauses DECREASES
+| is_lemma requires terminates decreases ne_simple_clauses DECREASES
       { clause_order 5 "decreases" "post-condition, assigns or allocates" }
-| requires terminates decreases simple_clauses ne_behaviors TERMINATES
+| is_lemma requires terminates decreases simple_clauses ne_behaviors TERMINATES
       { clause_order 6 "terminates" "behavior" }
-| requires terminates decreases simple_clauses ne_behaviors DECREASES
+| is_lemma requires terminates decreases simple_clauses ne_behaviors DECREASES
       { clause_order 6 "decreases" "behavior" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   REQUIRES
       { clause_order 7 "requires" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   TERMINATES
       { clause_order 7 "terminates" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   DECREASES
       { clause_order 7 "decreases" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   BEHAVIOR
       { clause_order 7 "behavior" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   ASSIGNS
       { clause_order 7 "assigns" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   ALLOCATES
       { clause_order 7 "allocates" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   FREES
       { clause_order 7 "frees" "complete or disjoint" }
-| requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
+| is_lemma requires terminates decreases simple_clauses behaviors ne_complete_or_disjoint
   post_cond_kind
       { clause_order 7 "post-condition" "complete or disjoint" }
 ;
@@ -1122,6 +1137,11 @@ clause_kw:
    recognized as identifiers... */
 | IDENTIFIER { $1 }
 | EOF { "end of annotation" }
+
+is_lemma:
+| /* epsilon */ { false }
+| LEMMA { true }
+;
 
 requires:
 | /* epsilon */ { [] }
@@ -1575,6 +1595,11 @@ parameters:
 | LPAR full_parameters RPAR { $2 }
 ;
 
+maybe_abstract:
+| ABSTRACT { true }
+| { false }
+;
+
 logic_def:
 /* logic function definition */
 | LOGIC full_logic_rt_type poly_id opt_parameters EQUAL full_lexpr SEMICOLON
@@ -1591,10 +1616,10 @@ logic_def:
     { let (id,labels,tvars) = $2 in
       exit_type_variables_scope ();
       LDinductive_def(id, labels, tvars, $3, $5) }
-| LEMMA poly_id COLON full_lexpr SEMICOLON
-    { let (id,labels,tvars) = $2 in
+| maybe_abstract LEMMA poly_id COLON full_lexpr SEMICOLON
+    { let (id,labels,tvars) = $3 in
       exit_type_variables_scope ();
-      LDlemma (id, false, labels, tvars, $4) }
+      LDlemma (id, false, $1, labels, tvars, $5) }
 | AXIOMATIC any_identifier LBRACE logic_decls RBRACE
     { LDaxiomatic($2,$4) }
 | TYPE poly_id_type_add_typename EQUAL typedef SEMICOLON
@@ -1679,10 +1704,25 @@ logic_decl:
       exit_type_variables_scope ();
       LDtype(id,tvars,None) }
 /* axiom */
-| AXIOM poly_id COLON full_lexpr SEMICOLON
-    { let (id,labels,tvars) = $2 in
+| maybe_abstract AXIOM poly_id COLON full_lexpr SEMICOLON
+    { let (id,labels,tvars) = $3 in
       exit_type_variables_scope ();
-      LDlemma (id, true, labels, tvars, $4) }
+      LDlemma (id, true, $1, labels, tvars, $5) }
+/* include */
+| INCLUDE any_identifier WITH subst SEMICOLON
+    { let (types, functions, lemmas) = sort_substs $4 in
+      LDinclude ($2, types, functions, lemmas) }
+;
+
+subst_elt:
+| FUNCTION any_identifier EQUAL any_identifier { Function ($2, $4) }
+| TYPE     type_spec      EQUAL type_spec      { Type     ($2, $4) }
+| LEMMA    any_identifier EQUAL any_identifier { Lemma    ($2, $4) }
+;
+
+subst:
+| subst_elt                 { [$1] }
+| subst_elt COMMA subst     { $1::$3 }
 ;
 
 logic_decl_loc:
@@ -1848,6 +1888,21 @@ post_cond:
 ;
 
 is_acsl_spec:
+| post_cond                     { snd $1 }
+| ASSIGNS                       { "assigns" }
+| ALLOCATES                     { "allocates" }
+| FREES                         { "frees" }
+| BEHAVIOR                      { "behavior" }
+| maybe_abstract LEMMA REQUIRES { "lemma" }
+| maybe_abstract LEMMA ENSURES  { "lemma" }
+| REQUIRES                      { "requires" }
+| TERMINATES                    { "terminates" }
+| COMPLETE                      { "complete" }
+| DECREASES                     { "decreases" }
+| DISJOINT                      { "disjoint" }
+;
+
+is_acsl_spec_kw:
 | post_cond  { snd $1 }
 | EXT_CONTRACT   { $1 }
 | ASSIGNS    { "assigns" }
@@ -1866,6 +1921,7 @@ is_acsl_decl_or_code_annot:
 | ASSUMES   { "assumes" }
 | GLOBAL    { "global" }
 | IMPACT    { "impact" }
+| INCLUDE   { "include" }
 | INDUCTIVE { "inductive" }
 | INVARIANT { "invariant" }
 | LEMMA     { "lemma" }
@@ -1893,7 +1949,6 @@ is_ext_spec:
 | CONTRACT { "contract" }
 | FUNCTION { "function" }
 | MODULE   { "module" }
-| INCLUDE  { "include" }
 | EXT_AT   { "at" }
 | EXT_LET  { "let" }
 ;
@@ -1903,10 +1958,10 @@ keyword:
 | non_logic_keyword { $1 }
 
 non_logic_keyword:
-| c_keyword      { $1 }
-| acsl_c_keyword { $1 }
-| is_ext_spec    { $1 }
-| is_acsl_spec   { $1 }
+| c_keyword       { $1 }
+| acsl_c_keyword  { $1 }
+| is_ext_spec     { $1 }
+| is_acsl_spec_kw { $1 }
 | is_acsl_decl_or_code_annot { $1 }
 | is_acsl_other  { $1 }
 | CUSTOM { "custom" }

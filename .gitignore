@@ -95,6 +95,9 @@ src/plugins/aorai/yalexer.ml
 src/plugins/aorai/yaparser.ml
 src/plugins/aorai/yaparser.mli
 src/plugins/e-acsl/tests/test_config
+src/plugins/e-acsl/tests/ptests_config
+src/plugins/e-acsl/Makefile
+src/plugins/e-acsl/doc/doxygen/doxygen.cfg
 src/kernel/config.ml
 src/kernel/frama_c_config.ml
 src/lib/dynlink_common_interface.ml
