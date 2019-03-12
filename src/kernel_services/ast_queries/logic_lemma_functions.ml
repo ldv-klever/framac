@@ -173,7 +173,8 @@ let check_annot_get_beh f =
   (match f.sspec.spec_terminates with
   | None -> ()
   | Some term_p when term_p.ip_content.pred_content = Ptrue -> ()
-  | _ -> Kernel.fatal "abrupt termination for lemma-functions is not allowed");
+  | Some _ when f.sspec.spec_lemma -> Kernel.fatal "abrupt termination for lemma-functions is not allowed"
+  | Some _ -> ());
   if (List.length f.sspec.spec_behavior = 1) then (
     let beh = (List.hd f.sspec.spec_behavior) in
     if f.sspec.spec_lemma then (
