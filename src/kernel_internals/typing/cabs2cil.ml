@@ -1060,6 +1060,7 @@ let currentFunctionFDEC: fundec ref = ref dummy_function
 
 (* Keep a set of self compinfo for composite types *)
 let compInfoNameEnv : (string, (compinfo * bool) * A.field_group list) H.t = H.create 113
+let lastStructIdEnv : (string, int) H.t = H.create 113
 
 let lastStructId = ref 0
 let freeStructId = ref 0
@@ -1092,12 +1093,12 @@ let anonStructName =
 let constrExprId = ref 0
 
 
-let startFile stage =
+let startFile stage fname =
   H.clear env;
   H.clear genv;
   H.clear alphaTable;
   begin match stage with
-  | `Bodies _ -> freeStructId := !lastStructId + 1;
+  | `Bodies _ -> freeStructId := H.find lastStructIdEnv fname + 1
   | _ -> ()
   end;
   lastStructId := 0;
@@ -10193,7 +10194,7 @@ let convFile ~stage (path, f) =
   Errorloc.clear_errors();
   (* Clean up the global types *)
   initGlobals();
-  startFile stage;
+  startFile stage fname;
   IH.clear noProtoFunctions;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
@@ -10266,6 +10267,7 @@ let convFile ~stage (path, f) =
   H.clear genv;
   IH.clear callTempVars;
   H.clear alpha_renaming;
+  H.add lastStructIdEnv fname !lastStructId;
   constrExprId := 0;
 
   if false then Kernel.debug "Cabs2cil converted %d globals" !globalidx;
