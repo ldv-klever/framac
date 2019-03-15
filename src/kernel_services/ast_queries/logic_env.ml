@@ -436,7 +436,7 @@ let prepare_tables =
     Logic_ctor_builtin.iter Logic_ctor_info.add;
     Logic_builtin_used.iter Logic_info.add;
     match stage with
-    | `Names -> ()
+    | `Once | `Names -> ()
     | `Types (filename, imports) | `Bodies (filename, imports) ->
       let module H = Datatype.String.Hashtbl in
       begin try

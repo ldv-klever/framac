@@ -52,6 +52,7 @@ val add_syntactic_transformation: (Cabs.file -> Cabs.file) -> unit
 val parse_to_cabs : Datatype.Filepath.t -> Cabs.file
 
 (** the main command to parse a file. *)
-val parse: stage:[ `Names
+val parse: stage:[ `Once
+                 | `Names
                  | `Types of string * (string * string list) list
                  | `Bodies of string * (string * string list) list ] -> Cabs.file -> Cil_types.file

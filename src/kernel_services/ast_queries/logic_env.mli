@@ -63,7 +63,8 @@ val builtin_states: State.t list
 (** Prepare all internal tables before their uses:
     clear all tables except builtins. *)
 val prepare_tables :
-  ?stage:[ `Names
+  ?stage:[ `Once
+         | `Names
          | `Types of string * (string * string list) list
          | `Bodies of string * (string * string list) list  ] -> unit -> unit
 

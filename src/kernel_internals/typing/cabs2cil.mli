@@ -137,7 +137,8 @@ val register_for_loop_body_hook: (Cabs.statement -> unit) -> unit
 val register_for_loop_incr_hook: (Cabs.expression -> unit) -> unit
 
 (** @plugin development guide *)
-val convFile: stage:[ `Names
+val convFile: stage:[ `Once
+                    | `Names
                     | `Types of string * (string * string list) list
                     | `Bodies of string * (string * string list) list ] -> Cabs.file -> Cil_types.file
 

@@ -1061,6 +1061,7 @@ let currentFunctionFDEC: fundec ref = ref dummy_function
 (* Keep a set of self compinfo for composite types *)
 let compInfoNameEnv : (string, (compinfo * bool) * A.field_group list) H.t = H.create 113
 let lastStructIdEnv : (string, int) H.t = H.create 113
+let maxStructId = ref 0
 
 let lastStructId = ref 0
 let freeStructId = ref 0
@@ -1098,10 +1099,12 @@ let startFile stage fname =
   H.clear genv;
   H.clear alphaTable;
   begin match stage with
-  | `Bodies _ -> freeStructId := H.find lastStructIdEnv fname + 1
-  | _ -> ()
-  end;
-  lastStructId := 0;
+  | `Once     -> ()
+  | `Names    -> H.add lastStructIdEnv fname !maxStructId
+  | `Types _  -> lastStructId := H.find lastStructIdEnv fname
+  | `Bodies _ ->(freeStructId := !maxStructId + 1;
+                 lastStructId := H.find lastStructIdEnv fname)
+  end
 ;;
 
 (* Lookup a variable name. Return also the location of the definition. Might
@@ -10200,7 +10203,7 @@ let convFile ~stage (path, f) =
   H.clear enumInfoNameEnv;
   H.clear typeInfoNameEnv;
   begin match stage with
-  | `Names | `Types _ -> ()
+  | `Once | `Names | `Types _ -> ()
   | `Bodies (fname, _) ->
     H.iter (fun k ((ci, _), body) -> H.add compInfoNameEnv k ((ci, true), body)) (H.find compInfoCache fname);
     H.iter (fun k (ci, _) -> H.add enumInfoNameEnv k (ci, true)) (H.find enumInfoCache fname);
@@ -10226,6 +10229,7 @@ let convFile ~stage (path, f) =
     let local_env = ghost_local_env ghost in
     let stage =
       match stage with
+      | `Once -> `Bodies
       | `Names -> `Names
       | `Types _ -> `Types
       | `Bodies _ -> `Bodies
@@ -10243,7 +10247,7 @@ let convFile ~stage (path, f) =
   in
   resolve_string_literals ();
   List.iter rename_spec !globals;
-  if stage = `Names then
+  if stage = `Names || stage = `Once then
     Logic_env.save_tables fname
   else
     Logic_env.check_forward_declarations ();
@@ -10252,12 +10256,13 @@ let convFile ~stage (path, f) =
   IH.clear mustTurnIntoDef;
   H.clear alreadyDefined;
   begin match stage with
-  | `Names | `Bodies _ -> ()
+  | `Once | `Names | `Bodies _ -> ()
   | `Types (fname, _) ->
     H.add compInfoCache fname (H.copy compInfoNameEnv);
     H.add enumInfoCache fname (H.copy enumInfoNameEnv);
     H.add typeInfoCache fname (H.copy typeInfoNameEnv)
   end;
+  maxStructId := max (max !maxStructId !lastStructId) !freeStructId;
   H.clear compInfoNameEnv;
   H.clear enumInfoNameEnv;
   H.clear typeInfoNameEnv;
@@ -10267,7 +10272,6 @@ let convFile ~stage (path, f) =
   H.clear genv;
   IH.clear callTempVars;
   H.clear alpha_renaming;
-  H.add lastStructIdEnv fname !lastStructId;
   constrExprId := 0;
 
   if false then Kernel.debug "Cabs2cil converted %d globals" !globalidx;

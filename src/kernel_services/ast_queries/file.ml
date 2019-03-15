@@ -860,109 +860,114 @@ let propagate_logic_info_default_labels =
     done;
     visitCilFile default_label_assoc_visitor file
 
-let files_to_cil files =
-  (* BY 2011-05-10 Deactivated this mark_as_computed. Does not seem to
-     do anything useful anymore, and causes problem with the self-recovering
-     gui (commit 13295)
-  (* mark as computed early in case of a typing error occur: do not type check
-     the erroneous program twice. *)
-     Ast.mark_as_computed (); *)
-  let debug_globals files =
-    let level = 6 in
-    if Kernel.debug_atleast level then begin
-      List.iter
-        (fun f ->
-           (* NB: don't use frama-C printer here, as the
-              annotations tables are not filled yet. *)
-           List.iter
-             (fun g -> Kernel.debug ~level "%a" Printer.pp_global g)
-             f.globals)
-        files
-    end
+type _ parsing_mode =
+  | Topological : Cil_types.file parsing_mode
+  | Recursive   : (Cil_types.file * Cabs.file list) parsing_mode
+
+let files_to_cil (type k) : k parsing_mode -> file list -> k =
+  let cabs f =
+    let fname, decls =
+      try
+        parse_cabs f
+      with exn when Errorloc.had_errors () ->
+        if Kernel.Debug.get () >= 1 then raise exn
+        else
+          Kernel.abort "@[stopping on@ file %S@ that@ has@ errors.%t@]"
+            (get_name f)
+            (fun fmt ->
+               if Filename.check_suffix (get_name f) ".c" &&
+                  not (Kernel.is_debug_key_enabled Kernel.dkey_pp)
+               then
+                 Format.fprintf fmt "@ Add@ '-kernel-msg-key pp'@ \
+                                     for preprocessing command.")
+    in
+    let decls, imports =
+      List.fold_left
+        (fun (decls, imports) ->
+           function
+           | b, Cabs.GLOBANNOT l ->
+             let l, imports =
+               List.fold_left
+                 (fun (decls, imports) ->
+                    function
+                    | { Logic_ptree.decl_node = Logic_ptree.LDimport (fname, names) } ->
+                      decls, (fname, names) :: imports
+                    | decl -> decl :: decls, imports)
+                 ([], imports)
+                 l
+             in
+             begin match l with
+               | [] -> decls, imports
+               | _ :: _ -> (b, Cabs.GLOBANNOT (List.rev l)) :: decls, imports
+             end
+           | decl -> decl :: decls, imports)
+        ([], [])
+        decls
+    in
+    (fname, List.rev decls), imports
   in
-  (* Parsing and merging must occur in the very same order.
-     Otherwise the order of files on the command line will not be consistently
-     handled. *)
-    Kernel.feedback ~level:2 "parsing";
-    let cabs_imports =
-      List.map
-        (fun f ->
-           let fname, decls =
-             try
-               parse_cabs f
-             with exn when Errorloc.had_errors () ->
-             if Kernel.Debug.get () >= 1 then raise exn
-             else
-               Kernel.abort "@[stopping on@ file %S@ that@ has@ errors.%t@]"
-                 (get_name f)
-                 (fun fmt ->
-                    if Filename.check_suffix (get_name f) ".c" &&
-                       not (Kernel.is_debug_key_enabled Kernel.dkey_pp)
-                    then
-                      Format.fprintf fmt "@ Add@ '-kernel-msg-key pp'@ \
-                                          for preprocessing command.")
-           in
-           let decls, imports =
-             List.fold_left
-               (fun (decls, imports) ->
-                  function
-                  | b, Cabs.GLOBANNOT l ->
-                    let l, imports =
-                      List.fold_left
-                        (fun (decls, imports) ->
-                           function
-                           | { Logic_ptree.decl_node = Logic_ptree.LDimport (fname, names) } ->
-                             decls, (fname, names) :: imports
-                           | decl -> decl :: decls, imports)
-                        ([], imports)
-                        l
-                    in
-                    begin match l with
-                    | [] -> decls, imports
-                    | _ :: _ -> (b, Cabs.GLOBANNOT (List.rev l)) :: decls, imports
-                    end
-                  | decl -> decl :: decls, imports)
-               ([], [])
-               decls
-           in
-           (fname, List.rev decls), imports)
-        files
-    in
-    let cil_files =
-      let parse ~stage cabs =
-        try
-          let file = Frontc.parse ~stage cabs in
-          file.fileName <- fst cabs;
-	  Kernel.debug ~dkey:Kernel.dkey_file_print_one "result of parsing %a:@\n%a"
-            Filepath.Normalized.pretty (fst cabs) Cil_printer.pp_file file;
-	  if Errorloc.had_errors () then raise Exit;
-          file
-        with exn when Errorloc.had_errors () ->
-          if Kernel.Debug.get () >= 1 then raise exn
-          else
-            Kernel.abort "skipping file %a that has errors." Filepath.Normalized.pretty (fst cabs)
+  let parse ~stage cabs =
+    try
+      let file = Frontc.parse ~stage cabs in
+      file.fileName <- fst cabs;
+      Kernel.debug ~dkey:Kernel.dkey_file_print_one "result of parsing %a:@\n%a"
+        Filepath.Normalized.pretty (fst cabs) Cil_printer.pp_file file;
+      if Errorloc.had_errors () then raise Exit;
+      file
+    with exn when Errorloc.had_errors () ->
+      if Kernel.Debug.get () >= 1 then raise exn
+      else
+        Kernel.abort "skipping file %a that has errors." Filepath.Normalized.pretty (fst cabs)
+  in
+  function
+  | Recursive ->
+    fun files ->
+      (* Parsing and merging must occur in the very same order.
+         Otherwise the order of files on the command line will not be consistently
+         handled. *)
+      Kernel.feedback ~level:2 "parsing";
+      let cabs_imports = List.map cabs files in
+      let cil_files =
+        List.iter (fun (cabs, _) -> ignore @@ parse ~stage:`Names cabs) cabs_imports;
+        List.iter
+          (fun (cabs, imports) ->
+             ignore @@ parse ~stage:(`Types ((fst cabs : Filepath.Normalized.t :> string), imports)) cabs)
+          cabs_imports;
+        List.map
+          (fun  (cabs, imports) ->
+             parse ~stage:(`Bodies ((fst cabs : Filepath.Normalized.t :> string), imports)) cabs)
+          cabs_imports
       in
-      List.iter (fun (cabs, _) -> ignore @@ parse ~stage:`Names cabs) cabs_imports;
-      List.iter
-        (fun (cabs, imports) ->
-           ignore @@ parse ~stage:(`Types ((fst cabs : Filepath.Normalized.t :> string), imports)) cabs)
-        cabs_imports;
-      List.map
-        (fun (cabs, imports) ->
-           parse ~stage:(`Bodies ((fst cabs : Filepath.Normalized.t :> string), imports)) cabs)
-        cabs_imports
-    in
-    (* fold_left reverses the list order.
-       This is an issue with pre-registered files. *)
-  let cabs_files = List.map fst cabs_imports in
-  Ast.UntypedFiles.set cabs_files;
-  (* Perform symbolic merge of all files *)
-  Kernel.feedback ~level:2 "symbolic link";
-  let merged_file = Mergecil.merge cil_files "whole_program" in
-  Logic_utils.complete_types merged_file;
-  if Kernel.UnspecifiedAccess.get () then
-    Undefined_sequence.check_sequences merged_file;
-  merged_file, cabs_files
+      let cabs_files = List.map fst cabs_imports in
+      Ast.UntypedFiles.set cabs_files;
+      (* Perform symbolic merge of all files *)
+      Kernel.feedback ~level:2 "symbolic link";
+      let merged_file = Mergecil.merge cil_files "whole_program" in
+      Logic_utils.complete_types merged_file;
+      if Kernel.UnspecifiedAccess.get () then
+        Undefined_sequence.check_sequences merged_file;
+      merged_file, cabs_files
+  | Topological ->
+    fun files ->
+      (* Parsing and merging must occur in the very same order.
+         Otherwise the order of files on the command line will not be consistently
+         handled. *)
+      Kernel.feedback ~level:2 "parsing";
+      let cil_files =
+        List.map
+          (fun f ->
+             let f = parse ~stage:`Once @@ fst @@ cabs f in
+             Rmtmps.removeUnusedTemps f;
+             f)
+          files
+      in
+      (* Perform symbolic merge of all files *)
+      Kernel.feedback ~level:2 "symbolic link";
+      let merged_file = Mergecil.merge cil_files "whole_program" in
+      Logic_utils.complete_types merged_file;
+      if Kernel.UnspecifiedAccess.get () then
+        Undefined_sequence.check_sequences merged_file;
+      merged_file
 (* "Implicit" annotations are those added by the kernel with ACSL name
    'Frama_C_implicit_init'. Currently, this concerns statements that are
    generated to initialize local variables. *)
@@ -1906,7 +1911,12 @@ let init_cil () =
 let prepare_from_c_files () =
   init_cil ();
   let files = Files.get () in (* Allow pre-registration of prolog files *)
-  let cil, _ = files_to_cil files in
+  let cil =
+    if Kernel.ReadAnnot.get () then
+      fst @@ files_to_cil Recursive files
+    else
+      files_to_cil Topological files
+  in
   prepare_cil_file cil
 
 let init_project_from_visitor ?(reorder=false) prj
