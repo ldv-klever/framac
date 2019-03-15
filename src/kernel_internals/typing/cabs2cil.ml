@@ -7230,7 +7230,7 @@ and doExp local_env
                   (ifChunk ~ghost tmp_lval loc skipChunk
                      (se3 @@ (dangerous, ghost)), ghost))
                  res
-                 Cil.voidType
+                 tresult
              | None ->
                (* we can drop e3, just keep e1 in case it is dangerous *)
                let (r1,se1,e1,_) =
@@ -7241,7 +7241,7 @@ and doExp local_env
                    keepPureExpr ~ghost e1 loc
                  else skipChunk
                in
-               finishExp (r1@r3) (se1 @@ (dangerous, ghost)) res Cil.voidType
+               finishExp (r1@r3) (se1 @@ (dangerous, ghost)) res tresult
              | Some e2'
                when is_dangerous e2' || is_dangerous e3'
                     || not (isEmpty se2) || not (isEmpty se3) ->
@@ -7259,7 +7259,7 @@ and doExp local_env
                  else se3
                in
                let cond = compileCondExp ~ghost ce1 se2 se3 in
-               finishExp (r2@r3) cond res Cil.voidType
+               finishExp (r2@r3) cond res tresult
              | Some _ -> (* we just keep e1 in case it is dangerous. everything
                             else can be dropped *)
                let (r1,se1,e1,_) =
@@ -7270,7 +7270,7 @@ and doExp local_env
                    keepPureExpr ~ghost e1 loc
                  else skipChunk
                in
-               finishExp (r1@r2@r3) (se1 @@ (dangerous, ghost)) res Cil.voidType)
+               finishExp (r1@r2@r3) (se1 @@ (dangerous, ghost)) res tresult)
           | _ -> (* Use a conditional *) begin
               match e2'o with
               | None -> (* has form "e1 ? : e3"  *)
