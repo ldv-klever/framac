@@ -2826,7 +2826,9 @@ struct
       lfun_app ctxt env loc f labels ttl
     | PLunop (Ubw_not, t) ->
       let t = type_int_term ctxt env t in
-      TUnOp (BNot, t), logic_arithmetic_promotion t.term_type
+      let ty = t.term_type in
+      if not (isLogicType isIntegralType ty) then modulo_op_error ~loc ty;
+      TUnOp (BNot, t), ty
     | PLunop (Ustar, t) ->
       check_current_label loc env;
       (* memory access need a current label to have some semantics *)
