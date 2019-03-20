@@ -922,7 +922,8 @@ let add_string_literal, resolve_string_literals =
           let s_equal s1 s2 =
             match s1, s2 with
             | `String s1, `String s2 -> String.compare s1 s2 == 0
-            | `Wstring l1, `Wstring l2 -> List.for_all2 (fun a b -> Int64.compare a b == 0) l1 l2
+            | `Wstring l1, `Wstring l2 -> List.(length l1 = length l2) &&
+                                          List.for_all2 (fun a b -> Int64.compare a b == 0) l1 l2
             | _ -> false
           in
           match a, b with
