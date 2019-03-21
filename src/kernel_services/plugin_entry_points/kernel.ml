@@ -880,6 +880,17 @@ module Machdep =
 
 let () = Parameter_customize.set_group parsing
 let () = Parameter_customize.do_not_reset_on_copy ()
+let () = Parameter_customize.set_cmdline_stage Cmdline.Extended
+module ShortWchar =
+  False
+    (struct
+      let module_name = "ShortWchar"
+      let option_name = "-short-wchar"
+      let help = "Override the underlying type for \"wchar_t\" to be \"short unsigned int\""
+    end)
+
+let () = Parameter_customize.set_group parsing
+let () = Parameter_customize.do_not_reset_on_copy ()
 module ReadAnnot =
   True(struct
          let module_name = "ReadAnnot"

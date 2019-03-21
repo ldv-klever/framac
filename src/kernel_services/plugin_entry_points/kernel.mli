@@ -356,6 +356,9 @@ module UnrollingForce: Parameter_sig.Bool
     called for well preparing the AST. *)
 module Machdep: Parameter_sig.String
 
+(** Behavior of option "-short-wchar" *)
+module ShortWchar: Parameter_sig.Bool
+
 (** Behavior of invisible option -keep-logical operator:
     Tries to avoid converting && and || into conditional statements.
     Note that this option is incompatible with many (most) plug-ins of the

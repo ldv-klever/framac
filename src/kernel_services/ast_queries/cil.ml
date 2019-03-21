@@ -7558,6 +7558,7 @@ let initCIL ~initLogicBuiltins machdep =
       findIkindName theMachine.theMachine.size_t;
     theMachine.typeOfSizeOf <- TInt(theMachine.kindOfSizeOf, []);
     theMachine.wcharKind <- findIkindName theMachine.theMachine.wchar_t;
+    if Kernel.ShortWchar.get () then theMachine.wcharKind <- findIkindName "unsigned short";
     theMachine.wcharType <- TInt(theMachine.wcharKind, []);
     theMachine.ptrdiffKind <- findIkindName theMachine.theMachine.ptrdiff_t;
     theMachine.ptrdiffType <- TInt(theMachine.ptrdiffKind, []);
