@@ -205,9 +205,10 @@ let alphaWorker      ~(alphaTable: 'a alphaTable)
                 let base =
                   if is_generated_name prefix then prefix else lookupname
                 in
-                H.add
-                  infixes newsuffix
-                  (ref (Integer.minus_one, [(Integer.minus_one, data)]));
+                if rename_mode = Add_new_suffix then
+                  H.add
+                    infixes (infix ^ newsuffix)
+                    (ref (Integer.minus_one, [(Integer.minus_one, data)]));
                 (match undolist with
                   | Some l -> l:= AlphaAddedSuffix (prefix,newsuffix)::!l
                   | None -> ());
