@@ -3326,12 +3326,12 @@ struct
           then f loc op t1 t2
           else if (op=Eq || op = Neq) then conditional_conversion t1 t2
           else
-            ctxt.error loc "comparison of incompatible types: %a and %a"
-              Cil_printer.pp_logic_type t1.term_type
-              Cil_printer.pp_logic_type t2.term_type
+            ctxt.error loc "only (dis)equality is allowed for comparison of types: %a and %a"
+              Cil_printer.pp_logic_type ty1
+              Cil_printer.pp_logic_type ty2
         | Eq | Neq -> conditional_conversion t1 t2
         | _ ->
-          ctxt.error loc "comparison of incompatible types: %a and %a"
+          ctxt.error loc "this reltion is not applicable to types: %a and %a"
             Cil_printer.pp_logic_type t1.term_type
             Cil_printer.pp_logic_type t2.term_type
       end
