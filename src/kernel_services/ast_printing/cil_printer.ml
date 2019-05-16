@@ -544,7 +544,8 @@ class cil_printer () = object (self)
       fprintf fmt "%s%a" prefix (pretty_C_constant suffix ik) i
 
     | CStr(s) -> fprintf fmt "\"%s\"" (Escape.escape_string s)
-    | CWStr(s) ->
+    | CWStr ([]) -> fprintf fmt "L\"\""
+    | CWStr(_ :: _ as s) ->
       (* text ("L\"" ^ escape_string s ^ "\"")  *)
       fprintf fmt "L";
       List.iter
