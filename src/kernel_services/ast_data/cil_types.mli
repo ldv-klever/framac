@@ -435,7 +435,7 @@ and fieldinfo = {
   mutable fsize_in_bits: int option;
   (** (Deprecated. Use {!Cil.bitsOffset} instead.) Similar to [fbitfield] for
       all types of fields.
-      @deprecated only Jessie uses this *)
+      @deprecated only Astraver uses this *)
 
   mutable foffset_in_bits: int option;
   (** Offset at which the field starts in the structure. Do not read directly,
@@ -443,7 +443,7 @@ and fieldinfo = {
 
   mutable fpadding_in_bits: int option;
 (** (Deprecated.) Store the size of the padding that follows the field, if any.
-    @deprecated only Jessie uses this *)
+    @deprecated only Astraver uses this *)
 }
 
 (* ************************************************************************* *)
@@ -1761,16 +1761,16 @@ and impact_pragma =
   | IPexpr of term
   | IPstmt
 
-(** Pragmas for the Jessie plugin of Frama-C. *)
-and jessie_pragma =
-  | JPexpr of term
+(** Pragmas for the Astraver plugin of Frama-C. *)
+and astraver_pragma =
+  | APexpr of term
 
 (** The various kinds of pragmas. *)
 and pragma =
   | Loop_pragma of loop_pragma
   | Slice_pragma of slice_pragma
   | Impact_pragma of impact_pragma
-  | Jessie_pragma of jessie_pragma
+  | Astraver_pragma of astraver_pragma
 
 (** all annotations that can be found in the code.
     This type shares the name of its constructors with

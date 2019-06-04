@@ -119,7 +119,7 @@
 	"include", INCLUDE, false;(* ACSL extension for external spec file *)
         "int", INT, true;
         "invariant", INVARIANT, false;
-        "jessie", JESSIE, false;
+        "av", ASTRAVER, false;
         "label", LABEL, false;
         "lemma", LEMMA, false;
         "let", EXT_LET, false;(* ACSL extension for external spec file *)

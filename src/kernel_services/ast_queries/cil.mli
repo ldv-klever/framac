@@ -1912,7 +1912,7 @@ class type cilVisitor = object
   method vloop_pragma: loop_pragma -> loop_pragma visitAction
   method vslice_pragma: slice_pragma -> slice_pragma visitAction
   method vimpact_pragma: impact_pragma -> impact_pragma visitAction
-  method vjessie_pragma: jessie_pragma -> jessie_pragma visitAction
+  method vastraver_pragma: astraver_pragma -> astraver_pragma visitAction
 
   method vdeps: deps -> deps visitAction
   method vfrom: from -> from visitAction

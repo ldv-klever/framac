@@ -916,7 +916,7 @@ to function contracts."
 	labels := Logic_label.Set.union (extract_labels_from_pred x) !labels
       in
       match a.annot_content with
-      | APragma (Slice_pragma (SPexpr term) | Impact_pragma (IPexpr term) | Jessie_pragma (JPexpr term)) ->
+      | APragma (Slice_pragma (SPexpr term) | Impact_pragma (IPexpr term) | Astraver_pragma (APexpr term)) ->
         (* to preserve the interpretation of the pragma *)
         get_zone_from_term ki term;
         (* to select the reachability of the pragma *)
@@ -1030,7 +1030,7 @@ to function contracts."
         | AInvariant(_,false,_) -> others
         | AAllocation _ -> others
         | AAssigns _ -> others
-        | APragma (Loop_pragma _)| APragma (Impact_pragma _) | APragma (Jessie_pragma _) -> others
+        | APragma (Loop_pragma _)| APragma (Impact_pragma _) | APragma (Astraver_pragma _) -> others
         | AStmtSpec _ | AExtended _  (* TODO: statement contract *) -> false
   end
 

@@ -995,7 +995,7 @@ let rec eval_term ~alarm_mode env t =
 
   | Tlambda _ -> unsupported "logic functions or predicates"
   | TUpdate _ -> unsupported "functional updates"
-  | TCoerce _ | TCoerceE _ -> unsupported "logic coercions" (* jessie *)
+  | TCoerce _ | TCoerceE _ -> unsupported "logic coercions"
   | Ttype _ -> unsupported "\\type operator"
   | Ttypeof _ -> unsupported "\\typeof operator"
   | Toffset_min _ | Toffset_max _ -> unsupported "\\offset_[max/min] operator"

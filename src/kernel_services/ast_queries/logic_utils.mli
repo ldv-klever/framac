@@ -320,7 +320,7 @@ val is_same_logic_type_info :
 val is_same_loop_pragma : loop_pragma -> loop_pragma -> bool
 val is_same_slice_pragma : slice_pragma -> slice_pragma -> bool
 val is_same_impact_pragma : impact_pragma -> impact_pragma -> bool
-val is_same_jessie_pragma : jessie_pragma -> jessie_pragma -> bool
+val is_same_astraver_pragma : astraver_pragma -> astraver_pragma -> bool
 val is_same_pragma : pragma -> pragma -> bool
 val is_same_code_annotation : code_annotation -> code_annotation -> bool
 val is_same_global_annotation : global_annotation -> global_annotation -> bool
@@ -393,7 +393,7 @@ val is_pragma : code_annotation -> bool
 val is_loop_pragma : code_annotation -> bool
 val is_slice_pragma : code_annotation -> bool
 val is_impact_pragma : code_annotation -> bool
-val is_jessie_pragma : code_annotation -> bool
+val is_astraver_pragma : code_annotation -> bool
 val is_loop_annot : code_annotation -> bool
 
 val is_trivial_annotation : code_annotation -> bool

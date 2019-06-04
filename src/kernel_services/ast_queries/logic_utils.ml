@@ -1017,17 +1017,17 @@ let is_same_impact_pragma p1 p2 =
   | IPstmt, IPstmt -> true
   | (IPexpr _ | IPstmt), _ -> false
 
-let is_same_jessie_pragma p1 p2 =
+let is_same_astraver_pragma p1 p2 =
   match p1, p2 with
-  | JPexpr t1, JPexpr t2 -> is_same_term t1 t2
+  | APexpr t1, APexpr t2 -> is_same_term t1 t2
 
 let is_same_pragma p1 p2 =
   match p1,p2 with
   | Loop_pragma p1, Loop_pragma p2 -> is_same_loop_pragma p1 p2
   | Slice_pragma p1, Slice_pragma p2 -> is_same_slice_pragma p1 p2
   | Impact_pragma p1, Impact_pragma p2 -> is_same_impact_pragma p1 p2
-  | Jessie_pragma p1, Jessie_pragma p2 -> is_same_jessie_pragma p1 p2
-  | (Loop_pragma _ | Slice_pragma _ | Impact_pragma _ | Jessie_pragma _), _ -> false
+  | Astraver_pragma p1, Astraver_pragma p2 -> is_same_astraver_pragma p1 p2
+  | (Loop_pragma _ | Slice_pragma _ | Impact_pragma _ | Astraver_pragma _), _ -> false
 
 let is_same_extension (_,e1, _,c1) (_,e2, _,c2) =
   Datatype.String.equal e1 e2 &&
@@ -2144,8 +2144,8 @@ let is_slice_pragma ca =
 let is_impact_pragma ca =
   match ca.annot_content with APragma (Impact_pragma _) -> true | _ -> false
 
-let is_jessie_pragma ca =
-  match ca.annot_content with APragma (Jessie_pragma _) -> true | _ -> false
+let is_astraver_pragma ca =
+  match ca.annot_content with APragma (Astraver_pragma _) -> true | _ -> false
 
 let is_loop_extension ca =
   match ca.annot_content with AExtended (_,is_loop,_) -> is_loop | _ -> false
@@ -2165,7 +2165,7 @@ let is_property_pragma = function
   | Loop_pragma (Unroll_specs _ | Widen_hints _ | Widen_variables _)
   | Slice_pragma (SPexpr _ | SPctrl | SPstmt)
   | Impact_pragma (IPexpr _ | IPstmt) -> false
-  | Jessie_pragma (JPexpr _) -> true
+  | Astraver_pragma (APexpr _) -> true
 (* If at some time a pragma becomes something which should be proven,
    update the pragma-related code in gui/property_navigator.ml *)
 

@@ -4072,8 +4072,8 @@ struct
       IPexpr t -> Cil_types.IPexpr (term env t)
     | IPstmt -> Cil_types.IPstmt
 
-  let jessie_pragma env = function
-    | JPexpr t ->
+  let astraver_pragma env = function
+    | APexpr t ->
         let loc = t.lexpr_loc in
         let t =
           term env t |> function
@@ -4081,9 +4081,9 @@ struct
               check_non_void_ptr loc t1.term_type;
               { t with
                 term_node = TCoerce (mk_logic_pointer_or_StartOf t1, ty) }
-          | _ -> C.error loc "coercion expected in Jessie pragma (e.g. jessie pragma p :> char *)"
+          | _ -> C.error loc "coercion expected in Astraver pragma (e.g. av pragma p :> char *)"
         in
-        Cil_types.JPexpr t
+        Cil_types.APexpr t
 
   let code_annot_env () =
     let env = append_here_label (append_pre_label (append_init_label
@@ -4106,8 +4106,8 @@ struct
         Cil_types.APragma (Cil_types.Slice_pragma (slice_pragma (code_annot_env()) sp))
       | APragma (Loop_pragma lp) ->
 	  Cil_types.APragma (Cil_types.Loop_pragma (loop_pragma (code_annot_env()) lp))
-      | APragma (Jessie_pragma jp) ->
-          Cil_types.APragma (Cil_types.Jessie_pragma (jessie_pragma (code_annot_env ()) jp))
+      | APragma (Astraver_pragma jp) ->
+          Cil_types.APragma (Cil_types.Astraver_pragma (astraver_pragma (code_annot_env ()) jp))
       | AStmtSpec (behav,s) ->
         (* function behaviors and statement behaviors are not at the
            same level. Do not mix them in a complete or disjoint clause

@@ -1976,7 +1976,7 @@ class type cilVisitor = object
 
   method vslice_pragma: slice_pragma -> slice_pragma visitAction
   method vimpact_pragma: impact_pragma -> impact_pragma visitAction
-  method vjessie_pragma: jessie_pragma -> jessie_pragma visitAction
+  method vastraver_pragma: astraver_pragma -> astraver_pragma visitAction
 
   method vdeps:
     deps -> deps visitAction
@@ -2114,7 +2114,7 @@ end
 
    method vslice_pragma _ = DoChildren
    method vimpact_pragma _ = DoChildren
-   method vjessie_pragma _ = DoChildren
+   method vastraver_pragma _ = DoChildren
 
    method vdeps _ = DoChildren
 
@@ -3022,11 +3022,11 @@ and childrenSpec vis s =
    | Widen_variables lt -> let lt' = mapNoCopy (visitCilTerm vis) lt in
      if lt' != lt then Widen_variables lt' else p
 
- and visitCilJessiePragma vis p =
-   doVisitCil vis id vis#vjessie_pragma childrenJessiePragma p
- and childrenJessiePragma vis (*p*) =
+ and visitCilAstraverPragma vis p =
+   doVisitCil vis id vis#vastraver_pragma childrenAstraverPragma p
+ and childrenAstraverPragma vis (*p*) =
    function
-   | JPexpr t as p -> let t' = visitCilTerm vis t in if t' != t then JPexpr t' else p
+   | APexpr t as p -> let t' = visitCilTerm vis t in if t' != t then APexpr t' else p
 
  and childrenModelInfo vis m =
   let field_type = visitCilLogicType vis m.mi_field_type in
@@ -3154,9 +3154,9 @@ and childrenSpec vis s =
      | APragma (Loop_pragma p) ->
 	 let p' = visitCilLoopPragma vis p in
 	 if p' != p then change_content (APragma (Loop_pragma p')) else ca
-     | APragma (Jessie_pragma p) ->
-         let p' = visitCilJessiePragma vis p in
-         if p' != p then change_content (APragma (Jessie_pragma p')) else ca
+     | APragma (Astraver_pragma p) ->
+         let p' = visitCilAstraverPragma vis p in
+         if p' != p then change_content (APragma (Astraver_pragma p')) else ca
      | AStmtSpec (behav,s) ->
 	 let s' = vSpec s in
 	 if s' != s then change_content (AStmtSpec (behav,s')) else ca

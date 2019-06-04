@@ -342,15 +342,15 @@ and impact_pragma =
   | IPexpr of lexpr
   | IPstmt
 
-and jessie_pragma =
-  | JPexpr of lexpr
+and astraver_pragma =
+  | APexpr of lexpr
 
 (** The various kinds of pragmas. *)
 and pragma =
   | Loop_pragma of loop_pragma
   | Slice_pragma of slice_pragma
   | Impact_pragma of impact_pragma
-  | Jessie_pragma of jessie_pragma
+  | Astraver_pragma of astraver_pragma
 
 
 (** all annotations that can be found in the code. This type shares the name of 
