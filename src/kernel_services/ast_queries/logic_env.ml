@@ -451,7 +451,7 @@ let prepare_tables =
         ((filename, []) :: imports)
         ~f:(fun (filename', names) ->
             try
-              let ctors', types', infos', models' = Forward_decls.find filename' in
+              let ctors', types', infos', models' = Forward_decls.find (Filepath.normalize filename') in
               let to_import = H.create (List.length names) in
               List.iter (fun name -> H.add to_import name None) names;
               let check () =
