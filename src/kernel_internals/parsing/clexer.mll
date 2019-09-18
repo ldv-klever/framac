@@ -155,6 +155,12 @@ let init_lexicon _ =
       ("typeof", fun loc -> TYPEOF loc);
       ("__alignof", fun loc -> ALIGNOF loc);
       ("__alignof__", fun loc -> ALIGNOF loc);
+      ("_Alignof",
+        (fun loc ->
+          if Kernel.C11.get () then
+            ALIGNOF loc
+          else
+            IDENT "_Alignof"));
       ("__volatile__", fun loc -> VOLATILE loc);
       ("__volatile", fun loc -> VOLATILE loc);
 
@@ -201,7 +207,13 @@ let init_lexicon _ =
           if Kernel.C11.get () then
             NORETURN loc
           else
-            IDENT "_Noreturn"))
+            IDENT "_Noreturn"));
+      ("_Static_assert",
+       (fun loc ->
+          if Kernel.C11.get () then
+            STATIC_ASSERT loc
+          else
+            IDENT "_Static_assert"))
     ]
 
 

@@ -142,6 +142,8 @@ val wkey_cert_msc_38: warn_category
 
 val wkey_cert_exp_10: warn_category
 
+val wkey_check_static_assert: warn_category
+
 val wkey_check_volatile: warn_category
 
 val wkey_jcdb: warn_category

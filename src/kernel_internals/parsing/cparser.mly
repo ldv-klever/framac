@@ -367,7 +367,7 @@ let in_block l =
 %token<Cabs.cabsloc> DECLSPEC
 %token<string * Cabs.cabsloc> MSASM MSATTR
 %token<string * Cabs.cabsloc> PRAGMA_LINE
-%token<Cabs.cabsloc> PRAGMA
+%token<Cabs.cabsloc> PRAGMA STATIC_ASSERT
 %token PRAGMA_EOL
 
 /*Frama-C: ghost bracketing */
@@ -476,6 +476,7 @@ global:
 | ASM LPAREN string_constant RPAREN SEMICOLON
                                         { GLOBASM (fst $3, (*handleLoc*) $1) }
 | pragma                                { $1 }
+| static_assert                         { $1 }
 /* (* Old-style function prototype. This should be somewhere else, like in
     * "declaration". For now we keep it at global scope only because in local
     * scope it looks too much like a function call  *) */
@@ -1494,6 +1495,16 @@ pragma:
 | PRAGMA_LINE                           {
     PRAGMA (make_expr (VARIABLE (fst $1)), snd $1)
   }
+;
+
+static_assert:
+| STATIC_ASSERT LPAREN expression RPAREN SEMICOLON {
+    let e = make_expr (CALL({ expr_loc = $1; expr_node = VARIABLE "_Static_assert" }, [$3])) in
+    PRAGMA (e, $1) }
+| STATIC_ASSERT LPAREN expression COMMA string_constant RPAREN SEMICOLON {
+    let e = make_expr (CALL({ expr_loc = $1; expr_node = VARIABLE "_Static_assert" },
+                            [$3; make_expr (CONSTANT(CONST_STRING (fst $5, None)))])) in
+    PRAGMA (e, $1) }
 ;
 
 /* (* We want to allow certain strange things that occur in pragmas, so we

@@ -461,6 +461,33 @@ let process_pack_pragma name args =
     | _ -> Some (Attr (name, args))
   end
 
+let process_static_assert_pragma name args =
+  if not (Kernel.C11.get ()) then ()
+  else
+    let emsg =
+      match args with
+      | [e; AStr m] -> Some (e, Some m)
+      | [e] -> Some (e, None)
+      | a ->
+        Kernel.warning ~wkey:Kernel.wkey_check_static_assert ~current:true
+          "Unsupported syntax for _Static_assert pragma: `%a' \
+           should be an expression with an optional message string"
+          (Pretty_utils.pp_list ~sep:", " ~empty:"<empty>" Cil_printer.pp_attrparam) a;
+        None
+    in
+    match name, emsg with
+    | "_Static_assert", Some (e, m) ->
+      begin match intOfAttrparam e with
+      | Some 0 ->
+        Kernel.warning ~wkey:Kernel.wkey_check_static_assert ~current:true
+          "Static assertion failed%s" (match m with Some m -> ": " ^ m | None -> "")
+      | Some _ -> ()
+      | None ->
+        Kernel.warning ~wkey:Kernel.wkey_check_static_assert ~current:true
+          "Could not compute static expression: %a" Cil_printer.pp_attrparam e
+      end
+    | _ -> ()
+
 let force_packed_attribute a =
   if hasAttribute "packed" a then a
   else addAttribute (Attr("packed",[])) a
@@ -8941,6 +8968,7 @@ and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : ch
           match a' with
           | ACons (s, args) ->
             process_align_pragma s args;
+            process_static_assert_pragma s args;
             process_stdlib_pragma s args >>?
             process_pack_pragma
           | _ -> (* Cil.fatal "Unexpected attribute in #pragma" *)
