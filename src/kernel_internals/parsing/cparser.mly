@@ -865,6 +865,7 @@ block_element_list:
         { $1 @ no_ghost_stmt (DEFINITION($2)) :: $3 }
 |   annot_list_opt statement block_element_list
             { $1 @ $2 @ $3 }
+|   annot_list_opt static_assert block_element_list     { $1 @ $3 }
 |   annot_list_opt pragma block_element_list            { $1 @ $3 }
 /*(* GCC accepts a label at the end of a block *)*/
 |   annot_list_opt id_or_typename_as_id COLON 

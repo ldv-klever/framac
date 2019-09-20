@@ -462,7 +462,7 @@ let process_pack_pragma name args =
   end
 
 let process_static_assert_pragma name args =
-  if not (Kernel.C11.get ()) then ()
+  if not (Kernel.C11.get ()) then false
   else
     let emsg =
       match args with
@@ -485,8 +485,9 @@ let process_static_assert_pragma name args =
       | None ->
         Kernel.warning ~wkey:Kernel.wkey_check_static_assert ~current:true
           "Could not compute static expression: %a" Cil_printer.pp_attrparam e
-      end
-    | _ -> ()
+      end;
+      true
+    | _ -> false
 
 let force_packed_attribute a =
   if hasAttribute "packed" a then a
@@ -8968,7 +8969,7 @@ and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : ch
           match a' with
           | ACons (s, args) ->
             process_align_pragma s args;
-            process_static_assert_pragma s args;
+            ignore (process_static_assert_pragma s args);
             process_stdlib_pragma s args >>?
             process_pack_pragma
           | _ -> (* Cil.fatal "Unexpected attribute in #pragma" *)
@@ -8982,6 +8983,23 @@ and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : ch
         empty
 
       | _ -> Kernel.fatal ~current:true "Too many attributes in pragma"
+    end
+
+  | A.PRAGMA (a, loc), `Bodies ->
+    let ghost = local_env.is_ghost in
+    begin match doAttr local_env.is_ghost ("dummy", [a]) with
+      | [Attr("dummy", [ACons (s, args)])]
+        when process_static_assert_pragma s args ->
+        append_chunk_to_annot ~ghost
+          (s2c
+             (mkStmtOneInstr ~ghost ~valid_sid
+                (Code_annot
+                   (Logic_const.new_code_annotation
+                      (APragma (Assert_pragma (Attr (s, args)))), loc))))
+          empty
+      | _ ->
+        Kernel.warning ~current:true "Unexpected attribute in #pragma";
+        empty
     end
 
   | A.FUNDEF (spec,((specs,(n,dt,a, _)) : A.single_name),

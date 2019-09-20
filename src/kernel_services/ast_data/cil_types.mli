@@ -1771,6 +1771,7 @@ and pragma =
   | Slice_pragma of slice_pragma
   | Impact_pragma of impact_pragma
   | Astraver_pragma of astraver_pragma
+  | Assert_pragma of attribute
 
 (** all annotations that can be found in the code.
     This type shares the name of its constructors with
