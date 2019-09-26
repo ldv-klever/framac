@@ -3006,6 +3006,8 @@ class cil_printer () = object (self)
       fprintf fmt "@[loop pragma@ %a;@]" self#loop_pragma lp
     | APragma (Astraver_pragma jp) ->
       fprintf fmt "@[av pragma@ %a;@]" self#astraver_pragma jp
+    | APragma (Assert_pragma a) ->
+      fprintf fmt "@[assert pragma@ %a;@]" self#attributes [a]
     | AStmtSpec(for_bhv, spec) ->
       fprintf fmt "@[<hv 2>%a%a@]"
         pp_for_behavs for_bhv

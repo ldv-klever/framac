@@ -402,7 +402,7 @@ object(self)
       Annotations.fold_decreases (fun e d _ -> Some (e,d)) kf None
     in
     let old_lemma =
-      Annotations.fold_lemma (fun e d _ -> d) kf false
+      Annotations.fold_lemma (fun _e d _ -> d) kf false
     in
     let spec =
       { spec_behavior = snd (List.split old_behaviors);

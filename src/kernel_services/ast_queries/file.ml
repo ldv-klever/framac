@@ -1047,7 +1047,7 @@ let synchronize_source_annot has_new_stmt kf =
           | AAssert _ | AInvariant _ | AVariant _
           | AAssigns _ | AAllocation _
           | APragma (Slice_pragma (SPctrl | SPexpr _))
-          | APragma (Astraver_pragma _)
+          | APragma (Astraver_pragma _ | Assert_pragma _)
           | APragma (Impact_pragma (IPexpr _))
           | APragma (Loop_pragma _) -> false
         in

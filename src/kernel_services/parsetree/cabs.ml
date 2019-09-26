@@ -60,6 +60,7 @@ type typeSpecifier = (* Merge all specifiers into one type *)
   | Tint64
   | Tfloat
   | Tdouble
+  | Tlong_double
   | Tsigned
   | Tunsigned
   | Tnamed of string

@@ -94,6 +94,35 @@ let init_lexicon _ =
   H.clear lexicon;
   Logic_env.reset_typenames ();
   Logic_env.builtin_types_as_typenames ();
+  let float =
+    let token =
+      let tokens =
+        let token tok size =
+          (match size with
+           | 2 -> `_16
+           | 4 -> `_32
+           | 8 -> `_64
+           | 10 -> `_80
+           | 16 -> `_128
+           | _ -> assert false),
+          tok
+        in
+        Cil_types.
+          (Cil.
+             [token (fun l -> FLOAT l) theMachine.theMachine.sizeof_float;
+              token (fun l -> DOUBLE l) theMachine.theMachine.sizeof_double;
+              token (fun l -> LONG_DOUBLE l) theMachine.theMachine.sizeof_longdouble])
+      in
+      fun size name loc ->
+        Option.fold ~none:(IDENT name) ~some:((|>) loc) (List.assoc_opt size tokens)
+    in
+    fun name size ->
+    (name,
+     fun loc ->
+       if Cil.theMachine.Cil.theMachine.Cil_types.compiler = "gcc"
+       then token size name loc
+       else IDENT name)
+  in
   List.iter
     (fun (key, builder) -> H.add lexicon key builder)
     [ ("auto", fun loc -> AUTO loc);
@@ -117,6 +146,16 @@ let init_lexicon _ =
       ("int", fun loc -> INT loc);
       ("float", fun loc -> FLOAT loc);
       ("double", fun loc -> DOUBLE loc);
+      float "_Float16" `_16;
+      float "_Float16x" `_16;
+      float "_Float32" `_32;
+      float "_Float32x" `_32;
+      float "_Float64" `_64;
+      float "_Float64x" `_64;
+      float "_Float80" `_80;
+      float "_Float80x" `_80;
+      float "_Float128" `_128;
+      float "_Float128x" `_128;
       ("void", fun loc -> VOID loc);
       ("enum", fun loc -> ENUM loc);
       ("struct", fun loc -> STRUCT loc);
@@ -425,9 +464,9 @@ let make_annot default lexbuf s =
   match Logic_lexer.annot (start, s) with
   | Some (stop, token) ->
     lexbuf.Lexing.lex_curr_p <-
-    Lexing.{ (Cil_datatype.Position.to_lexing_pos stop) with
-             pos_cnum = stop.pos_cnum + start.pos_cnum;
-             pos_bol = if stop.pos_lnum <> start.pos_lnum then stop.pos_bol + start.pos_cnum else start.pos_bol };
+    Filepath.{ (Cil_datatype.Position.to_lexing_pos stop) with
+             Lexing.pos_cnum = stop.pos_cnum + start.pos_cnum;
+             Lexing.pos_bol = if stop.pos_lnum <> start.pos_lnum then stop.pos_bol + start.pos_cnum else start.pos_bol };
     (* The filename has already been normalized, so we must reuse it "as is". *)
     E.setCurrentFile (stop.Filepath.pos_path :> string);
     (match token with

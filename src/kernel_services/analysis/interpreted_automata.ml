@@ -511,7 +511,7 @@ let build_automaton ~annotations kf =
       do_block control kinstr labels block;
       control.dest
 
-    | Throw _ | TryCatch _ | TryFinally _ | TryExcept _
+    | AsmGoto _ | Throw _ | TryCatch _ | TryFinally _ | TryExcept _
         -> Kernel.not_yet_implemented
                   "[interpreted_automata] exception handling"
     in

@@ -122,7 +122,7 @@ let lemma_for_behavior fvar args beh =
   let precond_pred, postcond_pred =
     let update_vars =
       Visitor.visitFramacPredicate
-        (object(self)
+        (object(_self)
           inherit Visitor.frama_c_refresh (Project.current ())
           val var_map = List.fold_right (uncurry Logic_var.Map.add ) arg_vars Logic_var.Map.empty
 

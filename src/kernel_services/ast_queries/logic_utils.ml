@@ -1027,7 +1027,9 @@ let is_same_pragma p1 p2 =
   | Slice_pragma p1, Slice_pragma p2 -> is_same_slice_pragma p1 p2
   | Impact_pragma p1, Impact_pragma p2 -> is_same_impact_pragma p1 p2
   | Astraver_pragma p1, Astraver_pragma p2 -> is_same_astraver_pragma p1 p2
-  | (Loop_pragma _ | Slice_pragma _ | Impact_pragma _ | Astraver_pragma _), _ -> false
+  | Assert_pragma a1, Assert_pragma a2 -> is_same_attribute a1 a2
+  | (Loop_pragma _ | Slice_pragma _ | Impact_pragma _ | Astraver_pragma _
+    | Assert_pragma _), _ -> false
 
 let is_same_extension (_,e1, _,c1) (_,e2, _,c2) =
   Datatype.String.equal e1 e2 &&
@@ -2165,7 +2167,9 @@ let is_property_pragma = function
   | Loop_pragma (Unroll_specs _ | Widen_hints _ | Widen_variables _)
   | Slice_pragma (SPexpr _ | SPctrl | SPstmt)
   | Impact_pragma (IPexpr _ | IPstmt) -> false
+  | Assert_pragma _
   | Astraver_pragma (APexpr _) -> true
+
 (* If at some time a pragma becomes something which should be proven,
    update the pragma-related code in gui/property_navigator.ml *)
 

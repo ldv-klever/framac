@@ -3157,6 +3157,10 @@ and childrenSpec vis s =
      | APragma (Astraver_pragma p) ->
          let p' = visitCilAstraverPragma vis p in
          if p' != p then change_content (APragma (Astraver_pragma p')) else ca
+     | APragma (Assert_pragma a) ->
+         let a = [a] in
+         let a' = visitCilAttributes vis a in
+         if a' != a then change_content (APragma (Assert_pragma (List.hd a'))) else ca
      | AStmtSpec (behav,s) ->
 	 let s' = vSpec s in
 	 if s' != s then change_content (AStmtSpec (behav,s')) else ca

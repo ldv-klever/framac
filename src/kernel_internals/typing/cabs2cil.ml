@@ -4533,6 +4533,7 @@ let rec doSpecList ghost (suggestedAnonName: string)
 
     | [A.Tfloat] -> TFloat(FFloat, [])
     | [A.Tdouble] -> TFloat(FDouble, [])
+    | [A.Tlong_double] -> TFloat(FLongDouble, [])
 
     | [A.Tlong; A.Tdouble] -> TFloat(FLongDouble, [])
 
@@ -5798,12 +5799,6 @@ and doExp local_env
       finishExp reads se (new_exp ~loc (Lval lv')) (dropQualifiers field_type)
 
       | A.CONSTANT ct -> begin
-	let hasSuffix str =
-	  let l = String.length str in
-	  fun s ->
-	    let ls = String.length s in
-	    l >= ls && s = String.uppercase_ascii (String.sub str (l - ls) ls)
-	in
         let add_literal s name_opt =
           let fdec_opt = match !scopes with [] -> None | _ -> Some !currentFunctionFDEC in
           match name_opt with
@@ -9421,7 +9416,7 @@ and doDecl ?(stage=`Bodies) local_env (isglobal: bool) (def : A.definition) : ch
       empty
   | (A.TYPEDEF _ | A.ONLYTYPEDEF _), `Names -> empty
   | (A.DECDEF _ | A.LINKAGE _ | A.GLOBASM _ | A.PRAGMA _ | A.FUNDEF _), (`Names | `Types) -> empty
-  | (A.CUSTOM _ | A.GLOBANNOT _ | A.PRAGMA _ | A.FUNDEF _), (`Names | `Types | `Bodies) ->
+  | (A.CUSTOM _ | A.GLOBANNOT _ | A.FUNDEF _), (`Names | `Types | `Bodies) ->
      Kernel.fatal ~current:true "this form of declaration must be global"
 (* Fragile pattern matching are bad practice
   | _ -> Kernel.fatal ~current:true "unexpected form of declaration"

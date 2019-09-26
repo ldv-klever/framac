@@ -934,10 +934,15 @@ and pp_impact_pragma pp_term fmt = function
   | IPexpr(term) -> Format.fprintf fmt "IPexpr(%a)" pp_term term
   | IPstmt -> Format.fprintf fmt "IPstmt"
 
+and pp_astraver_pragma pp_term fmt = function
+  | APexpr(term) -> Format.fprintf fmt "APexpr(%a)" pp_term term
+
 and pp_pragma pp_term fmt = function
   | Loop_pragma(term) -> Format.fprintf fmt "Loop_pragma(%a)" (pp_loop_pragma pp_term) term
   | Slice_pragma(term) -> Format.fprintf fmt "Slice_pragma(%a)" (pp_slice_pragma pp_term) term
   | Impact_pragma(term) -> Format.fprintf fmt "Impact_pragma(%a)" (pp_impact_pragma pp_term) term
+  | Astraver_pragma(term) -> Format.fprintf fmt "Astraver_pragma(%a)" (pp_astraver_pragma pp_term) term
+  | Assert_pragma(attr) -> Format.fprintf fmt "Assert_pragma(%a)" pp_attribute attr
 
 and pp_code_annotation_node fmt = function
   | AAssert(string_list,predicate) ->

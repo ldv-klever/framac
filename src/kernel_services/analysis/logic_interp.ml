@@ -922,6 +922,7 @@ to function contracts."
         (* to select the reachability of the pragma *)
         pragmas :=
           { !pragmas with ctrl = Stmt.Set.add ki !pragmas.ctrl }
+      | APragma (Assert_pragma _) -> ()
       | APragma (Slice_pragma SPctrl) ->
         (* to select the reachability of the pragma *)
         pragmas :=
@@ -1030,7 +1031,9 @@ to function contracts."
         | AInvariant(_,false,_) -> others
         | AAllocation _ -> others
         | AAssigns _ -> others
-        | APragma (Loop_pragma _)| APragma (Impact_pragma _) | APragma (Astraver_pragma _) -> others
+        | APragma (Loop_pragma _)
+        | APragma (Impact_pragma _)
+        | APragma (Astraver_pragma _ | Assert_pragma _) -> others
         | AStmtSpec _ | AExtended _  (* TODO: statement contract *) -> false
   end
 

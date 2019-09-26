@@ -665,44 +665,46 @@ struct
   (* Abstract axiomatics *)
 
   (** Apply axiomatic declaration substitutions *)
-  let apply_substs types functions lemmas loc inc_loc ga =
+  let apply_substs types functions _lemmas loc inc_loc ga =
     (* For typechecking, we need original functions but with new types *)
     let funcs_with_new_types = ref [] in
-    let modified_global = Cil.visitCilGlobal (object(self)
+    let modified_global = Cil.visitCilGlobal (object(_self)
       inherit Cil.genericCilVisitor (Cil.refresh_visit (Project.current ()))
 
       (* Changing included declarations:
        * - drop types/funcs/preds
        * - (but store funcs/preds with substitutions in a separate list for typechecking!)
        * - rename lemmas *)
-      method vglob t =
+      method! vglob t =
         match t with
         | GAnnot (Dfun_or_pred (_, _), _) ->
             DoChildrenPost (fun x -> List.iter (function
-              | GAnnot (Dfun_or_pred (info, _), loc) ->
+              | GAnnot (Dfun_or_pred (info, _), _loc) ->
                   funcs_with_new_types :=
                     (info.l_var_info.lv_name, info) :: !funcs_with_new_types
+              | _ -> assert false
             ) x; [])
         | GAnnot (Dtype (_, _), _) -> ChangeTo []
         | GAnnot (Dlemma (_, _, _, _, _, _, _), _) ->
             DoChildrenPost (fun x -> x |> List.map (function
-              | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, attr, loc), aloc) ->
+              | GAnnot (Dlemma (name, is_axiom, labels, ss, pred, attr, _loc), _aloc) ->
                   let (_, new_name) = Extlib.make_unique_name
                     Logic_env.Lemmas.mem ~sep:"_" name in
                   let flipped_axiom = (if attr = [AttrAnnot "AbstractLemma"] then not is_axiom else is_axiom) in
                   let def = Dlemma (new_name, flipped_axiom, labels, ss, pred, [], inc_loc) in
                   Logic_env.Lemmas.add new_name def;
-                  GAnnot (def, inc_loc)))
+                  GAnnot (def, inc_loc)
+              | _ -> assert false))
         | _ -> DoChildren
 
-      method vlogic_type t =
+      method! vlogic_type t =
         if List.mem_assoc t types then ChangeTo (List.assoc t types)
         else DoChildren
 
       val used_names = Datatype.String.Hashtbl.create 1
       val used_vars = Cil_datatype.Logic_var.Hashtbl.create 1
 
-      method vlogic_var_use t =
+      method! vlogic_var_use t =
         match t.lv_kind with
         (* avoid name collisions for non-replaced variables *)
         | LVFormal | LVQuant | LVLocal when not
@@ -739,8 +741,9 @@ struct
                     "Subst: replacing non-local logic_var use %s -> %s\n"
                     t.lv_name x.l_var_info.lv_name;
                   ChangeTo x.l_var_info
+              | None -> assert false
 
-      method vlogic_info_use t =
+      method! vlogic_info_use t =
         if Cil_datatype.Logic_info.Map.mem t functions then (
           let newt = Cil_datatype.Logic_info.Map.find t functions in
           Kernel.debug "Subst: replacing logic_info use %a -> %a\n"
@@ -749,7 +752,7 @@ struct
           ChangeTo newt
         ) else DoChildren
 
-    end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x) in
+    end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x |  _ -> assert false) in
     (modified_global, !funcs_with_new_types)
 
   (* Apply forward type inclusion (non-abstract type in src axiomatic, abstract
@@ -758,12 +761,12 @@ struct
    *
    * Called on the whole dest axiomatic! *)
   let apply_forward_type_substs types functions loc ga =
-    Cil.visitCilGlobal (object(self)
+    Cil.visitCilGlobal (object(_self)
       inherit Cil.genericCilVisitor (Cil.inplace_visit ())
 
       val rev_types = List.map (fun (k, v) -> (v, k)) types
 
-      method vglob t =
+      method! vglob t =
         match t with
         | GAnnot (Dtype (info, loc), aloc) ->
             if List.mem_assoc (Ltype (info, [])) rev_types then (
@@ -779,7 +782,7 @@ struct
                 ChangeTo [GAnnot (Dtype ({ info with lt_def = src_type.lt_def }, loc), aloc)]
               else DoChildren
             ) else DoChildren
-        | GAnnot (Dfun_or_pred (dst_fun, loc), aloc) ->
+        | GAnnot (Dfun_or_pred (dst_fun, _loc), _aloc) ->
             let dst_name = dst_fun.l_var_info.lv_name in
             if List.mem_assoc dst_name functions then (
               let src_fun = List.assoc dst_name functions in
@@ -811,7 +814,7 @@ struct
             DoChildren
         | _ -> DoChildren
 
-  end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x)
+  end) (GAnnot (ga, loc)) |> List.map (function (GAnnot (x, _)) -> x | _ -> assert false)
 
   let make_typing_context ~pre_state ~post_state ~assigns_env
       ~logic_type ~type_predicate ~type_term ~type_assigns = {
@@ -4479,8 +4482,8 @@ struct
                         let dst_fun = Logic_env.Logic_info.find v in
                         Cil_datatype.Logic_info.Map.add src_fun dst_fun a
                       ) Cil_datatype.Logic_info.Map.empty functions in
-                      let Daxiomatic (_, decls, _, _) = Logic_env.Axiomatics.find name in
-                      List.mapi (fun i dec ->
+                      let[@warning "-8"] Daxiomatic (_, decls, _, _) = Logic_env.Axiomatics.find name in
+                      List.map (fun dec ->
                         (* TODO add i to loc *)
                         let (result, funcs_with_new_types) = apply_substs
                           types fs lemmas loc x.decl_loc dec in
@@ -4505,7 +4508,7 @@ struct
               |> List.flatten in
             Daxiomatic (id, l, [], loc)
           )
-    | LDinclude (name,types,functions,lemmas) ->
+    | LDinclude _ ->
         Kernel.fatal ~current:true "Includes should be handled in axiomatics"
     | LDtype (s, l, def) ->
         let finish_with my_info =

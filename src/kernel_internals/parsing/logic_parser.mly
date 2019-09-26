@@ -1054,8 +1054,7 @@ spec:
 
 contract:
 | is_lemma requires terminates decreases simple_clauses behaviors complete_or_disjoint
-    { let lemma = $1 in
-      let requires=$2 in
+    { let requires=$2 in
       let (allocation,assigns,post_cond,extended) = $5 in
       let behaviors = $6 in
       let (completes,disjoints) = $7 in
@@ -1067,7 +1066,7 @@ contract:
           (Cabshelper.mk_behavior
              ~requires ~post_cond ~assigns ~allocation ~extended ())
           :: behaviors
-        else if $3<>None || $4<>None || 
+        else if $3<>None || $4<>None ||
                 behaviors<>[] || completes<>[] ||disjoints<>[]
         then behaviors
         else raise (Not_well_formed (loc(),"Empty annotation is not allowed"))
