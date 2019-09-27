@@ -113,8 +113,7 @@ let init_lexicon _ =
               token (fun l -> DOUBLE l) theMachine.theMachine.sizeof_double;
               token (fun l -> LONG_DOUBLE l) theMachine.theMachine.sizeof_longdouble])
       in
-      fun size name loc ->
-        Option.fold ~none:(IDENT name) ~some:((|>) loc) (List.assoc_opt size tokens)
+      fun size name loc -> Extlib.may_map ((|>) loc) ~dft:(IDENT name) (List.assoc_opt size tokens)
     in
     fun name size ->
     (name,
