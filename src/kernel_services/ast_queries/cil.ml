@@ -4250,12 +4250,20 @@ let parseIntExp ~loc repr =
   let rec loop = function
     | k::rest ->
         if fitsInInt k i then (* i fits in the current type. *)
-          kinteger64 ~loc ~repr ~kind:k i
+          Some (kinteger64 ~loc ~repr ~kind:k i)
         else loop rest
-    | [] ->
-        Kernel.fatal ~source:(fst loc) "Cannot represent the integer %s" repr
+    | [] -> None
   in
-  loop kinds
+  match loop kinds, gccMode () with
+  | Some i, _ -> i
+  | None, true ->
+      Kernel.warning ~source:(fst loc)
+        "Cannot represent the integer %s as specified. Will try all available integral types" repr;
+      begin match loop [IInt; IUInt; ILong; IULong; ILongLong; IULongLong] with
+      | Some i -> i
+      | None -> Kernel.fatal ~source:(fst loc) "Cannot represent the integer %s within any integral type" repr
+      end
+  | None, false -> Kernel.fatal ~source:(fst loc) "Cannot represent the integer %s" repr
 
  let mkStmtCfg ~before ~(new_stmtkind:stmtkind) ~(ref_stmt:stmt) : stmt =
    let new_ = { skind = new_stmtkind;
