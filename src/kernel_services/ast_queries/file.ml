@@ -1150,10 +1150,12 @@ let synchronize_source_annot has_new_stmt kf =
 
 let register_global = function
   | GFun (fundec, loc) ->
-    let onerets = ref [] in
-    let callback return goto = onerets := (return,goto) :: !onerets in
-      (* ensure there is only one return *)
-    Oneret.oneret ~callback fundec;
+      let onerets = ref [] in
+      if Kernel.Oneret.get () then begin
+        let callback return goto = onerets := (return,goto) :: !onerets in
+        (* ensure there is only one return *)
+        Oneret.oneret ~callback fundec
+      end;
       (* Build the Control Flow Graph for all
          functions *)
       if Kernel.SimplifyCfg.get () then begin
@@ -1164,17 +1166,18 @@ let register_global = function
         Rmtmps.remove_unused_labels fundec;
       end;
       Globals.Functions.add (Definition(fundec,loc));
-    let kf = Globals.Functions.get fundec.svar in
-    (* Finally set property-status on oneret clauses *)
-    List.iter
-      (fun ((sret,b,pret),gotos) ->
-         let ipreturns =
-           Property.ip_of_ensures kf (Kstmt sret) b (Returns,pret) in
-         let ipgotos = List.map
-             (fun (sgot,agot) -> Property.ip_of_code_annot_single kf sgot agot)
-             gotos in
-         Implicit_annotations.add ipreturns ipgotos
-      ) !onerets ;
+      let kf = Globals.Functions.get fundec.svar in
+      (* Finally set property-status on oneret clauses *)
+      if Kernel.Oneret.get () then
+        List.iter
+          (fun ((sret,b,pret),gotos) ->
+             let ipreturns =
+               Property.ip_of_ensures kf (Kstmt sret) b (Returns,pret) in
+             let ipgotos = List.map
+                 (fun (sgot,agot) -> Property.ip_of_code_annot_single kf sgot agot)
+                 gotos in
+             Implicit_annotations.add ipreturns ipgotos
+          ) !onerets
   | GFunDecl (spec, f,loc) ->
       (* global prototypes *)
       let args =

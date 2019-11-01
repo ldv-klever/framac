@@ -418,6 +418,9 @@ module SimplifyTrivialLoops: Parameter_sig.Bool
 module Constfold: Parameter_sig.Bool
   (** Behavior of option "-constfold" *)
 
+module Oneret: Parameter_sig.Bool
+  (** Behavior of option "-single-return" *)
+
 module InitializedPaddingLocals: Parameter_sig.Bool
   (** Behavior of option "-initialized-padding-locals" *)
 

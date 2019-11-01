@@ -1240,6 +1240,15 @@ module Constfold =
      end)
 
 let () = Parameter_customize.set_group normalisation
+module Oneret =
+  True
+    (struct
+      let option_name = "-single-return"
+      let module_name = "Oneret"
+      let help = "Ensure there is only one return statement per function"
+    end)
+
+let () = Parameter_customize.set_group normalisation
 let () = Parameter_customize.do_not_reset_on_copy ()
 module InitializedPaddingLocals =
   True
