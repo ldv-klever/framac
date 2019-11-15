@@ -424,6 +424,9 @@ module Oneret: Parameter_sig.Bool
 module InitializedPaddingLocals: Parameter_sig.Bool
   (** Behavior of option "-initialized-padding-locals" *)
 
+module Shrink_initializers: Parameter_sig.Bool
+  (** Behavior of option "-shrink-initializers" *)
+
 module AggressiveMerging: Parameter_sig.Bool
   (** Behavior of option "-aggressive-merging" *)
 

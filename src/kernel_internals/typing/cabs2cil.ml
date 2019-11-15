@@ -7884,6 +7884,19 @@ and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
   let (init, typ'', reads) =
     collectInitializer Cil_datatype.Lval.Set.empty preinit typ' typ'
   in
+  let shrink_init =
+    let rec shrink =
+      function
+      | _, SingleInit e when isZero e -> []
+      | _, SingleInit _ as i -> [i]
+      | off, CompoundInit (ty, inits) ->
+        match List.map shrink inits |> List.flatten with
+        | [] -> []
+        | inits -> [off, CompoundInit (ty, inits)]
+    in
+    fun i -> shrink (NoOffset, i) |> function [_, i] -> i | _ -> i
+  in
+  let init = if Kernel.Shrink_initializers.get () then shrink_init init else init in
   Kernel.debug ~dkey:Kernel.dkey_typing_init
     "Finished the initializer for %s@\n  init=%a@\n  typ=%a@\n  acc=%a@\n"
     vi.vname (fun fmt -> resolveGotos (); Cil_printer.pp_init fmt) init Cil_printer.pp_typ typ' d_chunk acc;

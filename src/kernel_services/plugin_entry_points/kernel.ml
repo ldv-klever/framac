@@ -1261,6 +1261,16 @@ module InitializedPaddingLocals =
      end)
 
 let () = Parameter_customize.set_group normalisation
+let () = Parameter_customize.do_not_reset_on_copy ()
+module Shrink_initializers =
+  False
+    (struct
+       let option_name = "-shrink-initializers"
+       let module_name = "Shrink_initializers"
+       let help = "Exploit default zero initialization to remove all nested initializers that can be made implicit"
+     end)
+
+let () = Parameter_customize.set_group normalisation
 module AggressiveMerging =
   False
     (struct
