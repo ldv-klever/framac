@@ -154,7 +154,6 @@ let () =
   Kernel.PrintLineDirectives.add_set_hook
     (fun _ b ->
        if b then begin
-         state.print_cil_as_is <- true;
          state.line_length <- 1000000000;
          state.line_directive_style <- Some Line_preprocessor_input
        end else begin
