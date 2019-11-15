@@ -2829,7 +2829,9 @@ let rec castTo ?loc ?overflow
          if types do not match.
       *)
       if va <> va' || bigger_length_args args args' then
-        error
+        Kernel.warning
+          ~wkey:Kernel.wkey_incompatible_pointer_types
+          ~current:true
           "conversion between function types with \
            different number of arguments:@ %a@ and@ %a"
           Cil_printer.pp_typ ot Cil_printer.pp_typ nt;
