@@ -264,6 +264,9 @@ module PrintComments: Parameter_sig.Bool
 module PrintLineDirectives: Parameter_sig.Bool
   (** Behavior of option "-print-lines" *)
 
+module Print_cil_as_is: Parameter_sig.Bool
+  (** Behavior of option "-pirnt-cil-as-is" *)
+
 module PrintAnnot: Parameter_sig.Bool
   (** Behavior of option "-print-annot" *)
 

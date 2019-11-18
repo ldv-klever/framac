@@ -572,6 +572,16 @@ module PrintLineDirectives =
 
 let () = Parameter_customize.set_group inout_source
 let () = Parameter_customize.do_not_projectify ()
+module Print_cil_as_is =
+  False
+    (struct
+      let module_name = "Print_cil_as_is"
+      let option_name = "-print-cil-as-is"
+      let help = "Don't perform code simplifications when printing"
+    end)
+
+let () = Parameter_customize.set_group inout_source
+let () = Parameter_customize.do_not_projectify ()
 module PrintAnnot =
   True
     (struct

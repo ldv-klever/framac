@@ -157,10 +157,12 @@ let () =
          state.line_length <- 1000000000;
          state.line_directive_style <- Some Line_preprocessor_input
        end else begin
-         state.print_cil_as_is <- false;
          state.line_length <- 80;
          state.line_directive_style <- None
        end)
+
+
+let () = Kernel.Print_cil_as_is.add_set_hook (fun _ b -> state.print_cil_as_is <- b)
 
 (* Parentheses/precedence level. An expression "a op b" is printed
    parenthesized if its parentheses level is >= that that of its context.
@@ -2027,7 +2029,6 @@ class cil_printer () = object (self)
          true
        | s, _ when
            s = Cil.bitfield_attribute_name &&
-           not state.print_cil_as_is &&
            not (Kernel.is_debug_key_enabled Kernel.dkey_print_bitfields) ->
          false
        | _ -> (* This is the default case *)
