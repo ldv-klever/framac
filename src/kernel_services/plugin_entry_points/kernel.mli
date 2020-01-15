@@ -267,6 +267,9 @@ module PrintLineDirectives: Parameter_sig.Bool
 module Print_cil_as_is: Parameter_sig.Bool
   (** Behavior of option "-pirnt-cil-as-is" *)
 
+module Fold_temp_vars: Parameter_sig.Bool
+  (** Behavior of option "-fold-temp-vars" *)
+
 module PrintAnnot: Parameter_sig.Bool
   (** Behavior of option "-print-annot" *)
 

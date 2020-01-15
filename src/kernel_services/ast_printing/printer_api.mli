@@ -360,7 +360,9 @@ type state =
 	  accurate. *)
       mutable line_length: int;
       (** Emit warnings when truncating integer constants (default true) *)
-      mutable warn_truncate: bool }
+      mutable warn_truncate: bool;
+      (** Try to fold temporary variables back into expressions *)
+      mutable fold_temp_vars: bool }
 
 (* ********************************************************************* *)
 (** {2 Functions for pretty printing} *)

@@ -27,6 +27,8 @@ open Cil_datatype
 open Printer_api
 open Format
 
+module VH = Varinfo.Hashtbl
+
 module Behavior_extensions = struct
 
   let printer_tbl = Hashtbl.create 5
@@ -148,7 +150,8 @@ let state =
     print_cil_input = false;
     print_cil_as_is = false;
     line_length = 80;
-    warn_truncate = true }
+    warn_truncate = true;
+    fold_temp_vars = false }
 
 let () =
   Kernel.PrintLineDirectives.add_set_hook
@@ -163,6 +166,8 @@ let () =
 
 
 let () = Kernel.Print_cil_as_is.add_set_hook (fun _ b -> state.print_cil_as_is <- b)
+
+let () = Kernel.Fold_temp_vars.add_set_hook (fun _ b -> state.fold_temp_vars <- b)
 
 (* Parentheses/precedence level. An expression "a op b" is printed
    parenthesized if its parentheses level is >= that that of its context.
@@ -632,6 +637,8 @@ class cil_printer () = object (self)
     else
       self#lval fmt lv
 
+  val unfolds = VH.create 16
+
   (* used to check whether StartOf x can be printed as x
      or must be rendered as &x[0]. *)
   val mutable parent_non_decay = false
@@ -650,6 +657,10 @@ class cil_printer () = object (self)
     match (Cil.stripInfo e).enode with
     | Info _ -> assert false
     | Const(c) -> self#constant fmt c
+    | Lval (Var ({ vtemp = true; _ } as vi), NoOffset)
+      when Extlib.opt_map fst (VH.find_opt unfolds vi) = Some `Unfold ->
+      let s, p, _ = snd @@ VH.find unfolds vi in
+      fprintf fmt (if p > level then "(%s)" else "%s") s
     | Lval(l) -> self#lval fmt l
 
     | UnOp(u,e1,_) ->
@@ -877,6 +888,10 @@ class cil_printer () = object (self)
     in
     match i with
     | Skip _ -> fprintf fmt ";"
+    | Set ((Var ({ vtemp = true; _ } as vi), NoOffset), _, _)
+    | Call (Some (Var ({ vtemp = true; _ } as vi), NoOffset), _, _, _)
+    | Local_init ({ vtemp = true; _ } as vi, _, _)
+      when fmt != str_formatter && Extlib.opt_map fst @@ VH.find_opt unfolds vi = Some `Unfold -> ()
     | Set(lv,e,_) -> begin
       (* Be nice to some special cases *)
       match e.enode with
@@ -921,6 +936,8 @@ class cil_printer () = object (self)
 	  self#exp e
 	  instr_terminator
       end
+    | Local_init ({ vdefined = false; _ } as vi, AssignInit i, _) ->
+      Format.fprintf fmt "@[<2>%a =@ (%a)%a%s@]" self#varinfo vi (self#typ None) vi.vtype self#init i instr_terminator
     | Local_init(vi, AssignInit i, _) ->
       Format.fprintf fmt "@[<2>%a =@ %a%s@]"
         self#vdecl vi self#init i instr_terminator
@@ -1254,7 +1271,8 @@ class cil_printer () = object (self)
       (* [JS 2012/12/07] could directly call self#attributesGen whenever we are
 	 sure than it puts its printing material inside a box *)
       fprintf fmt "@[%a@]" (self#attributesGen true) blk.battrs;
-    let locals_decl = List.filter (fun v -> not v.vdefined) blk.blocals in
+    let unfolded v = Extlib.opt_map fst @@ VH.find_opt unfolds v = Some `Unfold in
+    let locals_decl = List.filter (fun v -> not v.vdefined && not @@ unfolded v) blk.blocals in
     if locals_decl <> [] then
       Pretty_utils.pp_list ~pre:"@[<v>" ~sep:"@;" ~suf:"@]@ " 
 	self#vdecl_complete fmt locals_decl;
@@ -1580,6 +1598,109 @@ class cil_printer () = object (self)
     if print_global g then
       match g with
       | GFun (fundec, l) ->
+        VH.clear unfolds;
+        if Kernel.Fold_temp_vars.get () then
+          ignore
+            Cil.(
+              visitCilFunction
+                (object
+                  inherit genericCilVisitor (inplace_visit ())
+                  method! vinst =
+                    function
+                    | Set ((Var ({ vtemp = true; _ } as vi), NoOffset), _, _)
+                    | Call (Some (Var ({ vtemp = true; _ } as vi), NoOffset), _, _, _)
+                    | Local_init ({ vtemp = true; _ } as vi, _, _)
+                      when not (VH.mem unfolds vi) ->
+                      DoChildrenPost
+                        (fun i ->
+                           let i = Extlib.as_singleton i in
+                           self#instr str_formatter i;
+                           let s = flush_str_formatter () in
+                           let s = String.(sub s (length vi.vname + 3) (length s - length vi.vname - 4)) in
+                           let p =
+                             match i with
+                             | Set (_, e, _)
+                             | Local_init (_, AssignInit (SingleInit e), _) -> Precedence.getParenthLevel e
+                             | Local_init (_, AssignInit (CompoundInit _), _) -> 30
+                             | Call _ | Local_init (_, ConsInit _, _) -> 0
+                             | _ -> assert false
+                           in
+                           let e =
+                             let vars = VH.create 1 in
+                             ignore @@ visitCilInstr
+                               (object
+                                 inherit genericCilVisitor (inplace_visit ())
+                                 method! vvrbl v =
+                                   if not (Varinfo.equal v vi) && not v.vglob && not v.vformal then
+                                     VH.replace vars v ();
+                                   SkipChildren
+                               end)
+                               i;
+                             VH.fold
+                               Varinfo.Set.(fun vi _ ->
+                                   match snd @@ VH.find unfolds vi with
+                                   | (_, _, e) -> union (add vi e)
+                                   | exception Not_found -> add vi)
+                               vars
+                               Varinfo.Set.empty
+                           in
+                           VH.add unfolds vi (`Try, (s, p, e));
+                           [i])
+                    | Set _ | Call _ | Local_init _ | Asm _ ->
+                      DoChildrenPost
+                        (fun i ->
+                           VH.filter_map_inplace (fun _ -> function `Try, v -> Some (`Fail, v) | v -> Some v) unfolds;
+                           i)
+                    | _ -> DoChildren
+                  method! vexpr e =
+                    match e.enode with
+                    | Lval (Var ({ vtemp = true; _ } as vi), NoOffset)
+                      when Extlib.opt_map fst (VH.find_opt unfolds vi) = Some `Try ->
+                      VH.(replace unfolds vi (`Unfold, snd @@ find unfolds vi));
+                      SkipChildren
+                    | _ -> DoChildren
+                  method! vblock _ =
+                    DoChildrenPost
+                      (fun b ->
+                         let env =
+                           Varinfo.Set.(
+                             List.fold_right
+                               (fun vi ->
+                                  match VH.find unfolds vi with
+                                  | _, (_, _, e) -> union e
+                                  | exception Not_found -> Extlib.id)
+                               b.blocals
+                               empty)
+                         in
+                         let moved = VH.create 4 in
+                         ignore @@
+                         List.map
+                           (visitCilStmt @@
+                            object
+                              inherit genericCilVisitor (inplace_visit ())
+                              method! vblock b =
+                                b.blocals <-
+                                  List.filter
+                                    (fun vi ->
+                                       let r = Varinfo.Set.mem vi env in
+                                       if r then VH.replace moved vi ();
+                                       not r)
+                                    b.blocals;
+                                DoChildren
+                              method! vinst =
+                                function
+                                | Local_init (vi, AssignInit (SingleInit e), loc) when VH.mem moved vi ->
+                                  ChangeTo [Set (var vi, e, loc)]
+                                | Local_init (vi, ConsInit (f, args, Plain_func), loc) when VH.mem moved vi ->
+                                  ChangeTo [Call (Some (var vi), evar f, args, loc)]
+                                | _ -> SkipChildren
+                            end)
+                           b.bstmts;
+                         VH.iter (fun v () -> v.vdefined <- false) moved;
+                         b.blocals <- (List.of_seq @@ VH.to_seq_keys moved) @ b.blocals;
+                         b)
+                end)
+                fundec);
         self#in_current_function fundec.svar;
         (* If the function has attributes then print a prototype because
          * GCC cannot accept function attributes in a definition *)

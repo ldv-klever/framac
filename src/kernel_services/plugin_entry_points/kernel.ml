@@ -582,6 +582,16 @@ module Print_cil_as_is =
 
 let () = Parameter_customize.set_group inout_source
 let () = Parameter_customize.do_not_projectify ()
+module Fold_temp_vars =
+  False
+    (struct
+      let module_name = "Fold_temp_vars"
+      let option_name = "-fold-temp-vars"
+      let help = "Try to directly nest RHS of temporary variables back into their original expressions"
+    end)
+
+let () = Parameter_customize.set_group inout_source
+let () = Parameter_customize.do_not_projectify ()
 module PrintAnnot =
   True
     (struct
