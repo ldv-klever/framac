@@ -7656,6 +7656,15 @@ and doCondExp local_env (asconst: bool)
     | CENot(ce) -> CENot(remove_effects_ce ce)
   in
   let loc = e.expr_loc in
+  let e =
+    match e.expr_node with
+    | A.CAST ((s, dt, _), SINGLE_INIT e') ->
+      begin match doOnlyType local_env.is_ghost s dt with
+      | TInt (IInt, _) -> e'
+      | _ -> e
+      end
+    | _ -> e
+  in
   let result = match e.expr_node with
     | A.BINARY (A.AND, e1, e2) -> begin
         let ce1 = doCondExp (no_paren_local_env local_env) asconst ?ctxt e1 in
