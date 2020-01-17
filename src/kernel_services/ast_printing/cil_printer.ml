@@ -1305,32 +1305,33 @@ class cil_printer () = object (self)
 
   (* Make sure that you only call self#line_directive on an empty line *)
   method line_directive ?(forcefile=false) fmt l =
-    match state.line_directive_style with
-    | None -> ()
-    | Some _ when (fst l).Filepath.pos_lnum <= 0 -> ()
+    if fmt != str_formatter then
+      match state.line_directive_style with
+      | None -> ()
+      | Some _ when (fst l).Filepath.pos_lnum <= 0 -> ()
 
-    (* Do not print lineComment if the same line as above *)
-    | Some Line_comment_sparse when (fst l).Filepath.pos_lnum = lastLineNumber -> 
-      ()
+      (* Do not print lineComment if the same line as above *)
+      | Some Line_comment_sparse when (fst l).Filepath.pos_lnum = lastLineNumber ->
+        ()
 
-    | Some style  ->
-      let directive, pretty_path = match style with
-	| Line_comment | Line_comment_sparse -> "//#line", Datatype.Filepath.pretty
-	| Line_preprocessor_output when not (Cil.msvcMode ()) -> "#", Datatype.Filepath.pretty
-	| Line_preprocessor_output | Line_preprocessor_input -> "#line", Datatype.Filepath.pp_abs
-      in
-      let pos = fst l in
-      lastLineNumber <- pos.Filepath.pos_lnum;
-      let filename =
-        if forcefile || pos.Filepath.pos_path <> lastFileName then begin
-          lastFileName <- pos.Filepath.pos_path;
-          Format.asprintf " \"%a\""
-            pretty_path pos.Filepath.pos_path
-	end else
-	  ""
-      in
-      fprintf fmt "@[@<0>\n@<0>%s@<0> @<0>%d@<0> @<0>%s@]@\n" 
-	directive (fst l).Filepath.pos_lnum filename
+      | Some style  ->
+        let directive, pretty_path = match style with
+	  | Line_comment | Line_comment_sparse -> "//#line", Datatype.Filepath.pretty
+	  | Line_preprocessor_output when not (Cil.msvcMode ()) -> "#", Datatype.Filepath.pretty
+	  | Line_preprocessor_output | Line_preprocessor_input -> "#line", Datatype.Filepath.pp_abs
+        in
+        let pos = fst l in
+        lastLineNumber <- pos.Filepath.pos_lnum;
+        let filename =
+          if forcefile || pos.Filepath.pos_path <> lastFileName then begin
+            lastFileName <- pos.Filepath.pos_path;
+            Format.asprintf " \"%a\""
+              pretty_path pos.Filepath.pos_path
+	  end else
+	    ""
+        in
+        fprintf fmt "@[@<0>\n@<0>%s@<0> @<0>%d@<0> @<0>%s@]@\n"
+	  directive (fst l).Filepath.pos_lnum filename
 
   method stmtkind (next: stmt) fmt = function
     | UnspecifiedSequence seq ->
