@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -113,16 +113,24 @@ let value_panel pack (main_ui:main_ui) =
     GPack.table ~packing:(box#pack ~expand:true ~fill:true) ~columns:2 ()
   in
   let box_1_1 = GPack.hbox ~packing:(w#attach ~left:1 ~top:1) () in
+  let precision_refresh =
+    let tooltip = Value_parameters.Precision.parameter.Typed_parameter.help in
+    Gtk_helper.on_int ~lower:(-1) ~upper:11 ~tooltip
+      box_1_1 "precision (meta-option)"
+      Value_parameters.Precision.get
+      Value_parameters.Precision.set
+  in
+  let box_1_2 = GPack.hbox ~packing:(w#attach ~left:1 ~top:2) () in
   let slevel_refresh =
     let tooltip =
       Value_parameters.SemanticUnrollingLevel.parameter.Typed_parameter.help
     in
     Gtk_helper.on_int ~lower:0 ~upper:1000000 ~tooltip
-      box_1_1 "slevel"
+      box_1_2 "slevel"
       Value_parameters.SemanticUnrollingLevel.get
       Value_parameters.SemanticUnrollingLevel.set
   in
-  let box_1_2 = GPack.hbox ~packing:(w#attach ~left:1 ~top:2) () in
+  let box_1_3 = GPack.hbox ~packing:(w#attach ~left:1 ~top:3) () in
   let validator s =
     not
       (Kernel_function.Set.is_empty
@@ -130,9 +138,9 @@ let value_panel pack (main_ui:main_ui) =
   in
   let main_refresh = Gtk_helper.on_string
       ~tooltip:Kernel.MainFunction.parameter.Typed_parameter.help
-      ~validator box_1_2 "main" Kernel.MainFunction.get Kernel.MainFunction.set
+      ~validator box_1_3 "main" Kernel.MainFunction.get Kernel.MainFunction.set
   in
-  let refresh () = slevel_refresh (); main_refresh() in
+  let refresh () = precision_refresh (); slevel_refresh (); main_refresh() in
   ignore (run_button#connect#pressed
             (fun () ->
                main_ui#protect ~cancelable:true
@@ -453,8 +461,11 @@ module Select (Eval: Eval) = struct
       | PVDecl (Some kf, Kstmt stmt, vi) ->
         let lv = (Var vi, NoOffset) in
         select_lv main_ui (GL_Stmt (kf, stmt)) lv
-      | PIP (IPCodeAnnot (kf, stmt,
-                          ({annot_content = AAssert (_, p) | AInvariant (_, true, p)} as ca)) as ip) ->
+      | PIP (IPCodeAnnot {ica_kf = kf; ica_stmt = stmt;
+                          ica_ca = {annot_content =
+                                      AAssert (_, _, p)
+                                    | AInvariant (_, true, p)} as ca
+                         } as ip) ->
         begin
           let loc = GL_Stmt (kf, stmt) in
           let alarm_or_property =
@@ -464,14 +475,15 @@ module Select (Eval: Eval) = struct
           in
           select_predicate_with_red main_ui loc (alarm_or_property, p)
         end;
-      | PIP (IPPredicate (_, kf, Kglobal, p) as ip) -> begin
+      | PIP (IPPredicate {ip_kf=kf; ip_kinstr=Kglobal; ip_pred=p} as ip) -> begin
           match Gui_eval.classify_pre_post kf ip with
           | None -> ()
           | Some loc ->
             select_predicate_with_red
               main_ui loc (Red_statuses.Prop ip, Logic_const.pred_of_id_pred p)
         end
-      | PIP (IPPropertyInstance (kf, stmt, Some pred, ip)) ->
+      | PIP (IPPropertyInstance {ii_kf=kf;ii_stmt=stmt;
+                                 ii_pred=Some pred;ii_ip=ip}) ->
         let loc = GL_Stmt (kf, stmt) in
         select_predicate_with_red main_ui loc
           (Red_statuses.Prop ip, Logic_const.pred_of_id_pred pred)
@@ -479,7 +491,7 @@ module Select (Eval: Eval) = struct
       | PExp ((_,Kglobal,_) | (None, Kstmt _, _))
       | PTermLval (None, _, _, _)-> ()
       | PVDecl (_kf,_ki,_vi) -> ()
-      | PGlobal _  | PIP _ -> ()
+      | PGlobal _  | PIP _ | PStmtStart _ -> ()
     with
     | Eval_terms.LogicEvalError ee ->
       main_ui#pretty_information "Cannot evaluate term: %a@."
@@ -507,7 +519,7 @@ module Select (Eval: Eval) = struct
              (* Function pointers *)
              (* get the list of functions in the values *)
              let e = Value_util.lval_to_exp lv in
-             match Eval.Analysis.get_kinstr_state ki with
+             match Eval.Analysis.get_kinstr_state ~after:false ki with
              | `Bottom -> ()
              | `Value state ->
                let funs, _ = Eval.Analysis.eval_function_exp state e in
@@ -519,6 +531,7 @@ module Select (Eval: Eval) = struct
          | _ -> ()
         )
       end
+    | PStmtStart _
     | PVDecl (None, _, _) | PExp _ | PTermLval _ | PGlobal _ | PIP _ -> ()
 
   let _right_click_value_not_computed (main_ui:main_ui) (menu:menu) localizable =
@@ -621,11 +634,12 @@ let add_keybord_shortcut_evaluate main_ui =
           let bl = Ast_info.block_of_local fdec vi in
           select (find_loc kf fdec bl)
       end
-    | PIP (Property.IPCodeAnnot (kf, stmt,
-                                 {annot_content = AAssert (_, _) | AInvariant (_, true, _)} )) ->
+    | PIP (Property.(IPCodeAnnot {ica_kf = kf; ica_stmt = stmt;
+                                  ica_ca = {annot_content =
+                                              AAssert _ | AInvariant (_, true, _)}})) ->
       select (Some (GL_Stmt (kf, stmt)))
-    | PIP (Property.IPPredicate (_, kf, Kglobal, _) as ip) ->
-      select (Gui_eval.classify_pre_post kf ip)
+    | PIP (Property.(IPPredicate {ip_kf; ip_kinstr=Kglobal} as ip)) ->
+      select (Gui_eval.classify_pre_post ip_kf ip)
     | _ -> select None
   in
   main_ui#register_source_selector can_eval_acsl_expr_selector;

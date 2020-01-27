@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*                                                                        *)
 (*  The Why3 Verification Platform   /   The Why3 Development Team        *)
-(*  Copyright 2010-2013   --   INRIA - CNRS - Paris-Sud University        *)
+(*  Copyright 2010-2019   --   Inria - CNRS - Paris-Sud University        *)
 (*                                                                        *)
 (*  This software is distributed under the terms of the GNU Lesser        *)
 (*  General Public License version 2.1, with the special exception        *)
@@ -18,6 +18,6 @@
 (** The theory map_Map_ must be appended to this file*)
 logic const : 'b -> ('a,'b) farray
 
-axiom Const :
-  (forall b:'b1. forall a:'a1. (((const(b) : ('a1,'b1) farray)[a]) = b))
+axiom const_def :
+  (forall v:'b. forall us:'a. (((const(v) : ('a,'b) farray)[us]) = v))
 

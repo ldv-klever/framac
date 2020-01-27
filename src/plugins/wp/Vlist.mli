@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,3 +48,5 @@ val pretty : #engine -> Format.formatter -> F.term list -> unit
 val elements : #engine -> Format.formatter -> F.term list -> unit
 val pprepeat : #engine -> Format.formatter -> F.term list -> unit
 val shareable : F.term -> bool
+
+val specialize_eq_list: Lang.For_export.specific_equality

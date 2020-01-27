@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,8 +28,8 @@ module type Results = sig
   type value
   type location
 
-  val get_stmt_state : stmt -> state or_bottom
-  val get_kinstr_state: kinstr -> state or_bottom
+  val get_stmt_state : after:bool -> stmt -> state or_bottom
+  val get_kinstr_state: after:bool -> kinstr -> state or_bottom
   val get_stmt_state_by_callstack:
     after:bool -> stmt -> state Value_types.Callstack.Hashtbl.t or_top_or_bottom
   val get_initial_state_by_callstack:

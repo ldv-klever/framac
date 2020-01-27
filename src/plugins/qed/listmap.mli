@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -42,6 +42,8 @@ sig
   val equal : ('a -> 'a -> bool) -> 'a t -> 'a t -> bool
 
   val empty : 'a t
+  val is_empty : 'a t -> bool
+
   val add : key -> 'a -> 'a t -> 'a t
   val mem : key -> 'a t -> bool
   val find : key -> 'a t -> 'a

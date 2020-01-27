@@ -1,4 +1,4 @@
-# frama-c -wp -wp-timeout 90 -wp-steps 1500 [...]
+# frama-c -wp [...]
 [kernel] Parsing tests/wp_acsl/ctor.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -7,7 +7,8 @@
 [wp] [Qed] Goal typed_lemma_diff : Valid
 [wp] Proved goals:    2 / 2
   Qed:             2
-[wp] Report 'tests/wp_acsl/ctor.i.0.report.json'
+[wp] Report in:  'tests/wp_acsl/oracle_qualif/ctor.0.report.json'
+[wp] Report out: 'tests/wp_acsl/result_qualif/ctor.0.report.json'
 -------------------------------------------------------------
 Axiomatics          WP     Alt-Ergo        Total   Success
 Axiomatic Event      2     -                 2       100%

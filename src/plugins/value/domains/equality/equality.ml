@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -70,8 +70,8 @@ module Set = struct
      from each lvalue or expression to:
      - the equality in which it is involved;
      - for a lvalue [lv], the set of expressions that contain [lv] in the map.
-     This last information is needed when removing a lvalue, to remove or
-     replace all expressions containing this lvalue. *)
+       This last information is needed when removing a lvalue, to remove or
+       replace all expressions containing this lvalue. *)
 
   module Data = struct
     (* For a lvalue [lv], the first set gathers the expressions that depends on

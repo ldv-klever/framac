@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -90,8 +90,7 @@ let add_red_property ki ip =
        by modifying the callstack. Results in a better display *)
     let open Property in
     match ip with
-    | IPPropertyInstance (_, _, _,
-                          (IPPredicate (PKRequires _, _, _, _) as ip')) ->
+    | IPPropertyInstance {ii_ip=IPPredicate {ip_kind=PKRequires _} as ip'} ->
       add_red_ap Kglobal (Prop ip')
     | _ -> add_red_ap ki (Prop ip)
 

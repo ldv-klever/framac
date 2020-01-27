@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,18 +21,19 @@
 (**************************************************************************)
 
 (* -------------------------------------------------------------------------- *)
-(* --- Provers                                                            --- *)
+(* --- Prover Results                                                     --- *)
 (* -------------------------------------------------------------------------- *)
 
 let dkey_no_time_info = Wp_parameters.register_category "no-time-info"
 let dkey_no_step_info = Wp_parameters.register_category "no-step-info"
 let dkey_no_goals_info = Wp_parameters.register_category "no-goals-info"
+let dkey_no_cache_info = Wp_parameters.register_category "no-cache-info"
+let dkey_success_only = Wp_parameters.register_category "success-only"
 
 type prover =
-  | Why3 of string (* Prover via WHY *)
-  | Why3ide
-  | AltErgo       (* Alt-Ergo *)
-  | Coq           (* Coq and Coqide *)
+  | Why3 of Why3Provers.t (* Prover via WHY *)
+  | NativeAltErgo (* Direct Alt-Ergo *)
+  | NativeCoq     (* Direct Coq and Coqide *)
   | Qed           (* Qed Solver *)
   | Tactical      (* Interactive Prover *)
 
@@ -41,39 +42,48 @@ type mode =
   | EditMode  (* Edit then check scripts *)
   | FixMode   (* Try check script, then edit script on non-success *)
 
-type language =
-  | L_why3
-  | L_coq
-  | L_altergo
-
 let prover_of_name = function
   | "" | "none" -> None
   | "qed" | "Qed" -> Some Qed
-  | "alt-ergo" | "altgr-ergo" -> Some AltErgo
-  | "coq" | "coqide" -> Some Coq
+  | "native-alt-ergo" (* for wp-reports *)
+  | "native:alt-ergo" | "native:altgr-ergo"
+    ->
+      Wp_parameters.warning ~once:true ~current:false
+        "native support for alt-ergo is deprecated, use why3 instead" ;
+      Some NativeAltErgo
+  | "native-coq" (* for wp-reports *)
+  | "native:coq" | "native:coqide" | "native:coqedit"
+    ->
+      Wp_parameters.warning ~once:true ~current:false
+        "native support for coq is deprecated, use tip instead" ;
+      Some NativeCoq
   | "script" -> Some Tactical
   | "tip" -> Some Tactical
-  | "why3ide" -> Some Why3ide
+  | "why3" -> Some (Why3 { Why3.Whyconf.prover_name = "why3";
+                           Why3.Whyconf.prover_version = "";
+                           Why3.Whyconf.prover_altern = "generate only" })
   | s ->
       match Extlib.string_del_prefix "why3:" s with
       | Some "" -> None
-      | Some "ide" -> Some Why3ide
-      | Some s' -> Some (Why3 s')
-      | None -> Some (Why3 s)
+      | Some s' -> Some (Why3 (Why3Provers.find s'))
+      | None -> Some (Why3 (Why3Provers.find s))
+
+let mode_of_prover_name = function
+  | "native:coqedit" -> EditMode
+  | "native:coqide" | "native:altgr-ergo" -> FixMode
+  | _ -> BatchMode
 
 let name_of_prover = function
-  | Why3ide -> "why3ide"
-  | Why3 s -> "why3:" ^ s
-  | AltErgo -> "alt-ergo"
-  | Coq -> "coq"
+  | Why3 s -> "why3:" ^ (Why3Provers.print s)
+  | NativeAltErgo -> "alt-ergo"
+  | NativeCoq -> "coq"
   | Qed -> "qed"
   | Tactical -> "script"
 
 let title_of_prover = function
-  | Why3ide -> "Why3"
-  | Why3 s -> s
-  | AltErgo -> "Alt-Ergo"
-  | Coq -> "Coq"
+  | Why3 s -> Why3Provers.title s
+  | NativeAltErgo -> "Alt-Ergo"
+  | NativeCoq -> "Coq"
   | Qed -> "Qed"
   | Tactical -> "Script"
 
@@ -97,77 +107,42 @@ let sanitize_why3 s =
   Buffer.contents buffer
 
 let filename_for_prover = function
-  | Why3 s -> sanitize_why3 s
-  | Why3ide -> "Why3_ide"
-  | AltErgo -> "Alt-Ergo"
-  | Coq -> "Coq"
+  | Why3 s -> sanitize_why3 (Why3Provers.print s)
+  | NativeAltErgo -> "Alt-Ergo"
+  | NativeCoq -> "Coq"
   | Qed -> "Qed"
   | Tactical -> "Tactical"
 
-let language_of_name = function
-  | "" | "none" -> None
-  | "alt-ergo" | "altgr-ergo" -> Some L_altergo
-  | "coq" | "coqide"-> Some L_coq
-  | "why" -> Some L_why3
-  | s -> Wp_parameters.abort "Language '%s' unknown" s
-
-let language_of_prover = function
-  | Why3 _ -> L_why3
-  | Why3ide -> L_why3
-  | Coq -> L_coq
-  | AltErgo -> L_altergo
-  | Qed | Tactical -> L_why3
-
-let language_of_prover_name = function
-  | "" | "none" -> None
-  | "alt-ergo" | "altgr-ergo" -> Some L_altergo
-  | "coq" | "coqide" -> Some L_coq
-  | _ -> Some L_why3
-
-let mode_of_prover_name = function
-  | "coqedit" -> EditMode
-  | "coqide" | "altgr-ergo" | "tactical" -> FixMode
-  | _ -> BatchMode
-
 let is_auto = function
-  | Qed | AltErgo | Why3 _ -> true
-  | Tactical | Why3ide | Coq -> false
+  | Qed | NativeAltErgo | Why3 _ -> true
+  | Tactical | NativeCoq -> false
 
 let cmp_prover p q =
   match p,q with
   | Qed , Qed -> 0
   | Qed , _ -> (-1)
   | _ , Qed -> 1
-  | AltErgo , AltErgo -> 0
-  | AltErgo , _ -> (-1)
-  | _ , AltErgo -> 1
+  | NativeAltErgo , NativeAltErgo -> 0
+  | NativeAltErgo , _ -> (-1)
+  | _ , NativeAltErgo -> 1
   | Tactical , Tactical -> 0
   | Tactical , _ -> (-1)
   | _ , Tactical -> 1
-  | Coq , Coq -> 0
-  | Coq , _ -> (-1)
-  | _ , Coq -> 1
-  | Why3 p , Why3 q -> String.compare p q
-  | Why3 _, _ -> (-1)
-  | _, Why3 _ ->   1
-  | Why3ide, Why3ide -> 0
+  | NativeCoq , NativeCoq -> 0
+  | NativeCoq , _ -> (-1)
+  | _ , NativeCoq -> 1
+  | Why3 p , Why3 q -> Why3Provers.compare p q
 
 let pp_prover fmt = function
-  | AltErgo -> Format.pp_print_string fmt "Alt-Ergo"
-  | Why3ide -> Format.pp_print_string fmt "Why3ide"
-  | Coq -> Format.pp_print_string fmt "Coq"
+  | NativeAltErgo -> Format.pp_print_string fmt "Alt-Ergo (Native)"
+  | NativeCoq -> Format.pp_print_string fmt "Coq (Native)"
   | Why3 smt ->
       if Wp_parameters.debug_atleast 1 then
-        Format.pp_print_string fmt ("Why:"^smt)
+        Format.fprintf fmt "Why:%s" (Why3Provers.print smt)
       else
-        Format.pp_print_string fmt smt
+        Format.pp_print_string fmt (Why3Provers.title smt)
   | Qed -> Format.fprintf fmt "Qed"
   | Tactical -> Format.pp_print_string fmt "Tactical"
-
-let pp_language fmt = function
-  | L_altergo -> Format.pp_print_string fmt "Alt-Ergo"
-  | L_coq -> Format.pp_print_string fmt "Coq"
-  | L_why3 -> Format.pp_print_string fmt "Why3"
 
 let pp_mode fmt m = Format.pp_print_string fmt (title_of_mode m)
 
@@ -183,7 +158,6 @@ type config = {
   valid : bool ;
   timeout : int option ;
   stepout : int option ;
-  depth : int option ;
 }
 
 let param f = let v = f() in if v>0 then Some v else None
@@ -192,10 +166,9 @@ let current () = {
   valid = false ;
   timeout = param Wp_parameters.Timeout.get ;
   stepout = param Wp_parameters.Steps.get ;
-  depth = param Wp_parameters.Depth.get ;
 }
 
-let default = { valid = false ; timeout = None ; stepout = None ; depth = None }
+let default = { valid = false ; timeout = None ; stepout = None }
 
 let get_timeout = function
   | { timeout = None } -> Wp_parameters.Timeout.get ()
@@ -204,10 +177,6 @@ let get_timeout = function
 let get_stepout = function
   | { stepout = None } -> Wp_parameters.Steps.get ()
   | { stepout = Some t } -> t
-
-let get_depth = function
-  | { depth = None } -> Wp_parameters.Depth.get ()
-  | { depth = Some t } -> t
 
 (* -------------------------------------------------------------------------- *)
 (* --- Results                                                            --- *)
@@ -226,10 +195,10 @@ type verdict =
 
 type result = {
   verdict : verdict ;
+  cached : bool ;
   solver_time : float ;
   prover_time : float ;
   prover_steps : int ;
-  prover_depth : int ;
   prover_errpos : Lexing.position option ;
   prover_errmsg : string ;
 }
@@ -238,7 +207,8 @@ let is_verdict r = match r.verdict with
   | Valid | Checked | Unknown | Invalid | Timeout | Stepout | Failed -> true
   | NoResult | Computing _ -> false
 
-let is_valid r = r.verdict = Valid
+let is_valid = function { verdict = Valid } -> true | _ -> false
+let is_computing = function { verdict=Computing _ } -> true | _ -> false
 
 let configure r =
   let valid = (r.verdict = Valid) in
@@ -253,17 +223,13 @@ let configure r =
   let stepout =
     if r.prover_steps > 0 && r.prover_time <= 0.0 then
       let stepout = Wp_parameters.Steps.get () in
-      let margin = 1000 + r.prover_depth in
+      let margin = 1000 in
       Some(max stepout margin)
     else None in
-  let depth =
-    if r.prover_depth > 0 then Some r.prover_depth else None
-  in
   {
     valid ;
     timeout ;
     stepout ;
-    depth ;
   }
 
 let time_fits t =
@@ -278,23 +244,17 @@ let step_fits n =
   let stepout = Wp_parameters.Steps.get () in
   stepout = 0 || n < stepout
 
-let depth_fits n =
-  n = 0 ||
-  let depth = Wp_parameters.Depth.get () in
-  depth = 0 || n < depth
-
 let autofit r =
   time_fits r.prover_time &&
-  step_fits r.prover_steps &&
-  depth_fits r.prover_depth
+  step_fits r.prover_steps
 
-let result ?(solver=0.0) ?(time=0.0) ?(steps=0) ?(depth=0) verdict =
+let result ?(cached=false) ?(solver=0.0) ?(time=0.0) ?(steps=0) verdict =
   {
     verdict ;
+    cached = cached ;
     solver_time = solver ;
     prover_time = time ;
     prover_steps = steps ;
-    prover_depth = depth ;
     prover_errpos = None ;
     prover_errmsg = "" ;
   }
@@ -305,17 +265,19 @@ let checked = result Checked
 let invalid = result Invalid
 let unknown = result Unknown
 let timeout t = result ~time:(float t) Timeout
-let stepout = result Stepout
+let stepout n = result ~steps:n Stepout
 let computing kill = result (Computing kill)
 let failed ?pos msg = {
   verdict = Failed ;
+  cached = false ;
   solver_time = 0.0 ;
   prover_time = 0.0 ;
   prover_steps = 0 ;
-  prover_depth = 0 ;
   prover_errpos = pos ;
   prover_errmsg = msg ;
 }
+
+let cached r = if is_verdict r then { r with cached=true } else r
 
 let kfailed ?pos msg = Pretty_utils.ksfprintf (failed ?pos) msg
 
@@ -331,16 +293,22 @@ let pp_perf ~extended fmt r =
     then Format.fprintf fmt " (%a)" Rformat.pp_time t ;
     let s = r.prover_steps in
     if s > 0 && perfo extended dkey_no_step_info
-    then Format.fprintf fmt " (%d)" s
+    then Format.fprintf fmt " (%d)" s ;
+    if r.cached && perfo extended dkey_no_cache_info
+    then Format.fprintf fmt " (cached)" ;
   end
 
 let pp_res ~extended fmt r =
   match r.verdict with
   | NoResult -> Format.pp_print_string fmt (if extended then "No Result" else "-")
-  | Invalid -> Format.pp_print_string fmt "Invalid"
   | Computing _ -> Format.pp_print_string fmt "Computing"
-  | Valid -> Format.fprintf fmt "Valid%a" (pp_perf ~extended) r
   | Checked -> Format.fprintf fmt "Typechecked"
+  | Invalid -> Format.pp_print_string fmt "Invalid"
+  | Valid when Wp_parameters.has_dkey dkey_success_only ->
+      Format.pp_print_string fmt "Valid"
+  | (Timeout|Stepout|Unknown) when Wp_parameters.has_dkey dkey_success_only ->
+      Format.pp_print_string fmt "Unsuccess"
+  | Valid -> Format.fprintf fmt "Valid%a" (pp_perf ~extended) r
   | Unknown -> Format.fprintf fmt "Unknown%a" (pp_perf ~extended) r
   | Timeout -> Format.fprintf fmt "Timeout%a" (pp_perf ~extended) r
   | Stepout -> Format.fprintf fmt "Step limit%a" (pp_perf ~extended) r
@@ -361,8 +329,37 @@ let compare p q =
   in
   let r = rank q.verdict - rank p.verdict in
   if r <> 0 then r else
-    let s = Pervasives.compare p.prover_steps q.prover_steps in
+    let s = Transitioning.Stdlib.compare p.prover_steps q.prover_steps in
     if s <> 0 then s else
-      let t = Pervasives.compare p.prover_time q.prover_time in
+      let t = Transitioning.Stdlib.compare p.prover_time q.prover_time in
       if t <> 0 then t else
-        Pervasives.compare p.solver_time q.solver_time
+        Transitioning.Stdlib.compare p.solver_time q.solver_time
+
+let combine v1 v2 =
+  match v1 , v2 with
+  | Valid , Valid -> Valid
+  | Failed , _ | _ , Failed -> Failed
+  | Invalid , _ | _ , Invalid -> Invalid
+  | Timeout , _ | _ , Timeout -> Timeout
+  | Stepout , _ | _ , Stepout -> Stepout
+  | _ -> Unknown
+
+let merge r1 r2 =
+  let err = if r1.prover_errmsg <> "" then r1 else r2 in
+  {
+    verdict = combine r1.verdict r2.verdict ;
+    cached = r1.cached && r2.cached ;
+    solver_time = max r1.solver_time r2.solver_time ;
+    prover_time = max r1.prover_time r2.prover_time ;
+    prover_steps = max r1.prover_steps r2.prover_steps ;
+    prover_errpos = err.prover_errpos ;
+    prover_errmsg = err.prover_errmsg ;
+  }
+
+let choose r1 r2 =
+  match is_valid r1 , is_valid r2 with
+  | true , false -> r1
+  | false , true -> r2
+  | _ -> if compare r1 r2 <= 0 then r1 else r2
+
+let best = List.fold_left choose no_result

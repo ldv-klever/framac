@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -56,7 +56,6 @@ val location : string -> int -> Lexing.position
 
 val timeout : int option -> int
 val stepout : int option -> int
-val depth : int option -> int
 type logs = [ `OUT | `ERR | `BOTH ]
 
 class virtual command : string ->

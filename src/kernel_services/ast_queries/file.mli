@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -218,6 +218,9 @@ val create_rebuilt_project_from_visitor:
     @since Nitrogen-20111001 
     @modify Fluorine-20130401 added reorder optional argument
 *)
+
+val prepare_cil_file: Cil_types.file -> unit
+val files_pre_register_state: State.t
 
 val init_from_cmdline: unit -> unit
 (** Initialize the cil file representation with the file given on the

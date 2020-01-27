@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -168,6 +168,21 @@ __BEGIN_DECLS
   @ axiom strchr_def{L}:
   @   \forall char *s; \forall ℤ c;
   @      strchr(s,c) <==> \exists ℤ i; 0 <= i <= strlen(s) && s[i] == (char)c;
+  @ }
+  @*/
+
+/*@ axiomatic WMemChr {
+  @ logic 𝔹 wmemchr{L}(wchar_t *s, wchar_t c, ℤ n)
+  @   reads s[0..n - 1];
+  @ // Returns [true] iff wide char array [s] contains wide character [c]
+  @
+  @ logic ℤ wmemchr_off{L}(wchar_t *s, wchar_t c, ℤ n)
+  @   reads s[0..n - 1];
+  @ // Returns the offset at which [c] appears in [s].
+  @
+  @ axiom wmemchr_def{L}:
+  @   \forall wchar_t *s; \forall wchar_t c; \forall ℤ n;
+  @      wmemchr(s,c,n) <==> \exists int i; 0 <= i < n && s[i] == c;
   @ }
   @*/
 

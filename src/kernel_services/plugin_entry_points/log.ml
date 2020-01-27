@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -120,8 +120,8 @@ let stdout = {
   clean = true ;
   delayed = [] ;
   isatty = Unix.isatty Unix.stdout ;
-  output = Pervasives.output_substring Pervasives.stdout ;
-  flush =  (fun () -> Pervasives.flush Pervasives.stdout);
+  output = output_substring stdout ;
+  flush =  (fun () -> flush stdout);
 }
 
 let clean () = term_clean stdout
@@ -718,7 +718,7 @@ let rec split_joker = function
   | ""::w -> split_joker w
   | a::w -> a::split_joker w
 
-let split_category s = split_joker (Transitioning.String.split_on_char ':' s)
+let split_category s = split_joker (String.split_on_char ':' s)
 
 let evt_category = function
   | { evt_category = None } -> []

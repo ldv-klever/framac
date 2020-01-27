@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of WP plug-in of Frama-C.                           #
 #                                                                        #
-#  Copyright (C) 2007-2018                                               #
+#  Copyright (C) 2007-2019                                               #
 #    CEA (Commissariat a l'energie atomique et aux energies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -42,16 +42,34 @@ AC_ARG_ENABLE(
   WPCOQ=yes
 )
 
-AC_ARG_ENABLE(
-  wp-why3,
-  [  --enable-wp-why3        Wp precompiled Why3-Coq libraries (default: yes)],
-  WPWHY3COQ=$enableval,
-  WPWHY3COQ=yes
-)
-
 plugin_require(wp,qed)
 plugin_require(wp,rtegen)
 plugin_use(wp,gui)
+
+# Why3 API dependency
+######################
+# REQUIRE_LIBRARY: library *must* be present in order to build plugins
+# USE_LIBRARY: better for plugins if library is present, but not required
+# HAS_LIBRARY: is the library available?
+
+REQUIRE_WHY3=
+USE_WHY3=
+HAS_WHY3=
+
+WHY3_PATH=`ocamlfind query why3 | tr -d '\\r\\n'`
+echo "Ocamlfind -> using $WHY3_PATH"
+WHY3PATH_FOR_CONFIGURE=$WHY3_PATH
+
+configure_library([WHY3],
+                  [$WHY3PATH_FOR_CONFIGURE/why3.$LIB_SUFFIX],
+                  [$WHY3PATH_FOR_CONFIGURE/why3.$LIB_SUFFIX not found.],
+                  no)
+
+
+plugin_require_external(wp,why3)
+
+AC_SUBST(HAS_WHY3)
+
 
 check_plugin_dependencies
 
@@ -64,50 +82,21 @@ if test "$ENABLE_WP" != "no"; then
     if test "$COQC" = "yes" ; then
       COQVERSION=`coqc -v | sed -n -e 's|.*version* *\([[^ ]]*\) .*$|\1|p' `
       case $COQVERSION in
-        8.5*|8.6*|8.7*|trunk)
+        8.7*|8.8*|8.9*|8.10*|trunk)
           AC_MSG_RESULT(coqc version $COQVERSION found)
           ;;
-        *) 
+        *)
           AC_MSG_RESULT(unsupported coqc version $COQVERSION)
           COQC="no"
           ;;
       esac
     else
-      AC_MSG_NOTICE(rerun configure to make wp using coq 8.5+)
+      AC_MSG_NOTICE(rerun configure to make wp using coq 8.7.2 or higher)
     fi
   else
     COQC="no"
   fi
   AC_SUBST(COQC)
-
-  ## Configuring for WHY3-COQ
-  if test "$COQC" = "yes" -a "$WPWHY3COQ" = "yes" ; then
-    AC_CHECK_PROG(WHY3COQC,why3,yes,no)
-    if test "$WHY3COQC" = "yes" ; then
-      WHY3VERSION=`why3 --version | sed -n -e 's|.*version *\([[^ ]]*\)$|\1|p' `
-      case $WHY3VERSION in
-        0.88*)
-          AC_MSG_RESULT(why3 version $WHY3VERSION found)
-	  WHY3LIB=`why3 --print-libdir`
-	  if test -f $WHY3LIB/coq/BuiltIn.vo ; then
-	    AC_MSG_RESULT(why3 compiled coq libraries found)
-	  else
-            AC_MSG_RESULT(why3 compiled coq libraries not found in $WHY3LIB)
-	    WHY3COQC="no"
-          fi
-          ;;
-        *)
-          AC_MSG_RESULT(why3 unsupported version $WHY3VERSION)
-          WHY3COQC="no"
-          ;;
-      esac
-    else
-      AC_MSG_NOTICE(rerun configure to make wp using why3 0.88)
-    fi
-  else
-    WHY3COQC="no"
-  fi
-  AC_SUBST(WHY3COQC)
 
 fi
 

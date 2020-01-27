@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,62 +30,38 @@ module L = Qed.Logic
 (* --- Havoc                                                              --- *)
 (* -------------------------------------------------------------------------- *)
 
-let field,parameter =
-  Tactical.composer
-    ~id:"address"
-    ~title:"Address"
-    ~descr:"Access Outside the Assigned Range"
-    ()
-
-let has_type t e =
-  try F.Tau.equal t (F.typeof e)
-  with Not_found -> false
-
-let match_havoc =
-  let havoc m1 = function
-    | L.Fun( f , [m_undef;m0;a;n] ) when f == MemTyped.f_havoc -> m1,(m_undef,m0,a,n)
-    | _ -> raise Not_found
-  in function
-    | L.Eq (m,m') -> (try havoc m' (F.repr m) with | Not_found -> havoc m (F.repr m'))
-    | _ -> raise Not_found
+let lookup_havoc e =
+  match F.repr e with
+  | L.Aget( m , p ) ->
+      begin
+        match F.repr m with
+        | L.Fun( f , [mr;m0;a;n] ) when f == MemMemory.f_havoc ->
+            Some( mr , m0 , a , n , p )
+        | _ -> None
+      end
+  | _ -> None
 
 class havoc =
-  object(self)
+  object
     inherit Tactical.make ~id:"Wp.havoc"
         ~title:"Havoc"
         ~descr:"Go Through Assigns"
-        ~params:[parameter]
+        ~params:[]
 
-    method select feedback sel =
-      match sel with
-      | Clause(Step s) ->
-          begin
-            match s.condition with
-            | Have p | When p ->
-                let m1,(m_undef,m0,a,n) = match_havoc (F.e_expr p) in
-                let tp = F.typeof a in
-                feedback#update_field ~filter:(has_type tp) field ;
-                let sel = self#get_field field in
-                if not (Tactical.is_empty sel) then
-                  let ptr = Tactical.selected sel in
-                  if has_type tp ptr then
-                    let separated =
-                      F.p_call MemTyped.p_separated
-                        [ ptr ; F.e_int 1 ; a ; n ] in
-                    let equal_unassigned =
-                      F.p_equal (F.e_get m1 ptr) (F.e_get m0 ptr) in
-                    let equal_assigned =
-                      F.p_equal (F.e_get m1 ptr) (F.e_get m_undef ptr) in
-                    let process = Tactical.insert ~at:s.id
-                        [ "Havoc",F.p_if separated equal_unassigned equal_assigned  ] in
-                    Applicable process
-                  else
-                    ( feedback#set_error "Not a pointer type" ;
-                      Not_configured )
-                else Not_configured
-            | _ -> Not_applicable
-          end
-      | _ -> Not_applicable
+    method select _feedback sel =
+      let at = Tactical.at sel in
+      let e = Tactical.selected sel in
+      match lookup_havoc e with
+      | None -> Not_applicable
+      | Some(mr,m0,a,n,p) ->
+          let separated =
+            F.p_call MemMemory.p_separated
+              [ p ; F.e_int 1 ; a ; n ] in
+          let process = Tactical.rewrite ?at [
+              "Unassigned" , separated , e , F.e_get m0 p ;
+              "Assigned" , F.p_not separated , e , F.e_get mr p  ;
+            ] in
+          Applicable process
   end
 
 (* -------------------------------------------------------------------------- *)
@@ -94,11 +70,11 @@ class havoc =
 
 let separated ?at property =
   match F.e_expr property with
-  | L.Fun( f , [p;n;q;m] ) when f == MemTyped.p_separated ->
-      let base_p = MemTyped.a_base p in
-      let ofs_p = MemTyped.a_offset p in
-      let base_q = MemTyped.a_base q in
-      let ofs_q = MemTyped.a_offset q in
+  | L.Fun( f , [p;n;q;m] ) when f == MemMemory.p_separated ->
+      let base_p = MemMemory.a_base p in
+      let ofs_p = MemMemory.a_offset p in
+      let base_q = MemMemory.a_base q in
+      let ofs_q = MemMemory.a_offset q in
       let eq_base = F.p_equal base_p base_q in
       let on_left = F.p_leq (F.e_add ofs_p n) ofs_q in
       let on_right = F.p_leq (F.e_add ofs_q m) ofs_p in
@@ -134,8 +110,8 @@ class separated =
 (* -------------------------------------------------------------------------- *)
 
 let invalid m p n =
-  let base = MemTyped.a_base p in
-  let offset = MemTyped.a_offset p in
+  let base = MemMemory.a_base p in
+  let offset = MemMemory.a_offset p in
   let malloc = F.e_get m base in
   "Invalid",
   F.p_imply
@@ -145,8 +121,8 @@ let invalid m p n =
        (F.p_leq (F.e_add offset n) F.e_zero))
 
 let valid_rd m p n =
-  let base = MemTyped.a_base p in
-  let offset = MemTyped.a_offset p in
+  let base = MemMemory.a_base p in
+  let offset = MemMemory.a_offset p in
   let malloc = F.e_get m base in
   "Valid (Read)",
   F.p_imply
@@ -156,8 +132,8 @@ let valid_rd m p n =
        (F.p_leq (F.e_add offset n) malloc))
 
 let valid_rw m p n =
-  let base = MemTyped.a_base p in
-  let offset = MemTyped.a_offset p in
+  let base = MemMemory.a_base p in
+  let offset = MemMemory.a_offset p in
   let malloc = F.e_get m base in
   "Valid (Read & Write)",
   F.p_imply
@@ -169,10 +145,10 @@ let valid_rw m p n =
       ])
 
 let included p a q b =
-  let p_base = MemTyped.a_base p in
-  let q_base = MemTyped.a_base q in
-  let p_offset = MemTyped.a_offset p in
-  let q_offset = MemTyped.a_offset q in
+  let p_base = MemMemory.a_base p in
+  let q_base = MemMemory.a_base q in
+  let p_offset = MemMemory.a_offset p in
+  let q_offset = MemMemory.a_offset q in
   "Included",
   F.p_imply
     (F.p_lt F.e_zero a)
@@ -185,10 +161,10 @@ let included p a q b =
          ]))
 
 let lookup f = function
-  | [p;a;q;b] when f == MemTyped.p_included -> included p a q b
-  | [m;p;n] when f == MemTyped.p_invalid -> invalid m p n
-  | [m;p;n] when f == MemTyped.p_valid_rd -> valid_rd m p n
-  | [m;p;n] when f == MemTyped.p_valid_rw -> valid_rw m p n
+  | [p;a;q;b] when f == MemMemory.p_included -> included p a q b
+  | [m;p;n] when f == MemMemory.p_invalid -> invalid m p n
+  | [m;p;n] when f == MemMemory.p_valid_rd -> valid_rd m p n
+  | [m;p;n] when f == MemMemory.p_valid_rw -> valid_rw m p n
   | _ -> raise Not_found
 
 let unfold ?at e f es =
@@ -219,14 +195,13 @@ class validity =
 
 module Havoc =
 struct
-  let field = field
   let tactical = Tactical.export (new havoc)
-  let strategy ?(priority=1.0) ~havoc ~addr =
+  let strategy ?(priority=1.0) ~havoc =
     Strategy.{
       priority ;
       tactical ;
       selection = havoc ;
-      arguments = [ arg field addr ] ;
+      arguments = [] ;
     }
 end
 

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -133,21 +133,21 @@ let add_qedstat (ts:float) (s:stats) =
   if ts > s.time then s.time <- ts
 
 let get_field js fd =
-  try Json.field fd js with Not_found | Invalid_argument _ -> Json.Null
+  try Json.field fd js with Not_found | Invalid_argument _ -> `Null
 
 let json_assoc fields =
-  let fields = List.filter (fun (_,d) -> d<>Json.Null) fields in
-  if fields = [] then Json.Null else Json.Assoc fields
+  let fields = List.filter (fun (_,d) -> d<>`Null) fields in
+  if fields = [] then `Null else `Assoc fields
 
 let json_of_stats s =
-  let add fd v w = if v > 0 then (fd , Json.Int v)::w else w in
+  let add fd v w = if v > 0 then (fd , `Int v)::w else w in
   json_assoc
     begin
       add "total" s.total @@
       add "valid" s.valid @@
       add "failed" s.inconclusive @@
       add "unknown" s.unsuccess @@
-      (if s.rank >= 0 then [ "rank" , Json.Int s.rank ] else [])
+      (if s.rank >= 0 then [ "rank" , `Int s.rank ] else [])
     end
 
 let rankify_stats s js =
@@ -554,6 +554,22 @@ let properties ~config fmt (s:coverage) = function
   | "failed" -> number config fmt (Property.Set.cardinal s.covered - Property.Set.cardinal s.proved)
   | _ -> raise Exit
 
+
+let is_stat_name = function
+  | "success"
+  | "total"
+  | "valid" | ""
+  | "failed"
+  | "status"
+  | "inconclusive"
+  | "unsuccess"
+  | "time"
+  | "perf"
+  | "steps"
+  | "range" -> true
+  | _ -> false
+
+
 let stat ~config fmt s = function
   | "success" -> percent config fmt s.valid s.total
   | "total" -> number config fmt s.total
@@ -585,19 +601,11 @@ let stat ~config fmt s = function
 let pstats ~config fmt s cmd arg =
   match cmd with
   | "wp" | "qed" -> stat ~config fmt (get_prover s VCS.Qed) arg
-  | "alt-ergo" | "ergo" -> stat ~config fmt (get_prover s VCS.AltErgo) arg
-  | "coq" -> stat ~config fmt (get_prover s VCS.Coq) arg
-  | "z3" -> stat ~config fmt (get_prover s (VCS.Why3 "z3")) arg
-  | "gappa" -> stat ~config fmt (get_prover s (VCS.Why3 "gappa")) arg
-  | "simplify" -> stat ~config fmt (get_prover s (VCS.Why3 "simplify")) arg
-  | "vampire" -> stat ~config fmt (get_prover s (VCS.Why3 "vampire")) arg
-  | "zenon" -> stat ~config fmt (get_prover s (VCS.Why3 "zenon")) arg
-  | "cvc3" -> stat ~config fmt (get_prover s (VCS.Why3 "cvc3")) arg
-  | "cvc4" -> stat ~config fmt (get_prover s (VCS.Why3 "cvc4")) arg
-  | "yices" -> stat ~config fmt (get_prover s (VCS.Why3 "yices")) arg
-  | "why3-alt-ergo" | "why3-ergo" ->
-      stat ~config fmt (get_prover s (VCS.Why3 "alt-ergo")) arg
-  | _ -> stat ~config fmt s.main cmd
+  | cmd when is_stat_name cmd -> stat ~config fmt s.main cmd
+  | prover ->
+      match (VCS.prover_of_name prover) with
+      | None -> Wp_parameters.error ~once:true "Unknown prover name %s" prover
+      | Some prover -> stat ~config fmt (get_prover s prover) arg
 
 let pcstats ~config fmt (s,c) cmd arg =
   match cmd with
@@ -864,20 +872,29 @@ let export gstat specfile =
 
 (* -------------------------------------------------------------------------- *)
 
-let export_json gstat jfile =
+let export_json gstat ?jinput ~joutput () =
   begin
-    Wp_parameters.feedback "Report '%s'" jfile ;
     let js =
       try
-        if Sys.file_exists jfile
-        then Json.load_file jfile else Json.Null
+        let jfile = match jinput with
+          | None ->
+              Wp_parameters.feedback "Report '%s'" joutput ;
+              joutput
+          | Some jinput ->
+              Wp_parameters.feedback "Report in:  '%s'" jinput ;
+              Wp_parameters.feedback "Report out: '%s'" joutput ;
+              jinput
+        in
+        if Sys.file_exists jfile then
+          Json.load_file jfile
+        else `Null
       with Json.Error(file,line,msg) ->
         let source = Log.source ~file ~line in
         Wp_parameters.error ~source "Incorrect json file: %s" msg ;
-        Json.Null
+        `Null
     in
     rankify_fcstat gstat js ;
-    Json.save_file jfile (json_of_fcstat gstat) ;
+    Json.save_file joutput (json_of_fcstat gstat) ;
   end
 
 

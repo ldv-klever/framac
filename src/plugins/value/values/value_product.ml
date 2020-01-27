@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,13 +23,11 @@
 open Eval
 
 module Make
-    (Left: Abstract_value.Internal)
-    (Right: Abstract_value.Internal)
+    (Left: Abstract_value.S)
+    (Right: Abstract_value.S)
 = struct
 
   include Datatype.Pair (Left) (Right)
-
-  let structure = Structure.Key_Value.Node (Left.structure, Right.structure)
 
   let pretty_typ typ =
     Pretty_utils.pp_pair ~pre:"@[" ~sep:",@ " ~suf:"@]"

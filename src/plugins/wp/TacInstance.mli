@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,7 +29,7 @@ open Strategy
 val tactical : Tactical.t
 val fields : selection field list
 val params : parameter list
-val filter : var -> term -> bool
+val filter : tau -> term -> bool
 
 type bindings = (var * selection) list
 

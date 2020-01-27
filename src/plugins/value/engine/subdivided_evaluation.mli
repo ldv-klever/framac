@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -36,7 +36,7 @@ module type Forward_Evaluation = sig
 end
 
 module Make
-    (Value : Abstract_value.External)
+    (Value : Abstract.Value.External)
     (Loc: Abstract_location.S with type value = Value.t)
     (Valuation: Eval.Valuation with type value = Value.t
                                 and type loc = Loc.location)

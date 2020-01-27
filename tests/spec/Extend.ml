@@ -50,7 +50,7 @@ let visit_bar vis ext =
   | Ext_id idx ->
     let l = Bar_table.find idx in
     let l' = Cil.mapNoCopy (Cil.visitCilPredicate vis) l in
-    if Cil.is_copy_behavior vis#behavior then begin
+    if Visitor_behavior.is_copy vis#behavior then begin
       let idx' = Count.next () in
       Queue.add (fun () -> Bar_table.add idx' l') vis#get_filling_actions;
       Cil.ChangeTo(Ext_id idx')
@@ -107,16 +107,16 @@ let type_bla ~typing_context ~loc:_loc l =
   Ext_preds l
 
 let () =
-  Logic_typing.register_behavior_extension "foo" type_foo;
-  Logic_typing.register_behavior_extension "bar" type_bar;
-  Logic_typing.register_behavior_extension "bla" type_bla;
+  Logic_typing.register_behavior_extension "foo" false type_foo;
+  Logic_typing.register_behavior_extension "bar" false type_bar;
+  Logic_typing.register_behavior_extension "bla" false type_bla;
   Cil_printer.register_behavior_extension "bar" print_bar;
   Cil.register_behavior_extension "bar" visit_bar;
-  Logic_typing.register_code_annot_next_both_extension "baz" type_baz;
-  Logic_typing.register_code_annot_next_loop_extension "lfoo" type_foo;
-  Logic_typing.register_code_annot_extension "ca_foo" type_foo;
-  Logic_typing.register_code_annot_next_stmt_extension "ns_foo" type_foo;
-  Logic_typing.register_global_extension "global_foo" type_foo
+  Logic_typing.register_code_annot_next_both_extension "baz" false type_baz;
+  Logic_typing.register_code_annot_next_loop_extension "lfoo" false type_foo;
+  Logic_typing.register_code_annot_extension "ca_foo" false type_foo;
+  Logic_typing.register_code_annot_next_stmt_extension "ns_foo" false type_foo;
+  Logic_typing.register_global_extension "global_foo" false type_foo
 
 let run () =
   Ast.compute ();

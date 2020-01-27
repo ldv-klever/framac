@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,49 +20,24 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open Task
-open VCS
+val add_specific_equality:
+  for_tau:(Lang.tau -> bool) ->
+  mk_new_eq:Lang.F.binop ->
+  unit
+(** Equality used in the goal, simpler to prove than polymorphic equality *)
 
-(* -------------------------------------------------------------------------- *)
-(* --- Why3 Multi-Theorem Prover                                          --- *)
-(* -------------------------------------------------------------------------- *)
+val prove : ?timeout:int -> ?steplimit:int -> prover:Why3Provers.t ->
+  Wpo.t -> VCS.result Task.task
+(** Return NoResult if it is already proved by Qed *)
 
-type goal =
-  {
-    file : string;
-    theory : string;
-    goal : string;
-  }
+type mode = NoCache | Update | Replay | Rebuild | Offline | Cleanup
 
-val assemble_goal: Wpo.t -> (string list (* includes *) * goal) option
-(** None if the po is trivial *)
+val set_mode : mode -> unit
+val get_mode : unit -> mode
+val get_hits : unit -> int
+val get_miss : unit -> int
+val get_removed : unit -> int
 
-val prove : ?timeout:int -> prover:string -> Wpo.t -> result task
-(** The string must be a valid why3 prover identifier
-    Return NoResult if it is already proved by Qed
-*)
+val cleanup_cache : mode:mode -> unit
 
-type dp = {
-  dp_name : string ;
-  dp_version : string ;
-  dp_prover : string ;
-}
-
-val prover : dp -> prover
-
-val detect_why3 : (dp list option -> unit) -> unit
-val detect_provers : (dp list -> unit) -> unit
-
-val find : string -> dp list -> dp
-val parse : string -> dp
-
-(* -------------------------------------------------------------------------- *)
-(* --- Why3 Multi-Theorem Prover                                          --- *)
-(* -------------------------------------------------------------------------- *)
-
-module Goal :
-sig
-  type t = goal
-  val compare : t -> t -> int
-  val pretty : Format.formatter -> t -> unit
-end
+(**************************************************************************)

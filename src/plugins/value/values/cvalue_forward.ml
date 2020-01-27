@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -61,14 +61,12 @@ let are_comparable_string pointer1 pointer2 =
    In practice, function pointers are considered possible or one past
    when their offset is 0. For object pointers, the offset is checked
    against the validity of each base, taking past-one into account. *)
-let possible_pointer ~one_past location =
+let possible_pointer access location =
   let location = Locations.loc_bytes_to_loc_bits location in
   let is_possible_offset base offs =
-    if Base.is_function base then
-      Ival.is_zero offs
-    else
-      let size = if one_past then Integer.zero else Integer.one in
-      Base.is_valid_offset ~for_writing:false size base offs
+    if Base.is_function base
+    then Ival.is_zero offs
+    else Base.is_valid_offset access base offs
   in
   Locations.Location_Bits.for_all is_possible_offset location
 
@@ -107,8 +105,8 @@ let are_comparable_reason kind ev1 ev2 =
     else
       (* Both pointers have to be almost valid (they can be pointers to one past
          an array object. *)
-    if (not (possible_pointer ~one_past:true rest_1)) ||
-       (not (possible_pointer ~one_past:true rest_2))
+    if (not (possible_pointer Base.No_access rest_1)) ||
+       (not (possible_pointer Base.No_access rest_2))
     then false, `Invalid_pointer
     else
       (* Equality operators allow the comparison between an almost valid pointer
@@ -133,8 +131,8 @@ let are_comparable_reason kind ev1 ev2 =
       then false, `Rel_different_bases
       else
         (* If both addresses are valid, they can be compared for equality. *)
-      if (possible_pointer ~one_past:false rest_1) &&
-         (possible_pointer ~one_past:false rest_2)
+      if (possible_pointer (Base.Read Integer.one) rest_1) &&
+         (possible_pointer (Base.Read Integer.one) rest_2)
       then
         (* But beware of the comparisons of literal strings. *)
         if are_comparable_string rest_1 rest_2
@@ -208,8 +206,8 @@ let assume_not_nan ~assume_finite fkind v =
   let kind = Fval.kind fkind in
   let evaluate, backward_propagate =
     if assume_finite
-    then Fval.is_finite, Fval.backward_is_finite
-    else Fval.is_not_nan, fun _fkind -> Fval.backward_is_not_nan
+    then Fval.is_finite, Fval.backward_is_finite ~positive:true
+    else Fval.is_not_nan, fun _fkind -> Fval.backward_is_nan ~positive:false
   in
   match Cvalue.V.project_float v with
   | exception Cvalue.V.Not_based_on_null ->
@@ -338,10 +336,7 @@ let forward_binop_int ~typ ev1 op ev2 =
   | Shiftlt -> V.shift_left ev1 ev2
   | BXor    -> V.bitwise_xor ev1 ev2
   | BOr     -> V.bitwise_or ev1 ev2
-  | BAnd    ->
-    let size = Cil.bitsSizeOf typ in
-    let signed = Bit_utils.is_signed_int_enum_pointer typ in
-    V.bitwise_and ~size ~signed ev1 ev2
+  | BAnd    -> V.bitwise_and ev1 ev2
   (* Strict evaluation. The caller of this function is supposed to take
      into account the laziness of those operators itself *)
   | LOr  ->
@@ -404,7 +399,7 @@ let forward_unop typ op value =
       | TInt (ik, _) | TEnum ({ekind=ik}, _) ->
         let size = Cil.bitsSizeOfInt ik in
         let signed = Cil.isSigned ik in
-        V.bitwise_not_size ~signed ~size value
+        V.bitwise_not ~signed ~size value
       | _ -> assert false
     end
   | LNot ->
@@ -475,28 +470,31 @@ let make_volatile ?typ v =
   else v
 
 let eval_float_constant f fkind fstring =
-  let fl, fu = match fstring with
-    | Some string when fkind = Cil_types.FLongDouble ||
-                       Value_parameters.AllRoundingModesConstants.get () ->
-      let open Floating_point in
-      let {f_lower; f_upper} = snd (parse string) in
-      (* Computations are done in double. For long double constants, if we
-         reach infinity, we must use the interval [max_double..infty] to be
-         sound. Here we even use [-infty..infty]. *)
-      if Fc_float.is_infinite f_lower && Fc_float.is_infinite f_upper
-      then
-        begin
-          Value_util.warning_once_current
-            "cannot parse floating-point constant, returning imprecise result";
-          neg_infinity, infinity
-        end
-      else f_lower, f_upper
-    | None | Some _ -> f, f
-  in
-  let fl = Fval.F.of_float fl
-  and fu = Fval.F.of_float fu in
-  let af = Fval.inject (Fval.kind fkind) fl fu in
-  V.inject_float af
+  if Fc_float.is_nan f
+  then V.inject_float Fval.nan
+  else
+    let fl, fu = match fstring with
+      | Some string when fkind = Cil_types.FLongDouble ||
+                         Value_parameters.AllRoundingModesConstants.get () ->
+        let open Floating_point in
+        let {f_lower; f_upper} = snd (parse string) in
+        (* Computations are done in double. For long double constants, if we
+           reach infinity, we must use the interval [max_double..infty] to be
+           sound. Here we even use [-infty..infty]. *)
+        if Fc_float.is_infinite f_lower && Fc_float.is_infinite f_upper
+        then
+          begin
+            Value_util.warning_once_current
+              "cannot parse floating-point constant, returning imprecise result";
+            neg_infinity, infinity
+          end
+        else f_lower, f_upper
+      | None | Some _ -> f, f
+    in
+    let fl = Fval.F.of_float fl
+    and fu = Fval.F.of_float fu in
+    let af = Fval.inject (Fval.kind fkind) fl fu in
+    V.inject_float af
 
 
 (*

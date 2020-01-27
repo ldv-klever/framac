@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -37,26 +37,20 @@ typedef double double_t;
 #define MATH_ERRNO	1
 #define MATH_ERREXCEPT	2
 
-#define HUGE_VAL  0x1.0p2047
-#define HUGE_VALF 0x1.0p255f
-#define HUGE_VALL 0x1.0p32767L
-
 /* The constants below are not part of C99/C11 but they are defined in POSIX */
-#ifdef _XOPEN_SOURCE
-# define M_E 0x1.5bf0a8b145769p1         /* e          */
-# define M_LOG2E 0x1.71547652b82fep0     /* log_2 e    */
-# define M_LOG10E 0x1.bcb7b1526e50ep-2   /* log_10 e   */
-# define M_LN2 0x1.62e42fefa39efp-1      /* log_e 2    */
-# define M_LN10 0x1.26bb1bbb55516p1      /* log_e 10   */
-# define M_PI 0x1.921fb54442d18p1        /* pi         */
-# define M_PI_2 0x1.921fb54442d18p0      /* pi/2       */
-# define M_PI_4 0x1.921fb54442d18p-1     /* pi/4       */
-# define M_1_PI 0x1.45f306dc9c883p-2     /* 1/pi       */
-# define M_2_PI 0x1.45f306dc9c883p-1     /* 2/pi       */
-# define M_2_SQRTPI 0x1.20dd750429b6dp0  /* 2/sqrt(pi) */
-# define M_SQRT2 0x1.6a09e667f3bcdp0     /* sqrt(2)    */
-# define M_SQRT1_2 0x1.6a09e667f3bcdp-1  /* 1/sqrt(2)  */
-#endif
+#define M_E 0x1.5bf0a8b145769p1         /* e          */
+#define M_LOG2E 0x1.71547652b82fep0     /* log_2 e    */
+#define M_LOG10E 0x1.bcb7b1526e50ep-2   /* log_10 e   */
+#define M_LN2 0x1.62e42fefa39efp-1      /* log_e 2    */
+#define M_LN10 0x1.26bb1bbb55516p1      /* log_e 10   */
+#define M_PI 0x1.921fb54442d18p1        /* pi         */
+#define M_PI_2 0x1.921fb54442d18p0      /* pi/2       */
+#define M_PI_4 0x1.921fb54442d18p-1     /* pi/4       */
+#define M_1_PI 0x1.45f306dc9c883p-2     /* 1/pi       */
+#define M_2_PI 0x1.45f306dc9c883p-1     /* 2/pi       */
+#define M_2_SQRTPI 0x1.20dd750429b6dp0  /* 2/sqrt(pi) */
+#define M_SQRT2 0x1.6a09e667f3bcdp0     /* sqrt(2)    */
+#define M_SQRT1_2 0x1.6a09e667f3bcdp-1  /* 1/sqrt(2)  */
 
 /* The following specifications will set errno. */
 #define math_errhandling	MATH_ERRNO
@@ -67,7 +61,7 @@ typedef double double_t;
 #define FP_SUBNORMAL 3
 #define FP_NORMAL 4
 
-#include <float.h> // for DBL_MIN and FLT_MIN
+#include "float.h" // for DBL_MIN and FLT_MIN
 
 /*@
   assigns \result \from x;
@@ -756,6 +750,37 @@ extern int __finite(double d);
 
 #  define isfinite(x) \
      (sizeof (x) == sizeof (float) ? __finitef (x) : __finite (x))
+
+//The (integer x) argument is just here because a function without argument is
+//applied differently in ACSL and C
+
+/*@
+
+  logic float __fc_infinity(integer x) = \plus_infinity;
+  logic float __fc_nan(integer x) = \NaN;
+
+  @*/
+
+/*@
+  ensures result_is_infinity: \is_plus_infinity(\result);
+  assigns \result \from \nothing;
+  @*/
+extern const float __fc_infinity(int x);
+
+/*@
+  ensures result_is_nan: \is_NaN(\result);
+  assigns \result \from \nothing;
+  @*/
+extern const float __fc_nan(int x);
+
+
+#define INFINITY __fc_infinity(0)
+#define NAN __fc_nan(0)
+
+#define HUGE_VALF INFINITY
+#define HUGE_VAL  ((double)INFINITY)
+#define HUGE_VALL ((long double)INFINITY)
+
 
 __END_DECLS
 

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,36 +33,44 @@
 
 (** {1 OCaml} *)
 
-(** In OCaml 4.03, many functions [f] from String have been deprecated
-    in favor of [f_ascii], which operate only on the ASCII charset, while
-    the deprecated [f] knew about iso-8859-1.
-    We use the new names here, so that when support of 4.02.3 is dropped,
-    client code will just have to erase [Transitioning.] to use directly
-    the stdlib version
-*)
-module String: sig
-  val uppercase_ascii: string -> string (** 4.03 *)
-  val capitalize_ascii: string -> string (** 4.03 *)
-  val uncapitalize_ascii: string -> string (** 4.03 *)
-  val lowercase_ascii: string -> string (** 4.03 *)
-  val split_on_char: char -> string -> string list (** 4.04 *)
+(** 4.08 *)
+module Stdlib: sig
+  val compare: 'a -> 'a -> int
+  val succ: int -> int
+  val incr: int ref -> unit
+  val min: 'a -> 'a -> 'a
+  val max: 'a -> 'a -> 'a
+  val min_int: int
+  val max_int: int
 end
 
-(** See above documentation for [String] *)
-module Char: sig
-  val uppercase_ascii: char -> char (** 4.03 *)
-  val lowercase_ascii: char -> char (** 4.03 *)
+(** 4.08 *)
+module Dynlink: sig
+  val init: unit -> unit
 end
 
-module Stack: sig
-  val fold: ('a -> 'b -> 'a) -> 'a -> 'b Stack.t -> 'a (** 4.03 *)
+(** 4.07 *)
+module Float: sig
+  val max_float: float
 end
 
-module List: sig
-  val nth_opt: 'a list -> int -> 'a option (** 4.05 *)
-  val find_opt: ('a -> bool) -> 'a list -> 'a option (** 4.05 *)
-  val assoc_opt: 'a -> ('a * 'b) list -> 'b option (** 4.05 *)
-  val assq_opt: 'a -> ('a * 'b) list -> 'b option (** 4.05 *)
+(** 4.08 *)
+module Format: sig
+  type stag
+  val string_of_stag: stag -> string
+  val stag_of_string: string -> stag
+  type formatter_stag_functions = {
+    mark_open_stag : stag -> string;
+    mark_close_stag : stag -> string;
+    print_open_stag : stag -> unit;
+    print_close_stag : stag -> unit;
+  }
+  val pp_set_formatter_stag_functions:
+    Format.formatter -> formatter_stag_functions -> unit
+  val pp_get_formatter_stag_functions:
+    Format.formatter -> unit -> formatter_stag_functions
+  val pp_open_stag : Format.formatter -> stag -> unit
+  val pp_close_stag : Format.formatter -> unit -> unit
 end
 
 (** {1 Zarith} *)

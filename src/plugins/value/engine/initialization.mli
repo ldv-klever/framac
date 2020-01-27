@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -44,7 +44,7 @@ module type S = sig
 end
 
 module Make
-    (Domain: Abstract_domain.External)
+    (Domain: Abstract.Domain.External)
     (Eva: Evaluation.S with type state = Domain.state
                         and type loc = Domain.location)
     (Transfer: Transfer_stmt.S with type state = Domain.t)

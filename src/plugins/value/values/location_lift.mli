@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,9 +30,9 @@ module type Conversion = sig
 end
 
 module Make
-    (Loc: Abstract_location.Internal)
+    (Loc: Abstract_location.Leaf)
     (Convert : Conversion with type internal_value := Loc.value)
-  : Abstract_location.Internal with type location = Loc.location
+  : Abstract.Location.Internal with type location = Loc.location
                                 and type offset = Loc.offset
                                 and type value = Convert.extended_value
 

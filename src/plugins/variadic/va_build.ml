@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,7 +28,7 @@ open Cil
 
 let function_declaration ?vattr ~loc name typ mk_spec =
   (* Build the varinfo *)
-  let vi = makeGlobalVar name typ in
+  let vi = makeGlobalVar ~referenced:true name typ in
   Extlib.may (fun extra_vattr -> vi.vattr <- vi.vattr @ extra_vattr) vattr;
   vi.vdecl <- loc;
   (* Build the formals *)
@@ -41,11 +41,11 @@ let function_declaration ?vattr ~loc name typ mk_spec =
 
 let vi_init ~loc vi exp = Local_init(vi, AssignInit (SingleInit exp), loc)
 
-let array_init ~loc fundec scope name elem_typ values =
+let array_init ~loc fundec ~ghost scope name elem_typ values =
   let size = max (List.length values) 1 in (* In C, Array size >= 1 *)
   let esize = Cil.integer ~loc size in
   let typ = TArray (elem_typ, Some esize, Cil.empty_size_cache (), []) in
-  let vi = Cil.makeLocalVar fundec ~scope name typ in
+  let vi = Cil.makeLocalVar fundec ~ghost ~scope name typ in
   let initl =
     match values with
       | [] -> [ Index (Cil.zero ~loc, NoOffset), Cil.makeZeroInit ~loc elem_typ]

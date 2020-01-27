@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -24,7 +24,7 @@
 (* --- Model Factory                                                      --- *)
 (* -------------------------------------------------------------------------- *)
 
-type mheap = Hoare | ZeroAlias | Typed of MemTyped.pointer
+type mheap = Hoare | ZeroAlias | Region | Typed of MemTyped.pointer
 type mvar = Raw | Var | Ref | Caveat
 
 type setup = {
@@ -39,8 +39,8 @@ type driver = LogicBuiltins.driver
 val ident : setup -> string
 val descr : setup -> string
 val compiler : mheap -> mvar -> (module Sigs.Compiler)
-val configure : setup -> driver -> Model.tuning
-val instance : setup -> driver -> Model.t
+val configure : setup -> driver -> WpContext.tuning
+val instance : setup -> driver -> WpContext.model
 val default : setup (** ["Var,Typed,Nat,Real"] memory model. *)
 val parse :
   ?default:setup ->

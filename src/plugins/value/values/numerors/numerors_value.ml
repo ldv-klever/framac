@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -116,8 +116,7 @@ end
 include Datatype.Make(T)
 let pretty_debug = pretty
 let pretty_typ _ = pretty
-let error_key = Structure.Key_Value.create_key "numerors_values"
-let structure = Structure.Key_Value.Leaf error_key
+let key = Structure.Key_Value.create_key "numerors_values"
 
 
 (*-----------------------------------------------------------------------------

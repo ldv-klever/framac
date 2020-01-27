@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,6 +25,9 @@ open Cil_types
 module Typ : sig
   val attributes_less_equal : typ -> typ -> bool
   val params : typ -> (string * typ * attributes) list
+  val ghost_partitioned_params : typ ->
+    (string * typ * attributes) list *
+    (string * typ * attributes) list
   val params_types : typ -> typ list
   val params_count : typ -> int
   val is_variadic : typ -> bool

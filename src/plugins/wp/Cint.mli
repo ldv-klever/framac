@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -71,16 +71,15 @@ val f_lxor : lfun
 val f_lor  : lfun
 val f_lsl  : lfun
 val f_lsr  : lfun
-val f_bit  : lfun
 
-val f_bitwised : lfun list (** All except f_bit *)
+val f_bitwised : lfun list (** All except f_bit_positive *)
 
 (** Simplifiers *)
 
-val is_cint_simplifier: Conditions.simplifier
+val is_cint_simplifier: simplifier
 (** Remove the [is_cint] in formulas that are
     redundant with other conditions. *)
 
-val mask_simplifier: Conditions.simplifier
+val mask_simplifier: simplifier
 
 val is_positive_or_null: term -> bool

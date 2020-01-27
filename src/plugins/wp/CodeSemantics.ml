@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,6 +31,26 @@ open Qed
 open Sigs
 open Lang
 open Lang.F
+
+module WpLog = Wp_parameters
+let constfold_ctyp = function
+  | TArray (_,Some {enode = (Const CInt64 _) },_,_) as ct -> ct
+  | TArray (ty,Some len,cache,attr) as ct -> begin
+      match Cil.constFold true len with
+      | {enode = (Const CInt64 _) } as len ->
+          TArray(ty,Some len,cache,attr)
+      | _ -> ct
+    end
+  | ct -> ct
+
+let constfold_coffset = function
+  | Index({enode=Const (CInt64 _)}, _) as off -> off
+  | Index(idx, next) as off -> begin
+      match Cil.constFold true idx with
+      | {enode = (Const CInt64 _) } as idx -> Index(idx, next)
+      | _ -> off
+    end
+  | off -> off
 
 module Make(M : Sigs.Model) =
 struct
@@ -168,13 +188,18 @@ struct
     | C_int i -> Val (iop i (val_of_exp env e1) (val_of_exp env e2))
     | _ -> assert false
 
-  let bool_of_comp env iop lop e1 e2 =
+  let bool_of_comp env iop lop fop e1 e2 =
     let t1 = Cil.typeOf e1 in
     let t2 = Cil.typeOf e2 in
     if Cil.isPointerType t1 && Cil.isPointerType t2 then
       Cvalues.is_true (lop (loc_of_exp env e1) (loc_of_exp env e2))
-    else
-      iop (val_of_exp env e1) (val_of_exp env e2)
+    else match Cil.unrollType t1 with
+      | TFloat(f,_) ->
+          let p = fop (Ctypes.c_float f)
+              (val_of_exp env e1) (val_of_exp env e2) in
+          e_if (F.e_prop p) e_one e_zero
+      | _ ->
+          iop (val_of_exp env e1) (val_of_exp env e2)
 
   let bool_of_exp env e =
     match Ctypes.object_of (Cil.typeOf e) with
@@ -194,12 +219,12 @@ struct
     | BAnd    -> arith_int env tr Cint.band e1 e2
     | BOr     -> arith_int env tr Cint.bor  e1 e2
     | BXor    -> arith_int env tr Cint.bxor e1 e2
-    | Eq      -> Val (bool_of_comp env Cvalues.bool_eq  M.loc_eq  e1 e2)
-    | Ne      -> Val (bool_of_comp env Cvalues.bool_neq M.loc_neq e1 e2)
-    | Lt      -> Val (bool_of_comp env Cvalues.bool_lt  M.loc_lt  e1 e2)
-    | Gt      -> Val (bool_of_comp env Cvalues.bool_lt  M.loc_lt  e2 e1)
-    | Le      -> Val (bool_of_comp env Cvalues.bool_leq M.loc_leq e1 e2)
-    | Ge      -> Val (bool_of_comp env Cvalues.bool_leq M.loc_leq e2 e1)
+    | Eq      -> Val (bool_of_comp env Cvalues.bool_eq  M.loc_eq  Cfloat.feq e1 e2)
+    | Ne      -> Val (bool_of_comp env Cvalues.bool_neq M.loc_neq Cfloat.fneq e1 e2)
+    | Lt      -> Val (bool_of_comp env Cvalues.bool_lt  M.loc_lt  Cfloat.flt e1 e2)
+    | Gt      -> Val (bool_of_comp env Cvalues.bool_lt  M.loc_lt  Cfloat.flt e2 e1)
+    | Le      -> Val (bool_of_comp env Cvalues.bool_leq M.loc_leq Cfloat.fle e1 e2)
+    | Ge      -> Val (bool_of_comp env Cvalues.bool_leq M.loc_leq Cfloat.fle e2 e1)
     | LAnd    -> Val (Cvalues.bool_and (bool_of_exp env e1) (bool_of_exp env e2))
     | LOr     -> Val (Cvalues.bool_or  (bool_of_exp env e1) (bool_of_exp env e2))
     | PlusPI | IndexPI ->
@@ -290,7 +315,11 @@ struct
           Lang.assume (Cvalues.is_object obj data) ;
           data
 
-    | AddrOf lv | StartOf lv -> Loc (lval env lv)
+    | AddrOf lv ->
+        Loc (lval env lv)
+
+    | StartOf lv ->
+        Loc (Cvalues.startof ~shift:M.shift (lval env lv) (Cil.typeOfLval lv))
 
     | UnOp(op,e,ty) -> exp_unop env ty op e
     | BinOp(op,e1,e2,tr) -> exp_binop env tr op e1 e2
@@ -448,22 +477,18 @@ struct
         init_value ~sigma lv (Cil.typeOfLval lv) (Some exp) :: acc
 
     | CompoundInit ( ct , initl ) ->
-
-        let len = List.length initl in
-        let acc =
+        let ct = constfold_ctyp ct in
+        let acc = (* updated acc with default init of structure *)
           match ct with
-          | TArray (ty,Some {enode = (Const CInt64 (size,_,_))},_,_)
-            when Integer.lt (Integer.of_int len) size  ->
-              init_range ~sigma lv ty (Integer.of_int len) size None :: acc
-
-          | TComp (cp,_,_) when len < (List.length cp.cfields) ->
-
+          | TComp (cp,_,_) when cp.cstruct && (* not for union... *)
+                                (List.length initl) < (List.length cp.cfields) ->
+              (* default init for unintialized field of a struct *)
               List.fold_left
                 (fun acc f ->
                    if List.exists
                        (function
                          | Field(g,_),_ -> Fieldinfo.equal f g
-                         | _ -> false)
+                         | _ ->  WpLog.fatal "Kernel invariant broken into an initializer")
                        initl
                    then acc
                    else
@@ -477,47 +502,80 @@ struct
           | _ -> acc
         in
         match ct with
-        | TArray (ty,_,_,_)
-          when Wp_parameters.InitWithForall.get () ->
-            (* delayed: the last consecutive index have the same value
-               and are not yet initialized.
-                (i0,pred,il) =def \forall x. x \in [il;i0] t[x] == pred
-            *)
+        | TArray (ty,len,_,_) ->
+            let delayed =
+              match len with (* number of required elements *)
+              | Some {enode = (Const CInt64 (size,_,_))} ->
+                  (size, None)
+              | _ -> (* CIL invariant broken. *)
+                  WpLog.fatal "CIL invariant broken: unknown initialized array size"
+            in
             let make_quant acc = function
-              | None -> acc
-              | Some (Index({enode=Const (CInt64 (i0,_,_))}, NoOffset),exp,il)
-                when Integer.lt il i0 ->
+              (* adds delayed initializations from info about
+                 the last consecutive indices having
+                 the same value, but that have not yet initialized. *)
+              | (_,None) -> acc (* nothing was delayed *)
+              | (il,Some (i0,_,exp)) when Integer.lt il i0 ->
+                  (* Added pred: \forall i \in [il .. i0] ; t[i]==exp *)
                   let i2 = Integer.succ i0 in
                   init_range ~sigma lv ty il i2 (Some exp) :: acc
-              | Some (off,exp,_) ->
+              | (_il,Some (_i0,off,exp)) ->
+                  (* case [_il=_i0], so uses [off] corresponding to [_i0]
+                     Added pred: t[i]==exp*)
                   let lv = Cil.addOffsetLval off lv in
                   init_value ~sigma lv ty (Some exp) :: acc
+            in
+            let add_missing_indices acc i0 = function
+              (* adds eventual default value for missing indices. *)
+              | (i1, _) ->
+                  if Integer.ge i0 i1 then (* no hole *) acc
+                  else (* defaults values
+                          Added pred: \forall i \in [i0 .. i1[ ; t[i]==default *)
+                    init_range ~sigma lv ty i0 i1 None :: acc
             in
             let acc, delayed =
               List.fold_left
                 (fun (acc,delayed) (off,init) ->
-                   match delayed, off, init with
-                   | None, Index({enode=Const (CInt64 (i0,_,_))}, NoOffset),
-                     SingleInit curr ->
-                       (acc,Some(off,curr,i0))
-                   | Some (i0,prev,ip), Index({enode=Const (CInt64 (i,_,_))}, NoOffset),
-                     SingleInit curr
-                     when ExpStructEq.equal prev curr
-                       && Integer.equal (Integer.pred ip) i ->
-                       (acc,Some(i0,prev,i))
-                   | _, _,_ ->
+                   let off = constfold_coffset off in
+                   let idx,acc = match off with
+                     | Index({enode=Const CInt64 (idx,_,_)}, _) ->
+                         (match delayed with
+                          | (iprev, _) when Integer.lt iprev idx ->
+                              (* CIL invariant broken.
+                                 without that invariant, an algo with a 2sd pass
+                                 is required for introducing default values *)
+                              WpLog.fatal "CIL invariant broken: unordered initializer";
+                          | _ -> ()) ;
+                         idx,
+                         (* adds default values for missing indices *)
+                         add_missing_indices acc (Integer.succ idx) delayed
+                     | _ -> (* CIL invariant broken. *)
+                         WpLog.fatal "CIL invariant broken: unknown initialized index"
+                   in
+                   match off, init with (* only simple init can be delayed *)
+                   | Index(_, NoOffset), SingleInit init -> begin
+                       match delayed with
+                       | (i_prev,(Some (_,_,init_delayed) as delayed_info))
+                         when Wp_parameters.InitWithForall.get ()
+                           && Integer.equal (Integer.pred i_prev) idx
+                           && ExpStructEq.equal init_delayed init ->
+                           acc, (idx,delayed_info)
+                       | _ -> (* flush the delayed init, and store the new one *)
+                           let acc = make_quant acc delayed in
+                           acc, (idx, Some (idx,off,init))
+                     end
+                   | Index(_, _),_ ->
+                       (* flush the delayed init, and adds the current one *)
                        let acc = make_quant acc delayed in
-                       begin match off, init with
-                         | Index({enode=Const (CInt64 (i0,_,_))}, NoOffset),
-                           SingleInit curr ->
-                             acc, Some (off,curr,i0)
-                         | _ ->
-                             let lv = Cil.addOffsetLval off lv in
-                             init_variable ~sigma lv init acc, None
-                       end)
-                (acc,None)
-                (List.rev initl) in
-            (make_quant acc delayed)
+                       let lv = Cil.addOffsetLval off lv in
+                       (init_variable ~sigma lv init acc), (idx, None)
+                   | _ -> WpLog.fatal "CIL invariant broken: not an index"
+                )
+                (acc,delayed)
+                (List.rev initl)
+            in
+            let acc = make_quant acc delayed in
+            add_missing_indices acc Integer.zero delayed
         | _ ->
             List.fold_left
               (fun acc (off,init) ->

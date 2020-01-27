@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -458,7 +458,7 @@ end
     @since Carbon-20101201 *)
 module SharedCounter(Info : sig val name : string end) : Counter
 
-(** Creates a projectified counter.
+(** Creates a projectified counter. That starts at 0
 
     @since Nitrogen-20111001 *)
 module Counter(Info : sig val name : string end) : Counter
@@ -484,7 +484,15 @@ module type Hashcons = sig
 end
 
 (** Hashconsed version of an arbitrary datatype *)
-module Hashcons (Data: Datatype.S)(Info: Info) : Hashcons with type elt = Data.t
+module Hashcons
+    (Data: Datatype.S)
+    (Info: sig
+       include Info
+       val initial_values: Data.t list
+       (** List of values created at compile-time, that must be shared between
+           all instances of Frama-C. *)
+     end)
+  : Hashcons with type elt = Data.t
 
 
 (* ************************************************************************* *)

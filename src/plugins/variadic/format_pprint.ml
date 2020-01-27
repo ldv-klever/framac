@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -81,7 +81,7 @@ let string_of_cs = function
 
 let pp_cs ff (cs,capitalize) =
   let s = string_of_cs cs in
-  let s = if capitalize then Transitioning.String.capitalize_ascii s else s in
+  let s = if capitalize then String.capitalize_ascii s else s in
   Format.fprintf ff "%s" s
 
 let string_of_option ?pre:(pre="") ?suf:(suf="") f = function

@@ -1,4 +1,4 @@
-# frama-c -wp -wp-timeout 90 -wp-steps 50 [...]
+# frama-c -wp -wp-steps 50 [...]
 [kernel] Parsing tests/wp_bts/bts_1176.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -7,7 +7,8 @@
 [wp] [Qed] Goal typed_f_assert_qed_ok : Valid
 [wp] Proved goals:    1 / 1
   Qed:             1
-[wp] Report 'tests/wp_bts/bts_1176.i.0.report.json'
+[wp] Report in:  'tests/wp_bts/oracle_qualif/bts_1176.0.report.json'
+[wp] Report out: 'tests/wp_bts/result_qualif/bts_1176.0.report.json'
 -------------------------------------------------------------
 Functions           WP     Alt-Ergo        Total   Success
 f                    1     -                 1       100%

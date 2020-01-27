@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -95,7 +95,7 @@ class frama_c_refresh: Project.t -> frama_c_visitor
    *)
 
 class generic_frama_c_visitor:
-  Cil.visitor_behavior ->  frama_c_visitor
+  Visitor_behavior.t ->  frama_c_visitor
   (** Generic class that abstracts over [frama_c_inplace] and [frama_c_copy]. 
       @plugin development guide *)
 

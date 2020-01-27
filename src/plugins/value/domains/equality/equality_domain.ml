@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -122,9 +122,8 @@ module Internal = struct
   type state = t
 
   let name = "Equality domain"
-  let key = Structure.Key_Domain.create_key "equality_domain"
-  let structure : t Abstract_domain.structure = Abstract_domain.Leaf key
   let log_category = dkey
+  let key = Structure.Key_Domain.create_key "equality_domain"
 
   type equalities = Equality.Set.t
   let project (t, _, _) = t
@@ -180,13 +179,13 @@ module Store = Domain_store.Make (Internal)
 (* ------------------------- Abstract Domain -------------------------------- *)
 
 module Make
-    (Value : Abstract_value.External)
+    (Value : Abstract.Value.External)
 = struct
 
   include Internal
   module Store = Store
 
-  let get_cvalue = Value.get Main_values.cvalue_key
+  let get_cvalue = Value.get Main_values.CVal.key
 
   type value = Value.t
   type location = Precise_locs.precise_location
@@ -218,7 +217,7 @@ module Make
         let c = get v in
         if Cvalue.V.is_imprecise c then
           let c' = Cvalue.V.topify_with_origin Origin.top c in
-          Value.set Main_values.cvalue_key c' v
+          Value.set Main_values.CVal.key c' v
         else v
 
   let coop_eval oracle equalities atom_src =
@@ -338,7 +337,7 @@ module Make
       let deps = HCESet.fold (add_one_dep valuation) lvalues.read deps in
       HCESet.fold (add_one_dep valuation) lvalues.addr deps
 
-    let update _valuation state = state
+    let update _valuation state = `Value state
 
     let is_singleton = match get_cvalue with
       | None -> fun _ -> false
@@ -406,7 +405,7 @@ module Make
     let assign _stmt left_value right_expr value valuation state =
       let open Locations in
       let left_loc = Precise_locs.imprecise_location left_value.lloc in
-      let direct_left_zone = Locations.enumerate_bits left_loc in
+      let direct_left_zone = Locations.(enumerate_valid_bits Write left_loc) in
       let state = kill Hcexprs.Modified direct_left_zone state in
       let right_expr = Cil.constFold true right_expr in
       try
@@ -513,7 +512,7 @@ module Make
 
   let logic_assign _assigns location ~pre:_ state =
     let loc = Precise_locs.imprecise_location location in
-    let zone = Locations.enumerate_bits loc in
+    let zone = Locations.(enumerate_valid_bits Write loc) in
     kill Hcexprs.Modified zone state
 
   let evaluate_predicate _ _ _ = Alarmset.Unknown

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -433,6 +433,9 @@ and string annot = parse
           Buffer.add_char preprocess_buffer '"'; annot lexbuf }
   | "\\\"" { is_newline:=CHAR;
              Buffer.add_string preprocess_buffer "\\\"";
+             string annot lexbuf }
+  | "\\\\" { is_newline:=CHAR;
+             Buffer.add_string preprocess_buffer "\\\\";
              string annot lexbuf }
   | eof { abort_preprocess "eof while parsing a string literal" }
   | _ as c { is_newline:=CHAR;

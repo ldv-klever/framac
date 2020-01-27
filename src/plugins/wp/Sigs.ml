@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,12 +27,15 @@
 open Cil_types
 open Ctypes
 open Lang.F
+open Interpreted_automata
 
 (* -------------------------------------------------------------------------- *)
 (** {1 General Definitions} *)
 (* -------------------------------------------------------------------------- *)
 
 type 'a sequence = { pre : 'a ; post : 'a }
+
+type 'a binder = { bind: 'b 'c. 'a -> ('b -> 'c) -> 'b -> 'c }
 
 (** Oriented equality or arbitrary relation *)
 type equation =
@@ -81,6 +84,16 @@ type 'a result =
 
 (** Polarity of predicate compilation *)
 type polarity = [ `Positive | `Negative | `NoPolarity ]
+
+(** Frame Conditions.
+    Consider a function [phi(m)] over memory [m],
+    we want memories [m1,m2] and condition [p] such that
+    [p(m1,m2) -> phi(m1) = phi(m2)].
+    - [name] used for generating lemma
+    - [triggers] for the lemma
+    - [conditions] for the frame lemma to hold
+    - [mem1,mem2] to two memories for which the lemma holds *)
+type frame = string * Definitions.trigger list * pred list * term * term
 
 (* -------------------------------------------------------------------------- *)
 (** {1 Reversing Models}
@@ -132,6 +145,7 @@ sig
   type t
   val self : string (** Chunk names, for pretty-printing. *)
   val hash : t -> int
+  val equal : t -> t -> bool
   val compare : t -> t -> int
   val pretty : Format.formatter -> t -> unit
 
@@ -263,9 +277,14 @@ sig
 
   (** {2 Model Definition} *)
 
-  val configure : Model.tuning
+  val configure : WpContext.tuning
   (** Initializers to be run before using the model.
       Typically sets {!Context} values. *)
+
+  val configure_ia: automaton -> vertex binder
+  (** Given an automaton, return a vertex's binder.
+      Currently used by the automata compiler to bind current vertex.
+      See {!StmtSemantics}. *)
 
   val datatype : string
   (** For projectification. Must be unique among models. *)
@@ -307,9 +326,9 @@ sig
       shall be performed, otherwise return [Mvalue].
 
       Recognized [Cil] patterns:
-       - [Mvar x,[Mindex 0]] is rendered as [*x] when [x] has a pointer type
-       - [Mmem p,[Mfield f;...]] is rendered as [p->f...] like in Cil
-       - [Mmem p,[Mindex k;...]] is rendered as [p[k]...] to catch Cil [Mem(AddPI(p,k)),...] *)
+      - [Mvar x,[Mindex 0]] is rendered as [*x] when [x] has a pointer type
+      - [Mmem p,[Mfield f;...]] is rendered as [p->f...] like in Cil
+      - [Mmem p,[Mindex k;...]] is rendered as [p[k]...] to catch Cil [Mem(AddPI(p,k)),...] *)
   val lookup : state -> term -> mval
 
   (** Try to interpret a sequence of states into updates.
@@ -415,7 +434,7 @@ sig
      location [loc] which is represented by [t] in [sigma.post].
   *)
 
-  val assigned : sigma sequence -> c_object -> loc sloc -> pred list
+  val assigned : sigma sequence -> c_object -> loc sloc -> equation list
   (**
      Return a set of formula that express that two memory state are the same
      except at the given set of memory location.
@@ -592,12 +611,6 @@ sig
   type nonrec region = M.loc region
   type nonrec result = M.loc result
   type sigma = M.Sigma.t
-
-  (** {2 Debug} *)
-
-  val pp_logic : Format.formatter -> logic -> unit
-  val pp_sloc : Format.formatter -> loc sloc -> unit
-  val pp_region : Format.formatter -> region -> unit
 
   (** {2 Frames}
 

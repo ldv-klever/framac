@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -110,7 +110,7 @@ end
 
 class filter_visitor prj = object
 
-  inherit Visitor.generic_frama_c_visitor (Cil.copy_visit prj)
+  inherit Visitor.generic_frama_c_visitor (Visitor_behavior.copy prj)
 
   method! vglob_aux g =
     match g with

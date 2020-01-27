@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -40,13 +40,37 @@ module Make (Domain: InputDomain) = struct
   let dependencies = [ Db.Value.self ]
   let size = 16
 
-  module Storage =
-    State_builder.Ref (Datatype.Bool)
+  module type Ref = sig
+    val get : unit -> bool
+    val set : bool -> unit
+  end
+
+  (* Boolean reference saved on the disk. *)
+  module Bool_Ref_State =
+    State_builder.Ref
+      (Datatype.Bool)
       (struct
         let dependencies = dependencies
         let name = name ^ ".Storage"
         let default () = false
       end)
+
+  (* Boolean reference. Not saved on the disk. *)
+  module Bool_Ref = struct
+    let x = ref false
+    let set y = x := y
+    let get () = !x
+  end
+
+  (* A boolean reference indicating whether the states of the domain have been
+     saved. False by default, it becomes true when the engine calls
+     [register_global_state] at the start of the analysis.
+     If the domain is unmarshallable, its states cannot be saved on the
+     disk, and this boolean should not be saved either. *)
+  module Storage =
+    (val (if Descr.is_unmarshable Domain.descr
+          then (module Bool_Ref)
+          else (module Bool_Ref_State)) : Ref)
 
   module Global_State =
     State_builder.Option_ref (Domain)
@@ -79,6 +103,13 @@ module Make (Domain: InputDomain) = struct
         let name = name ^ ".AfterTable_By_Callstack"
         let size = size
         let dependencies = dependencies
+      end)
+  module AfterTable =
+    Cil_state_builder.Stmt_hashtbl (Domain)
+      (struct
+        let name = name ^ ".AfterTable"
+        let size = size
+        let dependencies = [ AfterTable_By_Callstack.self ]
       end)
 
   module Called_Functions_By_Callstack =
@@ -177,13 +208,18 @@ module Make (Domain: InputDomain) = struct
       try `Value (Called_Functions_By_Callstack.find kf)
       with Not_found -> `Bottom
 
-  let get_stmt_state s =
+  let get_stmt_state ~after s =
     if not (Storage.get ())
     then `Value Domain.top
     else
-      try `Value (Table.find s)
+      let (find, add), find_by_callstack =
+        if after
+        then AfterTable.(find, add), AfterTable_By_Callstack.find
+        else Table.(find, add), Table_By_Callstack.find
+      in
+      try `Value (find s)
       with Not_found ->
-        let ho = try Some (Table_By_Callstack.find s) with Not_found -> None in
+        let ho = try Some (find_by_callstack s) with Not_found -> None in
         let state =
           match ho with
           | None -> `Bottom
@@ -192,7 +228,7 @@ module Make (Domain: InputDomain) = struct
               (fun _cs state acc -> Bottom.join Domain.join acc (`Value state))
               h `Bottom
         in
-        ignore (state >>-: Table.add s);
+        ignore (state >>-: add s);
         state
 
   let get_stmt_state_by_callstack ~after stmt =

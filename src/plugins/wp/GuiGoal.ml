@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,6 +27,10 @@ type state =
   | Composer of ProofEngine.tree * GuiTactic.composer * GuiSequent.target
   | Browser of ProofEngine.tree * GuiTactic.browser * GuiSequent.target
 
+let on_proof_context proof job data =
+  let ctxt = ProofEngine.tree_context proof in
+  WpContext.on_context ctxt job data
+
 (* -------------------------------------------------------------------------- *)
 (* --- Autofocus Management                                               --- *)
 (* -------------------------------------------------------------------------- *)
@@ -35,37 +39,56 @@ type mode = [ `Refresh | `Autofocus | `ViewModel | `ViewAll | `ViewRaw ]
 
 module Config = Gtk_helper.Configuration
 
-class autofocus =
-  let options = [
-    `Refresh , "Refresh" ;
-    `Autofocus , "Autofocus" ;
-    `ViewAll , "Full Context" ;
-    `ViewModel , "Unmangled Memory" ;
-    `ViewRaw , "Raw Obligation" ;
-  ] in
-  let values = [
-    `Refresh , "REFRESH" ;
-    `Autofocus , "AUTOFOCUS" ;
-    `ViewAll , "VIEW_ALL" ;
-    `ViewModel , "VIEW_MODEL" ;
-    `ViewRaw , "VIEW_RAW" ;
-  ] in
+class ['a] menu ~(data : ('a * string * string) list) ~key ~default =
+  let options = List.map (fun (v,d,_) -> v,d) data in
+  let values = List.map (fun (v,_,k) -> v,k) data in
   object(self)
-    inherit [mode] Widget.menu ~default:`Autofocus ~options ()
+    inherit ['a] Widget.menu ~default ~options ()
     initializer
-      Wutil.later
-        begin fun () ->
-          Config.config_values
-            ~key:"GuiGoal.autofocus"
-            ~default:`Autofocus ~values self
-        end
+      Wutil.later (fun () -> Config.config_values ~key ~default ~values self)
+  end
+
+
+class autofocus =
+  object inherit [mode] menu
+      ~key:"GuiGoal.autofocus"
+      ~default:`Autofocus
+      ~data:[
+        `Refresh , "Refresh" , "REFRESH" ;
+        `Autofocus , "Autofocus" , "AUTOFOCUS" ;
+        `ViewAll , "Full Context" , "VIEW_ALL" ;
+        `ViewModel , "Unmangled Memory" , "VIEW_MODEL" ;
+        `ViewRaw , "Raw Obligation" , "VIEW_RAW" ;
+      ]
+  end
+
+class iformat =
+  object inherit [Plang.iformat] menu
+      ~key:"GuiGoal.iformat"
+      ~default:`Dec
+      ~data:[
+        `Dec , "Decimal" , "DEC" ;
+        `Hex , "Hexa" , "HEX" ;
+        `Bin , "Binary" , "BIN" ;
+      ]
+  end
+
+class rformat =
+  object inherit [Plang.rformat] menu
+      ~key:"GuiGoal.rformat"
+      ~default:`Ratio
+      ~data:[
+        `Ratio , "Real" , "REAL" ;
+        `Float , "Float (32 bits)" , "F32" ;
+        `Double , "Float (64 bits)" , "F64" ;
+      ]
   end
 
 (* -------------------------------------------------------------------------- *)
 (* --- Goal Panel                                                         --- *)
 (* -------------------------------------------------------------------------- *)
 
-class pane (proverpane : GuiConfig.provers) =
+class pane (gprovers : GuiConfig.provers) =
   let icon = new Widget.image GuiProver.no_status in
   let status = new Widget.label () in
   let text = new Wtext.text () in
@@ -92,7 +115,10 @@ class pane (proverpane : GuiConfig.provers) =
   let save_script = new Widget.button
     ~icon:`SAVE ~tooltip:"Save Script" () in
   let autofocus = new autofocus in
+  let iformat = new iformat in
+  let rformat = new rformat in
   let strategies = new GuiTactic.strategies () in
+  let native = List.mem "native:alt-ergo" (Wp_parameters.Provers.get ()) in
   object(self)
 
     val mutable state : state = Empty
@@ -104,15 +130,25 @@ class pane (proverpane : GuiConfig.provers) =
         let toolbar =
           Wbox.(toolbar
                   [ w prev ; w next ; w cancel ; w forward ;
-                    w autofocus ; w play_script ; w save_script ;
+                    w autofocus ; w iformat ; w rformat ;
+                    w play_script ; w save_script ;
                     w ~padding:6 icon ; h ~padding:6 status ]
                   [ w help ; w delete ]) in
-        layout#populate (Wbox.panel ~top:toolbar ~right:palette#widget text) ;
-        provers <-
-          VCS.([ new GuiProver.prover ~console:text ~prover:AltErgo ] @
-               List.map
-                 (fun dp -> new GuiProver.prover text (ProverWhy3.prover dp))
-                 proverpane#get) ;
+        let content = Wbox.split ~dir:`HORIZONTAL
+            text#widget (Wbox.scroll palette#widget) in
+        Wutil.later (fun () ->
+            Config.config_float ~key:"GuiGoal.palette" ~default:0.8 content
+          );
+        layout#populate (Wbox.panel ~top:toolbar content#widget) ;
+        let native_ergo =
+          if native then [
+            new GuiProver.prover ~console:text ~prover:VCS.NativeAltErgo
+          ] else [] in
+        let why3_provers =
+          List.map
+            (fun dp -> new GuiProver.prover ~console:text ~prover:(VCS.Why3 dp))
+            (Why3.Whyconf.Sprover.elements gprovers#get) in
+        provers <- native_ergo @ why3_provers ;
         List.iter (fun p -> palette#add_tool p#tool) provers ;
         palette#add_tool strategies#tool ;
         Strategy.iter strategies#register ;
@@ -122,11 +158,11 @@ class pane (proverpane : GuiConfig.provers) =
              tactics <- gtac :: tactics ;
              palette#add_tool gtac#tool) ;
         tactics <- List.rev tactics ;
-        self#register_provers proverpane#get ;
+        self#register_provers gprovers#get;
         printer#on_selection (fun () -> self#update) ;
         scripter#on_click self#goto ;
         scripter#on_backtrack self#backtrack ;
-        proverpane#connect self#register_provers ;
+        gprovers#connect self#register_provers ;
         delete#connect (fun () -> self#interrupt ProofEngine.reset) ;
         cancel#connect (fun () -> self#interrupt ProofEngine.cancel) ;
         forward#connect (fun () -> self#forward) ;
@@ -135,6 +171,8 @@ class pane (proverpane : GuiConfig.provers) =
         save_script#connect (fun () -> self#save_script) ;
         play_script#connect (fun () -> self#play_script) ;
         autofocus#connect self#autofocus ;
+        iformat#connect self#iformat ;
+        rformat#connect self#rformat ;
         composer#connect (fun () -> self#update) ;
         browser#connect (fun () -> self#update) ;
         help#connect (fun () -> self#open_help) ;
@@ -203,6 +241,9 @@ class pane (proverpane : GuiConfig.provers) =
           | `Leaf (k,_) -> ProofEngine.goto p (`Leaf(f k)) ; self#update
           | `Main | `Internal _ -> ()
 
+    method private iformat f = printer#set_iformat f ; self#update
+    method private rformat f = printer#set_rformat f ; self#update
+
     method private autofocus = function
       | `Autofocus ->
           printer#set_focus_mode true ;
@@ -232,11 +273,17 @@ class pane (proverpane : GuiConfig.provers) =
           in
           autofocus#set mode ; self#update
 
+    method private provers =
+      (if native then [ VCS.NativeAltErgo ] else []) @
+      (List.map (fun dp -> VCS.Why3 dp)
+         (Why3.Whyconf.Sprover.elements gprovers#get))
+
     method private play_script =
       match state with
       | Proof p ->
           ProofEngine.reset p ;
           ProverScript.spawn
+            ~provers:self#provers
             ~result:
               (fun wpo prv res ->
                  text#printf "[%a] %a : %a@."
@@ -273,7 +320,8 @@ class pane (proverpane : GuiConfig.provers) =
     method private register_provers dps =
       begin
         (* register missing provers *)
-        let prvs = List.map ProverWhy3.prover dps in
+        let dps = Why3.Whyconf.Sprover.elements dps in
+        let prvs = List.map (fun p -> VCS.Why3 p) dps in
         (* set visible provers *)
         List.iter
           (fun prover ->
@@ -338,19 +386,22 @@ class pane (proverpane : GuiConfig.provers) =
           printer#set_target Tactical.Empty ;
           strategies#connect None ;
           List.iter (fun tactic -> tactic#clear) tactics
-      | Some(model,sequent,sel) ->
-          strategies#connect (Some (self#strategies sequent)) ;
-          let select (tactic : GuiTactic.tactic) =
-            let process = self#apply in
-            let composer = self#compose in
-            let browser = self#browse in
-            tactic#select ~process ~composer ~browser sel
-          in
-          Model.with_model model (List.iter select) tactics ;
-          let tgt =
-            if List.exists (fun tactics -> tactics#targeted) tactics
-            then sel else Tactical.Empty in
-          printer#set_target tgt
+      | Some(tree,sequent,sel) ->
+          on_proof_context tree
+            begin fun () ->
+              strategies#connect (Some (self#strategies sequent)) ;
+              let select (tactic : GuiTactic.tactic) =
+                let process = self#apply in
+                let composer = self#compose in
+                let browser = self#browse in
+                tactic#select ~process ~composer ~browser ~tree sel
+              in
+              List.iter select tactics ;
+              let tgt =
+                if List.exists (fun tactics -> tactics#targeted) tactics
+                then sel else Tactical.Empty in
+              printer#set_target tgt
+            end ()
 
     method private update_scriptbar =
       match state with
@@ -450,8 +501,7 @@ class pane (proverpane : GuiConfig.provers) =
               self#update_provers (Some wpo) ;
               let sequent = printer#sequent in
               let select = printer#selection in
-              let model = wpo.Wpo.po_model in
-              self#update_tactics (Some(model,sequent,select)) ;
+              self#update_tactics (Some(proof,sequent,select)) ;
             end
       | Composer _ | Browser _ -> ()
 
@@ -475,42 +525,39 @@ class pane (proverpane : GuiConfig.provers) =
             text#hrule ;
           end
       | Proof proof ->
-          begin
-            text#clear ;
-            scripter#tree proof ;
-            text#hrule ;
-            text#printf "%t@." (printer#goal (ProofEngine.head proof)) ;
-            text#hrule ;
-            scripter#status proof ;
-          end
+          on_proof_context proof
+            begin fun () ->
+              text#clear ;
+              scripter#tree proof ;
+              text#hrule ;
+              text#printf "%t@." (printer#goal (ProofEngine.head proof)) ;
+              text#hrule ;
+              scripter#status proof ;
+            end ()
       | Composer(proof,cc,tgt) ->
-          begin
-            text#clear ;
-            let quit () =
-              state <- Proof proof ;
-              printer#restore tgt ;
-              self#update in
-            let model = ProofEngine.tree_model proof in
-            let print = composer#print cc ~quit in
-            text#printf "%t@." (Model.with_model model print) ;
-            text#hrule ;
-            text#printf "%t@."
-              (printer#goal (ProofEngine.head proof)) ;
-          end
+          on_proof_context proof
+            begin fun () ->
+              text#clear ;
+              let quit () =
+                state <- Proof proof ;
+                printer#restore tgt ;
+                self#update in
+              text#printf "%t@." (composer#print cc ~quit) ;
+              text#hrule ;
+              text#printf "%t@." (printer#goal (ProofEngine.head proof)) ;
+            end ()
       | Browser(proof,cc,tgt) ->
-          begin
-            text#clear ;
-            let quit () =
-              state <- Proof proof ;
-              printer#restore tgt ;
-              self#update in
-            let model = ProofEngine.tree_model proof in
-            let print = browser#print cc ~quit in
-            text#printf "%t@." (Model.with_model model print) ;
-            text#hrule ;
-            text#printf "%t@."
-              (printer#goal (ProofEngine.head proof)) ;
-          end
+          on_proof_context proof
+            begin fun () ->
+              text#clear ;
+              let quit () =
+                state <- Proof proof ;
+                printer#restore tgt ;
+                self#update in
+              text#printf "%t@." (browser#print cc ~quit) ;
+              text#hrule ;
+              text#printf "%t@." (printer#goal (ProofEngine.head proof)) ;
+            end ()
       | Forking _ -> ()
 
     method update =
@@ -532,7 +579,7 @@ class pane (proverpane : GuiConfig.provers) =
           let n = Task.size pool in
           if n = 0 then
             begin
-              ignore (ProofEngine.commit ~resolve:false fork) ;
+              ignore (ProofEngine.commit fork) ;
               ProofEngine.validate proof ;
               ProofEngine.forward proof ;
               state <- Proof proof ;
@@ -549,12 +596,12 @@ class pane (proverpane : GuiConfig.provers) =
               VCS.pp_prover prv Wpo.pp_title wpo VCS.pp_result res
           end
         ~success:(fun _ _ -> Wutil.later self#commit)
-        ~pool provers
+        ~pool (List.map (fun dp -> VCS.BatchMode , dp) provers)
 
     method private fork proof fork =
       Wutil.later
         begin fun () ->
-          let provers = VCS.[ BatchMode, AltErgo ] in
+          let provers = self#provers in
           let pool = Task.pool () in
           ProofEngine.iter (self#schedule pool provers) fork ;
           let server = ProverTask.server () in
@@ -597,7 +644,7 @@ class pane (proverpane : GuiConfig.provers) =
                 begin
                   ProverScript.search
                     ~depth ~width ~auto
-                    ~provers:[ VCS.AltErgo ]
+                    ~provers:[ VCS.NativeAltErgo ]
                     ~result:
                       (fun wpo prv res ->
                          text#printf "[%a] %a : %a@."

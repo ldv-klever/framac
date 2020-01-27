@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -171,7 +171,7 @@ module Make (F: Float_sig.S) = struct
   let compare x y =
     match x, y with
     | FRange.Itv (b1, e1, n1), FRange.Itv (b2, e2, n2) ->
-      let c = Pervasives.compare n1 n2 in
+      let c = Transitioning.Stdlib.compare n1 n2 in
       if c <> 0 then c else
         let r = F.compare b1 b2 in
         if r <> 0 then r else F.compare e1 e2
@@ -223,7 +223,7 @@ module Make (F: Float_sig.S) = struct
   let pos_zero prec = singleton (Cst.pos_zero prec)
   let one prec = singleton (F.of_float Near prec 1.)
   let pos_infinity prec = singleton (Cst.pos_infinity prec)
-  let _neg_infinity prec = singleton (Cst.neg_infinity prec)
+  let neg_infinity prec = singleton (Cst.neg_infinity prec)
 
   let minus_one_one prec ~nan =
     FRange.inject ~nan (F.of_float Near prec (-1.)) (F.of_float Near prec 1.)
@@ -314,14 +314,12 @@ module Make (F: Float_sig.S) = struct
     | (FRange.NaN, FRange.Itv (b1, e1, _)) -> FRange.inject ~nan:true b1 e1
     | FRange.NaN, FRange.NaN -> FRange.nan
 
-  let widen_down f = F.neg (F.widen_up (F.neg f))
-
-  let widen f1 f2 =
+  let widen wh prec f1 f2 =
     assert (is_included f1 f2);
     match f1, f2 with
     | FRange.Itv (b1, e1, _), FRange.Itv (b2, e2, nan) ->
-      let b = if Cmp.equal b2 b1 then b2 else widen_down b2 in
-      let e = if Cmp.equal e2 e1 then e2 else F.widen_up e2 in
+      let b = if Cmp.equal b2 b1 then b2 else F.widen_down wh prec b2 in
+      let e = if Cmp.equal e2 e1 then e2 else F.widen_up wh prec e2 in
       (** widen_up and down produce double only if the input is a double *)
       FRange.inject ~nan b e
     | FRange.NaN, f2 -> f2
@@ -439,17 +437,27 @@ module Make (F: Float_sig.S) = struct
     | FRange.Itv (_, _, true)
     | FRange.NaN -> Comp.Unknown
 
-  let backward_is_not_nan = function
-    | FRange.NaN -> `Bottom
-    | FRange.Itv (b, e, _) -> `Value (FRange.inject ~nan:false b e)
+  let backward_is_nan ~positive = function
+    | FRange.NaN as v -> if positive then `Value v else `Bottom
+    | FRange.Itv (_, _, false) as v -> if positive then `Bottom else `Value v
+    | FRange.Itv (b, e, true) ->
+      if positive then `Value nan else `Value (FRange.inject ~nan:false b e)
 
-  let backward_is_finite prec = function
-    | FRange.NaN -> `Bottom
-    | FRange.Itv (b, e, _) as f ->
-      if Cmp.equal b e && F.is_infinite b
-      then `Bottom (* [f] is exactly an infinite, we can return `Bottom even
-                      in the [Real] case *)
-      else narrow (top_finite prec) f
+  let backward_is_finite ~positive prec = function
+    | FRange.NaN as v -> if positive then `Bottom else `Value v
+    | FRange.Itv (b, e, nan) as f ->
+      if positive
+      then
+        if Cmp.equal b e && F.is_infinite b
+        then `Bottom (* [f] is exactly an infinite, we can return `Bottom
+                        even in the [Real] case. *)
+        else narrow (top_finite prec) f
+      else
+        match F.is_infinite b, F.is_infinite e with
+        | true, true -> `Value f (* No possible reduction. *)
+        | true, false -> `Value (FRange.inject ~nan b b)
+        | false, true -> `Value (FRange.inject ~nan e e)
+        | false, false -> if nan then `Value FRange.nan else `Bottom
 
   let has_greater_min_bound t1 t2 =
     match t1, t2 with

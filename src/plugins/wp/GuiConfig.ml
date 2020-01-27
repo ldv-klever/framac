@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,35 +20,54 @@
 (*                                                                        *)
 (**************************************************************************)
 
-open ProverWhy3
-
 (* ------------------------------------------------------------------------ *)
 (* ---  Prover List in Configuration                                    --- *)
 (* ------------------------------------------------------------------------ *)
 
-class provers config =
+class provers key =
   object(self)
-    inherit [dp list] Wutil.selector []
+    inherit [Why3.Whyconf.Sprover.t] Wutil.selector Why3.Whyconf.Sprover.empty
 
     method private load () =
       let open Gtk_helper.Configuration in
-      let rec collect w = function
-        | ConfString s -> ProverWhy3.parse s :: w
-        | ConfList fs -> List.fold_left collect w fs
-        | _ -> w in
+      let prover_of_conf acc = function
+        | ConfList [ConfString prover_name;
+                    ConfString prover_version;
+                    ConfString prover_altern] ->
+            Why3.Whyconf.Sprover.add
+              Why3.Whyconf.{ prover_name; prover_version; prover_altern }
+              acc
+        | _ -> acc in
       try
-        let data = Gtk_helper.Configuration.find config in
-        self#set (List.rev (collect [] data))
-      with Not_found -> ()
+        let data = Gtk_helper.Configuration.find key in
+        match data with
+        | ConfList data ->
+            (List.fold_left prover_of_conf Why3.Whyconf.Sprover.empty data)
+        | _ -> Why3.Whyconf.Sprover.empty
+      with Not_found -> Why3.Whyconf.Sprover.empty
 
     method private save () =
       let open Gtk_helper.Configuration in
-      Gtk_helper.Configuration.set config
-        (ConfList (List.map (fun dp -> ConfString dp.dp_prover) self#get))
+      let conf_of_prover dp = ConfList Why3.Whyconf.[ConfString dp.prover_name;
+                                                     ConfString dp.prover_version;
+                                                     ConfString dp.prover_altern] in
+      Gtk_helper.Configuration.set key
+        (ConfList (List.map conf_of_prover
+                     (Why3.Whyconf.Sprover.elements self#get)))
 
     initializer
       begin
-        self#load () ;
+        let settings = self#load () in
+        (** select automatically the provers set on the command line *)
+        let cmdline = Wp_parameters.Provers.get () in
+        let selection = List.fold_left
+            (fun acc e ->
+               match Why3Provers.find_opt e with
+               | None -> acc
+               | Some p -> Why3.Whyconf.Sprover.add p acc)
+            settings cmdline
+        in
+        self#set selection ;
         self#on_event self#save ;
       end
 
@@ -60,8 +79,7 @@ class provers config =
 
 class dp_chooser
     ~(main:Design.main_window_extension_points)
-    ~(available:provers)
-    ~(enabled:provers)
+    ~(provers:provers)
   =
   let dialog = new Wpane.dialog
     ~title:"Why3 Provers"
@@ -70,22 +88,16 @@ class dp_chooser
   let array = new Wpane.warray () in
   object(self)
 
-    val mutable provers = []
+    val mutable selected = Why3.Whyconf.Mprover.empty
 
     method private enable dp e =
-      let rec hook dp e = function
-        | [] -> [dp,e]
-        | head :: tail ->
-            if fst head = dp then (dp,e) :: tail
-            else head :: hook dp e tail
-      in provers <- hook dp e provers
+      selected <- Why3.Whyconf.Mprover.add dp e selected
 
     method private lookup dp =
-      try List.assoc dp provers
-      with Not_found -> false
+      Why3.Whyconf.Mprover.find dp selected
 
     method private entry dp =
-      let text = Printf.sprintf "%s (%s)" dp.dp_name dp.dp_version in
+      let text = Why3Provers.title dp in
       let sw = new Widget.switch () in
       let lb = new Widget.label ~align:`Left ~text () in
       sw#set (self#lookup dp) ;
@@ -101,24 +113,34 @@ class dp_chooser
 
     method private configure dps =
       begin
-        available#set dps ;
-        array#set dps ;
-        provers <- List.map (fun dp -> dp , self#lookup dp) dps ;
+        array#set (Why3.Whyconf.Sprover.elements dps) ;
         array#update () ;
       end
 
-    method private detect () = ProverWhy3.detect_provers self#configure
+    method private detect () =
+      begin
+        self#configure (Why3Provers.provers_set ());
+      end
 
-    method private select () =
-      let dps = List.fold_right
-          (fun (dp,e) dps -> if e then dp :: dps else dps)
-          provers []
-      in enabled#set dps
+    method private apply () =
+      provers#set
+        (Why3.Whyconf.Mprover.map_filter
+           (function
+             | true -> Some ()
+             | false -> None)
+           selected)
 
     method run () =
-      available#send self#configure () ;
-      List.iter (fun dp -> self#enable dp true) enabled#get ;
-      array#update () ;
+      let dps = Why3Provers.provers_set () in
+      let sel = provers#get in
+      selected <- Why3.Whyconf.Mprover.merge
+          (fun _ avail enab ->
+             match avail, enab with
+             | None, _ -> None
+             | Some (), Some () -> Some true
+             | Some (), None -> Some false)
+          dps sel;
+      self#configure dps ;
       dialog#run ()
 
     initializer
@@ -128,96 +150,9 @@ class dp_chooser
         dialog#button ~action:(`APPLY) ~label:"Apply" () ;
         array#set_entry self#entry ;
         dialog#add_block array#coerce ;
-        dialog#on_value `APPLY self#select ;
+        dialog#on_value `APPLY self#apply ;
       end
 
   end
 
 (* ------------------------------------------------------------------------ *)
-(* ---  WP Prover Switch Panel                                          --- *)
-(* ------------------------------------------------------------------------ *)
-
-type mprover =
-  | NoProver
-  | AltErgo
-  | Coq
-  | Why3ide
-  | Why3 of dp
-
-class dp_button ~(available:provers) ~(enabled:provers) =
-  let render = function
-    | NoProver -> "None"
-    | AltErgo -> "Alt-Ergo (native)"
-    | Coq -> "Coq (native,ide)"
-    | Why3ide -> "Why3 (ide)"
-    | Why3 dp -> Printf.sprintf "Why3: %s (%s)" dp.dp_name dp.dp_version
-  in
-  let items = [ NoProver ; AltErgo ; Coq ; Why3ide ] in
-  let button = new Widget.menu ~default:AltErgo ~render ~items () in
-  object(self)
-    method coerce = button#coerce
-    method widget = (self :> Widget.t)
-    method set_enabled = button#set_enabled
-    method set_visible = button#set_visible
-
-    method private import =
-      match Wp_parameters.Provers.get () with
-      | [] -> ()
-      | spec :: _ ->
-          match VCS.prover_of_name spec with
-          | Some (VCS.Why3 p) ->
-              let dps = available#get in
-              let dp = ProverWhy3.find p dps in
-              if not (List.mem dp dps) then available#set (dps @ [dp]) ;
-              let en = dp :: enabled#get in
-              enabled#set
-                (List.filter (fun q -> List.mem q en) available#get)
-          | _ -> ()
-
-    method private set_provers dps =
-      button#set_items (items @ List.map (fun dp -> Why3 dp) dps)
-
-    method private get_selection = function
-      | NoProver -> "none"
-      | AltErgo -> "alt-ergo"
-      | Coq -> "coqide"
-      | Why3ide -> "why3ide"
-      | Why3 dp -> "why3:" ^ dp.dp_prover
-
-    method private set_selection = function
-      | [] -> ()
-      | spec :: _ ->
-          match VCS.prover_of_name spec with
-          | None | Some VCS.Qed | Some VCS.Tactical -> button#set NoProver
-          | Some VCS.AltErgo -> button#set AltErgo
-          | Some VCS.Coq -> button#set Coq
-          | Some VCS.Why3ide -> button#set Why3ide
-          | Some (VCS.Why3 spec) ->
-              let dp = ProverWhy3.find spec enabled#get in
-              button#set (Why3 dp)
-
-    val mutable last = []
-    val mutable init = true
-
-    method update () =
-      begin
-        if init then self#import ;
-        let current = Wp_parameters.Provers.get () in
-        if current <> last then
-          self#set_selection (Wp_parameters.Provers.get ()) ;
-        last <- current ;
-        if init then
-          begin
-            self#set_provers enabled#get ;
-            enabled#connect self#set_provers ;
-            init <- false ;
-          end
-      end
-
-    initializer
-      begin
-        button#connect
-          (fun mp -> Wp_parameters.Provers.set [self#get_selection mp]) ;
-      end
-
-  end

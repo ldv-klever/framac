@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,8 +29,6 @@
 type clobbered_set = {
   mutable clob: Base.SetLattice.t
 }
-
-val key: clobbered_set Abstract_domain.key
 
 val structural_descr: Structural_descr.t
 

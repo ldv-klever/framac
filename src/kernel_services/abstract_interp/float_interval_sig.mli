@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -29,6 +29,7 @@ type prec = Float_sig.prec
 
 module type S = sig
   type float (** Type of the interval bounds. *)
+  type widen_hints (** Type of the widen hints. *)
   type t     (** Type of intervals. *)
 
   val packed_descr : Structural_descr.pack
@@ -45,6 +46,10 @@ module type S = sig
 
   (** The NaN singleton *)
   val nan: t
+
+  (** The infinities singleton *)
+  val pos_infinity: prec -> t
+  val neg_infinity: prec -> t
 
   (** [inject ~nan b e] creates the floating-point interval [b..e], plus NaN
       if [nan] is true. [b] and [e] must be ordered, and not NaN. They can be
@@ -64,7 +69,7 @@ module type S = sig
 
   val is_included: t -> t -> bool
   val join: t -> t -> t
-  val widen: t -> t -> t
+  val widen: widen_hints -> prec -> t -> t -> t
   val narrow: t -> t -> t or_bottom
 
   val contains_a_zero: t -> bool
@@ -86,8 +91,8 @@ module type S = sig
 
   val is_finite: t -> Abstract_interp.Comp.result
   val is_not_nan: t -> Abstract_interp.Comp.result
-  val backward_is_finite: prec -> t -> t or_bottom
-  val backward_is_not_nan: t -> t or_bottom
+  val backward_is_finite: positive:bool -> prec -> t -> t or_bottom
+  val backward_is_nan: positive:bool -> t -> t or_bottom
 
   (** [has_greater_min_bound f1 f2] returns 1 if the interval [f1] has a better
       minimum bound (i.e. greater) than the interval [f2]. *)

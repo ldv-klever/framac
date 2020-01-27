@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -80,7 +80,7 @@
 
 #  define __bswap_64(x) \
      (__extension__                                                           \
-      ({ union { __extension__ unsigned long long int __ll;                   \
+      ({ union __fc_bswap { __extension__ unsigned long long int __ll;        \
                  unsigned int __l[2]; } __w, __r;                             \
          if (__builtin_constant_p (x))                                        \
            __r.__ll = __bswap_constant_64 (x);                                \

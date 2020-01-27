@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,7 +48,7 @@ class overflow =
                 "In-Range", (hs , cond) ;
                 "No-Overflow" ,
                 Conditions.subst
-                  (fun u -> if u == e then v else u)
+                  (fun u -> if u == e then v else raise Not_found)
                   (hs , F.p_imply cond g)
               ])
       | _ -> Not_applicable

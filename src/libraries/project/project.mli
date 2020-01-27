@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -141,6 +141,10 @@ val set_keep_current: bool -> unit
   (** [set_keep_current b] keeps the current project forever (even after the end
       of the current {!on}) iff [b] is [true].
       @since Aluminium-20160501 *)
+
+(**/**)
+val set_current_as_last_created: unit -> unit
+(**/**)
 
 val copy: ?selection:State_selection.t -> ?src:t -> t -> unit
   (** Copy a project into another one. Default project for [src] is [current

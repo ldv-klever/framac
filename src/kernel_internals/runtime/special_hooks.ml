@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -138,8 +138,9 @@ let () =
 
 (* Load Frama-c from disk if required *)
 let load_binary () =
-  let filename = Kernel.LoadState.get () in
-  if filename <> "" then begin
+  let filepath = Kernel.LoadState.get () in
+  if filepath <> Filepath.Normalized.unknown then begin
+    let filename = Filepath.Normalized.to_pretty_string filepath in
     try
       Project.load_all filename
     with Project.IOError s ->

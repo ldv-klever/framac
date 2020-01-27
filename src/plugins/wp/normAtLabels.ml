@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,7 +33,8 @@ type label_mapping = Cil_types.logic_label -> Clabels.c_label
  * *)
 class norm_at (mapping : label_mapping) =
   object(self)
-    inherit Visitor.generic_frama_c_visitor (Cil.copy_visit (Project.current ()))
+    inherit Visitor.generic_frama_c_visitor
+        (Visitor_behavior.copy (Project.current ()))
 
     val mutable current_label = None
 
@@ -65,7 +66,7 @@ class norm_at (mapping : label_mapping) =
       | TAddrOf (h, _) | TLval (h, _) | TStartOf (h, _)  ->
           let old_label = current_label in
           let at_label = match h with
-            | TResult _ -> Some Clabels.post
+            | TResult _ | TVar{lv_name="\\exit_status"} -> Some Clabels.post
             | _ -> old_label
           in
           current_label <- None;

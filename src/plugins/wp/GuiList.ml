@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -72,7 +72,7 @@ let render_prover_result p =
         end
     | { verdict=r } , _ -> icon_of_verdict r
 
-class pane (enabled:GuiConfig.provers) =
+class pane (gprovers:GuiConfig.provers) =
   let model = new model in
   let list = new Wtable.list ~headers:true ~rules:true model#coerce in
   object(self)
@@ -111,31 +111,27 @@ class pane (enabled:GuiConfig.provers) =
     method private create_prover p =
       begin
         let title = VCS.title_of_prover p in
-        let column = list#add_column_pixbuf ~title [] (render_prover_result p) in
-        if p <> VCS.Qed then provers <- (p,column) :: provers
+        let column = list#add_column_pixbuf ~title [] (render_prover_result p)
+        in if p <> VCS.Qed then provers <- (p,column) :: provers
       end
 
-    method private configure dps =
-      let open ProverWhy3 in
+    method private configure (dps:Why3.Whyconf.Sprover.t) =
       begin
-        let rec wanted p = function
-          | [] -> false
-          | dp :: dps -> dp.dp_prover = p || dp.dp_name = p || wanted p dps
-        in
         (* Removing Useless Columns *)
         List.iter
           (fun (vcs,column) ->
              match vcs with
-             | VCS.Why3 p when not (wanted p dps) ->
-                 ignore (list#view#remove_column column)
+             | VCS.Why3 p ->
+                 column#set_visible (Why3.Whyconf.Sprover.mem p dps) ;
+                 (* ignore (list#view#remove_column column) *)
              | _ -> ()
           ) provers ;
         (* Installing Missing Columns *)
-        List.iter
+        Why3.Whyconf.Sprover.iter
           (fun dp ->
-             let p = VCS.Why3 dp.dp_prover in
-             match self#column_of_prover p with
-             | None -> self#create_prover p
+             let prv = VCS.Why3 dp in
+             match self#column_of_prover prv with
+             | None -> self#create_prover prv
              | Some _ -> ()
           ) dps ;
       end
@@ -148,15 +144,20 @@ class pane (enabled:GuiConfig.provers) =
         let render w =
           [`TEXT (Pretty_utils.to_string Wpo.pp_title w)] in
         ignore (list#add_column_text ~title:"Goal" [] render) ;
-        let render w = [`TEXT (Wpo.get_model_name w)] in
+        let render w = [`TEXT (Wpo.get_model w |> WpContext.MODEL.descr)] in
         ignore (list#add_column_text ~title:"Model" [] render) ;
         List.iter
           self#create_prover
-          [ VCS.Qed ; VCS.Tactical ; VCS.AltErgo ; VCS.Coq ; VCS.Why3ide ] ;
+          [ VCS.Qed ; VCS.Tactical ] ;
+        let prv = Wp_parameters.Provers.get () in
+        if List.mem "native:alt-ergo" prv then
+          self#create_prover VCS.NativeAltErgo ;
+        if List.mem "native:coq" prv then
+          self#create_prover VCS.NativeCoq ;
         ignore (list#add_column_empty) ;
         list#set_selection_mode `MULTIPLE ;
-        enabled#connect self#configure ;
-        self#configure enabled#get ;
+        gprovers#connect self#configure ;
+        self#configure gprovers#get ;
       end
 
     method private on_cell f w c = f w (self#prover_of_column c)

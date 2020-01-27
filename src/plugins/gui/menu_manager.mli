@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -54,8 +54,8 @@ type entry = private {
 
 (** {2 Smart constructors for menu entries.}
 
-    If not supplied, the [active] parameter is the function that always returns
-    [true].
+    If not supplied, the [sensitive] parameter is the function that always
+    returns [true].
     @since Nitrogen-20111001 *)
 
 val toolbar:

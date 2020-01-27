@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -31,7 +31,7 @@ let collections: State.Set.t ref = ref State.Set.empty
 let get_selection_gen ?(is_set=true) selection =
   let l =
     if is_set then
-      List.map fst selection
+      List.rev (List.rev_map fst selection)
     else
       List.fold_left
         (fun acc (x, b) -> if b then acc else x :: acc)

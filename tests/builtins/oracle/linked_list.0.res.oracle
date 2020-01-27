@@ -15,9 +15,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -38,7 +43,7 @@
   ==END OF DUMP==
 [eva] computing for function malloc <- main.
   Called from tests/builtins/linked_list.c:41.
-[eva:alarm] share/libc/stdlib.h:331: Warning: 
+[eva:alarm] share/libc/stdlib.h:394: Warning: 
   function malloc, behavior allocation: postcondition 'allocation' got status unknown.
 [eva] Recording results for malloc
 [eva] Done for function malloc
@@ -52,9 +57,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -85,9 +95,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -121,9 +136,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -156,9 +176,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -195,9 +220,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -232,9 +262,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -273,9 +308,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -312,9 +352,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -355,9 +400,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -396,9 +446,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -441,9 +496,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -729,9 +789,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}
@@ -1019,9 +1084,14 @@
   __fc_stdout ∈ {{ &__fc_initial_stdout }}
   __fc_fopen[0..15] ∈ {0}
   __fc_p_fopen ∈ {{ &__fc_fopen[0] }}
+  __fc_tmpnam[0..2047] ∈ {0}
+  __fc_p_tmpnam ∈ {{ &__fc_tmpnam[0] }}
   __fc_heap_status ∈ [--..--]
   __fc_random_counter ∈ [--..--]
   __fc_rand_max ∈ {32767}
+  __fc_random48_init ∈ {0}
+  __fc_random48_counter[0..2] ∈ [--..--]
+  __fc_p_random48_counter ∈ {{ &__fc_random48_counter[0] }}
   __fc_env[0] ∈ {{ NULL ; &S_0___fc_env[0] }}
           [1] ∈ {{ NULL ; &S_1___fc_env[0] }}
           [2..4095] ∈ {{ NULL ; &S_0___fc_env[0] ; &S_1___fc_env[0] }}

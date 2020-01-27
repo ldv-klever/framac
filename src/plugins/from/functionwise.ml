@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -37,7 +37,7 @@ let () = From_parameters.ForceDeps.set_output_dependencies [Tbl.self]
 let force_compute = ref (fun _ -> assert false)
 
 module To_Use = struct
-  let get_value_state = Db.Value.get_stmt_state
+  let get_value_state s = Db.Value.get_stmt_state s
 
   let memo kf =
     Tbl.memo

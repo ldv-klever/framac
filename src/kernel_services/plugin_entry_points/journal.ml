@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -155,7 +155,7 @@ let print_trailer fmt =
   Format.fprintf fmt "@[(* Registering *)@]@\n";
   Format.fprintf fmt
     "@[<hv 2>let main : unit -> unit =@;@[<hv 2>Dynamic.register@;~plugin:%S@;\"main\"@;"
-    (Transitioning.String.capitalize_ascii (Filename.basename (get_name ())));
+    (String.capitalize_ascii (Filename.basename (get_name ())));
   Format.fprintf fmt
     "@[<hv 2>(Datatype.func@;Datatype.unit@;Datatype.unit)@]@;";
   Format.fprintf fmt "~journalize:false@;main@]@]@\n@\n";

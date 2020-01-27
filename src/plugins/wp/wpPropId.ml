@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -192,7 +192,7 @@ let compare_kind k1 k2 = match k1, k2 with
         if cmp <> 0 then cmp
         else
           Property.compare p1 p2
-  | _,_ -> Pervasives.compare (kind_order k1) (kind_order k2)
+  | _,_ -> Transitioning.Stdlib.compare (kind_order k1) (kind_order k2)
 
 let compare_prop_id pid1 pid2 =
   (* This order of comparison groups together prop_pids with same properties *)
@@ -204,7 +204,7 @@ let compare_prop_id pid1 pid2 =
     let cmp = compare_kind pid2.p_kind pid1.p_kind in
     if cmp <> 0 then cmp
     else
-      Pervasives.compare pid1.p_part pid2.p_part
+      Transitioning.Stdlib.compare pid1.p_part pid2.p_part
 
 module PropId =
   Datatype.Make_with_collections(
@@ -228,21 +228,31 @@ module PropId =
     let varname = Datatype.undefined
   end)
 
-module Names:
+(* -------------------------------------------------------------------------- *)
+(* --- Lagacy Naming                                                      --- *)
+(* -------------------------------------------------------------------------- *)
+
+module NameUniquify(D:Datatype.S_with_collections)(S:sig
+    val name: string
+    val basename: D.t -> string
+  end) :
 sig
-  val get_prop_id_name: prop_id -> string
-end = struct
+  val unique_basename: D.t -> string
+end
+=
+struct
+
   module NamesTbl = State_builder.Hashtbl(Datatype.String.Hashtbl)(Datatype.Int)
       (struct
-        let name = "WpPropertyNames"
+        let name = S.name^"Names"
         let dependencies = [ ]
         let size = 97
       end)
 
   module IndexTbl =
-    State_builder.Hashtbl(PropId.Hashtbl)(Datatype.String)
+    State_builder.Hashtbl(D.Hashtbl)(Datatype.String)
       (struct
-        let name = "WpPropertyIndex"
+        let name = S.name^"Index"
         let dependencies =
           [ Ast.self;
             NamesTbl.self;
@@ -253,7 +263,39 @@ end = struct
         let size = 97
       end)
 
-  let base_id_prop_txt = Property.Names.get_prop_name_id
+
+  (** returns the name that should be returned by the function [get_prop_name_id]
+      if the given property has [name] as basename. That name is reserved so that
+      [get_prop_name_id prop] can never return an identical name. *)
+  let reserve_name_id pid =
+    let basename = S.basename pid in
+    try
+      let speed_up_start = NamesTbl.find basename in
+      (* this basename is already reserved *)
+      let n,unique_name = Extlib.make_unique_name NamesTbl.mem ~sep:"_" ~start:speed_up_start basename
+      in NamesTbl.replace basename (succ n) ; (* to speed up Extlib.make_unique_name for next time *)
+      unique_name
+    with Not_found -> (* first time that basename is reserved *)
+      NamesTbl.add basename 2 ;
+      basename
+
+  (** returns a unique name identifying the property.
+      This name is built from the basename of the property. *)
+  let unique_basename pid =
+    try IndexTbl.find pid
+    with Not_found -> (* first time we are asking for a name for that [ip] *)
+      let unique_name = reserve_name_id pid in
+      IndexTbl.add pid unique_name ;
+      unique_name
+
+end
+
+module LegacyNames :
+sig
+  val get_prop_id_name: prop_id -> string
+end = struct
+
+  let base_id_prop_txt = Property.LegacyNames.get_prop_name_id
 
   let basename_of_prop_id p =
     match p.p_kind , p.p_prop with
@@ -291,31 +333,102 @@ end = struct
             Printf.sprintf "%s_part%06d" basename (succ k)
     in normalize_basename basename
 
-  (** returns the name that should be returned by the function [get_prop_name_id]
-      if the given property has [name] as basename. That name is reserved so that
-      [get_prop_name_id prop] can never return an identical name. *)
-  let reserve_name_id pid =
-    let basename = get_prop_id_basename pid in
-    try
-      let speed_up_start = NamesTbl.find basename in
-      (* this basename is already reserved *)
-      let n,unique_name = Extlib.make_unique_name NamesTbl.mem ~sep:"_" ~start:speed_up_start basename
-      in NamesTbl.replace basename (succ n) ; (* to speed up Extlib.make_unique_name for next time *)
-      unique_name
-    with Not_found -> (* first time that basename is reserved *)
-      NamesTbl.add basename 2 ;
-      basename
+
+  module UniquifyPropId = NameUniquify(PropId)(struct
+      let name = "WpProperty"
+      let basename = get_prop_id_basename
+    end)
+
 
   (** returns a unique name identifying the property.
       This name is built from the basename of the property. *)
   let get_prop_id_name pid =
-    try IndexTbl.find pid
-    with Not_found -> (* first time we are asking for a name for that [ip] *)
-      let unique_name = reserve_name_id pid in
-      IndexTbl.add pid unique_name ;
-      unique_name
+    UniquifyPropId.unique_basename pid
 
 end
+
+(* -------------------------------------------------------------------------- *)
+(* --- Naming Properties                                                  --- *)
+(* -------------------------------------------------------------------------- *)
+
+module Names:
+sig
+  val get_prop_id_name: prop_id -> string
+end =
+struct
+
+  (** Uniquify the first part of the prop_id *)
+  module Uniquify1 = NameUniquify(Property)(struct
+      let name = "Wp.WpPropId.Names."
+      let basename ip =
+        let truncate = max 20 (Wp_parameters.TruncPropIdFileName.get ()) in
+        Property.Names.get_prop_basename ~truncate ip
+    end)
+
+  let get_ip ip =
+    Uniquify1.unique_basename ip
+
+  (** Uniquify call-site for precondition check. So
+      that precondition of the same call-site are grouped *)
+  module CallSite = Datatype.Triple_with_collections
+      (Kernel_function)(Kernel_function)(Stmt)
+      (struct let module_name = "Wp.WpPropId.CallSite" end)
+  module Uniquify_Stmt = NameUniquify(CallSite)(struct
+      let name = "Wp.WpPropId.Names3."
+      let basename (caller_kf,callee_kf,_stmt) =
+        (Kernel_function.get_name caller_kf)^"_call_"^(Kernel_function.get_name callee_kf)
+    end)
+
+  let get_prop_id_base p =
+    match p.p_kind , p.p_prop with
+    | (PKTactic | PKCheck | PKProp | PKPropLoop) , p -> get_ip p
+    | PKEstablished , p -> get_ip p ^ "_established"
+    | PKPreserved , p -> get_ip p ^ "_preserved"
+    | PKVarDecr , p -> get_ip p ^ "_decrease"
+    | PKVarPos , p -> get_ip p ^ "_positive"
+    | PKAFctOut , p -> get_ip p ^ "_normal"
+    | PKAFctExit , p -> get_ip p ^ "_exit"
+    | PKPre(callee_kf,stmt,pre) , _ ->
+        let caller_kf = Kernel_function.find_englobing_kf stmt in
+        let call_string =
+          Uniquify_Stmt.unique_basename (caller_kf,callee_kf,stmt)
+        in
+        (** remove name of callee kernel function given by get_ip *)
+        let ip_string = get_ip pre in
+        let ip_string =
+          Extlib.opt_conv ip_string
+            (Extlib.string_del_prefix
+               ((Kernel_function.get_name callee_kf)^"_")
+               ip_string)
+        in
+        call_string^"_"^ip_string
+
+  let get_prop_id_basename p =
+    let basename = get_prop_id_base p in
+    match p.p_part with
+    | None -> basename
+    | Some(k,n) ->
+        if n < 10 then Printf.sprintf "%s_part%d" basename (succ k) else
+        if n < 100 then Printf.sprintf "%s_part%02d" basename (succ k) else
+        if n < 1000 then Printf.sprintf "%s_part%03d" basename (succ k) else
+          Printf.sprintf "%s_part%06d" basename (succ k)
+
+  module Uniquify2 = NameUniquify(PropId)(struct
+      let name = "Wp.WpPropId.Names2."
+      let basename = get_prop_id_basename
+    end)
+
+  let get_prop_id_name p =
+    Uniquify2.unique_basename p
+
+end
+
+(* -------------------------------------------------------------------------- *)
+(* --- Naming Accessors                                                   --- *)
+(* -------------------------------------------------------------------------- *)
+
+let get_legacy = LegacyNames.get_prop_id_name
+(** Legacy property PO name *)
 
 let get_propid = Names.get_prop_id_name
 (** Name related to a property PO *)
@@ -331,42 +444,37 @@ let ident_names names =
                       | _ as n -> '\"' <> (String.get n 0) ) names
 
 let code_annot_names ca = match ca.annot_content with
-  | AAssert (_, named_pred)  -> "@assert"::(ident_names named_pred.pred_name)
+  | AAssert (_, Check, named_pred)  -> "@check"::(ident_names named_pred.pred_name)
+  | AAssert (_, Assert, named_pred)  -> "@assert"::(ident_names named_pred.pred_name)
   | AInvariant (_,_,named_pred) -> "@invariant"::(ident_names named_pred.pred_name)
   | AVariant (term, _) -> "@variant"::(ident_names term.term_name)
+  | AExtended(_,_,{ext_name}) -> [Printf.sprintf "@%s" ext_name]
   | _ -> [] (* TODO : add some more names ? *)
 
 (** This is used to give the name of the property that the user can give
  * to select it from the command line (-wp-prop option) *)
-let user_prop_names p = match p with
-  | Property.IPPredicate (kind,_,_,idp) ->
-      let kind_name =
-        Format.asprintf  "%c%a" '@' Property.pretty_predicate_kind kind
-      in
-      kind_name::idp.ip_content.pred_name
-  | Property.IPExtended(_,(_,name,_,_)) ->
-      let kind_name = Format.asprintf "%s_extension" name in [kind_name]
-  | Property.IPCodeAnnot (_,_, ca) -> code_annot_names ca
-  | Property.IPComplete (_, _,_,lb) ->
+let user_prop_names p =
+  let open Property in match p with
+  | IPPredicate {ip_kind; ip_pred} ->
+      Format.asprintf  "@@%a" Property.pretty_predicate_kind ip_kind ::
+      ip_pred.ip_content.pred_name
+  | IPExtended {ie_ext={ext_name}} -> [ Printf.sprintf "@%s" ext_name ]
+  | IPCodeAnnot {ica_ca} -> code_annot_names ica_ca
+  | IPComplete {ic_bhvs} ->
       let kind_name = "@complete_behaviors" in
-      let name =
-        Format.asprintf  "complete_behaviors%a" pp_names lb
+      let name = Format.asprintf "complete_behaviors%a" pp_names ic_bhvs
       in kind_name::[name]
-  | Property.IPDisjoint (_, _,_, lb) ->
+  | IPDisjoint {ic_bhvs} ->
       let kind_name = "@disjoint_behaviors" in
-      let name = Format.asprintf  "disjoint_behaviors%a" pp_names lb
+      let name = Format.asprintf "disjoint_behaviors%a" pp_names ic_bhvs
       in kind_name::[name]
-  | Property.IPAssigns (_, _, _, l) ->
-      let kind_name = "@assigns" in
+  | IPAssigns {ias_froms} ->
       List.fold_left
-        (fun acc (t,_) -> (ident_names t.it_content.term_name) @ acc) [kind_name] l
-  | Property.IPDecrease (_,_, Some ca,_) ->
-      let kind_name = "@decreases"
-      in kind_name::code_annot_names ca
-  | Property.IPDecrease _ ->
-      let kind_name = "@decreases"
-      in kind_name::[] (*TODO: add more names ? *)
-  | Property.IPLemma (a,_,_,l,_) ->
+        (fun acc (t,_) -> (ident_names t.it_content.term_name) @ acc)
+        ["@assigns"] ias_froms
+  | IPDecrease {id_ca=Some ca} -> "@decreases"::code_annot_names ca
+  | IPDecrease _ -> [ "@decreases" ]
+  | IPLemma {il_name = a; il_pred = l} ->
       let names = "@lemma"::a::(ident_names l.pred_name)
       in begin
         match LogicUsage.section_of_lemma a with
@@ -374,16 +482,16 @@ let user_prop_names p = match p with
         | LogicUsage.Axiomatic ax -> ax.LogicUsage.ax_name::names
       end
   (* TODO *)
-  | Property.IPFrom _
-  | Property.IPAllocation _
-  | Property.IPAxiomatic _
-  | Property.IPAxiom _
-  | Property.IPBehavior _
-  | Property.IPReachable _
-  | Property.IPPropertyInstance _
-  | Property.IPTypeInvariant _
-  | Property.IPGlobalInvariant _
-  | Property.IPOther _ -> []
+  | IPFrom _
+  | IPAllocation _
+  | IPAxiomatic _
+  | IPAxiom _
+  | IPBehavior _
+  | IPReachable _
+  | IPPropertyInstance _
+  | IPTypeInvariant _
+  | IPGlobalInvariant _
+  | IPOther _ -> []
 
 let string_of_termination_kind = function
     Normal -> "post"
@@ -459,7 +567,7 @@ let stmt_hints hs s =
        match label with
        | Label(a,_,src) -> if src then add_hint hs a
        | Default _ -> add_hint hs "default"
-       | Case(e,_) -> match Ctypes.get_int e with
+       | Case(e,_) -> match Ctypes.get_int64 e with
          | Some k -> add_hint hs ("case-" ^ Int64.to_string k)
          | None -> ()
     ) s.labels
@@ -469,10 +577,13 @@ let kinstr_hints hs = function
   | Kglobal -> ()
 
 let propid_hints hs p =
+  let open Property in
   match p.p_kind , p.p_prop with
   | PKCheck , _ -> ()
-  | PKProp , Property.IPAssigns (_ , Kstmt _, _, _) -> add_required hs "stmt-assigns"
-  | PKProp , Property.IPAssigns (_ , Kglobal, _, _) -> add_required hs "fct-assigns"
+  | PKProp , IPAssigns {ias_kinstr=Kstmt _} ->
+      add_required hs "stmt-assigns"
+  | PKProp , IPAssigns {ias_kinstr=Kglobal} ->
+      add_required hs "fct-assigns"
   | PKPropLoop , Property.IPAssigns _ -> add_required hs "loop-assigns"
   | PKPropLoop , _ -> add_required hs "invariant"
   | PKProp , _ -> add_required hs "property"
@@ -506,7 +617,7 @@ let assigns_hints hs froms =
   List.iter (fun ({it_content=t},_) -> term_hints hs t) froms
 
 let annot_hints hs = function
-  | AAssert(bs,ipred) | AInvariant(bs,_,ipred) ->
+  | AAssert(bs,_,ipred) | AInvariant(bs,_,ipred) ->
       List.iter (add_hint hs) (ident_names ipred.pred_name) ;
       List.iter (add_hint hs) bs
   | AAssigns(bs,Writes froms) ->
@@ -515,21 +626,23 @@ let annot_hints hs = function
   | AAllocation _ | AAssigns(_,WritesAny) | AStmtSpec _
   | AVariant _ | APragma _ | AExtended _ -> ()
 
-let property_hints hs = function
-  | Property.IPAxiom (s,_,_,p,_)
-  | Property.IPLemma (s,_,_,p,_) -> List.iter (add_required hs) (s::p.pred_name)
-  | Property.IPBehavior _ -> ()
-  | Property.IPComplete(_,_,_,ps) | Property.IPDisjoint(_,_,_,ps) ->
-      List.iter (add_required hs) ps
-  | Property.IPPredicate(_,_,_,ipred) ->
-      List.iter (add_hint hs) ipred.ip_content.pred_name
-  | Property.IPExtended(_,(_,name,_,_)) -> List.iter (add_hint hs) [name]
-  | Property.IPCodeAnnot(_,_,ca) -> annot_hints hs ca.annot_content
-  | Property.IPAssigns(_,_,_,froms) -> assigns_hints hs froms
-  | Property.IPAllocation _ (* TODO *)
-  | Property.IPFrom _ | Property.IPDecrease _  | Property.IPPropertyInstance _
-  | Property.IPReachable _ | Property.IPAxiomatic _ | Property.IPOther _
-  | Property.IPTypeInvariant _ | Property.IPGlobalInvariant _ -> ()
+let property_hints hs =
+  let open Property in function
+    | IPAxiom  {il_name; il_pred}
+    | IPLemma  {il_name; il_pred} ->
+        List.iter (add_required hs) (il_name::il_pred.pred_name)
+    | IPBehavior _ -> ()
+    | IPComplete {ic_bhvs} | IPDisjoint {ic_bhvs} ->
+        List.iter (add_required hs) ic_bhvs
+    | IPPredicate {ip_pred} ->
+        List.iter (add_hint hs) ip_pred.ip_content.pred_name
+    | IPExtended {ie_ext={ext_name}} -> List.iter (add_hint hs) [ext_name]
+    | IPCodeAnnot {ica_ca} -> annot_hints hs ica_ca.annot_content
+    | IPAssigns {ias_froms} -> assigns_hints hs ias_froms
+    | IPAllocation _ (* TODO *)
+    | IPFrom _ | Property.IPDecrease _  | Property.IPPropertyInstance _
+    | IPReachable _ | Property.IPAxiomatic _ | Property.IPOther _
+    | IPTypeInvariant _ | Property.IPGlobalInvariant _ -> ()
 
 let prop_id_keys p =
   begin
@@ -597,9 +710,10 @@ let is_assigns p =
   | Property.IPAssigns _ -> true
   | _ -> false
 
-let is_requires = function
-  | Property.IPPredicate (Property.PKRequires _,_,_,_) -> true
-  | _ -> false
+let is_requires =
+  let open Property in function
+    | IPPredicate {ip_kind = PKRequires _} -> true
+    | _ -> false
 
 let is_loop_preservation p =
   match p.p_kind with
@@ -611,29 +725,38 @@ let is_loop_preservation p =
       end
   | _ -> None
 
-let select_by_name asked_names pid =
+let user_prop_pid pid =
   let p_prop = match pid.p_kind with
     | PKPre (_,_,p_prop) -> p_prop
-    | _ -> property_of_id pid
-  in
-  let names = user_prop_names p_prop in
-  let is_minus s = try s.[0] = '-' with _ -> false in
-  let is_plus s = try s.[0] = '+' with _ -> false in
-  let remove_first s = String.sub s 1 ((String.length s) -1) in
-  let eval acc asked =
-    let is_minus,a = match acc with
-      | None -> if is_minus asked then true,true else false,false
-      | Some a -> (is_minus asked),a
-    in let eval () =
-         let asked = if is_minus || (is_plus asked) then remove_first asked else asked
-         in List.mem asked names
-    in Some (if is_minus
-             then a && (not (eval ()))
-             else a || (eval ()))
-  in
-  match List.fold_left eval None asked_names with
-  | Some false -> false
-  | _ -> true
+    | _ -> property_of_id pid in
+  user_prop_names p_prop
+
+let select_default pid =
+  let names = user_prop_pid pid in
+  not (List.mem "no_wp" names)
+
+let select_by_name asked_names pid =
+  let names = user_prop_pid pid in
+  if List.mem "no_wp" names then false
+  else
+    let is_minus s = try s.[0] = '-' with _ -> false in
+    let is_plus s = try s.[0] = '+' with _ -> false in
+    let remove_first s = String.sub s 1 ((String.length s) -1) in
+    let eval acc asked =
+      let is_minus,a = match acc with
+        | None -> if is_minus asked then true,true else false,false
+        | Some a -> (is_minus asked),a
+      in let eval () =
+           let asked = if is_minus || (is_plus asked)
+             then remove_first asked else asked
+           in List.mem asked names
+      in Some (if is_minus
+               then a && (not (eval ()))
+               else a || (eval ()))
+    in
+    match List.fold_left eval None asked_names with
+    | Some false -> false
+    | _ -> true
 
 let select_call_pre s_call asked_pre pid =
   match pid.p_kind with
@@ -882,11 +1005,11 @@ let get_loop_stmt kf stmt =
 (** Quite don't understand what is going on here... what is it supposed to do ?
  * [2011-07-07-Anne] *)
 let get_induction p =
-  let get_stmt = function
-    | Property.IPDecrease(kf,Kstmt stmt,_,_) -> Some (kf, stmt)
-    | Property.IPCodeAnnot(kf,stmt,_) -> Some (kf, stmt)
-    | Property.IPAssigns(kf,Kstmt stmt,_,_) -> Some (kf, stmt)
-    | _ -> None
+  let get_stmt = let open Property in function
+      | IPDecrease {id_kf;id_kinstr=Kstmt stmt} -> Some (id_kf, stmt)
+      | IPCodeAnnot {ica_kf;ica_stmt} -> Some (ica_kf, ica_stmt)
+      | IPAssigns {ias_kf; ias_kinstr=Kstmt stmt} -> Some (ias_kf, stmt)
+      | _ -> None
   in match p.p_kind with
   | PKCheck | PKAFctOut|PKAFctExit|PKPre _ | PKTactic -> None
   | PKProp ->
@@ -895,13 +1018,13 @@ let get_induction p =
         | Some (kf, s) -> get_loop_stmt kf s
       in loop_stmt_opt
   | PKPropLoop ->
+      let open Property in
       let loop_stmt_opt = match property_of_id p with
-        | Property.IPCodeAnnot(kf,stmt,
-                               {annot_content = AInvariant(_, loop, _)})
-          ->
-            if loop then (*loop invariant *) Some stmt
-            else (* invariant inside loop *) get_loop_stmt kf stmt
-        | Property.IPAssigns (_, Kstmt stmt, Property.Id_loop _, _) ->
+        | IPCodeAnnot {ica_kf; ica_stmt;
+                       ica_ca = {annot_content = AInvariant(_, loop, _)}} ->
+            if loop then (*loop invariant *) Some ica_stmt
+            else (* invariant inside loop *) get_loop_stmt ica_kf ica_stmt
+        | IPAssigns {ias_kinstr=Kstmt stmt; ias_bhv = Id_loop _} ->
             (* loop assigns *) Some stmt
         | _ -> None (* assert false ??? *)
       in loop_stmt_opt

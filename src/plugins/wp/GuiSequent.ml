@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -526,6 +526,12 @@ class focused (wtext : Wtext.text) =
     method get_state_mode = pcond#get_state
     method set_state_mode = pcond#set_state
 
+    method set_iformat = plang#set_iformat
+    method get_iformat = plang#get_iformat
+
+    method set_rformat = plang#set_rformat
+    method get_rformat = plang#get_rformat
+
     method selected =
       begin
         self#set_target self#selection ;
@@ -711,7 +717,6 @@ class focused (wtext : Wtext.text) =
     method goal w fmt =
       let open Wpo in
       match w.po_formula with
-      | GoalCheck _ -> Wpo.pp_goal fmt w
       | GoalLemma _ ->
           Format.fprintf fmt "@\n@{<wp:clause>Lemma@} %a:@\n" Wpo.pp_title w ;
           let _,sequent = Wpo.compute w in

@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -46,7 +46,7 @@ struct sockaddr_storage {
   sa_family_t   ss_family;
 };
 
-#include "../__fc_define_iovec.h"
+#include "sys/uio.h"
 
 struct cmsghdr {
   socklen_t  cmsg_len;
@@ -269,7 +269,7 @@ extern unsigned char *CMSG_DATA(struct cmsghdr *cmsg);
 
 #define SOMAXCONN 128
 
-enum {
+enum __fc_shutdown {
   SHUT_RD,
   SHUT_WR,
   SHUT_RDWR

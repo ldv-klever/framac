@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,8 +22,6 @@
 
 open Cil_types
 
-let ploc_key = Structure.Key_Location.create_key "precise_locs"
-
 module PLoc = struct
 
   type value = Cvalue.V.t
@@ -32,7 +30,7 @@ module PLoc = struct
     | Precise of Precise_locs.precise_offset
     | Imprecise of Cvalue.V.t (* when the offset contains addresses *)
 
-  let structure = Structure.Key_Location.Leaf ploc_key
+  let key = Structure.Key_Location.create_key "precise_locs"
 
   let equal_loc = Precise_locs.equal_loc
   let equal_offset o1 o2 = match o1, o2 with
@@ -138,13 +136,14 @@ module PLoc = struct
 
   let eval_varinfo varinfo = make (Locations.loc_of_varinfo varinfo)
 
-  let is_valid ~for_writing loc =
-    Locations.is_valid ~for_writing (Precise_locs.imprecise_location loc)
+  let is_valid access loc =
+    Locations.is_valid access (Precise_locs.imprecise_location loc)
 
   let assume_valid_location ~for_writing ~bitfield loc =
-    if not (is_valid ~for_writing loc)
+    let access = Locations.(if for_writing then Write else Read) in
+    if not (is_valid access loc)
     then
-      let loc = Precise_locs.valid_part ~for_writing ~bitfield loc in
+      let loc = Precise_locs.valid_part access ~bitfield loc in
       if Precise_locs.is_bottom_loc loc then `False else `Unknown loc
     else `True
 

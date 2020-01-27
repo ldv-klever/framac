@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -99,7 +99,7 @@ extern long           telldir(DIR *);
 
 
 /* File types for `d_type'.  */
-enum
+enum __fc_readdir_dtype
   {
     DT_UNKNOWN = 0,
 # define DT_UNKNOWN	DT_UNKNOWN

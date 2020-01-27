@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -102,7 +102,13 @@ val replace: ('a -> 'a -> bool) -> 'a -> 'a list -> 'a list
 
 val filter_map: ('a -> bool) -> ('a -> 'b) -> 'a list -> 'b list
 val filter_map': ('a -> 'b) -> ('b -> bool) -> 'a list -> 'b list
+val filter_map_opt: ('a -> 'b option) -> 'a list -> 'b list
   (** Combines [filter] and [map]. *)
+
+val fold_map: ('a -> 'b -> 'a * 'c) -> 'a -> 'b list -> 'a * 'c list
+(** Combines [fold_left] and [map] *)
+val fold_map_opt: ('a -> 'b -> 'a * 'c option) -> 'a -> 'b list -> 'a * 'c list
+(** Combines [filter] [fold_left] and [map] *)
 
 val product_fold: ('a -> 'b -> 'c -> 'a) -> 'a -> 'b list -> 'c list -> 'a
 (** [product f acc l1 l2] is similar to [fold_left f acc l12] with l12 the
@@ -135,13 +141,13 @@ val opt_of_list: 'a list -> 'a option
       @since Oxygen-20120901 *)
 
 val find_opt : ('a -> 'b option) -> 'a list -> 'b
-[@@deprecated "Use Transitioning.List.find_opt instead."]
+[@@deprecated "Use List.find_opt instead."]
   (** [find_option p l] returns the value [p e], [e] being the first
       element of [l] such that [p e] is not [None]. Raise [Not_found] if there
       is no such value the list l.
 
       @since Nitrogen-20111001
-      @deprecated 18.0-Argon use [Transitioning.List.find_opt] instead *)
+      @deprecated 18.0-Argon use [List.find_opt] instead *)
 
 val iteri: (int -> 'a -> unit) -> 'a list -> unit
   (** Same as iter, but the function to be applied take also as argument the
@@ -154,7 +160,9 @@ val mapi: (int -> 'a -> 'b) -> 'a list -> 'b list
       @since Oxygen-20120901 *)
 
 val sort_unique: ('a -> 'a -> int) -> 'a list -> 'a list
-  (**  Same as List.sort , but also remove duplicates. *)
+  (**  Same as List.sort , but also remove duplicates.
+       @deprecated use List.sort_uniq instead
+  *)
 
 val subsets: int -> 'a list -> 'a list list
   (** [subsets k l] computes the combinations of [k] elements from list [l].
@@ -330,6 +338,17 @@ val try_finally: finally:(unit -> unit) -> ('a -> 'b) -> 'a -> 'b
 (* ************************************************************************* *)
 (** System commands *)
 (* ************************************************************************* *)
+
+val mkdir : ?parents:bool -> string -> Unix.file_perm -> unit
+  (** [mkdir ?parents name perm] creates directory [name] with permission
+      [perm]. If [parents] is true, recursively create parent directories
+      if needed. [parents] defaults to false.
+      Note that this function may create some of the parent directories
+      and then fail to create the children, e.g. if [perm] does not allow
+      user execution of the created directory. This will leave the filesystem
+      in a modified state before raising an exception.
+      @raise Unix.Unix_error if cannot create [name] or its parents.
+      @since 19.0-Potassium  *)
 
 val safe_at_exit : (unit -> unit) -> unit
   (** Register function to call with [Pervasives.at_exit], but only

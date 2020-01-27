@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,11 +32,13 @@ open Wpo
 let dispatch ?(config=VCS.default) mode prover wpo =
   begin
     match prover with
-    | AltErgo -> ProverErgo.prove ~config ~mode wpo
-    | Coq -> ProverCoq.prove mode wpo
-    | Why3 prover -> ProverWhy3.prove ?timeout:config.timeout ~prover wpo
     | Qed | Tactical -> Task.return VCS.no_result
-    | _ -> Task.failed "Prover '%a' not available" VCS.pp_prover prover
+    | NativeAltErgo -> ProverErgo.prove ~config ~mode wpo
+    | NativeCoq -> ProverCoq.prove mode wpo
+    | Why3 prover -> ProverWhy3.prove
+                       ~timeout:(VCS.get_timeout config)
+                       ~steplimit:(VCS.get_stepout config)
+                       ~prover wpo
   end
 
 let started ?start wpo =
@@ -76,7 +78,7 @@ let simplify ?start ?result wpo =
        VCS.( r.verdict == Valid ) ||
        begin
          started ?start wpo ;
-         if resolve wpo then
+         if Wpo.reduce wpo then
            let time = qed_time wpo in
            let res = VCS.result ~time VCS.Valid in
            (update ?result wpo VCS.Qed res ; true)

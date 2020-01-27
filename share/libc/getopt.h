@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -27,14 +27,7 @@ __PUSH_FC_STDLIB
 
 __BEGIN_DECLS
 
-extern char *optarg;
-extern int optind, opterr, optopt;
-
-/*@ 
-  assigns \result, *optarg, optind, opterr, optopt 
-             \from argc, argv[0..argc-1], optstring[0..];
- */
-extern int getopt(int argc, char * const argv[], const char *optstring);
+#include "unistd.h"
 
 /* GNU specific */
 struct option
