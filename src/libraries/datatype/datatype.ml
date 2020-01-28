@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -146,7 +146,7 @@ end
 let valid_varname s =
   let r = Str.regexp "[^A-Za-z0-9_]+" in
   let s = Str.global_replace r "__" s in
-  Transitioning.String.uncapitalize_ascii s
+  String.uncapitalize_ascii s
 
 let check f fname tname fstr =
   assert
@@ -272,7 +272,7 @@ let is_module_name s =
   List.for_all
     (fun x ->
        String.length x > 0 &&
-       x.[0] = Transitioning.Char.uppercase_ascii x.[0]) l
+       x.[0] = Char.uppercase_ascii x.[0]) l
 
 module Make(X: Make_input) = struct
 
@@ -1711,7 +1711,7 @@ end
 module Make_with_collections(X: Make_input) =
   With_collections
     (Make(X))
-    (struct let module_name = Transitioning.String.capitalize_ascii X.name end)
+    (struct let module_name = String.capitalize_ascii X.name end)
 
 (* ****************************************************************************)
 (** {2 Predefined datatype} *)
@@ -1730,7 +1730,7 @@ module Simple_type
   end) =
 struct
 
-  let module_name = "Datatype." ^ Transitioning.String.capitalize_ascii X.name
+  let module_name = "Datatype." ^ String.capitalize_ascii X.name
 
   include With_collections
   (Make(struct
@@ -1776,7 +1776,7 @@ module Bool =
       let name = "bool"
       let reprs = [ true ]
       let copy = identity
-      let compare : bool -> bool -> int = Pervasives.compare
+      let compare : bool -> bool -> int = Transitioning.Stdlib.compare
       let equal : bool -> bool -> bool = (=)
       let pretty fmt b = Format.fprintf fmt "%B" b
       let varname _ = "b"
@@ -1790,12 +1790,12 @@ module Int = struct
       let name = "int"
       let reprs = [ 2 ]
       let copy = identity
-      let compare : int -> int -> int = Pervasives.compare
+      let compare : int -> int -> int = Transitioning.Stdlib.compare
       let equal : int -> int -> bool = (=)
       let pretty fmt n = Format.fprintf fmt "%d" n
       let varname _ = "n"
      end)
-  let compare : int -> int -> int = Pervasives.compare
+  let compare : int -> int -> int = Transitioning.Stdlib.compare
 end
 let int = Int.ty
 
@@ -1848,7 +1848,7 @@ module Float =
       let name = "float"
       let reprs = [ 0.1 ]
       let copy = identity
-      let compare : float -> float -> int = Pervasives.compare
+      let compare : float -> float -> int = Transitioning.Stdlib.compare
       let equal : float -> float -> bool = (=)
       let pretty fmt f = Format.fprintf fmt "%f" f
       let varname _ = "f"

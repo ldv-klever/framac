@@ -1,4 +1,4 @@
-# frama-c -wp -wp-timeout 90 -wp-steps 1500 [...]
+# frama-c -wp [...]
 [kernel] Parsing tests/wp_plugin/loopcurrent.i (no preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
@@ -6,13 +6,14 @@
 [wp] tests/wp_plugin/loopcurrent.i:12: Warning: 
   Missing assigns clause (assigns 'everything' instead)
 [wp] 4 goals scheduled
-[wp] [Qed] Goal typed_f_loop_inv_preserved : Valid
-[wp] [Qed] Goal typed_f_loop_inv_established : Valid
-[wp] [Qed] Goal typed_f_loop_inv_2_preserved : Valid
-[wp] [Qed] Goal typed_f_loop_inv_2_established : Valid
+[wp] [Qed] Goal typed_f_loop_invariant_preserved : Valid
+[wp] [Qed] Goal typed_f_loop_invariant_established : Valid
+[wp] [Qed] Goal typed_f_loop_invariant_2_preserved : Valid
+[wp] [Qed] Goal typed_f_loop_invariant_2_established : Valid
 [wp] Proved goals:    4 / 4
   Qed:             4
-[wp] Report 'tests/wp_plugin/loopcurrent.i.0.report.json'
+[wp] Report in:  'tests/wp_plugin/oracle_qualif/loopcurrent.0.report.json'
+[wp] Report out: 'tests/wp_plugin/result_qualif/loopcurrent.0.report.json'
 -------------------------------------------------------------
 Functions           WP     Alt-Ergo        Total   Success
 f                    4     -                 4       100%

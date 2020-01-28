@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,5 +22,5 @@
 
 (** Abstraction of the sign of integer variables. *)
 
-include Abstract_domain.Internal with type value = Sign_value.t
-                                  and type location = Precise_locs.precise_location
+include Abstract_domain.Leaf with type value = Sign_value.t
+                              and type location = Precise_locs.precise_location

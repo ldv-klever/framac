@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,16 +32,18 @@ module type Conversion = sig
 end
 
 module Make
-    (Loc: Abstract_location.Internal)
+    (Loc: Abstract_location.Leaf)
     (Convert : Conversion with type internal_value := Loc.value)
 = struct
 
   (* Import most of [Loc] *)
-  include (Loc: Abstract_location.Internal
+  include (Loc: Abstract_location.S
            with type value := Loc.value (* we are converting this type *)
             and type location = Loc.location
             and type offset = Loc.offset)
   type value = Convert.extended_value
+
+  let structure = Abstract.Location.Leaf (Loc.key, (module Loc))
 
   (* Now lift the functions that contain {!value} in their type. *)
 

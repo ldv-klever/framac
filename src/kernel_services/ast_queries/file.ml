@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -119,7 +119,7 @@ let from_filename ?cpp f =
       | None -> get_preprocessor_command ()
         | Some cpp -> cpp, cpp_opt_kind ()
       in
-      (if flags = "" then cpp else cpp ^ " " ^ flags), gnu
+      (if flags = [] then cpp else cpp ^ " " ^ String.concat " " flags), gnu
   in
   if Filename.check_suffix f ".i" then begin
     NoCPP f
@@ -284,7 +284,7 @@ module DatatypeMachdep = Datatype.Make_with_collections(struct
   let reprs = [Machdeps.x86_32]
   let name = "File.Machdep"
   type t = Cil_types.mach
-  let compare : t -> t -> int = Pervasives.compare
+    let compare : t -> t -> int = Transitioning.Stdlib.compare
   let equal : t -> t -> bool = (=)
   let hash : t -> int = Hashtbl.hash
   let copy = Datatype.identity
@@ -311,13 +311,16 @@ let existing_machdep_macro () =
   with Not_found -> false
 
 let machdep_macro = function
-  | "x86_16" | "gcc_x86_16" -> "__FC_MACHDEP_X86_16"
-  | "x86_32" | "gcc_x86_32" -> "__FC_MACHDEP_X86_32"
-  | "x86_64" | "gcc_x86_64" -> "__FC_MACHDEP_X86_64"
+  | "x86_16"                -> "__FC_MACHDEP_X86_16"
+  | "gcc_x86_16"            -> "__FC_MACHDEP_GCC_X86_16"
+  | "x86_32"                -> "__FC_MACHDEP_X86_32"
+  | "gcc_x86_32"            -> "__FC_MACHDEP_GCC_X86_32"
+  | "x86_64"                -> "__FC_MACHDEP_X86_64"
+  | "gcc_x86_64"            -> "__FC_MACHDEP_GCC_X86_64"
   | "ppc_32"                -> "__FC_MACHDEP_PPC_32"
   | "msvc_x86_64"           -> "__FC_MACHDEP_MSVC_X86_64"
   | s ->
-      let res = "__FC_MACHDEP_" ^ (Transitioning.String.uppercase_ascii s) in
+    let res = "__FC_MACHDEP_" ^ (String.uppercase_ascii s) in
       Kernel.warning ~once:true
         "machdep %s has no registered macro. Using %s for pre-processing" s res;
       res
@@ -483,52 +486,24 @@ let safe_remove_file (f : Datatype.Filepath.t) =
     Extlib.safe_remove (f :> string)
 
 let build_cpp_cmd cmdl supp_args in_file out_file =
+  (* using Filename.quote for filenames which contain space or shell
+     metacharacters *)
+  let in_file = Filename.quote in_file
+  and out_file = Filename.quote out_file in
+  let substitute s =
+    match Str.matched_string s with
+    | "%%" -> "%"
+    | "%args" -> supp_args
+    | "%1" | "%i" | "%input" -> in_file
+    | "%2" | "%o" | "%output" -> out_file
+    | s -> s (* Unrecognized parameters are left intact *)
+    in
+  let regexp = Str.regexp "%%\\|%[a-z0-9]+" in
   try
-          (* Format.eprintf "-cpp-command=|%s|@\n" cmdl; *)
-          (* look at the command line to find two "%s" or one "%1" and a "%2"
-          *)
-    let percent1 = String.index cmdl '%' in
-          (* Format.eprintf "-cpp-command percent1=%d@\n" percent1;
-             Format.eprintf "-cpp-command %%%c@\n" (String.get cmdl
-             (percent1+1)); *)
-    let percent2 = String.index_from cmdl (percent1+1) '%' in
-          (* Format.eprintf "-cpp-command percent2=%d@\n" percent2;
-             Format.eprintf "-cpp-command %%%c@\n" (String.get cmdl
-             (percent2+1)); *)
-    let file1, file2 =
-      match String.get cmdl (percent1+1), String.get cmdl (percent2+1)
-      with
-      | '1', '2' ->
-        in_file, out_file
-            (* "%1" followed by "%2" is used to printf 'ppf' after 'f' *)
-      | '2', '1' ->
-        out_file, in_file
-      | _, _ -> raise (Invalid_argument "maybe a bad cpp command")
-    in
-    let cmd1 = String.sub cmdl 0 percent1 in
-          (* Format.eprintf "-cpp-command cmd1=|%s|@\n" cmd1; *)
-    let cmd2 =
-      String.sub cmdl (percent1 + 2) (percent2 - (percent1 + 2))
-    in
-          (* Format.eprintf "-cpp-command cmd2=|%s|@\n" cmd2; *)
-    let cmd3 =
-      String.sub cmdl (percent2 + 2) (String.length cmdl - (percent2 + 2))
-    in
-          (* Format.eprintf "-cpp-command cmd3=|%s|@\n" cmd3; *)
-    Format.sprintf "%s%s %s %s%s%s" cmd1
-            (* using Filename.quote for filenames which contain space or
-               shell metacharacters *)
-      (Filename.quote file1)
-      supp_args
-      cmd2 (Filename.quote file2) cmd3
-  with
-  | Invalid_argument _
-  | Not_found ->
-    Format.sprintf "%s %s -o %s %s" cmdl
-      supp_args
-              (* using Filename.quote for filenames which contain space or
-                 shell metacharacters *)
-      (Filename.quote out_file) (Filename.quote in_file)
+    ignore (Str.search_forward regexp cmdl 0); (* Try to find one match *)
+    Str.global_substitute regexp substitute cmdl
+  with Not_found ->
+    Format.sprintf "%s %s -o %s %s" cmdl supp_args out_file in_file
 
 let parse_cabs = function
   | NoCPP f ->
@@ -568,7 +543,7 @@ let parse_cabs = function
       (* Hypothesis: the preprocessor is POSIX compliant,
          hence understands -I and -D. *)
       let include_args =
-        if Kernel.FramaCStdLib.get () then [Config.datadir ^ "/libc"]
+      if Kernel.FramaCStdLib.get () then [Config.framac_libc]
         else []
       in
       let define_args =
@@ -684,12 +659,13 @@ let parse_cabs = function
       with Not_found ->
         Kernel.abort "could not find a suitable plugin for parsing %S." f
 
-(** Keep defined entry point even if not defined, and possibly the functions
-    with only specifications (according to parameter
-    keep_unused_specified_function). This function is meant to be passed to
-    {!Rmtmps.removeUnusedTemps}. *)
-let keep_entry_point ?(specs=Kernel.Keep_unused_specified_functions.get ()) g =
-  Rmtmps.isDefaultRoot g ||
+(* Keep defined entry point even if not defined, and possibly
+   other unused globals according to relevant command-line parameters.
+   This function is meant to be passed to {!Rmtmps.removeUnused}. *)
+let isRoot g =
+  let specs = Kernel.Keep_unused_specified_functions.get () in
+  let keepTypes = Kernel.Keep_unused_types.get () in
+  Rmtmps.isExportedRoot g ||
     match g with
     | GFun({svar = v; sspec = spec},_)
     | GFunDecl(spec,v,_) ->
@@ -698,6 +674,8 @@ let keep_entry_point ?(specs=Kernel.Keep_unused_specified_functions.get ()) g =
       || (specs && not (is_empty_funspec spec))
       (* and the declarations carrying specifications according to the
          command line.*)
+  | GType _ | GCompTag _ | GCompTagDecl _ | GEnumTag _ | GEnumTagDecl _ ->
+    keepTypes
     | _ -> false
 
 type 'a what =
@@ -706,7 +684,7 @@ type 'a what =
 
 let propagate_logic_info_default_labels =
   let module H = Logic_info.Hashtbl in
-  let inplace_visit = inplace_visit () in
+  let inplace_visit = Visitor_behavior.inplace () in
   let locations = H.create 200 in
   let glob_annot_visitor =
     object(self)
@@ -944,6 +922,7 @@ let files_to_cil (type k) : k parsing_mode -> file list -> k =
       Kernel.feedback ~level:2 "symbolic link";
       let merged_file = Mergecil.merge cil_files "whole_program" in
       Logic_utils.complete_types merged_file;
+      propagate_logic_info_default_labels merged_file;
       if Kernel.UnspecifiedAccess.get () then
         Undefined_sequence.check_sequences merged_file;
       merged_file, cabs_files
@@ -957,7 +936,7 @@ let files_to_cil (type k) : k parsing_mode -> file list -> k =
         List.map
           (fun f ->
              let f = parse ~stage:`Once @@ fst @@ cabs f in
-             Rmtmps.removeUnusedTemps f;
+             Rmtmps.removeUnused f;
              f)
           files
       in
@@ -1034,8 +1013,8 @@ let synchronize_source_annot has_new_stmt kf =
           match annot.annot_content with
           | AStmtSpec _ | APragma (Slice_pragma SPstmt | Impact_pragma IPstmt)
             -> true
-          | AExtended(_,is_loop,(_,name,_,_)) ->
-            (match Logic_env.extension_category name with
+          | AExtended(_,is_loop,{ext_name}) ->
+            (match Logic_env.extension_category ext_name with
              | Some (Ext_code_annot (Ext_here | Ext_next_loop)) -> false
              | Some (Ext_code_annot Ext_next_stmt) -> true
              | Some (Ext_code_annot Ext_next_both) -> not is_loop
@@ -1223,7 +1202,7 @@ let cleanup file =
     method! vstmt_aux st =
       self#remove_lexical_annotations st;
       let loc = Stmt.loc st in
-      if Annotations.has_code_annot st || st.labels <> [] then
+      if Annotations.has_code_annot st || st.labels <> [] || st.sattr <> [] then
         keep_stmt <- Stmt.Set.add st keep_stmt;
       match st.skind with
       | Block b ->
@@ -1429,7 +1408,7 @@ let prepare_cil_file ast =
   Transform_before_cleanup.apply ast;
   (* Remove unused temp variables and globals. *)
   Kernel.feedback ~level:2 "cleaning unused parts";
-  Rmtmps.removeUnusedTemps ~isRoot:keep_entry_point ast;
+  Rmtmps.removeUnused ~isRoot ast;
   if Kernel.Check.get () then begin
     Filecheck.check_ast ~is_normalized:false ~ast "Removed temp vars"
   end;
@@ -1455,7 +1434,7 @@ let prepare_cil_file ast =
       method! vinst =
         function
         | Call (None, { enode = Lval (Var { vname = "__builtin_unreachable" }, NoOffset) }, [], loc) ->
-          let annot = Logic_const.new_code_annotation (AAssert ([], Logic_const.unamed ~loc Pfalse)) in
+          let annot = Logic_const.new_code_annotation (AAssert ([], Check, Logic_const.unamed ~loc Pfalse)) in
           Annotations.add_code_annot
             Emitter.kernel
             ~kf:(Globals.Functions.get (Extlib.the self#current_func).svar)
@@ -1514,6 +1493,7 @@ let init_project_from_cil_file prj file =
   Project.copy ~selection prj;
   Project.on prj (fun file -> fill_built_ins (); prepare_cil_file file) file
 
+let files_pre_register_state = Files.pre_register_state
 
 module Global_annotation_graph = struct
   module Base =
@@ -1924,12 +1904,12 @@ let prepare_from_c_files () =
 
 let init_project_from_visitor ?(reorder=false) prj
     (vis:Visitor.frama_c_visitor) =
-  if not (Cil.is_copy_behavior vis#behavior)
+  if not (Visitor_behavior.is_copy vis#behavior)
     || not (Project.equal prj (Extlib.the vis#project))
   then
     Kernel.fatal
       "Visitor does not copy or does not operate on correct project.";
-  Project.on prj (fun () -> Cil.initCIL (fun () -> ()) (get_machdep ())) ();
+  Project.on prj init_cil ();
   let old_ast = Ast.get () in
   let ast = visitFramacFileCopy vis old_ast in
   let finalize ast =
@@ -1966,7 +1946,6 @@ let create_project_from_visitor ?reorder ?(last=true) prj_name visitor =
   Project.copy
     ~selection:(Parameter_state.get_reset_selection ()) ~src:temp prj;
   Project.remove ~project:temp ();
-  Project.on prj init_cil ();
   prepare_from_visitor ?reorder prj visitor;
   prj
 

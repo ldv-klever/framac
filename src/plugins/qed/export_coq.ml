@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -320,7 +320,7 @@ struct
                 (fun (c,ts) ->
                    fprintf fmt "@ | @[<hov 2>%s : " (link_name (self#link c)) ;
                    List.iter (fun t -> fprintf fmt "@ %a ->" self#pp_tau t) ts ;
-                   fprintf fmt "@ %a.@]" self#pp_tau result ;
+                   fprintf fmt "@ %a@]" self#pp_tau result ;
                 ) cases ;
               fprintf fmt ".@]@\n" ;
             end

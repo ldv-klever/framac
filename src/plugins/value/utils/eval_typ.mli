@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -34,7 +34,7 @@ val sizeof_lval_typ: typ -> Int_Base.t
 
 (** [offsetmap_matches_type t o] returns true if either:
     - [o] contains a single scalar binding, of the expected scalar type [t]
-    (float or integer)
+      (float or integer)
     - [o] contains multiple bindings, pointers, etc.
     - [t] is not a scalar type. *)
 val offsetmap_matches_type: typ -> Cvalue.V_Offsetmap.t -> bool

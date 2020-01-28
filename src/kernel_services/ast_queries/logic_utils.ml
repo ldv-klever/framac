@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -225,7 +225,7 @@ let need_logic_cast oldt newt =
   not (Cil_datatype.Logic_type.equal (Ctype oldt) (Ctype newt))
 
 (* Does the same kind of optimization than [Cil.mkCastT] for [Ctype]. *)
-let mk_cast ?(loc=Cil_datatype.Location.unknown) ?(force=false) ?(overflow=Check) newt t =
+let mk_cast ?(loc=Cil_datatype.Location.unknown) ?(force=false) ?(overflow:overflow_treatment=Check) newt t =
   let mk_cast t = (* to new type [newt] *)
     let typ = Cil.type_remove_attributes_for_logic_type newt 
     in term ~loc (TCastE (typ, overflow, t)) (Ctype typ)
@@ -288,7 +288,7 @@ let string_to_float_lconstant string =
      constant and the nearest parsed float is exact. Otherwise, use the upper
      and lower float computed by [parse]. *)
   let l = String.length string - 1 in
-  let last = Transitioning.Char.uppercase_ascii string.[l] in
+  let last = Char.uppercase_ascii string.[l] in
   let exact = last = 'F' || last = 'D' in
   if exact
   then LReal (real_of_float string f.Floating_point.f_nearest)
@@ -304,7 +304,7 @@ let numeric_coerce ltyp t =
   let oldt = unroll_type t.term_type in
   if Cil_datatype.Logic_type.equal oldt ltyp then t
   else match t.term_node with
-    | TLogic_coerce(_,e) -> coerce e
+    | TLogic_coerce(t,e) when Cil.no_op_coerce t e -> coerce e
     | TConst(Integer(i,_)) ->
       (match oldt, ltyp with
        | Ctype (TInt(ikind,_)), Linteger when Cil.fitsInInt ikind i ->
@@ -923,9 +923,9 @@ and is_same_predicate_node p1 p2 =
      with Invalid_argument _ -> false)
   | (Pfalse | Ptrue | Papp _ | Prel _ | Pand _ | Por _ | Pimplies _
     | Piff _ | Pnot _ | Pif _ | Plet _ | Pforall _ | Pexists _
-    | Pat _ | Pvalid _ | Pvalid_read _ | Pvalid_function _
+    | Pat _ | Pvalid _ | Pvalid_read _ | Pvalid_function _ | Psubtype _
     | Pinitialized _ | Pdangling _
-    | Pfresh _ | Pallocable _ | Pfreeable _ | Psubtype _ | Pxor _ | Pseparated _
+    | Pfresh _ | Pallocable _ | Pfreeable _ | Pxor _ | Pseparated _
     ), _ -> false
 
 and is_same_predicate pred1 pred2 =
@@ -1031,9 +1031,10 @@ let is_same_pragma p1 p2 =
   | (Loop_pragma _ | Slice_pragma _ | Impact_pragma _ | Astraver_pragma _
     | Assert_pragma _), _ -> false
 
-let is_same_extension (_,e1, _,c1) (_,e2, _,c2) =
-  Datatype.String.equal e1 e2 &&
-  match c1, c2 with
+let is_same_extension x1 x2 =
+  Datatype.String.equal x1.ext_name x2.ext_name &&
+  (x1.ext_has_status = x2.ext_has_status) &&
+  match x1.ext_kind, x2.ext_kind with
   | Ext_id i1, Ext_id i2 -> i1 = i2
   | Ext_terms t1, Ext_terms t2 ->
     is_same_list is_same_term t1 t2
@@ -1043,8 +1044,8 @@ let is_same_extension (_,e1, _,c1) (_,e2, _,c2) =
 
 let is_same_code_annotation (ca1:code_annotation) (ca2:code_annotation) =
   match ca1.annot_content, ca2.annot_content with
-  | AAssert(l1,p1), AAssert(l2,p2) ->
-    is_same_list (=) l1 l2 && is_same_predicate p1 p2
+  | AAssert(l1,k1,p1), AAssert(l2,k2,p2) ->
+    is_same_list (=) l1 l2 && k1 = k2 && is_same_predicate p1 p2
   | AStmtSpec (l1,s1), AStmtSpec (l2,s2) ->
     is_same_list (=) l1 l2 && is_same_spec s1 s2
   | AInvariant(l1,b1,p1), AInvariant(l2,b2,p2) ->
@@ -1240,7 +1241,7 @@ and is_same_lexpr l1 l2 =
   | PLresult, PLresult | PLnull, PLnull
   | PLfalse, PLfalse | PLtrue, PLtrue | PLempty, PLempty ->
     true
-  | PLcast(t1,e1), PLcast(t2,e2) | PLcoercion(e1,t1), PLcoercion (e2,t2)->
+  | PLcast(t1,e1), PLcast(t2,e2) ->
     is_same_pl_type t1 t2 && is_same_lexpr e1 e2
   | PLcast_mod(t1, e1), PLcast_mod(t2, e2) ->
     is_same_pl_type t1 t2 && is_same_lexpr e1 e2
@@ -1299,12 +1300,12 @@ and is_same_lexpr l1 l2 =
   | PLset l1, PLset l2 | PLunion l1, PLunion l2 | PLinter l1, PLinter l2 ->
     is_same_list is_same_lexpr l1 l2
   | (PLvar _ | PLapp _ | PLlambda _ | PLlet _ | PLconstant _ | PLunop _
-    | PLbinop _ | PLdot _ | PLarrow _ | PLarrget _ | PLlist _ | PLold _ | PLat _
+    | PLbinop _ | PLdot _ | PLarrow _ | PLarrget _ | PLlist _ | PLrepeat _ | PLold _ | PLat _
     | PLbase_addr _ | PLblock_length _ | PLoffset _ | PLoffset_max _ | PLoffset_min _
     | PLresult | PLnull | PLcast _ | PLcast_mod _
     | PLrange _ | PLsizeof _ | PLsizeofE _ | PLoffsetof _ | PLtypeof _ | PLcoercion _
     | PLcoercionE _ | PLupdate _ | PLinitIndex _ | PLtype _ | PLfalse
-    | PLtrue | PLinitField _ | PLrel _ | PLrepeat _ | PLand _ | PLor _ | PLxor _
+    | PLtrue | PLinitField _ | PLrel _ | PLand _ | PLor _ | PLxor _
     | PLimplies _ | PLiff _ | PLnot _ | PLif _ | PLforall _
     | PLexists _ | PLvalid _ | PLvalid_read _ | PLvalid_function _
     | PLfreeable _ | PLallocable _ 
@@ -1397,13 +1398,13 @@ let rec hash_term (acc,depth,tot) t =
     | Toffset_min (l,t) -> 
       let hash = acc + 355 + hash_label l in
       hash_term (hash,depth-1,tot-2) t
-    | Tnull -> acc+361, tot - 1
     | TCoerce(t,ty) ->
       let hash = Cil_datatype.TypByName.hash ty in
       hash_term (acc+380+hash,depth-1,tot-2) t
     | TCoerceE(t1,t2) ->
       let hash1,tot1 = hash_term (acc+399,depth-1,tot-1) t1 in
       hash_term (hash1,depth-1,tot1) t2
+    | Tnull -> acc+361, tot - 1
     | TUpdate(t1,off,t2) ->
       let hash1,tot1 = hash_term (acc+418,depth-1,tot-1) t1 in
       let hash2,tot2 = hash_term_offset (hash1,depth-1,tot1) off in
@@ -1589,12 +1590,12 @@ let rec compare_term t1 t2 =
   | TAlignOfE _, _ -> 1
   | _, TAlignOfE _ -> -1
   | TUnOp (o1,t1), TUnOp(o2,t2) ->
-    let res = Pervasives.compare o1 o2 in
+    let res = Transitioning.Stdlib.compare o1 o2 in
     if res = 0 then compare_term t1 t2 else res
   | TUnOp _, _ -> 1
   | _, TUnOp _ -> -1
   | TBinOp(o1,l1,r1), TBinOp(o2,l2,r2) ->
-    let res = Pervasives.compare o1 o2 in
+    let res = Transitioning.Stdlib.compare o1 o2 in
     if res = 0 then
       let res = compare_term l1 l2 in
       if res = 0 then compare_term r1 r2 else res
@@ -1803,7 +1804,7 @@ and compare_predicate_node p1 p2 =
   | Papp _, _ -> 1
   | _, Papp _ -> -1
   | Prel(r1,lt1,rt1), Prel(r2,lt2,rt2) ->
-    let res = Pervasives.compare r1 r2 in
+    let res = Transitioning.Stdlib.compare r1 r2 in
     if res = 0 then
       let res = compare_term lt1 lt2 in
       if res = 0 then compare_term rt1 rt2 else res
@@ -2010,7 +2011,14 @@ let merge_post_cond l1 l2 =
        else pc::acc)
     l1 l2
 
-let merge_behaviors ~silent old_behaviors fresh_behaviors =
+let pp_old_loc fmt oldloc =
+  if Cil_datatype.Location.(equal oldloc unknown) then
+    Format.ifprintf fmt ""
+  else
+    Format.fprintf fmt " (old location: %a)"
+      Cil_datatype.Location.pretty oldloc
+
+let merge_behaviors ?(oldloc=Cil_datatype.Location.unknown) ~silent old_behaviors fresh_behaviors =
   old_behaviors @
   (List.filter
      (fun b ->
@@ -2018,9 +2026,10 @@ let merge_behaviors ~silent old_behaviors fresh_behaviors =
           let old_b = List.find (fun x -> x.b_name = b.b_name) old_behaviors in
           if not (is_same_behavior b old_b) then begin
             if not silent then
-              Kernel.warning ~current:true "found two %s. Merging them%t"
+              Kernel.warning ~current:true "found two %s%a. Merging them%t"
                 (if Cil.is_default_behavior b then "contracts"
                  else "behaviors named " ^ b.b_name)
+                pp_old_loc oldloc
                 (fun fmt ->
                    if Kernel.debug_atleast 1 then
                      Format.fprintf fmt ":@ @[%a@] vs. @[%a@]"
@@ -2037,7 +2046,7 @@ let merge_behaviors ~silent old_behaviors fresh_behaviors =
         with Not_found -> true)
      fresh_behaviors)
 
-let merge_funspec ?(silent_about_merging_behav=false) old_spec fresh_spec =
+let merge_funspec ?(oldloc=Cil_datatype.Location.unknown) ?(silent_about_merging_behav=false) old_spec fresh_spec =
   if not (is_same_spec old_spec fresh_spec || Cil.is_empty_funspec fresh_spec)
   then
     if Cil.is_empty_funspec old_spec then begin
@@ -2048,7 +2057,7 @@ let merge_funspec ?(silent_about_merging_behav=false) old_spec fresh_spec =
       old_spec.spec_variant <- fresh_spec.spec_variant;
     end else begin
       old_spec.spec_behavior <-
-        merge_behaviors ~silent:silent_about_merging_behav
+        merge_behaviors ~oldloc ~silent:silent_about_merging_behav
           old_spec.spec_behavior fresh_spec.spec_behavior ;
       (match old_spec.spec_variant,fresh_spec.spec_variant with
        | None,None -> ()
@@ -2056,14 +2065,17 @@ let merge_funspec ?(silent_about_merging_behav=false) old_spec fresh_spec =
        | None, Some _ -> old_spec.spec_variant <- fresh_spec.spec_variant
        | Some _old, Some _fresh ->
          Kernel.warning ~current:true
-           "found two variants for function specification. Keeping only the first one.");
+           "found two variants for function specification%a. \
+            Keeping only the first one."
+           pp_old_loc oldloc);
       (match old_spec.spec_terminates, fresh_spec.spec_terminates with
        | None, None -> ()
        | Some p1, Some p2 when is_same_identified_predicate p1 p2 -> ()
        | _ ->
          Kernel.warning ~current:true
-           "found two different terminates clause for function specification. \
-            keeping only the fist one");
+           "found two different terminates clauses \
+            for function specification%a. Keeping only the first one"
+           pp_old_loc oldloc);
       old_spec.spec_complete_behaviors <-
         List.fold_left (fun acc b ->
             if List.mem b old_spec.spec_complete_behaviors then acc
@@ -2111,7 +2123,11 @@ let lhost_c_type thost =
      | _ -> assert false)
   | TResult ty -> ty
 
-let is_assert ca = match ca.annot_content with AAssert _ -> true | _ -> false
+let is_assert ca =
+  match ca.annot_content with AAssert (_, Assert, _) -> true | _ -> false
+
+let is_check ca =
+  match ca.annot_content with AAssert (_, Check, _) -> true | _ -> false
 
 let is_contract ca =
   match ca.annot_content with AStmtSpec _ -> true | _ -> false
@@ -2158,7 +2174,7 @@ let is_loop_annot s =
 
 let is_trivial_annotation a =
   match a.annot_content with
-  | AAssert (_,a) -> is_trivially_true a
+  | AAssert (_,_,a) -> is_trivially_true a
   | APragma _ | AStmtSpec _ | AInvariant _ | AVariant _
   | AAssigns _| AAllocation _ | AExtended _
     -> false
@@ -2421,9 +2437,9 @@ and constFoldBinOpToInt ~machdep bop e1 e2 =
       | PlusPI | IndexPI | MinusPI | MinusPP -> None
       | Mult _ -> Some (Integer.mul i1 i2)
       | Div _ ->
-        if Integer.(equal zero i2) && Integer.(is_zero (rem i1 i2)) then None
-        else Some (Integer.div i1 i2)
-      | Mod _ -> if Integer.(equal zero i2) then None else Some (Integer.rem i1 i2)
+        if Integer.(equal zero i2) && Integer.(is_zero (e_rem i1 i2)) then None
+        else Some (Integer.e_div i1 i2)
+      | Mod _ -> if Integer.(equal zero i2) then None else Some (Integer.e_rem i1 i2)
       | BAnd -> Some (Integer.logand i1 i2)
       | BOr -> Some (Integer.logor i1 i2)
       | BXor -> Some (Integer.logxor i1 i2)
@@ -2452,8 +2468,8 @@ and constFoldToffset t =
       try
         let start, _width = bitsLogicOffset v.lv_type offset in
         let size_char = Integer.eight in
-        if Integer.(is_zero (rem start size_char)) then
-          Some (Integer.div start size_char)
+        if Integer.(is_zero (e_rem start size_char)) then
+          Some (Integer.e_div start size_char)
         else None (* bitfields *)
       with Cil.SizeOfError _ -> None
     end
@@ -2606,7 +2622,7 @@ let eval_term_lval global_find_init (lhost, loff) =
   | _ -> None
 
 class simplify_const_lval global_find_init = object (self)
-  inherit Cil.genericCilVisitor (Cil.copy_visit (Project.current ()))
+  inherit Cil.genericCilVisitor (Visitor_behavior.copy (Project.current ()))
 
   method! vterm t =
     match t.term_node with

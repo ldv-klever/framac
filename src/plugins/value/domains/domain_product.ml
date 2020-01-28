@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -28,8 +28,8 @@ let product_category = Value_parameters.register_category "domain_product"
 
 module Make
     (Value: Abstract_value.S)
-    (Left:  Abstract_domain.Internal with type value = Value.t)
-    (Right: Abstract_domain.Internal with type value = Left.value
+    (Left:  Abstract.Domain.Internal with type value = Value.t)
+    (Right: Abstract.Domain.Internal with type value = Left.value
                                       and type location = Left.location)
 = struct
 
@@ -51,7 +51,7 @@ module Make
       (struct let module_name = name end)
   type state = t
 
-  let structure = Abstract_domain.Node (Left.structure, Right.structure)
+  let structure = Abstract.Domain.Node (Left.structure, Right.structure)
 
   let log_category = product_category
 
@@ -161,8 +161,9 @@ module Make
     module Right_Transfer = Right.Transfer (Right_Valuation)
 
     let update valuation (left, right) =
-      Left_Transfer.update valuation left,
-      Right_Transfer.update valuation right
+      Left_Transfer.update valuation left >>- fun left ->
+      Right_Transfer.update valuation right >>-: fun right ->
+      left, right
 
     let assign stmt lv expr value valuation (left, right) =
       Left_Transfer.assign stmt lv expr value valuation left >>- fun left ->
@@ -365,9 +366,9 @@ module Make
       and right_tbl = Right.Store.get_initial_state_by_callstack kf in
       merge_callstack_tbl left_tbl right_tbl
 
-    let get_stmt_state stmt =
-      Left.Store.get_stmt_state stmt >>- fun left ->
-      Right.Store.get_stmt_state stmt >>-: fun right ->
+    let get_stmt_state ~after stmt =
+      Left.Store.get_stmt_state ~after stmt >>- fun left ->
+      Right.Store.get_stmt_state ~after stmt >>-: fun right ->
       left, right
     let get_stmt_state_by_callstack ~after stmt =
       let left_tbl = Left.Store.get_stmt_state_by_callstack ~after stmt

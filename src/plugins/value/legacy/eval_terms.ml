@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -123,7 +123,7 @@ let alarm_reduce_mode () =
   if Value_parameters.ReduceOnLogicAlarms.get () then Ignore else Fail
 
 let find_or_alarm ~alarm_mode state loc =
-  let is_invalid = not (Locations.is_valid ~for_writing:false loc) in
+  let is_invalid = not Locations.(is_valid Read loc) in
   track_alarms is_invalid alarm_mode;
   let v = Model.find_indeterminate ~conflate_bottom:true state loc in
   let is_indeterminate = Cvalue.V_Or_Uninitialized.is_indeterminate v in
@@ -446,9 +446,13 @@ let einteger v =
 
 (* Note: some reals cannot be exactly represented as floats; in which
    case we do not know their under-approximation. *)
-let ereal v =
+let efloating_point etype fval =
+  let v = V.inject_float fval in
   let eunder = under_from_over v in
-  { etype = Cil.doubleType; eunder; eover = v; ldeps = empty_logic_deps}
+  { etype; eunder; eover = v; ldeps = empty_logic_deps }
+
+let ereal = efloating_point Cil.doubleType
+let efloat = efloating_point Cil.floatType
 
 let is_true = function
   | `True | `TrueReduced _ -> true
@@ -462,7 +466,7 @@ let check_logic_alarms ~alarm_mode typ (_v1: V.t eval_result) op v2 =
     let truth = Cvalue_forward.assume_non_zero v2.eover in
     let division_by_zero = not (is_true truth) in
     track_alarms division_by_zero alarm_mode
-  | Shiftlt _ | Shiftrt _ -> begin
+  | Shiftlt _ | Shiftrt -> begin
       (* Check that [e2] is positive. [e1] can be arbitrary, we use
          the arithmetic vision of shifts *)
       try
@@ -604,6 +608,15 @@ let cast ~src_typ ~dst_typ v =
     | TSFloat fkind, TSFloat _ ->
       Cvalue.V.cast_float_to_float (Fval.kind fkind) v
 
+(* V.cast_int_to_int is unsound when the destination type is _Bool.
+   Use this function instead. *)
+let cast_to_bool r =
+  let contains_zero = V.contains_zero r.eover
+  and contains_non_zero = V.contains_non_zero r.eover in
+  let eover = V.interp_boolean ~contains_zero ~contains_non_zero in
+  { eover; eunder = under_from_over eover;
+    ldeps = r.ldeps; etype = TInt (IBool, []) }
+
 (* -------------------------------------------------------------------------- *)
 (* --- Inlining of defined logic functions and predicates                 --- *)
 (* -------------------------------------------------------------------------- *)
@@ -628,7 +641,21 @@ let known_logic_funs = [
 let known_predicates = [
   "\\warning", ACSL;
   "\\is_finite", ACSL;
+  "\\is_plus_infinity", ACSL;
+  "\\is_minus_infinity", ACSL;
   "\\is_NaN", ACSL;
+  "\\eq_float", ACSL;
+  "\\ne_float", ACSL;
+  "\\lt_float", ACSL;
+  "\\le_float", ACSL;
+  "\\gt_float", ACSL;
+  "\\ge_float", ACSL;
+  "\\eq_double", ACSL;
+  "\\ne_double", ACSL;
+  "\\lt_double", ACSL;
+  "\\le_double", ACSL;
+  "\\gt_double", ACSL;
+  "\\ge_double", ACSL;
   "\\subset", ACSL;
   "valid_read_string", Libc;
   "valid_string", Libc;
@@ -698,11 +725,14 @@ let rec eval_term ~alarm_mode env t =
      | _ -> ast_error "non-evaluable constant")
   | TConst (LChr c) ->
     einteger (Cvalue.V.inject_int (Cil.charConstToInt c))
-  | TConst (LReal { r_lower ; r_upper }) -> begin
+  | TConst (LReal { r_nearest; r_lower ; r_upper }) -> begin
+      if Fc_float.is_nan r_nearest
+      then ereal Fval.nan
+      else
       let r_lower = Fval.F.of_float r_lower in
       let r_upper = Fval.F.of_float r_upper in
       let f = Fval.inject Fval.Real r_lower r_upper in
-      ereal (V.inject_ival (Ival.inject_float f))
+        ereal f
     end
     | TOffsetOf fi ->
       einteger (Cvalue.V.inject_int @@
@@ -726,9 +756,15 @@ let rec eval_term ~alarm_mode env t =
       eunder = loc_bits_to_loc_bytes_under r.eunder;
       eover = loc_bits_to_loc_bytes r.eover }
 
-  (* Special case for the constants \pi and \e. *)
-  | TLval (TVar {lv_name = "\\pi"}, _) -> ereal (V.inject_float Fval.pi)
-  | TLval (TVar {lv_name = "\\e"}, _)  -> ereal (V.inject_float Fval.e)
+  (* Special case for the constants \pi, \e, \infinity and \NaN. *)
+  | TLval (TVar {lv_name = "\\pi"}, _) -> ereal Fval.pi
+  | TLval (TVar {lv_name = "\\e"}, _)  -> ereal Fval.e
+  | TLval (TVar {lv_name = "\\plus_infinity"}, _) ->
+    efloat Fval.(pos_infinity Single)
+  | TLval (TVar {lv_name = "\\minus_infinity"}, _) ->
+    efloat Fval.(neg_infinity Single)
+  | TLval (TVar {lv_name = "\\NaN"}, _) -> efloat Fval.nan
+
   | TLval _ ->
     let lval = eval_tlval ~alarm_mode env t in
     let typ = lval.etype in
@@ -742,7 +778,7 @@ let rec eval_term ~alarm_mode env t =
     let deps =
       if Cvalue.Model.is_reachable state then
         add_deps env.e_cur empty_logic_deps
-          (enumerate_valid_bits ~for_writing:false eover_loc)
+          (enumerate_valid_bits Locations.Read eover_loc)
       else empty_logic_deps
     in
     let eunder_loc = make_loc (lval.eunder) size in
@@ -840,15 +876,14 @@ let rec eval_term ~alarm_mode env t =
 
   | TCastE (typ, _, t) ->
     let r = eval_term ~alarm_mode env t in
-    let eover, eunder =
       (* See if the cast does something. If not, we can keep eunder as is.*)
       if is_noop_cast ~src_typ:t.term_type ~dst_typ:typ
-      then r.eover, r.eunder
+    then { r with etype = typ }
+    else if Cil.isBoolType typ
+    then cast_to_bool r
       else
         let eover = cast ~src_typ:r.etype ~dst_typ:typ r.eover in
-        eover, under_from_over eover
-    in
-    { etype = typ; ldeps = r.ldeps; eunder; eover }
+      { etype = typ; ldeps = r.ldeps; eunder = under_from_over eover; eover }
 
   | Tif (tcond, ttrue, tfalse) ->
     eval_tif eval_term Cvalue.V.join Cvalue.V.meet ~alarm_mode env
@@ -892,9 +927,8 @@ let rec eval_term ~alarm_mode env t =
        nothing to do, AND coercion from an integer type to a floating-point
        type, that require a conversion. *)
     (match Logic_const.plain_or_set Extlib.id ltyp with
-     | Linteger ->
-       assert (Logic_typing.is_integral_type t.term_type);
-       r
+     | Linteger when Logic_typing.is_integral_type t.term_type
+                  || Logic_const.is_boolean_type t.term_type -> r
      | Ctype typ when Cil.isIntegralOrPointerType typ -> r
      | Lreal ->
        if Logic_typing.is_integral_type t.term_type
@@ -910,7 +944,12 @@ let rec eval_term ~alarm_mode env t =
            ldeps = r.ldeps;
            eunder = under_from_over eover;
            eover;  }
-     | _ -> unsupported
+     | _ ->
+       if Logic_const.is_boolean_type ltyp
+       && Logic_typing.is_integral_type t.term_type
+       then cast_to_bool r
+       else
+         unsupported
               (Format.asprintf "logic coercion %a -> %a@."
                  Printer.pp_logic_type t.term_type Printer.pp_logic_type ltyp)
     )
@@ -944,11 +983,11 @@ let rec eval_term ~alarm_mode env t =
            frontiers are always 0 or 8*k-1 (because validity is in bits and
            starts on zero), so we add 1 everywhere, then divide by eight. *)
         let convert start_bits end_bits =
-          let congr_succ i = Int.(equal zero (rem (succ i) eight)) in
+          let congr_succ i = Int.(equal zero (e_rem (succ i) eight)) in
           let congr_or_zero i = Int.(equal zero i || congr_succ i) in
           assert (congr_or_zero start_bits || congr_or_zero end_bits);
-          let start_bytes = Int.(pos_div (Int.succ start_bits) eight) in
-          let end_bytes =   Int.(pos_div (Int.succ end_bits)   eight) in
+          let start_bytes = Int.(e_div (Int.succ start_bits) eight) in
+          let end_bytes =   Int.(e_div (Int.succ end_bits)   eight) in
           Ival.inject_range (Some start_bytes) (Some end_bytes)
         in
         match Base.validity b with
@@ -1255,7 +1294,6 @@ and eval_known_logic_function ~alarm_mode env li labels args =
   | "\\max", Some Lreal, _, [t1; t2] ->
     let backward = Cvalue.V.backward_comp_float_left_true Comp.Ge Fval.Real in
     eval_extremum Cil.doubleType backward ~alarm_mode env t1 t2
-
   | _ -> assert false
 
 and eval_float_builtin_arity2  ~alarm_mode env name arg1 arg2 =
@@ -1310,16 +1348,16 @@ let eval_tlval_as_location_with_deps ~alarm_mode env t =
 
 
 (* Return a pair of (under-approximating, over-approximating) zones. *)
-let eval_tlval_as_zone_under_over ~alarm_mode ~for_writing env t =
+let eval_tlval_as_zone_under_over ~alarm_mode access env t =
   let r = eval_tlval ~alarm_mode env t in
   let s = Eval_typ.sizeof_lval_typ r.etype in
-  let under = enumerate_valid_bits_under ~for_writing (make_loc r.eunder s) in
-  let over = enumerate_valid_bits ~for_writing (make_loc r.eover s) in
+  let under = enumerate_valid_bits_under access (make_loc r.eunder s) in
+  let over = enumerate_valid_bits access (make_loc r.eover s) in
   (under, over)
 
-let eval_tlval_as_zone ~alarm_mode ~for_writing env t =
+let eval_tlval_as_zone ~alarm_mode access env t =
   let _under, over =
-    eval_tlval_as_zone_under_over ~alarm_mode ~for_writing env t
+    eval_tlval_as_zone_under_over ~alarm_mode access env t
   in
   over
 
@@ -1494,7 +1532,7 @@ let eval_forall_predicate state r test =
   let size_bits = Eval_typ.sizeof_lval_typ r.etype in
   let make_loc loc = make_loc loc size_bits in
   let over_loc = make_loc r.eover in
-  if not (Locations.is_valid ~for_writing:false over_loc) then c_alarm ();
+  if not Locations.(is_valid Read over_loc) then c_alarm ();
   match forall_in_over_location state over_loc test with
   | Unknown ->
     let under_loc = make_loc r.eunder in
@@ -1547,71 +1585,7 @@ let rel_of_binop = function
 exception DoNotReduce
 exception Reduce_to_bottom
 
-(* if you add something here, update [known_predicates] above also
-   (and of course [eval_known_papp] below). *)
-let reduce_by_known_papp env positive li _labels args =
-  match positive, li.l_var_info.lv_name, args with
-  | true, "\\is_finite", [arg]
-  | false, "\\is_NaN", [arg] -> begin
-      let fval_reduce =
-        (* positive is true for is_finite, false for is_NaN. *)
-        if positive
-        then Fval.backward_is_finite
-        else (fun _fkind -> Fval.backward_is_not_nan)
-        in
-      try
-        let alarm_mode = alarm_reduce_mode () in
-        let typ_loc, locs = eval_term_as_exact_locs ~alarm_mode env arg in
-        let aux loc env =
-	  let state = env_current_state env in
-          let v = find_or_alarm ~alarm_mode state loc in
-          let v =  Cvalue_forward.reinterpret typ_loc v in
-          let v = match Cil.unrollType typ_loc with
-            | TFloat (fkind,_) -> begin
-                let v = Cvalue.V.project_float v in
-                let kind = Fval.kind fkind in
-                match fval_reduce kind v with
-                | `Value f -> V.inject_float f
-                | `Bottom -> V.bottom
-              end
-            | _ -> (* Better safe than sorry, we may have e.g. en int location
-                      here *)
-              raise Not_an_exact_loc
-          in
-          let state' = Cvalue.Model.reduce_previous_binding state loc v in
-          overwrite_current_state env state'
-        in
-        Eval_op.apply_on_all_locs aux locs env
-      with LogicEvalError _ | Not_an_exact_loc | Cvalue.V.Not_based_on_null ->
-        env
-    end
-
-  | true, "\\subset", [argl;argr] -> begin
-      try
-        let alarm_mode = alarm_reduce_mode () in
-        let vr = (eval_term ~alarm_mode env argr).eover in
-        let _typ, locsl = eval_term_as_exact_locs ~alarm_mode env argl in
-        let aux locl env =
-          let state = env_current_state env in
-          let vl = find_or_alarm ~alarm_mode state locl in
-          let reduced = V.narrow vl vr in
-          if V.equal V.bottom reduced then raise Reduce_to_bottom;
-          let state' =
-            Cvalue.Model.reduce_previous_binding state locl reduced
-          in
-          overwrite_current_state env state'
-        in
-        Eval_op.apply_on_all_locs aux locsl env
-      with
-      | LogicEvalError _ | Not_an_exact_loc -> env
-      | Reduce_to_bottom -> overwrite_current_state env Model.bottom
-    end
-
-  | _ -> (* Do not fail here. We can be asked to reduce on predicates that we
-            can evaluate, but on which we are not able to reduce on (yet ?).*)
-    env
-
-let reduce_by_valid env positive ~for_writing (tset: term) =
+let reduce_by_valid env positive access (tset: term) =
   (* Auxiliary function that reduces \valid(lv+offs), where lv is atomic
      (no more tsets), and offs is a bits-expressed constant offset.
      [offs_typ] is supposed to be the type of the pointed location after [offs]
@@ -1632,7 +1606,7 @@ let reduce_by_valid env positive ~for_writing (tset: term) =
       let lshifted_p = make_loc shifted_p (Eval_typ.sizeof_lval_typ offs_typ) in
       let valid = (* reduce the shifted pointer to the wanted part *)
         if positive
-        then Locations.valid_part ~for_writing lshifted_p
+        then Locations.valid_part access lshifted_p
         else Locations.invalid_part lshifted_p
       in
       let valid = valid.loc in
@@ -1668,7 +1642,7 @@ let reduce_by_valid env positive ~for_writing (tset: term) =
   let aux_one_lval typ loc env =
             try
               let state =
-                Eval_op.reduce_by_valid_loc ~positive ~for_writing
+        Eval_op.reduce_by_valid_loc ~positive access
                   loc typ (env_current_state env)
               in
               overwrite_current_state env state
@@ -1736,26 +1710,8 @@ let reduce_by_valid env positive ~for_writing (tset: term) =
   in
   do_one env tset
 
-let rec reduce_by_relation ~alarm_mode env positive t1 rel t2 =
-  (* special case: t1 is a term of the form "a rel' b",
-     and is compared to "== 0" or "!= 0" => evaluate t1 directly;
-     note: such terms may be created by other evaluation/reduction functions
-     e.g. eval_predicate, reduce_by_predicate_content *)
-  match t1.term_node, rel with
-  | TBinOp (bop, t1', t2'), Rneq when is_rel_binop bop && Cil.isLogicZero t2 ->
-    reduce_by_relation ~alarm_mode env positive t1' (rel_of_binop bop) t2'
-  | TBinOp (bop, t1', t2'), Req when is_rel_binop bop && Cil.isLogicZero t2 ->
-    reduce_by_relation ~alarm_mode env (not positive) t1' (rel_of_binop bop) t2'
-  | _ ->
-    let env = reduce_by_left_relation ~alarm_mode env positive t1 rel t2 in
-  let sym_rel = match rel with
-    | Rgt -> Rlt | Rlt -> Rgt | Rle -> Rge | Rge -> Rle
-    | Req -> Req | Rneq -> Rneq
-  in
-    reduce_by_left_relation ~alarm_mode env positive t2 sym_rel t1
-
 (* reduce [tl] so that [rl rel tr] holds *)
-and reduce_by_left_relation ~alarm_mode env positive tl rel tr =
+let reduce_by_left_relation ~alarm_mode env positive tl rel tr =
   try
     let debug = false in
     if debug then Format.printf "#Left term %a@." Printer.pp_term tl;
@@ -1790,6 +1746,108 @@ and reduce_by_left_relation ~alarm_mode env positive tl rel tr =
     Eval_op.apply_on_all_locs aux locs env
   with Not_an_exact_loc | LogicEvalError _ -> env
 
+let rec reduce_by_relation ~alarm_mode env positive t1 rel t2 =
+  (* special case: t1 is a term of the form "a rel' b",
+     and is compared to "== 0" or "!= 0" => evaluate t1 directly;
+     note: such terms may be created by other evaluation/reduction functions
+     e.g. eval_predicate, reduce_by_predicate_content *)
+  match t1.term_node, rel with
+  | TBinOp (bop, t1', t2'), Rneq when is_rel_binop bop && Cil.isLogicZero t2 ->
+    reduce_by_relation ~alarm_mode env positive t1' (rel_of_binop bop) t2'
+  | TBinOp (bop, t1', t2'), Req when is_rel_binop bop && Cil.isLogicZero t2 ->
+    reduce_by_relation ~alarm_mode env (not positive) t1' (rel_of_binop bop) t2'
+  | _ ->
+    let env = reduce_by_left_relation ~alarm_mode env positive t1 rel t2 in
+    let sym_rel = match rel with
+      | Rgt -> Rlt | Rlt -> Rgt | Rle -> Rge | Rge -> Rle
+      | Req -> Req | Rneq -> Rneq
+    in
+    reduce_by_left_relation ~alarm_mode env positive t2 sym_rel t1
+
+(* if you add something here, update [known_predicates] above also
+   (and of course [eval_known_papp] below).
+   May raise LogicEvalError or Not_an_exact_loc, when no reduction can be done,
+   and Reduce_to_bottom, in which case the reduction leads to bottom. *)
+let reduce_by_known_papp ~alarm_mode env positive li _labels args =
+  (* If the term [arg] is a floating-point lvalue with an exact location,
+     reduces its value in [env] by using the backward propagator on fval
+     [fval_reduce]. *)
+  let reduce_float fval_reduce arg =
+    try
+      let typ_loc, locs = eval_term_as_exact_locs ~alarm_mode env arg in
+      let aux loc env =
+        let state = env_current_state env in
+        let v = find_or_alarm ~alarm_mode state loc in
+        let v =  Cvalue_forward.reinterpret typ_loc v in
+        let v = match Cil.unrollType typ_loc with
+          | TFloat (fkind,_) -> begin
+              let v = Cvalue.V.project_float v in
+              let kind = Fval.kind fkind in
+              match fval_reduce kind v with
+              | `Value f -> V.inject_float f
+              | `Bottom -> V.bottom
+            end
+          | _ -> (* Better safe than sorry, we may have e.g. en int location
+                    here *)
+            raise Not_an_exact_loc
+        in
+        let state' = Cvalue.Model.reduce_previous_binding state loc v in
+        overwrite_current_state env state'
+      in
+      Eval_op.apply_on_all_locs aux locs env
+    with Cvalue.V.Not_based_on_null -> env
+  in
+  (* Reduces [f] to positive or negative infinity (according to [pos]),
+     or to the complement if [positive] is false. *)
+  let reduce_by_infinity ~pos prec f =
+    let inf = if pos then Fval.pos_infinity prec else Fval.neg_infinity prec in
+    let fval =
+      if positive
+      then inf
+      else Fval.(join nan (join (Fval.neg inf) (top_finite prec)))
+    in
+    Fval.narrow fval f
+  in
+  match li.l_var_info.lv_name, args with
+  | "\\is_finite", [arg] ->
+    reduce_float (Fval.backward_is_finite ~positive) arg
+  | "\\is_plus_infinity", [arg] ->
+    reduce_float (reduce_by_infinity ~pos:true) arg
+  | "\\is_minus_infinity", [arg] ->
+    reduce_float (reduce_by_infinity ~pos:false) arg
+  | "\\is_NaN", [arg] ->
+    reduce_float (fun _fkind -> Fval.backward_is_nan ~positive) arg
+  | ("\\eq_float" | "\\eq_double"), [t1;t2] ->
+    reduce_by_relation ~alarm_mode env positive t1 Req t2
+  | ("\\ne_float" | "\\ne_double"), [t1;t2] ->
+    reduce_by_relation ~alarm_mode env positive t1 Rneq t2
+  | ("\\lt_float" | "\\lt_double"), [t1;t2] ->
+    reduce_by_relation ~alarm_mode env positive t1 Rlt t2
+  | ("\\le_float" | "\\le_double"), [t1;t2] ->
+    reduce_by_relation ~alarm_mode env positive t1 Rle t2
+  | ("\\gt_float" | "\\gt_double"), [t1;t2] ->
+    reduce_by_relation ~alarm_mode env positive t1 Rgt t2
+  | ("\\ge_float" | "\\ge_double"), [t1;t2] ->
+    reduce_by_relation ~alarm_mode env positive t1 Rge t2
+  | "\\subset", [argl;argr] when positive ->
+    let alarm_mode = alarm_reduce_mode () in
+    let vr = (eval_term ~alarm_mode env argr).eover in
+    let _typ, locsl = eval_term_as_exact_locs ~alarm_mode env argl in
+    let aux locl env =
+      let state = env_current_state env in
+      let vl = find_or_alarm ~alarm_mode state locl in
+      let reduced = V.narrow vl vr in
+      if V.equal V.bottom reduced then raise Reduce_to_bottom;
+      let state' =
+        Cvalue.Model.reduce_previous_binding state locl reduced
+      in
+      overwrite_current_state env state'
+    in
+    Eval_op.apply_on_all_locs aux locsl env
+
+  | _ -> (* Do not fail here. We can be asked to reduce on predicates that we
+            can evaluate, but on which we are not able to reduce on (yet ?).*)
+    env
 
 (** Big recursive functions for predicates *)
 
@@ -1883,9 +1941,9 @@ let rec reduce_by_predicate ~alarm_mode env positive p =
     | _,Pvalid (_label,tsets) ->
       (* TODO: label should not be ignored. Instead, we should clear
          variables that are not in scope at the label. *)
-      reduce_by_valid env positive ~for_writing:true  tsets
+      reduce_by_valid env positive Write tsets
     | _,Pvalid_read (_label,tsets) ->
-      reduce_by_valid env positive ~for_writing:false tsets
+      reduce_by_valid env positive Read tsets
 
     | _,Pvalid_function _tsets -> env (* TODO *)
 
@@ -1897,6 +1955,13 @@ let rec reduce_by_predicate ~alarm_mode env positive p =
           (* See comments in the code for the evaluation of Pinitialized *)
           let star_tsets = deref_tsets tsets in
           let rlocb = eval_tlval ~alarm_mode env star_tsets in
+          (* No reduction on negations of \initialized or \dangling on multiple
+             locations: at least one of them is non initialized/dangling, but
+             which one? Reduction would only be possible in the rare case where
+             only one of the locations might be non initialized/dangling. *)
+          if not (positive || Location_Bits.cardinal_zero_or_one rlocb.eover)
+          then env
+          else
           let size = Eval_typ.sizeof_lval_typ rlocb.etype in
           let state = env_state env lbl_initialized in
           let fred = match p_content with
@@ -1933,12 +1998,14 @@ let rec reduce_by_predicate ~alarm_mode env positive p =
       end
     | _,Papp (li, labels, args) -> begin
         if is_known_predicate li.l_var_info then
-          reduce_by_known_papp env positive li labels args
+          try reduce_by_known_papp ~alarm_mode env positive li labels args
+          with
+          | Reduce_to_bottom -> overwrite_current_state env Model.bottom
+          | LogicEvalError _ | Not_an_exact_loc -> env
         else
           match Inline.inline_predicate ~inline ~current:env.e_cur p with
           | None -> env
-          | Some p' ->
-            reduce_by_predicate_content env positive p'.pred_content
+          | Some p' -> reduce_by_predicate_content env positive p'.pred_content
       end
     | _,Pif (tcond, ptrue, pfalse) ->
       begin
@@ -1963,8 +2030,7 @@ let rec reduce_by_predicate ~alarm_mode env positive p =
     | true, Pexists (_, _) | false, Pforall (_, _)
     | _,Plet (_, _)
     | _,Pallocable (_,_) | _,Pfreeable (_,_) | _,Pfresh (_,_,_,_)
-    | _,Psubtype _
-    | _, Pseparated _
+    | _,Psubtype _ | _, Pseparated _
       -> env
   in
   reduce_by_predicate_content env positive p.pred_content
@@ -2026,28 +2092,29 @@ and eval_predicate env pred =
     | Pvalid (_label, tsets) | Pvalid_read (_label, tsets) -> begin
         (* TODO: see same constructor in reduce_by_predicate *)
         try
-          let for_writing =
-            (match p.pred_content with Pvalid_read _ -> false | _ -> true) in
+          let access =
+            match p.pred_content with Pvalid_read _ -> Read | _ -> Write
+          in
           let state = env_current_state env in
           let typ_pointed = Logic_typing.ctype_of_pointed tsets.term_type in
           (* Check if we are trying to write in a const l-value *)
-          if for_writing && Value_util.is_const_write_invalid typ_pointed then
+          if access = Write && Value_util.is_const_write_invalid typ_pointed then
             raise Stop;
           let size = Eval_typ.sizeof_lval_typ typ_pointed in
           (* Check that the given location is valid *)
           let valid ~over:locbytes_over ~under:locbytes_under =
             let loc = loc_bytes_to_loc_bits locbytes_over in
             let loc = Locations.make_loc loc size in
-            if not (Locations.is_valid ~for_writing loc) then (
+            if not Locations.(is_valid access loc) then (
               (* \valid does not hold if the over-approximation is invalid
                  everywhere, or if a part of the under-approximation is invalid
               *)
-              let valid = valid_part ~for_writing loc in
+              let valid = valid_part access loc in
               if Locations.is_bottom_loc valid then raise Stop;
               let loc_under = loc_bytes_to_loc_bits locbytes_under in
               let loc_under = Locations.make_loc loc_under size in
               let valid_loc_under =
-                Locations.valid_part ~for_writing loc_under
+                Locations.valid_part access loc_under
               in
               if not (Location.equal loc_under valid_loc_under) then
                 raise Stop;
@@ -2058,7 +2125,7 @@ and eval_predicate env pred =
              (* Evaluate the left-value, and check that it is initialized
                 and not an escaping pointer *)
              let loc = eval_tlval_as_location ~alarm_mode env tsets in
-             if not (Locations.is_valid ~for_writing:false loc) then
+             if not Locations.(is_valid Read loc) then
                c_alarm ();
              let v = Model.find_indeterminate state loc in
              let v, ok = match v with
@@ -2216,14 +2283,46 @@ and eval_predicate env pred =
       Builtins_malloc.freeable r.eover
     | Pfresh (_,_,_,_)
     | Pallocable _ | Pfreeable _
-    | Plet (_,_)
-    | Psubtype _
+    | Plet (_,_) | Psubtype _
       -> Unknown
 
   (* Logic predicates. Update the list known_predicates above if you
      add something here. *)
   and eval_known_papp env li _labels args =
+    let unary_float unary_fun arg =
+      try
+        let eval_result = eval_term ~alarm_mode env arg in
+        unary_fun (V.project_float eval_result.eover)
+      with
+      | V.Not_based_on_null -> Unknown
+      | LogicEvalError ee -> display_evaluation_error ~loc ee; Unknown
+    in
+    let fval_cmp comp arg1 arg2 =
+      try
+        let e1 = eval_term ~alarm_mode env arg1
+        and e2 = eval_term ~alarm_mode env arg2 in
+        let f1 = V.project_float e1.eover
+        and f2 = V.project_float e2.eover in
+        Fval.forward_comp comp f1 f2
+      with
+      | V.Not_based_on_null -> Unknown
+      | LogicEvalError ee -> display_evaluation_error ~loc ee; Unknown
+    in
     match li.l_var_info.lv_name, args with
+    | "\\is_finite", [arg] -> unary_float Fval.is_finite arg
+    | "\\is_plus_infinity", [arg] ->
+      let pos_inf = Fval.pos_infinity Float_sig.Single in
+      unary_float (fun f -> Fval.forward_comp Comp.Eq f pos_inf) arg
+    | "\\is_minus_infinity", [arg] ->
+      let neg_inf = Fval.neg_infinity Float_sig.Single in
+      unary_float (fun f -> Fval.forward_comp Comp.Eq f neg_inf) arg
+    | "\\is_NaN", [arg] -> inv_truth (unary_float Fval.is_not_nan arg)
+    | ("\\eq_float" | "\\eq_double"), [arg1;arg2] -> fval_cmp Comp.Eq arg1 arg2
+    | ("\\ne_float" | "\\ne_double"), [arg1;arg2] -> fval_cmp Comp.Ne arg1 arg2
+    | ("\\lt_float" | "\\lt_double"), [arg1;arg2] -> fval_cmp Comp.Lt arg1 arg2
+    | ("\\le_float" | "\\le_double"), [arg1;arg2] -> fval_cmp Comp.Le arg1 arg2
+    | ("\\gt_float" | "\\gt_double"), [arg1;arg2] -> fval_cmp Comp.Gt arg1 arg2
+    | ("\\ge_float" | "\\ge_double"), [arg1;arg2] -> fval_cmp Comp.Ge arg1 arg2
     | "\\warning", _ -> begin
         match args with
         | [{ term_node = TConst(LStr(str))}] ->
@@ -2231,22 +2330,6 @@ and eval_predicate env pred =
         | _ ->
           Value_parameters.abort
             "Wrong argument: \\warning expects a constant string"
-      end
-    | "\\is_finite", [arg] -> begin
-        try
-          let eval_result = eval_term ~alarm_mode env arg in
-          match V.project_float eval_result.eover with
-          | exception Cvalue.V.Not_based_on_null -> Unknown
-          | f -> Fval.is_finite f
-        with LogicEvalError ee -> display_evaluation_error ~loc ee; Unknown
-      end
-    | "\\is_NaN", [arg] -> begin
-        try
-          let eval_result = eval_term ~alarm_mode env arg in
-          match V.project_float eval_result.eover with
-          | exception Cvalue.V.Not_based_on_null -> Unknown
-          | f -> Abstract_interp.inv_truth (Fval.is_not_nan f)
-        with LogicEvalError ee -> display_evaluation_error ~loc ee; Unknown
       end
     | "\\subset", [argl;argr] -> begin
         try
@@ -2336,7 +2419,7 @@ let predicate_deps env pred =
     | Pinitialized (lbl, tsets) | Pdangling (lbl, tsets) ->
       let loc, deploc =
         eval_tlval_as_location_with_deps ~alarm_mode env tsets in
-      let zone = enumerate_valid_bits ~for_writing:false loc in
+      let zone = enumerate_valid_bits Locations.Read loc in
       Logic_label.Map.add lbl zone deploc
 
     | Pnot p -> do_eval env p

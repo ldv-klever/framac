@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -368,7 +368,7 @@ module type Forward_Evaluation = sig
 end
 
 module Make
-    (Value : Abstract_value.External)
+    (Value : Abstract.Value.External)
     (Loc : Abstract_location.S with type value = Value.t)
     (Valuation: Valuation with type value = Value.t
                            and type loc = Loc.location)
@@ -379,15 +379,15 @@ module Make
   (* Values are converted to {!Cvalue.V.t}, because those are
      currently the only values on which we can split. *)
 
-  let get_cval = match Value.get Main_values.cvalue_key with
+  let get_cval = match Value.get Main_values.CVal.key with
     | Some get -> get
     | None -> fun _ -> Cvalue.V.top
 
   let set_cval =
-    let set = Value.set Main_values.cvalue_key in
+    let set = Value.set Main_values.CVal.key in
     fun cval v -> set cval v
 
-  let activated = Value.mem Main_values.cvalue_key
+  let activated = Value.mem Main_values.CVal.key
 
   module Clear = Clear_Valuation (Valuation)
 

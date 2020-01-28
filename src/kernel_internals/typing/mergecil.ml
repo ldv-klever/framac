@@ -461,17 +461,20 @@ module ExtMerging =
   Merging
     (struct
       type t = acsl_extension
-      let hash (_,name,_,kind) =
-        Datatype.String.hash name + 5 * hash_ext_kind kind
-      let compare (_,name1, _,kind1) (_,name2,_,kind2) =
-        let res = Datatype.String.compare name1 name2 in
+      let hash (e : acsl_extension) =
+        Datatype.String.hash e.ext_name + 5 * hash_ext_kind e.ext_kind
+      let compare (e1 : acsl_extension) (e2 : acsl_extension) =
+        let res = Datatype.String.compare e1.ext_name e2.ext_name in
         if res <> 0 then res
         else
-          compare_ext_kind kind1 kind2
+          let res = Datatype.Bool.compare e1.ext_has_status e2.ext_has_status in
+          if res <> 0 then res
+          else
+            compare_ext_kind e1.ext_kind e2.ext_kind
       let equal x y = compare x y = 0
       let merge_synonym _ = true
-      let output fmt (_,name,_,_) =
-        Format.fprintf fmt "global ACSL extension %s" name
+      let output fmt {ext_name} =
+        Format.fprintf fmt "global ACSL extension %s" ext_name
     end)
 
 type volatile_kind = R | W
@@ -1738,6 +1741,17 @@ let oneFilePass1 (f:file) : unit =
             end else Kernel.abort "%s" msg (* Fail if both variables are used. *)
         end
       in
+      if Cil.hasAttribute "fc_stdlib" oldvi.vattr then begin
+        let attrprm = Cil.findAttribute "fc_stdlib" oldvi.vattr in
+        let attrprm =
+          if Cil.hasAttribute "fc_stdlib" vi.vattr then begin
+            Cil.findAttribute "fc_stdlib" vi.vattr @ attrprm
+          end else attrprm
+        in
+        let attrs = Cil.dropAttribute "fc_stdlib" newrep.ndata.vattr in
+        let attrs = Cil.addAttribute (Attr ("fc_stdlib", attrprm)) attrs in
+        newrep.ndata.vattr <- attrs;
+      end;
       newrep.ndata.vdefined <- vi.vdefined || oldvi.vdefined;
       newrep.ndata.vreferenced <- vi.vreferenced || oldvi.vreferenced;
       (* We do not want to turn non-"const" globals into "const" one. That

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -146,7 +146,7 @@ let preferences (host_window: Design.main_window_extension_points) =
   in
   let theme_group = new Widget.group "" in
   let build_theme_button name =
-    let label = Transitioning.String.capitalize_ascii name in
+    let label = String.capitalize_ascii name in
     let widget = theme_group#add_radio ~label ~value:name () in
     theme_box#add widget#coerce
   in
@@ -243,13 +243,7 @@ let insert (host_window: Design.main_window_extension_points) =
       [ Menu_manager.menubar ~icon:stock "Exit Frama-C"
           (Menu_manager.Unit_callback Cmdline.bail_out) ]
   in
-  quit_item.(0)#add_accelerator `CONTROL 'q';
-  ignore
-    (menu_manager#add_entries
-       filemenu
-       ~pos:0
-       [ Menu_manager.toolbar ~icon:stock ~label:"Exit" ~tooltip:"Exit Frama-C"
-           (Menu_manager.Unit_callback Cmdline.bail_out)])
+  quit_item.(0)#add_accelerator `CONTROL 'q'
 
 (** Register this dialog in main window menu bar *)
 let () = Design.register_extension insert

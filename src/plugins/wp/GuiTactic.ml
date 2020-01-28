@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -340,6 +340,7 @@ let wfield tac form pp = function
 (* -------------------------------------------------------------------------- *)
 
 type edited = {
+  tree : ProofEngine.tree ;
   target : selection ;
   browser : (browser -> unit) ;
   composer : (composer -> unit) ;
@@ -388,6 +389,10 @@ class tactic
     (* --- Feedback API                                                       --- *)
     (* -------------------------------------------------------------------------- *)
 
+    method pool = match edited with
+      | None -> assert false
+      | Some { tree } -> ProofEngine.pool tree
+
     method interactive = self#is_active
     method get_title = title
     method has_error = error
@@ -403,10 +408,10 @@ class tactic
       ?range:bool -> ?vmin:int -> ?vmax:int ->
       ?filter:(Lang.F.term -> bool) -> 'a field -> unit =
       fun ?enabled ?title ?tooltip ?range ?vmin ?vmax ?filter field ->
-        let id = Tactical.ident field in
-        List.iter (fun (fd : wfield) ->
-            fd#update ?enabled ?title ?tooltip ?range ?vmin ?vmax ?filter id
-          ) wfields
+      let id = Tactical.ident field in
+      List.iter (fun (fd : wfield) ->
+          fd#update ?enabled ?title ?tooltip ?range ?vmin ?vmax ?filter id
+        ) wfields
 
     (* -------------------------------------------------------------------------- *)
     (* --- Widget Behavior                                                    --- *)
@@ -437,8 +442,8 @@ class tactic
     method private updated () =
       match edited with
       | None -> ()
-      | Some { process ; composer ; browser ; target } ->
-          self#select ~process ~composer ~browser target
+      | Some { process ; composer ; browser ; target ; tree } ->
+          self#select ~process ~composer ~browser ~tree target
 
     method clear =
       begin
@@ -452,12 +457,14 @@ class tactic
 
     method private status target =
       List.iter (fun fd -> fd#select target) wfields ;
-      try tac#select (self :> feedback) target
+      try Lang.local ~pool:self#pool (tac#select (self :> feedback)) target
       with Not_found | Exit -> Not_applicable
 
-    method select ~process ~browser ~composer (target : selection) =
+    method select ~process ~browser ~composer ~tree
+        (target : selection) =
       begin
         self#reset_dongle ;
+        edited <- Some { process ; composer ; browser ; target ; tree } ;
         let status = self#status target in
         match status , error with
         | Not_applicable , _ ->
@@ -466,12 +473,10 @@ class tactic
             self#set_action () ;
         | Not_configured , _ | Applicable _ , true ->
             self#set_visible true ;
-            edited <- Some { process ; composer ; browser ; target } ;
             self#set_status `DIALOG_WARNING ;
             self#set_action () ;
         | Applicable proc , false ->
             self#set_visible true ;
-            edited <- Some { process ; composer ; browser ; target } ;
             self#set_status `APPLY ;
             let callback () = process tac target proc in
             self#set_action ~callback () ;

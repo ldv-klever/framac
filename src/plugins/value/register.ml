@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -49,7 +49,7 @@ let eval_error_reason fmt e =
   then Eval_terms.pretty_logic_evaluation_error fmt e
 
 let assigns_inputs_to_zone state assigns =
-  let env = Eval_terms.env_pre_f ~pre:state () in
+  let env = Eval_terms.env_assigns ~pre:state in
   let treat_asgn acc (_,ins as asgn) =
     match ins with
     | FromAny -> Zone.top
@@ -59,7 +59,7 @@ let assigns_inputs_to_zone state assigns =
           (fun acc t ->
              let z =
                Eval_terms.eval_tlval_as_zone ~alarm_mode:Eval_terms.Ignore
-                 ~for_writing:false env t.it_content
+                 Read env t.it_content
              in
              Zone.join acc z)
           acc
@@ -96,7 +96,7 @@ let assigns_outputs_aux ~eval ~bot ~top ~join state ~result assigns =
 let assigns_outputs_to_zone =
   let eval env term =
     Eval_terms.eval_tlval_as_zone
-      ~alarm_mode:Eval_terms.Ignore ~for_writing:true env term
+      ~alarm_mode:Eval_terms.Ignore Write env term
   in
   assigns_outputs_aux ~eval
     ~bot:Locations.Zone.bottom ~top:Locations.Zone.top ~join:Locations.Zone.join
@@ -169,9 +169,14 @@ let () =
 
 open Eval
 
-module Val = struct
+module CVal = struct
   include Main_values.CVal
-  include Structure.Open (Structure.Key_Value) (Main_values.CVal)
+  let structure = Abstract.Value.Leaf (key, (module Main_values.CVal))
+end
+
+module Val = struct
+  include CVal
+  include Structure.Open (Abstract.Value) (CVal)
   let reduce t = t
 end
 
@@ -183,6 +188,8 @@ module Eva =
 
 module Transfer = Cvalue_domain.State.Transfer (Eva.Valuation)
 
+let inject_cvalue state = state, Locals_scoping.bottom ()
+
 let bot_value = function
   | `Bottom -> Cvalue.V.bottom
   | `Value v -> v
@@ -190,6 +197,9 @@ let bot_value = function
 let bot_state = function
   | `Bottom -> Cvalue.Model.bottom
   | `Value s -> s
+
+let update valuation state =
+  bot_state (Transfer.update valuation state >>-: fst)
 
 let rec eval_deps state e =
   match e.enode with
@@ -211,7 +221,7 @@ and eval_deps_lval state lv =
   match loc with
   | `Bottom -> deps
   | `Value loc ->
-    let deps_lv = Precise_locs.enumerate_valid_bits ~for_writing loc in
+    let deps_lv = Precise_locs.enumerate_valid_bits Read loc in
     Locations.Zone.join deps deps_lv
 and eval_deps_addr state (h, o:lval) =
   Locations.Zone.join (eval_deps_host state h) (eval_deps_offset state o)
@@ -228,7 +238,7 @@ let notify_opt with_alarms alarms =
   Extlib.may (fun mode -> Alarmset.notify mode alarms) with_alarms
 
 let eval_expr_with_valuation ?with_alarms deps state expr=
-  let state = Cvalue_domain.inject state in
+  let state = inject_cvalue state in
   let deps = match deps with
     | None -> None
     | Some deps ->
@@ -240,7 +250,7 @@ let eval_expr_with_valuation ?with_alarms deps state expr=
   match eval with
   | `Bottom -> (Cvalue.Model.bottom, deps, Cvalue.V.bottom), None
   | `Value (valuation, result) ->
-    let state = Cvalue_domain.project (Transfer.update valuation state) in
+    let state = update valuation state in
     (state, deps, result), Some valuation
 
 (* Compatibility layer between the old API of eval_exprs and the new evaluation
@@ -248,7 +258,7 @@ let eval_expr_with_valuation ?with_alarms deps state expr=
 module Eval = struct
 
   let eval_expr ?with_alarms state expr =
-    let state = Cvalue_domain.inject state in
+    let state = inject_cvalue state in
     let eval, alarms = Eva.evaluate ~reduction:false state expr in
     notify_opt with_alarms alarms;
     bot_value (eval >>-: snd)
@@ -270,19 +280,18 @@ module Eval = struct
 
 
   let reduce_by_cond state expr positive =
-    let state = Cvalue_domain.inject state in
+    let state = inject_cvalue state in
     let eval, _alarms =
       Eva.reduce state expr positive
     in
-    bot_state (eval >>-: fun valuation ->
-               Cvalue_domain.project (Transfer.update valuation state))
+    bot_state (eval >>-: fun valuation -> update valuation state)
 
 
   let lval_to_precise_loc_deps_state ?with_alarms ~deps state ~reduce_valid_index:(_:bool) lval =
     if not (Cvalue.Model.is_reachable state)
     then state, deps, Precise_locs.loc_bottom, (Cil.typeOfLval lval)
     else
-      let state = Cvalue_domain.inject state in
+      let state = inject_cvalue state in
       let deps = match deps with
         | None -> None
         | Some deps ->
@@ -295,8 +304,7 @@ module Eval = struct
       notify_opt with_alarms alarms;
       match eval with
       | `Bottom -> Cvalue.Model.bottom, deps, Precise_locs.loc_bottom, (Cil.typeOfLval lval)
-      | `Value (valuation, loc, typ) ->
-        Cvalue_domain.project (Transfer.update valuation state), deps, loc, typ
+      | `Value (valuation, loc, typ) -> update valuation state, deps, loc, typ
 
   let lval_to_loc_deps_state ?with_alarms ~deps state ~reduce_valid_index lv =
     let state, deps, pl, typ =
@@ -332,7 +340,7 @@ module Eval = struct
 
   let resolv_func_vinfo ?with_alarms deps state funcexp =
     let open Cil_types in
-    let state = Cvalue_domain.inject state in
+    let state = inject_cvalue state in
     let deps = match funcexp.enode with
       | Lval (Var _, NoOffset) -> deps
       | Lval (Mem v, _) ->
@@ -399,7 +407,7 @@ module Export (Eval : Eval) = struct
       let _, r =
         lval_to_precise_loc_with_deps_state_alarm ?with_alarms state ~deps:None lv
       in
-      let zone = Precise_locs.enumerate_valid_bits ~for_writing:false r in
+      let zone = Precise_locs.enumerate_valid_bits Read r in
       Locations.Zone.join acc zone
     in
     Db.Value.fold_state_callstack
@@ -407,7 +415,7 @@ module Export (Eval : Eval) = struct
 
   let lval_to_zone_state state lv =
     let _, r = lval_to_precise_loc_with_deps_state state ~deps:None lv in
-    Precise_locs.enumerate_valid_bits ~for_writing:false r
+    Precise_locs.enumerate_valid_bits Read r
 
   let lval_to_zone_with_deps_state state ~for_writing ~deps lv =
     let deps, r = lval_to_precise_loc_with_deps_state state ~deps lv in
@@ -416,14 +424,15 @@ module Export (Eval : Eval) = struct
       then Precise_locs.loc_bottom
       else r
     in
-    let zone = Precise_locs.enumerate_valid_bits ~for_writing r in
+    let access = if for_writing then Write else Read in
+    let zone = Precise_locs.enumerate_valid_bits access r in
     let exact = Precise_locs.valid_cardinal_zero_or_one ~for_writing r in
     deps, zone, exact
 
 
   let lval_to_offsetmap_aux ?with_alarms state lv =
     let loc =
-      Locations.valid_part ~for_writing:false
+      Locations.valid_part Read
         (lval_to_loc ?with_alarms state lv)
     in
     match loc.Locations.size with

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -117,6 +117,9 @@ module Parameter : sig
 
   (** String parameters. *)
   module String : Common with type t = string
+
+  (** Filepath parameters. *)
+  module Filepath : Common with type t = Datatype.Filepath.t
 
   (** Set of string parameters. *)
   module StringSet : sig

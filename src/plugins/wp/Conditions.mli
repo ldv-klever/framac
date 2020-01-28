@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -27,6 +27,10 @@
 open Cil_types
 open Lang
 open Lang.F
+
+(** Predicates *)
+val forall_intro: Lang.F.pred -> Lang.F.pred list * Lang.F.pred
+val exist_intro: Lang.F.pred -> Lang.F.pred
 
 (** Sequent *)
 
@@ -130,6 +134,7 @@ val subst : (term -> term) -> sequent -> sequent
     Function [f] should only transform the head of the predicate, and can assume
     its sub-terms have been already substituted. The atomic substitution is also applied
     to predicates.
+    [f] should raise [Not_found] on terms that must not be replaced
 *)
 
 val introduction : sequent -> sequent option
@@ -180,36 +185,10 @@ val bundle : bundle -> sequence
 
 (** {2 Simplifier} *)
 
-exception Contradiction
-
-class type simplifier =
-  object
-    method name : string
-    method copy : simplifier
-    method assume : F.pred -> unit
-    (** Assumes the hypothesis *)
-    method target : F.pred -> unit
-    (** Give the predicate that will be simplified later *)
-    method fixpoint : unit
-    (** Called after assuming hypothesis and knowing the goal *)
-    method infer : F.pred list
-    (** Add new hypotheses implied by the original hypothesis. *)
-
-    method simplify_exp : F.term -> F.term
-    (** Currently simplify an expression. *)
-    method simplify_hyp : F.pred -> F.pred
-    (** Currently simplify an hypothesis before assuming it. In any
-        case must return a weaker formula. *)
-    method simplify_branch : F.pred -> F.pred
-    (** Currently simplify a branch condition. In any case must return an
-        equivalent formula. *)
-    method simplify_goal : F.pred -> F.pred
-    (** Simplify the goal. In any case must return a stronger formula. *)
-  end
-
 val clean : sequent -> sequent
 val filter : sequent -> sequent
 val parasite : sequent -> sequent
 val simplify : ?solvers:simplifier list -> ?intros:int -> sequent -> sequent
 val pruning : ?solvers:simplifier list -> sequent -> sequent
+
 (* -------------------------------------------------------------------------- *)

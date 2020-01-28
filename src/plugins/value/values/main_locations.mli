@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -25,17 +25,13 @@
 (** Abstract locations built over Precise_locs. *)
 module PLoc : sig
 
-  include Abstract_location.Internal
+  include Abstract_location.Leaf
     with type value = Cvalue.V.t
      and type location = Precise_locs.precise_location
 
   val make: Locations.location -> location
 
 end
-
-(** Key for precise locs. *)
-val ploc_key : PLoc.location Abstract_location.key
-
 
 (*
 Local Variables:

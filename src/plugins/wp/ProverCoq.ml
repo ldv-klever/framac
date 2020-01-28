@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,7 +32,7 @@ open Definitions
 let dkey = Wp_parameters.register_category "prover"
 
 let cluster_file c =
-  let dir = Model.directory () in
+  let dir = WpContext.directory () in
   let base = cluster_id c in
   Printf.sprintf "%s/%s.v" dir base
 
@@ -93,7 +93,7 @@ let parse_c_option opt =
     let coqid = Filename.chop_extension (Filename.basename c_file) in
     let c_module =
       Printf.sprintf "%s.%s" c_name
-        (Transitioning.String.capitalize_ascii coqid)
+        (String.capitalize_ascii coqid)
     in
     { c_id = opt ; c_source ; c_file ; c_path ; c_name ; c_module }
   with Not_found ->
@@ -101,7 +101,7 @@ let parse_c_option opt =
     let c_source = Filename.dirname opt in
     let c_file = Filename.basename opt in
     let c_module =
-      Transitioning.String.capitalize_ascii (Filename.chop_extension c_file)
+      String.capitalize_ascii (Filename.chop_extension c_file)
     in
     { c_id = opt ; c_source ; c_file ; c_path = "." ; c_name = "" ; c_module }
 
@@ -249,7 +249,7 @@ let need_recompile ~source ~target =
 
 (* Used to mark version of clusters already available *)
 
-module CLUSTERS = Model.Index
+module CLUSTERS = WpContext.Index
     (struct
       type key = cluster
       type data = int * depend list
@@ -331,7 +331,7 @@ and assemble_coqlib coqcc c =
 
 let assemble_goal ~pid axioms prop =
   let title = Pretty_utils.to_string WpPropId.pretty pid in
-  let model = Model.directory () in
+  let model = WpContext.directory () in
   let id = WpPropId.get_propid pid in
   let file = Printf.sprintf "%s/%s.coq" model id in
   let goal = cluster ~id ~title () in
@@ -401,7 +401,7 @@ class runcoq includes source =
                else
                  Format.fprintf fmt "-R %s %s@\n" dir name
             ) includes ;
-          Format.fprintf fmt "-arg -noglob@\n" ;
+          Format.fprintf fmt "-arg@\n" ;
         end
 
     method private options =
@@ -413,7 +413,6 @@ class runcoq includes source =
              else
                self#add ["-R";dir;name]
           ) includes ;
-        self#add [ "-noglob" ] ;
       end
 
     method failed : 'a. 'a task =
@@ -458,24 +457,18 @@ class runcoq includes source =
       | 1 -> Task.return false
       | _ -> self#failed
 
-    method script =
-      let script = Wp_parameters.Script.get () in
-      if Sys.file_exists script then self#add [ script ]
-
     method coqide =
       let coqide = Wp_parameters.CoqIde.get () in
       self#set_command coqide ;
       if is_emacs coqide then
         begin
           self#project ;
-          self#script ;
           self#add [ source ] ;
         end
       else
         begin
           self#options ;
           self#add [ source ] ;
-          self#script ;
         end ;
       Task.sync coqide_lock (self#run ~logout ~logerr)
   end
@@ -523,6 +516,7 @@ open Wpo
 type coq_wpo = {
   cw_pid : WpPropId.prop_id ;
   cw_gid : string ;
+  cw_leg : string ;
   cw_goal : string ; (* filename for goal without proof *)
   cw_script : string ; (* filename for goal with proof script *)
   cw_headers : string list ; (* filename for libraries *)
@@ -559,14 +553,14 @@ let rec try_hints w = function
       if succeed then
         let required,hints = WpPropId.prop_id_keys w.cw_pid in
         let keys = List.merge String.compare required hints in
-        Proof.add_script w.cw_gid keys script closing ;
+        Proof.add_script_for ~gid:w.cw_gid keys script closing ;
         Task.return true
       else
         try_hints w hints
 
 let try_prove w =
   begin
-    match Proof.script_for ~pid:w.cw_pid ~gid:w.cw_gid with
+    match Proof.script_for ~pid:w.cw_pid ~gid:w.cw_gid ~legacy:w.cw_leg with
     | Some (script,closing) ->
         Wp_parameters.feedback ~ontty "[Coq] Goal %s : Saved script" w.cw_gid ;
         try_script w script closing
@@ -579,7 +573,8 @@ let try_prove w =
     try_hints w (Proof.hints_for ~pid:w.cw_pid)
 
 let try_coqide w =
-  let script,closing = Proof.script_for_ide ~pid:w.cw_pid ~gid:w.cw_gid in
+  let script,closing =
+    Proof.script_for_ide ~pid:w.cw_pid ~gid:w.cw_gid ~legacy:w.cw_leg in
   make_script w script closing ;
   (new runcoq w.cw_includes w.cw_script)#coqide >>= fun st ->
   if st = 0 then
@@ -588,16 +583,16 @@ let try_coqide w =
         Wp_parameters.feedback "[Coq] No proof found" ;
         Task.return false
     | Some(script,closing) ->
-        if Proof.is_empty script then
+        if Proof.is_empty_script script then
           begin
-            Proof.delete_script w.cw_gid ;
+            Proof.delete_script_for ~gid:w.cw_gid ;
             Task.canceled () ;
           end
         else
           begin
             let req,hs = WpPropId.prop_id_keys w.cw_pid in
             let hints = List.merge String.compare req hs in
-            Proof.add_script w.cw_gid hints script closing ;
+            Proof.add_script_for ~gid:w.cw_gid hints script closing ;
             Wp_parameters.feedback ~ontty "[Coq] Goal %s : Script" w.cw_gid ;
             try_script w script closing
           end
@@ -651,14 +646,17 @@ let prove_session ~mode w =
 let prove_prop wpo ~mode ~axioms ~prop =
   let pid = wpo.po_pid in
   let gid = wpo.po_gid in
+  let leg = wpo.po_leg in
   let model = wpo.po_model in
-  let script = DISK.file_goal ~pid ~model ~prover:Coq in
+  let context = Wpo.get_context wpo in
+  let script = DISK.file_goal ~pid ~model ~prover:NativeCoq in
   let includes , headers , goal =
-    Model.with_model model (assemble_goal ~pid axioms) prop
+    WpContext.on_context context (assemble_goal ~pid axioms) prop
   in
   prove_session ~mode {
     cw_pid = pid ;
     cw_gid = gid ;
+    cw_leg = leg ;
     cw_goal = goal ;
     cw_script = script ;
     cw_headers = headers ;
@@ -669,7 +667,8 @@ let prove_annot wpo vcq ~mode =
   Task.todo
     begin fun () ->
       let prop =
-        Model.with_model wpo.po_model GOAL.compute_proof vcq.VC_Annot.goal in
+        WpContext.on_context (Wpo.get_context wpo)
+          GOAL.compute_proof vcq.VC_Annot.goal in
       prove_prop wpo ~mode ~axioms:None ~prop
     end
 
@@ -683,16 +682,7 @@ let prove_lemma wpo vca ~mode =
       prove_prop wpo ~mode ~axioms ~prop
     end
 
-let prove_check wpo vck ~mode =
-  Task.todo
-    begin fun () ->
-      let axioms = None in
-      let prop = vck.VC_Check.goal in
-      prove_prop wpo ~mode ~axioms ~prop
-    end
-
 let prove mode wpo =
   match wpo.Wpo.po_formula with
   | GoalAnnot vcq -> prove_annot wpo vcq ~mode
   | GoalLemma vca -> prove_lemma wpo vca ~mode
-  | GoalCheck vck -> prove_check wpo vck ~mode

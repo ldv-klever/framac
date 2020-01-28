@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -256,6 +256,17 @@ module Identified_term: S_with_collections_pretty with type t = identified_term
 
 module Logic_ctor_info: S_with_collections_pretty with type t = logic_ctor_info
 module Logic_info: S_with_collections_pretty with type t = logic_info
+
+(** Logic_info with structural comparison:
+    - name of the symbol
+    - type of arguments
+    Note that polymorphism is ignored, in the sense that two symbols with
+    the same name and profile except for the name of their type variables
+    will compare unequal.
+
+    @since 20.0-Calcium
+*)
+module Logic_info_structural: S_with_collections_pretty with type t = logic_info
 module Logic_constant: S_with_collections_pretty with type t = logic_constant
 
 module Logic_label: S_with_collections_pretty with type t = logic_label
@@ -278,6 +289,8 @@ module Term: S_with_collections_pretty with type t = term
 module Term_lhost: S_with_collections_pretty with type t = term_lhost
 module Term_offset: S_with_collections_pretty with type t = term_offset
 module Term_lval: S_with_collections_pretty with type t = term_lval
+
+module Logic_real: S_with_collections_pretty with type t = logic_real
 
 module Predicate: S_with_pretty with type t = predicate
 module Identified_predicate: 

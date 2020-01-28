@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -114,8 +114,8 @@ struct
       method op_add (_:amode) = Assoc "+"
       method op_sub (_:amode) = Assoc "-"
       method op_mul (_:amode) = Assoc "*"
-      method op_div = function Aint -> Call "comp_div" | Areal -> Op "/"
-      method op_mod = function Aint -> Call "comp_mod" | Areal -> Call "rmod"
+      method op_div = function Aint -> Call "div" | Areal -> Op "/"
+      method op_mod = function Aint -> Call "mod" | Areal -> Call "rmod"
 
       method op_eq cmode _amode =
         match cmode with

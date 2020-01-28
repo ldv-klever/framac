@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -172,7 +172,7 @@ extern int    __va_ioctl_int(int fd, int request, int arg);
 
 /*@ assigns \result \from indirect:fd, indirect:request,
       indirect:((char*)argp)[0..];
-    assigns argp != \null ? ((char*)argp)[0..] : \empty \from
+    assigns ((char*)argp)[0..] \from
       indirect:fd, indirect:request, ((char*)argp)[0..]; */
 extern int    __va_ioctl_ptr(int fd, int request, void* argp);
 

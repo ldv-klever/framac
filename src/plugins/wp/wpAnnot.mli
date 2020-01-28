@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -64,15 +64,15 @@ val get_called_assigns : kernel_function -> Property.t list
 type asked_assigns = NoAssigns | OnlyAssigns | WithAssigns
 
 val get_id_prop_strategies :
-  model:Model.t ->
+  model:WpContext.model ->
   ?assigns:asked_assigns -> Property.t -> WpStrategy.strategy list
 
 val get_call_pre_strategies :
-  model:Model.t ->
+  model:WpContext.model ->
   stmt -> WpStrategy.strategy list
 
 val get_function_strategies :
-  model:Model.t ->
+  model:WpContext.model ->
   ?assigns:asked_assigns ->
   ?bhv:string list ->
   ?prop:string list ->

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -23,5 +23,5 @@
 (** An abstract domain built on top of the Simpler_domains.Simple_Cvalue
     interface that just prints the transfer functions called by the engine
     during an analysis. *)
-include Abstract_domain.Internal with type value = Cvalue.V.t
-                                  and type location = Precise_locs.precise_location
+include Abstract_domain.Leaf with type value = Cvalue.V.t
+                              and type location = Precise_locs.precise_location

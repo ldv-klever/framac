@@ -2,7 +2,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2018                                               #
+#  Copyright (C) 2007-2019                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -81,7 +81,7 @@ ifeq ($(DEVELOPMENT),yes)
 # - 50 (warning about ambiguously placed OCamldoc comments): while it would be
 #   useful to ensure OCamldoc understands comments correctly, some clean-up
 #   is needed before enabling this warning.
-WARNINGS ?= -w +a-4-6-9-41-44-45-48-50
+WARNINGS ?= -w +a-4-6-9-41-42-44-45-48-50
 
 # - 3 (deprecated feature) cannot always be avoided for OCaml stdlib when
 #   supporting several OCaml versions

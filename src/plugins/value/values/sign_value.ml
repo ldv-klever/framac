@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -54,7 +54,7 @@ let empty = { pos = false; zero = false; neg = false }
 include Datatype.Make(struct
     type t = signs
     include Datatype.Serializable_undefined
-    let compare = Pervasives.compare
+    let compare = Transitioning.Stdlib.compare
     let equal = Datatype.from_compare
     let hash = Hashtbl.hash
     let reprs = [top]
@@ -271,5 +271,4 @@ let backward_cast ~src_typ:_ ~dst_typ:_ ~src_val:_ ~dst_val:_ = `Value None
 (** {2 Misc} *)
 
 (* Eva boilerplate, used to retrieve the domain. *)
-let sign_key = Structure.Key_Value.create_key "sign_values"
-let structure = Structure.Key_Value.Leaf sign_key
+let key = Structure.Key_Value.create_key "sign_values"

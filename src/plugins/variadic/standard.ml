@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -72,21 +72,35 @@ let is_extended_integer_type t =
   | TNamed (ti, _) -> List.mem ti.tname extended_integer_typenames
   | _ -> false
 
-let can_cast given expected =
   let integral_rep ikind =
     Cil.bitsSizeOfInt ikind, Cil.isSigned ikind
-  and expose t =
+
+let expose t =
     Cil.type_remove_attributes_for_c_cast (Cil.unrollType t)
-  in
+
+(* From most permissive to least permissive *)
+type castability = Strict      (* strictly allowed by the C standard *)
+                 | Tolerated   (* tolerated in practice *)
+                 | NonPortable (* non-portable minor deviation *)
+                 | NonStrict   (* only allowed in non-strict mode *)
+                 | Never       (* never allowed *)
+
+let can_cast given expected =
   match expose given, expose expected with
+  | t1, t2 when Cil_datatype.Typ.equal t1 t2 -> Strict
   | (TInt (i1,a1) | TEnum({ekind=i1},a1)), 
-    (TInt (i2,a2) | TEnum({ekind=i2},a2))
-    when not (Strict.get ()) || is_extended_integer_type given ->
-      integral_rep i1 = integral_rep i2 &&
-      Cil_datatype.Attributes.equal a1 a2
-  | TPtr _, TPtr _ -> true
-  | exposed_given, exposed_expected ->
-    Cil_datatype.Typ.equal exposed_given exposed_expected
+    (TInt (i2,a2) | TEnum({ekind=i2},a2)) ->
+    if integral_rep i1 <> integral_rep i2 ||
+       not (Cil_datatype.Attributes.equal a1 a2) then
+      Never
+    else if is_extended_integer_type given then
+      Tolerated
+    else if i1 = i2 then
+      NonPortable
+    else
+      NonStrict
+  | TPtr _, TPtr _ -> Strict
+  | _, _ -> Never
 
 let does_fit exp typ =
   match Cil.constFoldToInt exp, Cil.unrollType typ with
@@ -105,12 +119,22 @@ let pretty_typ fmt t =
 (* cast the i-th argument exp to paramtyp *)
 let cast_arg i paramtyp exp =
   let argtyp = Cil.typeOf exp in
-  if not (can_cast argtyp paramtyp) && not (does_fit exp paramtyp) then
+  if not (does_fit exp paramtyp) then
+    begin match can_cast argtyp paramtyp with
+      | Strict | Tolerated -> ()
+      | (NonPortable | NonStrict) when not (Strict.get ()) -> ()
+      | NonPortable ->
+        Self.warning ~current:true
+          "Possible portability issues with enum type for argument %d \
+           (use -variadic-no-strict to avoid this warning)."
+          (i + 1)
+      | NonStrict | Never ->
     Self.warning ~current:true
       "Incorrect type for argument %d. \
        The argument will be cast from %a to %a."
       (i + 1)
-      pretty_typ argtyp pretty_typ paramtyp;
+          pretty_typ argtyp pretty_typ paramtyp
+  end;
   Cil.mkCast ~force:false ~overflow:Check ~e:exp ~newt:paramtyp
 
 
@@ -155,7 +179,7 @@ let find_null exp_list =
 
 
 let aggregator_call
-    ~fundec {a_target; a_pos; a_type; a_param} scope loc mk_call vf args =
+    ~fundec ~ghost {a_target; a_pos; a_type; a_param} scope loc mk_call vf args =
   let name = vf.vf_decl.vorig_name
   and tparams = Typ.params_types a_target.vtype 
   and pname, ptyp = a_param in
@@ -198,7 +222,7 @@ let aggregator_call
     name a_target.vorig_name;
   let pname = if pname = "" then "param" else pname in
   let vaggr, assigns =
-    Build.array_init ~loc fundec scope pname ptyp args_middle
+    Build.array_init ~loc fundec ~ghost scope pname ptyp args_middle
   in
   let new_arg = Cil.mkAddrOrStartOf ~loc (Cil.var vaggr) in
   let new_args = args_left @ [new_arg] @ args_right in
@@ -424,6 +448,16 @@ let build_fun_spec env loc vf format_fun tvparams formals =
     (* Cil.hasAttribute "const" *)
     add_lval (lval,dir)
   in
+  let make_indirect iterm =
+    (* Add "indirect" to an identified term, if it isn't already *)
+    if List.mem "indirect" iterm.it_content.term_name then iterm
+    else
+      let it_content =
+        { iterm.it_content with
+          term_name = "indirect" :: iterm.it_content.term_name }
+      in
+      { iterm with it_content }
+  in
 
   (* Build variadic parameter source/dest list *)
   let dirs = List.map snd tvparams in
@@ -517,14 +551,20 @@ let build_fun_spec env loc vf format_fun tvparams formals =
   | Syslog, _ -> ()
   end;
 
-  (* Add return value dest *)
-  let rettyp = Cil.getReturnType vf.vf_decl.vtype in
-  if not (Cil.isVoidType rettyp) then
-    add_lval ~indirect:true (Build.tresult rettyp, `ArgOut);
-
-  (* Build the assign clause *)
+  (* Build the assigns clause (without \result, for now; it will be added
+     separately) *)
   let froms = List.map (fun iterm -> iterm, From !sources) !dests in
-  let assigns = Writes froms in
+
+  (* Add return value dest: it is different from above since it is _indirectly_
+     assigned from all sources *)
+  let rettyp = Cil.getReturnType vf.vf_decl.vtype in
+  let froms_for_result =
+    if Cil.isVoidType rettyp then []
+    else
+      [iterm (Build.tresult rettyp),
+       From (List.map make_indirect !sources)]
+  in
+  let assigns = Writes (froms_for_result @ froms) in
 
   (* Build the default behaviour *)
   let bhv = Cil.mk_behavior ~assigns

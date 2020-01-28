@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -472,7 +472,7 @@ let extract ~f_slice_names new_proj_name =
     Transform.build_cil_file (new_proj_name ^ " tmp") ()
   in
   let new_prj =
-    !Db.Sparecode.rm_unused_globals ~new_proj_name ~project:tmp_prj ()
+    Sparecode.Register.rm_unused_globals ~new_proj_name ~project:tmp_prj ()
   in
   Project.remove ~project:tmp_prj ();
   let ctx = Parameter_state.get_selection_context () in

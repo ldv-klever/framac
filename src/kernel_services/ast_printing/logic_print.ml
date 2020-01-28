@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -134,12 +134,12 @@ let getParenthLevel e =
     | PLunop (Ustar,_) | PLdot _ | PLarrow _ | PLarrget _
     | PLsizeof _ | PLsizeofE _ -> 20
     | PLoffsetof _ -> 20
-    | PLapp _ | PLold _ | PLat _ 
+    | PLapp _ | PLold _ | PLat _
     | PLoffset _ | PLoffset_max _ | PLoffset_min _ | PLbase_addr _ | PLblock_length _
     | PLupdate _  | PLinitField _ | PLinitIndex _
     | PLvalid _ | PLvalid_read _ | PLvalid_function _
     | PLinitialized _ | PLdangling _
-    | PLallocable _ | PLfreeable _ | PLfresh _ 
+    | PLallocable _ | PLfreeable _ | PLfresh _
     | PLseparated _ | PLsubtype _ | PLunion _ | PLinter _ -> 10
     | PLvar _ | PLconstant _ | PLresult | PLnull | PLtypeof _ | PLtype _
     | PLfalse | PLtrue | PLcomprehension _ | PLempty | PLset _ | PLlist _ -> 0
@@ -498,6 +498,10 @@ let print_pragma fmt p =
     | Impact_pragma p -> fprintf fmt "impact@ pragma@ %a;" print_impact_pragma p
     | Astraver_pragma p -> fprintf fmt "astraver@ pragma@ %a;" print_astraver_pragma p
 
+let print_assertion_kind fmt = function
+  | Assert -> pp_print_string fmt "assert"
+  | Check -> pp_print_string fmt "check"
+
 let print_extension fmt (name, ext) =
   fprintf fmt "%s %a" name (pp_list ~sep:",@ " print_lexpr) ext
 
@@ -506,8 +510,9 @@ let print_code_annot fmt ca =
     (pp_list ~pre:"for@ " ~sep:",@ " ~suf:":@ " pp_print_string) fmt bhvs
   in
   match ca with
-      AAssert(bhvs,e) ->
-        fprintf fmt "%aassert@ %a;" print_behaviors bhvs print_lexpr e
+    AAssert(bhvs,kind,e) ->
+    fprintf fmt "%a%a@ %a;"
+      print_behaviors bhvs print_assertion_kind kind print_lexpr e
     | AStmtSpec (bhvs,s) ->
       fprintf fmt "%a%a"
         print_behaviors bhvs

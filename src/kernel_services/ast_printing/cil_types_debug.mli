@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -107,7 +107,10 @@ val pp_label : Format.formatter -> Cil_types.label -> unit
 val pp_stmtkind : Format.formatter -> Cil_types.stmtkind -> unit
 val pp_catch_binder : Cil_types.catch_binder Pretty_utils.formatter
 val pp_instr : Cil_types.instr Pretty_utils.formatter
-val pp_extended_asm : Cil_types.extended_asm Pretty_utils.formatter
+val pp_extended_asm :
+   ((string option * string * Cil_types.lval) list *
+    (string option * string * Cil_types.exp) list *
+    string list * Cil_types.stmt ref list) Pretty_utils.formatter
 val pp_filepath_position : Format.formatter -> Filepath.position -> unit
 val pp_lexing_position : Format.formatter -> Lexing.position -> unit
 val pp_location : Format.formatter -> Cil_types.location -> unit
@@ -141,8 +144,8 @@ val pp_predicate : Cil_types.predicate Pretty_utils.formatter
 val pp_spec : Format.formatter -> Cil_types.spec -> unit
 val pp_acsl_extension : Format.formatter -> Cil_types.acsl_extension -> unit
 val pp_acsl_extension_kind :
-  Cil_types.acsl_extension_kind Pretty_utils.formatter
-val pp_behavior : Format.formatter -> 'a -> unit
+  Format.formatter ->  Cil_types.acsl_extension_kind -> unit
+val pp_behavior : Format.formatter -> Cil_types.behavior -> unit
 val pp_termination_kind :
   Format.formatter -> Cil_types.termination_kind -> unit
 val pp_loop_pragma :
@@ -161,12 +164,11 @@ val pp_code_annotation_node :
   Format.formatter -> Cil_types.code_annotation_node -> unit
 val pp_funspec : Format.formatter -> Cil_types.funspec -> unit
 val pp_code_annotation : Cil_types.code_annotation Pretty_utils.formatter
-val pp_funbehavior : Format.formatter -> 'a -> unit
+val pp_funbehavior : Format.formatter -> Cil_types.funbehavior -> unit
 val pp_global_annotation : Cil_types.global_annotation Pretty_utils.formatter
 val pp_custom_tree : Format.formatter -> Cil_types.custom_tree -> unit
 val pp_kinstr : Format.formatter -> Cil_types.kinstr -> unit
 val pp_cil_function : Format.formatter -> Cil_types.cil_function -> unit
-val pp_kernel_function : Format.formatter -> 'a -> unit
+val pp_kernel_function : Format.formatter -> Cil_types.kernel_function -> unit
 val pp_localisation : Format.formatter -> Cil_types.localisation -> unit
-val pp_mach : Format.formatter -> 'a -> unit
-                                         
+val pp_mach : Format.formatter -> Cil_types.mach -> unit

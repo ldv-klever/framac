@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -77,6 +77,22 @@ class type extensible_printer_type = object
 
   method private has_annot: bool
   (** [true] if [current_stmt] has some annotations attached to it. *)
+
+  method private in_ghost_if_needed:
+    Format.formatter ->
+    bool ->
+    post_fmt:(((Format.formatter -> unit) -> unit, Format.formatter, unit) format) ->
+    ?block:bool ->
+    (unit -> unit)
+    -> unit
+  (** Open a ghost context if the the first [bool] is true and we are not
+      already in a ghost context. [post_fmt] is a format like ["%t"] and is used
+      to define the format at the end of the ghost context. [block] indicates
+      whether we should open a C block or not (defaults to [true]). The last
+      parameter is the function to be applied in the ghost context (generally
+      some AST element).
+
+      @since 20.0-Calcium *)
 
   method private current_stmt: stmt option
   (** @return the [stmt] being printed *)
@@ -190,7 +206,7 @@ class type extensible_printer_type = object
       last {!Cil_types.stmt} argument. The initial {!Cil_types.stmt} argument
       records the statement which follows the one being printed. *)
 
-  method stmtkind: stmt ->  Format.formatter -> stmtkind -> unit
+  method stmtkind: attributes -> stmt ->  Format.formatter -> stmtkind -> unit
   (** Print a statement kind. The code to be printed is given in the
       {!Cil_types.stmtkind} argument.  The initial {!Cil_types.stmt} argument
       records the statement which follows the one being printed;
@@ -368,7 +384,7 @@ type state =
 (** {2 Functions for pretty printing} *)
 (* ********************************************************************* *)
 
-module type S = sig
+module type S_pp = sig
 
   val pp_varname: Format.formatter -> string -> unit
 
@@ -478,6 +494,12 @@ module type S = sig
     unit
   (** [self#force_brace printer fmt x] pretty prints [x] by using [printer],
       but add some extra braces '\{' and '\}' which are hidden by default. *)
+
+end
+
+module type S = sig
+
+  include S_pp
 
   (* ********************************************************************* *)
   (** {3 Extensible printer} *)

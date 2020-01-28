@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -74,7 +74,7 @@ class propagate project fnames ~cast_intro = object(self)
     known_globals <- Varinfo.Set.add vi known_globals;
     if Cil.isFunctionType vi.vtype then begin
       let kf = Globals.Functions.get vi in
-      let new_kf = Cil.memo_kernel_function self#behavior kf in
+      let new_kf = Visitor_behavior.Memo.kernel_function self#behavior kf in
       Queue.add (fun () -> Globals.Functions.register new_kf)
         self#get_filling_actions;
     end
@@ -181,9 +181,8 @@ class propagate project fnames ~cast_intro = object(self)
                   in
                   array, Int_Base.project size
                 in
-                array,
-                (Integer.pos_div offset sizeof_pointed),
-                (Integer.pos_rem offset sizeof_pointed)
+                let div,rem = Integer.e_div_rem offset sizeof_pointed in
+                array,div,rem
               in
               let expr' =
                 if array then

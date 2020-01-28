@@ -1,16 +1,18 @@
-# frama-c -wp -wp-timeout 240 -wp-steps 1500 [...]
+# frama-c -wp -wp-timeout 240 [...]
 [kernel] Parsing tests/wp_plugin/inductive.c (with preprocessing)
 [wp] Running WP plugin...
 [wp] Loading driver 'share/wp.driver'
+[wp] Warning: native support for coq is deprecated, use tip instead
 [wp] 2 goals scheduled
 [wp] [Coq] Goal typed_lemma_offset : Saved script
-[wp] [Coq] Goal typed_lemma_offset : Valid
+[wp] [Coq (Native)] Goal typed_lemma_offset : Valid
 [wp] [Coq] Goal typed_lemma_test : Saved script
-[wp] [Coq] Goal typed_lemma_test : Valid
+[wp] [Coq (Native)] Goal typed_lemma_test : Valid
 [wp] Proved goals:    2 / 2
   Qed:             0 
   Coq:             2
-[wp] Report 'tests/wp_plugin/inductive.c.0.report.json'
+[wp] Report in:  'tests/wp_plugin/oracle_qualif/inductive.0.report.json'
+[wp] Report out: 'tests/wp_plugin/result_qualif/inductive.0.report.json'
 -------------------------------------------------------------
 Axiomatics          WP     Alt-Ergo        Total   Success
 Lemma               -      -                 2       100%

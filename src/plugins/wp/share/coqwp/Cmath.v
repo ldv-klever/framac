@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -32,9 +32,10 @@ Require real.RealInfix.
 Require Import RIneq.
 
 (* Why3 goal *)
-Lemma abs_def : forall (x:Z), ((0%Z <= x)%Z ->
-  ((ZArith.BinInt.Z.abs x) = x)) /\ ((~ (0%Z <= x)%Z) ->
-  ((ZArith.BinInt.Z.abs x) = (-x)%Z)).
+Lemma abs_def :
+  forall (x:Z),
+  ((0%Z <= x)%Z -> ((ZArith.BinInt.Z.abs x) = x)) /\
+  (~ (0%Z <= x)%Z -> ((ZArith.BinInt.Z.abs x) = (-x)%Z)).
 Proof.
 exact int.Abs.abs_def.
 Qed.

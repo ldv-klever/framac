@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -224,6 +224,7 @@ module Normalized = struct
   let pretty fmt p = Format.fprintf fmt "%s" (pretty p)
   let pp_abs fmt p = Format.fprintf fmt "%s" p
   let unknown = normalize ""
+  let is_unknown fp = equal fp unknown
 end
 
 type position =

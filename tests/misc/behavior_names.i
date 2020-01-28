@@ -1,5 +1,6 @@
 /* run.config
-   OPT: -load-script tests/misc/behavior_names.ml
+   MODULE: @PTEST_DIR@/@PTEST_NAME@.cmxs
+   OPT: -no-autoload-plugins
 */
 
 /*@ behavior foo: ensures \true; */

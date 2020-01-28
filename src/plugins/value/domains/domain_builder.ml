@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,7 +22,7 @@
 
 
 module type InputDomain = sig
-  include Abstract_domain.S_with_Structure
+  include Abstract_domain.S
   val storage: unit -> bool
 end
 
@@ -32,6 +32,9 @@ module Complete
 
   include Domain
   module Store = Domain_store.Make (Domain)
+
+  let key: Domain.t Structure.Key_Domain.key =
+    Structure.Key_Domain.create_key Domain.name
 
   let post_analysis _state = ()
 end
@@ -57,7 +60,6 @@ module Make_Minimal
 
   include Domain
 
-  let structure = Abstract_domain.Void
   let log_category = Value_parameters.register_category ("d-" ^ name)
 
   type value = Value.t
@@ -79,7 +81,7 @@ module Make_Minimal
                                              and type loc = location)
   = struct
 
-    let update _valuation state = state
+    let update _valuation state = `Value state
 
     let assign kinstr lv expr _value _valuation state =
       Domain.assign kinstr lv.Eval.lval expr state
@@ -185,7 +187,6 @@ module Complete_Simple_Cvalue (Domain: Simpler_domains.Simple_Cvalue)
          (Domain) (struct let module_name = Domain.name end)
        : Datatype.S_with_collections with type t := t)
 
-    let structure = Abstract_domain.Void
     let log_category = Value_parameters.register_category ("d-" ^ name)
 
     type value = Cvalue.V.t
@@ -227,7 +228,7 @@ module Complete_Simple_Cvalue (Domain: Simpler_domains.Simple_Cvalue)
       let record valuation = { find = find valuation;
                                find_loc = find_loc valuation; }
 
-      let update _valuation state = state
+      let update _valuation state = `Value state
       let assign kinstr lv expr value valuation state =
         Domain.assign kinstr lv expr value (record valuation) state
       let assume stmt expr positive valuation state =

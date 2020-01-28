@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,8 +33,8 @@ struct
 
   let stage = function
     | Prover( Qed , { verdict = Valid } ) -> 0
-    | Prover( (AltErgo | Why3 _) , { verdict = Valid } ) -> 1
-    | Prover( Coq , { verdict = Valid } ) -> 2
+    | Prover( (NativeAltErgo | Why3 _) , { verdict = Valid } ) -> 1
+    | Prover( NativeCoq , { verdict = Valid } ) -> 2
     | Tactic _ -> 3
     | Prover _ -> 4
     | Error _ -> 5
@@ -47,7 +47,7 @@ struct
     let sa = stage a in
     let sb = stage b in
     if sa = sb
-    then Pervasives.compare (time a) (time b)
+    then Transitioning.Stdlib.compare (time a) (time b)
     else sa - sb
 
   let sort script = List.stable_sort compare script
@@ -65,7 +65,7 @@ let jconfigure (console : #Tactical.feedback) jtactic goal =
   | Some(tactical,selection) ->
       console#set_title "%s" tactical#title ;
       let verdict =
-        try tactical#select console selection
+        try Lang.local ~pool:console#pool (tactical#select console) selection
         with Not_found | Exit -> Not_applicable
       in
       begin
@@ -78,12 +78,14 @@ let jconfigure (console : #Tactical.feedback) jtactic goal =
       end
 
 let jfork tree ?node jtactic =
-  let console = new ProofScript.console ~title:jtactic.header in
+  let console = new ProofScript.console
+    ~pool:(ProofEngine.pool tree)
+    ~title:jtactic.header in
   try
     let anchor = ProofEngine.anchor tree ?node () in
     let goal = ProofEngine.goal anchor in
-    let model = ProofEngine.node_model anchor in
-    match Model.with_model model (jconfigure console jtactic) goal with
+    let ctxt = ProofEngine.node_context anchor in
+    match WpContext.on_context ctxt (jconfigure console jtactic) goal with
     | None -> None
     | Some (script,process) ->
         Some (ProofEngine.fork tree ~anchor script process)
@@ -102,6 +104,7 @@ open Task
 
 module Env =
 struct
+
   type t = {
     tree : ProofEngine.tree ;
     valid : bool ; (* play valid provers *)
@@ -135,13 +138,13 @@ struct
   let stuck env =
     if not env.signaled then
       begin
-        ProofEngine.validate ~unknown:true env.tree ;
+        ProofEngine.validate ~incomplete:true env.tree ;
         env.success (ProofEngine.main env.tree) None ;
         env.signaled <- true ;
       end
 
   let validate ?(finalize=false) env =
-    ProofEngine.validate ~unknown:true env.tree ;
+    ProofEngine.validate ~incomplete:true env.tree ;
     if not env.signaled then
       let wpo = ProofEngine.main env.tree in
       let proved = Wpo.is_proved wpo in
@@ -296,7 +299,7 @@ and autosearch env ~depth node : bool Task.task =
   | Some fork -> autofork env ~depth fork
 
 and autofork env ~depth fork =
-  let _,children = ProofEngine.commit ~resolve:true fork in
+  let _,children = ProofEngine.commit fork in
   let pending = Env.pending env in
   if pending > 0 then
     begin
@@ -343,7 +346,7 @@ let rec crawl env on_child node = function
       begin
         match jfork (Env.tree env) ?node jtactic with
         | None ->
-            Wp_parameters.error
+            Wp_parameters.warning
               "Script Error: can not apply '%s'@\n\
                @[<hov 2>Params: %a@]@\n\
                @[<hov 2>Select: %a@]@."
@@ -353,9 +356,12 @@ let rec crawl env on_child node = function
             crawl env on_child node alternative
         | Some fork ->
             (*TODO: saveback forgiven script *)
-            let _,children = ProofEngine.commit ~resolve:true fork in
+            let _,children = ProofEngine.commit fork in
             reconcile children subscripts ;
-            if children = [] then
+            let residual = List.filter
+                (fun (_,node) -> not (ProofEngine.proved node))
+                children in
+            if residual = [] then
               Env.validate env
             else
               List.iter (fun (_,n) -> on_child n) children ;
@@ -372,8 +378,11 @@ let schedule job =
 let rec process env node =
   schedule
     begin fun () ->
-      let script = Priority.sort (ProofEngine.bound node) in
-      crawl env (process env) (Some node) script
+      if ProofEngine.proved node then
+        ( Env.validate env ; Task.return () )
+      else
+        let script = Priority.sort (ProofEngine.bound node) in
+        crawl env (process env) (Some node) script
     end
 
 let task
@@ -410,6 +419,7 @@ type 'a process =
 let skip1 _ = ()
 let skip2 _ _ = ()
 let skip3 _ _ _ = ()
+
 let prove
     ?(valid = true) ?(failed = true) ?(provers = [])
     ?(depth = 0) ?(width = 0) ?(backtrack = 0) ?(auto = [])
@@ -429,7 +439,6 @@ let spawn
               ~valid ~failed ~provers
               ~depth ~width ~backtrack ~auto
               ~start ~progress ~result ~success wpo)
-
 
 let search
     ?(depth = 0) ?(width = 0) ?(backtrack = 0) ?(auto = []) ?(provers = [])

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -48,7 +48,7 @@ module Status = struct
         let reprs = [ True; False; False; Unknown ]
         let mem_project = Datatype.never_any_project
         let pretty = pretty_status
-        let compare (s1:t) (s2:t) = Pervasives.compare s1 s2
+        let compare (s1:t) (s2:t) = Transitioning.Stdlib.compare s1 s2
         let equal (s1:t) (s2:t) = s1 = s2
         let hash (s:t) = Hashtbl.hash s
       end)
@@ -154,7 +154,7 @@ let merge ~combine merge_status s1 s2 =
     else function Unknown -> None | p -> Some p
   in
   let merge _ p1 p2 = match p1, p2 with
-    | None, None       -> assert false
+    | None, None -> assert false
     | Some p, None -> if combine then Some p else return (merge_status p d2)
     | None, Some p -> if combine then Some p else return (merge_status d1 p)
     | Some p1, Some p2 -> return (merge_status p1 p2)
@@ -216,7 +216,7 @@ let local_printer: Printer.extensible_printer =
     method! code_annotation fmt ca =
       temporaries <- Cil_datatype.Varinfo.Set.empty;
       match ca.annot_content with
-      | AAssert(_, p) ->
+      | AAssert (_, _, p) ->
         (* ignore the ACSL name *)
         Format.fprintf fmt "@[<v>@[assert@ %a;@]" self#predicate_node p.pred_content;
         (* print temporary variables information *)
@@ -305,10 +305,10 @@ let emit_alarm kinstr alarm (status:status) =
 
   | Alarms.Overflow (kind, _, _, _) ->
     let str = match kind with
-          | Alarms.Signed -> "signed overflow"
-          | Alarms.Unsigned -> "unsigned overflow"
-          | Alarms.Signed_downcast -> "signed downcast"
-          | Alarms.Unsigned_downcast -> "unsigned downcast"
+      | Alarms.Signed -> "signed overflow"
+      | Alarms.Unsigned -> "unsigned overflow"
+      | Alarms.Signed_downcast -> "signed downcast"
+      | Alarms.Unsigned_downcast -> "unsigned downcast"
     in
     register_alarm str
 
@@ -396,7 +396,7 @@ let cmp a1 a2 =
 
 let emit_alarms kinstr map =
   let list = M.bindings map in
-    let sorted_list = List.sort cmp list in
+  let sorted_list = List.sort cmp list in
   List.iter (fun (alarm, status) -> emit_alarm kinstr alarm status) sorted_list;
   if Alarm_cache.length () >= Value_parameters.StopAtNthAlarm.get ()
   then begin

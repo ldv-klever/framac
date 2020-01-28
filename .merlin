@@ -1,4 +1,4 @@
-FLG -c -w +a-4-6-9-41-44-45-48-50 -warn-error +a-3-4-32-33-34-35-36-37-38-39-58 -bin-annot -strict-sequence -safe-string
+FLG -c -w +a-4-6-9-41-42-44-45-48-50 -warn-error +a-3-4-32-33-34-35-36-37-38-39-58 -bin-annot -strict-sequence -safe-string 
 PKG findlib
 PKG ocamlgraph
 PKG unix
@@ -7,6 +7,15 @@ PKG dynlink
 PKG bytes
 PKG zarith
 PKG yojson
+PKG bigarray
+PKG lablgtk2
+PKG lablgtk2.sourceview2
+PKG lablgtk2.gnomecanvas
+PKG ppx_deriving
+PKG ppx_deriving_yojson
+PKG yojson
+PKG yojson
+PKG why3
 B lib/plugins
 B lib/plugins/gui
 B src
@@ -39,12 +48,12 @@ B src/plugins/scope
 S src/plugins/scope
 B src/plugins/value
 S src/plugins/value
+B src/plugins/value/partitioning
+S src/plugins/value/partitioning
 B src/plugins/value/engine
 S src/plugins/value/engine
 B src/plugins/value/gui_files
 S src/plugins/value/gui_files
-B src/plugins/value/slevel
-S src/plugins/value/slevel
 B src/plugins/value/domains
 S src/plugins/value/domains
 B src/plugins/value/domains/numerors
@@ -91,6 +100,10 @@ B src/plugins/callgraph
 S src/plugins/callgraph
 B src/plugins/constant_propagation
 S src/plugins/constant_propagation
+B src/plugins/markdown-report
+S src/plugins/markdown-report
+B src/plugins/markdown-report/share
+S src/plugins/markdown-report/share
 B src/plugins/postdominators
 S src/plugins/postdominators
 B src/plugins/sparecode
@@ -101,8 +114,6 @@ B src/plugins/e-acsl/contrib
 S src/plugins/e-acsl/contrib
 B src/plugins/e-acsl/contrib/libdlmalloc
 S src/plugins/e-acsl/contrib/libdlmalloc
-B src/plugins/e-acsl/contrib/libgmp
-S src/plugins/e-acsl/contrib/libgmp
 B src/plugins/e-acsl/man
 S src/plugins/e-acsl/man
 B src/plugins/e-acsl/scripts
@@ -115,6 +126,16 @@ B src/plugins/e-acsl/share/e-acsl/bittree_model
 S src/plugins/e-acsl/share/e-acsl/bittree_model
 B src/plugins/e-acsl/share/e-acsl/segment_model
 S src/plugins/e-acsl/share/e-acsl/segment_model
+B src/plugins/e-acsl/src
+S src/plugins/e-acsl/src
+B src/plugins/e-acsl/src/analyses
+S src/plugins/e-acsl/src/analyses
+B src/plugins/e-acsl/src/libraries
+S src/plugins/e-acsl/src/libraries
+B src/plugins/e-acsl/src/code_generator
+S src/plugins/e-acsl/src/code_generator
+B src/plugins/e-acsl/src/project_initializer
+S src/plugins/e-acsl/src/project_initializer
 B src/plugins/e-acsl/license
 S src/plugins/e-acsl/license
 B src/plugins/e-acsl/lib
@@ -137,6 +158,8 @@ B src/plugins/wp/share/coqwp/real
 S src/plugins/wp/share/coqwp/real
 B src/plugins/wp/share/why3
 S src/plugins/wp/share/why3
+B src/plugins/wp/share/why3/frama_c_wp
+S src/plugins/wp/share/why3/frama_c_wp
 B src/plugins/wp/qed
 S src/plugins/wp/qed
 B src/plugins/wp/qed/src
@@ -149,6 +172,8 @@ B src/plugins/from
 S src/plugins/from
 B src/plugins/users
 S src/plugins/users
+B src/plugins/server
+S src/plugins/server
 B src/plugins/slicing
 S src/plugins/slicing
 B src/plugins/inout

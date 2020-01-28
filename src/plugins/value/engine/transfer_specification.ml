@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -133,11 +133,12 @@ let reduce_to_valid_location out loc =
       None
     end
   else
-    let valid = Locations.valid_part ~for_writing:true loc in
+    let valid = Locations.(valid_part Write loc) in
     if Locations.is_bottom_loc valid then
       begin
         if is_assigns out && not (Locations.is_bottom_loc loc) then
           Value_parameters.warning ~current:true ~once:true
+            ~wkey:Value_parameters.wkey_invalid_assigns
             "@[Completely invalid destination@ for %a.@ \
              Ignoring.@]" pp_assign_free_alloc out;
         None
@@ -165,14 +166,14 @@ let precise_loc_of_assign env assign_or_allocation =
 
 
 module Make
-    (Value: Abstract_value.External)
-    (Location: Abstract_location.External)
-    (Domain: Abstract_domain.External with type value = Value.t
-                                       and type location = Location.location)
-    (States: Powerset.S with type state = Domain.t)
-    (Logic : Transfer_logic.S with type state = Domain.t
+    (Abstract: Abstractions.S)
+    (States: Powerset.S with type state = Abstract.Dom.t)
+    (Logic : Transfer_logic.S with type state = Abstract.Dom.t
                                and type states = States.t)
 = struct
+
+  module Domain = Abstract.Dom
+  module Location = Abstract.Loc
 
   (* Most transfer functions about logic return a set of states instead of a
      single state, and States.empty instead of bottom. We thus use this monad
@@ -226,16 +227,13 @@ module Make
 
   (* Extraction of the precise location and of the cvalue domain:
      needed to evaluate the location of an assigns clause. *)
-  let get_ploc = match Location.get Main_locations.ploc_key with
+  let get_ploc = match Location.get Main_locations.PLoc.key with
     | None -> fun _ -> Main_locations.PLoc.top
     | Some get -> get
-  let set_ploc = Location.set Main_locations.ploc_key
+  let set_ploc = Location.set Main_locations.PLoc.key
   let set_location loc = set_ploc (Main_locations.PLoc.make loc)
-  let get_cvalue_state = match Domain.get Cvalue_domain.key with
-    | None -> fun _ -> Cvalue.Model.top
-    | Some get -> get
 
-  let make_env state = Eval_terms.env_assigns (get_cvalue_state state)
+  let make_env state = Eval_terms.env_assigns (Domain.get_cvalue_or_top state)
 
   let is_result = function
     | Assigns (term, _)
@@ -298,7 +296,7 @@ module Make
         end
     in
     let check_one_state state =
-      let cvalue_state = get_cvalue_state state in
+      let cvalue_state = Domain.get_cvalue_or_top state in
       List.iter (check_one_assign cvalue_state) assigns
     in
     States.iter check_one_state states
@@ -467,12 +465,12 @@ module Make
 
   (* Sound over-approximations of the effects of a function can be computed
      through its specification in three different ways:
-     - the default behavior is always an over-approximation of the function
+     – the default behavior is always an over-approximation of the function
        effects, but can be very imprecise. We use it only if the two other ways
        are inapplicable (both are strictly more precise).
-     - any behavior whose assumes clause is true in the current state is also a
+     – any behavior whose assumes clause is true in the current state is also a
        sound approximation of the function effects applied to this state.
-     - the union of any complete set of behaviors is an over-approximation of
+     – the union of any complete set of behaviors is an over-approximation of
        the function effects.
      To obtain the highest precision, the states resulting from the
      interpretation of any true behavior and of any complete set should be

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,14 +22,7 @@
 
 open Eval
 
-let key = Structure.Key_Domain.create_key "cvalue_domain"
 let dkey_card = Value_parameters.register_category "cardinal"
-
-let extract get = match get key with
-  | None -> fun _ -> Cvalue.Model.top
-  | Some get -> function
-    | `Bottom -> Cvalue.Model.bottom
-    | `Value state -> get state
 
 module Model = struct
 
@@ -168,10 +161,6 @@ module State = struct
 
   type state = Model.t * Locals_scoping.clobbered_set
 
-  let structure =
-    Abstract_domain.Node (Abstract_domain.Leaf key,
-                          Abstract_domain.Leaf Locals_scoping.key)
-
   let log_category = Value_parameters.dkey_cvalue_domain
 
   include Datatype.Make_with_collections (
@@ -193,6 +182,7 @@ module State = struct
     end )
 
   let name = "Cvalue domain"
+  let key = Structure.Key_Domain.create_key "cvalue_domain"
 
   type value = Model.value
   type location = Model.location
@@ -227,7 +217,7 @@ module State = struct
 
     module T = Cvalue_transfer.Transfer (Valuation)
 
-    let update valuation (s, clob) = T.update valuation s, clob
+    let update valuation (s, clob) = T.update valuation s >>-: fun s -> s, clob
 
     let assign stmt lv expr assigned valuation (s, clob) =
       T.assign stmt lv expr assigned valuation s >>-: fun s ->
@@ -473,7 +463,9 @@ module State = struct
         | None -> `Bottom
       else `Top
 
-    let get_stmt_state stmt = return (Db.Value.get_stmt_state stmt)
+    let get_stmt_state ~after stmt =
+      return (Db.Value.get_stmt_state ~after stmt)
+
     let get_stmt_state_by_callstack ~after stmt =
       if Storage.get ()
       then
@@ -550,9 +542,6 @@ end
 
 let () = Db.Value.display := (fun fmt kf -> State.display ~fmt kf)
 
-let inject cvalue_model = cvalue_model, Locals_scoping.bottom ()
-let project (state, _) = state
-
 
 type prefix = Hptmap.prefix
 module Subpart = struct
@@ -560,12 +549,12 @@ module Subpart = struct
   let hash = Model.hash_subtree
   let equal = Model.equal_subtree
 end
-let distinct_subpart a b =
+let distinct_subpart (a, _) (b, _) =
   if Model.equal a b then None
   else
     try Model.comp_prefixes a b; None
     with Model.Found_prefix (p, s1, s2) -> Some (p, s1, s2)
-let find_subpart s prefix = Model.find_prefix s prefix
+let find_subpart (s, _) prefix = Model.find_prefix s prefix
 
 (*
 Local Variables:

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,67 +20,61 @@
 (*                                                                        *)
 (**************************************************************************)
 
-let split_on_char c s =
-  let rec aux res s =
-    if String.contains s c then begin
-      let i = String.rindex s c in
-      let prefix = String.sub s 0 i in
-      let suf = String.sub s (i+1) (String.length s - i - 1) in
-      aux (suf::res) prefix
-    end else s :: res
-  in
-  aux [] s
-
-let stack_fold f x s =
-  let res = ref x in
-  let do_it y = res := f !res y in
-  Stack.iter do_it s;
-  !res
-
-let nth_opt l n =
-  try Some (List.nth l n)
-  with Failure _ when n >= 0 -> None
-(* OCaml manual states that a negative argument still raises a Failure. *)
-
-let find_opt f l = try Some (List.find f l) with Not_found -> None
-
-let assoc_opt x l = try Some (List.assoc x l) with Not_found -> None
-
-let assq_opt x l = try Some (List.assq x l) with Not_found -> None
-
-(* the implementations above are only used in case we compile against an
-   old OCaml version. Avoid unused warning in other cases. *)
-let _: char -> string -> string list = split_on_char
-let _: ('a -> 'b -> 'a) -> 'a -> 'b Stack.t -> 'a = stack_fold
-let _: 'a list -> int -> 'a option = nth_opt
-let _: ('a -> bool) -> 'a list -> 'a option = find_opt
-let _: 'a -> ('a * 'b) list -> 'b option = assoc_opt
-let _: 'a -> ('a * 'b) list -> 'b option = assq_opt
+module Stdlib = struct
+  (* Pervasives/Stdlib functions *)
+  let compare = compare
+  let succ = succ
+  let incr = incr
+  let min = min
+  let max = max
+  let min_int = min_int
+  let max_int = max_int
+end
 
 [@@@ warning "-3"]
 
-module String = struct
-  let uppercase_ascii = String.uppercase
-  let capitalize_ascii = String.capitalize
-  let uncapitalize_ascii = String.uncapitalize
-  let lowercase_ascii = String.lowercase
-  let split_on_char = @SPLIT_ON_CHAR@
+module Dynlink = struct
+  let init = @DYNLINK_INIT@
 end
 
-module Char = struct
-  let uppercase_ascii = Char.uppercase
-  let lowercase_ascii = Char.lowercase
+module Float = struct
+  let max_float = @FLOAT_MAX_FLOAT@
 end
 
-module Stack = struct
-  let fold = @STACK_FOLD@
-end
-
-module List = struct
-  let nth_opt = @NTH_OPT@
-  let find_opt = @FIND_OPT@
-  let assoc_opt = @ASSOC_OPT@
-  let assq_opt = @ASSQ_OPT@
+module Format = struct
+  type stag = Format.@FORMAT_STAG@
+  let string_of_stag s = @FORMAT_STRING_OF_STAG@
+  let stag_of_string s = @FORMAT_STAG_OF_STRING@
+  type formatter_stag_functions = {
+    mark_open_stag : stag -> string;
+    mark_close_stag : stag -> string;
+    print_open_stag : stag -> unit;
+    print_close_stag : stag -> unit;
+  }
+  let pp_set_formatter_stag_functions fmt set_formatter_stag_functions =
+    Format.pp_set_formatter_@FORMAT_STAG@_functions fmt
+      {
+        Format.mark_open_@FORMAT_STAG@ =
+          set_formatter_stag_functions.mark_open_stag;
+        Format.mark_close_@FORMAT_STAG@ =
+          set_formatter_stag_functions.mark_close_stag;
+        Format.print_open_@FORMAT_STAG@ =
+          set_formatter_stag_functions.print_open_stag;
+        Format.print_close_@FORMAT_STAG@ =
+          set_formatter_stag_functions.print_close_stag;
+      }
+  let pp_get_formatter_stag_functions fmt () =
+    let st = Format.pp_get_formatter_@FORMAT_STAG@_functions fmt () in
+    {
+      mark_open_stag = st.Format.mark_open_@FORMAT_STAG@;
+      mark_close_stag = st.Format.mark_close_@FORMAT_STAG@;
+      print_open_stag = st.Format.print_open_@FORMAT_STAG@;
+      print_close_stag = st.Format.print_close_@FORMAT_STAG@;
+    }
+  let pp_open_stag fmt s =
+    Format.pp_open_@FORMAT_STAG@ fmt s
+  let pp_close_stag fmt () =
+    Format.pp_close_@FORMAT_STAG@ fmt ()
 end
 
 module Q = struct

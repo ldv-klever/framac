@@ -33,7 +33,7 @@ see [INSTALL.md](INSTALL.md).
 
 Frama-C is available through [OPAM](http://opam.ocaml.org/), the
 OCaml Package Manager. This is the preferred installation method. Be sure
-to install opam v1.2 or higher. Then the following sequence of commands
+to install opam v2.0 or higher. Then the following sequence of commands
 should install frama-c and its gui:
 
     opam init
@@ -43,7 +43,7 @@ should install frama-c and its gui:
 
 Frama-C is developed mainly in Linux, often tested in macOS
 (via Homebrew), and occasionally tested on Windows
-(with Cygwin + MinGW).
+(via the Windows Subsystem for Linux).
 
 ## Usage
 
@@ -57,7 +57,7 @@ The recommended usage for simple files is one of the following lines:
     frama-c-gui file.c
 
 Where `-<plugin>` is one of the several Frama-C plug-ins,
-e.g. `-val`, or `-wp`, or `-metrics`, etc.
+e.g. `-eva`, or `-wp`, or `-metrics`, etc.
 Plug-ins can also be run directly from the GUI.
 
 To list all plug-ins, run:

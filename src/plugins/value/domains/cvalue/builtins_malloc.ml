@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -54,9 +54,9 @@ let () = Ast.add_monotonic_state Dynamic_Alloc_Bases.self
 
 (* Remove some parts of the callstack:
    - Remove the bottom of the call tree until we get to the call site
-   of the call to the first malloc function. The idea is that each of
-   these call site correspond to a different use of a malloc function,
-   so it is interesting to keep their bases separated. *)
+     of the call to the first malloc function. The idea is that each of
+     these call site correspond to a different use of a malloc function,
+     so it is interesting to keep their bases separated. *)
 let call_stack_no_wrappers () =
   let stack = Value_util.call_stack () in
   assert (stack != []);
@@ -192,7 +192,7 @@ let guess_intended_malloc_type stack sizev constant_size =
   let nb_elems elem_size =
     if constant_size && Int.equal size_min size_max
     then Some (if Int.(equal elem_size zero) then Int.zero
-               else Int.div size_min elem_size)
+               else Int.e_div size_min elem_size)
     else None
   in
   let mk_typed_size t =
@@ -200,8 +200,8 @@ let guess_intended_malloc_type stack sizev constant_size =
     | TPtr (t, _) when not (Cil.isVoidType t) ->
       let s = Int.of_int (Cil.bytesSizeOf t) in
       if Int.(equal s zero) ||
-         (Int.equal (Int.rem size_min s) Int.zero &&
-          Int.equal (Int.rem size_max s) Int.zero)
+         (Int.equal (Int.e_rem size_min s) Int.zero &&
+          Int.equal (Int.e_rem size_max s) Int.zero)
       then
         { min_bytes = size_min; max_bytes = size_max;
           elem_typ = t; nb_elems = nb_elems s }

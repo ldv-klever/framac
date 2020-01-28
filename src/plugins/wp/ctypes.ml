@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -30,7 +30,7 @@ open Cil_datatype
 module WpLog = Wp_parameters
 
 type c_int =
-  | Bool
+  | CBool
   | UInt8
   | SInt8
   | UInt16
@@ -43,19 +43,19 @@ type c_int =
 let compare_c_int : c_int -> c_int -> _ = Extlib.compare_basic
 
 let signed  = function
-  | Bool -> false
+  | CBool -> false
   | UInt8 | UInt16 | UInt32 | UInt64 -> false
   | SInt8 | SInt16 | SInt32 | SInt64 -> true
 
 let i_bits = function
-  | Bool -> 1
+  | CBool -> 1
   | UInt8  | SInt8  -> 8
   | UInt16 | SInt16 -> 16
   | UInt32 | SInt32 -> 32
   | UInt64 | SInt64 -> 64
 
 let i_bytes = function
-  | Bool -> 1
+  | CBool -> 1
   | UInt8  | SInt8  -> 1
   | UInt16 | SInt16 -> 2
   | UInt32 | SInt32 -> 4
@@ -73,12 +73,13 @@ let is_char = function
   | SInt8 -> not Cil.theMachine.Cil.theMachine.char_is_unsigned
   | UInt16 | SInt16
   | UInt32 | SInt32
-  | UInt64 | SInt64 | Bool -> false
+  | UInt64 | SInt64
+  | CBool -> false
 
 let c_int ikind =
   let mach = Cil.theMachine.Cil.theMachine in
   match ikind with
-  | IBool -> if Wp_parameters.get_bool_range () then Bool else UInt8
+  | IBool -> CBool
   | IChar -> if mach.char_is_unsigned then UInt8 else SInt8
   | ISChar -> SInt8
   | IUChar -> UInt8
@@ -93,8 +94,11 @@ let c_int ikind =
 
 let c_bool () = c_int IBool
 let c_char () = c_int IChar
-let c_ptr () =
-  make_c_int false Cil.theMachine.Cil.theMachine.sizeof_ptr
+
+let p_bytes () = Cil.theMachine.Cil.theMachine.sizeof_ptr
+let p_bits () = 8 * p_bytes ()
+
+let c_ptr () = make_c_int false (p_bytes ())
 
 let sub_c_int t1 t2 =
   if (signed t1 = signed t2) then i_bits t1 <= i_bits t2
@@ -163,7 +167,7 @@ let idx = function
   | SInt32 -> 5
   | UInt64 -> 6
   | SInt64 -> 7
-  | Bool -> 8
+  | CBool -> 8
 
 let i_memo f =
   let m = Array.make 9 None in
@@ -186,7 +190,7 @@ let f_memo f =
     | None -> let r = f z in m.(k) <- Some r ; r
 
 let i_iter f =
-  List.iter f [Bool;UInt8;SInt8;UInt16;SInt16;UInt32;SInt32;UInt64;SInt64]
+  List.iter f [CBool;UInt8;SInt8;UInt16;SInt16;UInt32;SInt32;UInt64;SInt64]
 
 let f_iter f =
   List.iter f [Float32;Float64]
@@ -210,7 +214,7 @@ let bounds i = i_memo i_bounds i
 (* -------------------------------------------------------------------------- *)
 
 let pp_int fmt i =
-  if i = Bool then Format.pp_print_string fmt "bool"
+  if i = CBool then Format.pp_print_string fmt "bool"
   else Format.fprintf fmt "%cint%d" (if signed i then 's' else 'u') (i_bits i)
 
 let pp_float fmt f = Format.fprintf fmt "float%d" (f_bits f)
@@ -235,6 +239,11 @@ let constant e =
 
 let get_int e =
   match (Cil.constFold true e).enode with
+  | Const(CInt64(k,_,_)) -> Some (Integer.to_int k)
+  | _ -> None
+
+let get_int64 e =
+  match (Cil.constFold true e).enode with
   | Const(CInt64(k,_,_)) -> Some (Integer.to_int64 k)
   | _ -> None
 
@@ -254,14 +263,12 @@ let is_pointer = function
   | C_pointer _ -> true
   | C_int _ | C_float _ | C_array _ | C_comp _ -> false
 
-let is_void = Cil.isVoidType
-
 let rec object_of typ =
   match typ with
   | TInt(i,_) -> C_int (c_int i)
   | TFloat(f,_) -> C_float (c_float f)
-  | TPtr(typ,_) -> C_pointer (if is_void typ then TInt (IChar,[]) else typ)
-  | TFun _ -> C_pointer (TVoid [])
+  | TPtr(typ,_) -> C_pointer (if Cil.isVoidType typ then Cil.charType else typ)
+  | TFun _ -> C_pointer Cil.voidType
   | TEnum ({ekind=i},_) -> C_int (c_int i)
   | TComp (comp,_,_) -> C_comp comp
   | TArray (typ_elt,e_opt,_,_) ->
@@ -272,7 +279,6 @@ let rec object_of typ =
               arr_element = typ_elt;
               arr_flat = None;
             }
-
         | Some e ->
             let dim,ncells,ty_cell = dimension typ in
             C_array {
@@ -317,7 +323,7 @@ module AinfoComparable = struct
     let c = !cmp obj_a obj_b in
     if c <> 0 then c
     else match a.arr_flat , b.arr_flat with
-      | Some a , Some b -> Pervasives.compare a.arr_size b.arr_size
+      | Some a , Some b -> Transitioning.Stdlib.compare a.arr_size b.arr_size
       | None , Some _ -> (-1)
       | Some _ , None -> 1
       | None , None -> 0
@@ -444,29 +450,44 @@ let sizeof_defined = function
   | C_array { arr_flat = None } -> false
   | _ -> true
 
+let typ_comp cinfo = TComp(cinfo,Cil.empty_size_cache(),[])
+
+let bits_sizeof_comp cinfo = Cil.bitsSizeOf (typ_comp cinfo)
+
+let bits_sizeof_array ainfo =
+  match ainfo.arr_flat with
+  | Some a ->
+      let csize = Cil.integer ~loc:Cil.builtinLoc a.arr_cell_nbr in
+      let ctype = TArray(a.arr_cell,Some csize,Cil.empty_size_cache(),[]) in
+      Cil.bitsSizeOf ctype
+  | None ->
+      if WpLog.ExternArrays.get () then
+        max_int
+      else
+        WpLog.fatal ~current:true "Sizeof unknown-size array"
+
+
 let sizeof_object = function
   | C_int i -> i_bytes i
   | C_float f -> f_bytes f
-  | C_pointer _ty -> i_bytes (c_ptr())
-  | C_comp cinfo ->
-      let ctype = TComp(cinfo,Cil.empty_size_cache(),[]) in
-      (Cil.bitsSizeOf ctype / 8)
-  | C_array ainfo ->
-      match ainfo.arr_flat with
-      | Some a ->
-          let csize = Cil.integer ~loc:Cil.builtinLoc a.arr_cell_nbr in
-          let ctype = TArray(a.arr_cell,Some csize,Cil.empty_size_cache(),[]) in
-          (Cil.bitsSizeOf ctype / 8)
-      | None ->
-          if WpLog.ExternArrays.get () then
-            max_int
-          else
-            WpLog.fatal ~current:true "Sizeof unknown-size array"
+  | C_pointer _ty -> p_bytes ()
+  | C_comp cinfo -> bits_sizeof_comp cinfo / 8
+  | C_array ainfo -> bits_sizeof_array ainfo / 8
+
+let bits_sizeof_object = function
+  | C_int i -> i_bits i
+  | C_float f -> f_bits f
+  | C_pointer _ty -> p_bits ()
+  | C_comp cinfo -> bits_sizeof_comp cinfo
+  | C_array ainfo -> bits_sizeof_array ainfo
 
 let field_offset fd =
-  let ctype = TComp(fd.fcomp,Cil.empty_size_cache(),[]) in
-  let offset = Field(fd,NoOffset) in
-  fst (Cil.bitsOffset ctype offset) / 8
+  if fd.fcomp.cstruct then (* C struct *)
+    let ctype = TComp(fd.fcomp,Cil.empty_size_cache(),[]) in
+    let offset = Field(fd,NoOffset) in
+    fst (Cil.bitsOffset ctype offset) / 8
+  else (* CIL invariant: all C union fields start at offset 0 *)
+    0
 
 (* Conforms to C-ISO 6.3.1.8        *)
 (* If same sign => greater rank.    *)
@@ -574,7 +595,7 @@ and compare_array_ptr_conflated a b =
   let c = compare_ptr_conflated obj_a obj_b in
   if c <> 0 then c
   else match a.arr_flat , b.arr_flat with
-    | Some a , Some b -> Pervasives.compare a.arr_size b.arr_size
+    | Some a , Some b -> Transitioning.Stdlib.compare a.arr_size b.arr_size
     | None , Some _ -> (-1)
     | Some _ , None -> 1
     | None , None -> 0

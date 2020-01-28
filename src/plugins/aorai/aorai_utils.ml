@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Aorai plug-in of Frama-C.                        *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -716,8 +716,9 @@ let is_state_pred state =
 let is_state_stmt (state,copy) loc = 
    if Aorai_option.Deterministic.get () 
    then
-     mkStmtOneInstr (Set (Cil.var copy, int2enumstate_exp loc state.nums, loc))
-   else mkStmtOneInstr (Set (Cil.var copy, Cil.one loc, loc))
+    mkStmtOneInstr
+      ~ghost:true (Set (Cil.var copy, int2enumstate_exp loc state.nums, loc))
+  else mkStmtOneInstr ~ghost:true (Set (Cil.var copy, Cil.one loc, loc))
 
 let is_state_exp state loc =
   if Aorai_option.Deterministic.get () 
@@ -747,7 +748,7 @@ let is_out_of_state_stmt (_,copy) loc =
     Aorai_option.fatal
       "Deterministic automaton sync functions can't have out-of-state stmt. \
        Maybe this should use `is_out_of_state_exp' instead."
-  else mkStmtOneInstr (Set(Cil.var copy , mk_int_exp 0 , loc ))
+  else mkStmtOneInstr ~ghost:true (Set(Cil.var copy , mk_int_exp 0 , loc ))
 
 let is_out_of_state_exp state loc = 
   
@@ -808,9 +809,11 @@ object(self)
           let scope = Kernel_function.find_enclosing_block stmt in
           let f = Extlib.the self#current_func in
           let name = Data_for_aorai.loopInit ^ "_" ^ (string_of_int stmt.sid) in
-          let var =
-            Cil.makeLocalVar f ~scope name Cil.intType
+          let typ =
+            Cil.typeAddAttributes
+              [Attr (Cil.frama_c_ghost_formal,[])] Cil.intType
           in
+          let var = Cil.makeLocalVar ~ghost:true f ~scope name typ in
           Data_for_aorai.set_varinfo name var
         | _ -> ()
     end;
@@ -1754,10 +1757,11 @@ let act_convert loc (_,act) res =
   let treat_one_act = 
   function
   | Counter_init t_lval -> 
-    Cil.mkStmtOneInstr (Set (tlval_to_lval t_lval res, Cil.one loc, loc))
+      Cil.mkStmtOneInstr
+        ~ghost:true (Set (tlval_to_lval t_lval res, Cil.one loc, loc))
   | Counter_incr t_lval -> 
     let my_lval = tlval_to_lval t_lval res in
-    Cil.mkStmtOneInstr
+      Cil.mkStmtOneInstr ~ghost:true
       (Set 
          (my_lval,
           (Cil.mkBinOp
@@ -1767,7 +1771,7 @@ let act_convert loc (_,act) res =
              (Cil.one loc)), 
           loc))
   | Copy_value (t_lval, t) -> 
-    Cil.mkStmtOneInstr
+      Cil.mkStmtOneInstr ~ghost:true
       (Set (tlval_to_lval t_lval res, term_to_exp t res, loc))
   | _ ->
     Aorai_option.fatal "Peebles not treated yet." (* TODO : Treat peebles. *)
@@ -1802,7 +1806,7 @@ let mk_stmt loc (states, tr) f fst status ((st,_) as state) res =
         )
     in
     let mkIfStmt exp1 block1 block2 =
-      Cil.mkStmt (If (exp1, block1, block2, loc))
+      Cil.mkStmt ~ghost:true (If (exp1, block1, block2, loc))
     in
     let if_cond =
       List.fold_left 
@@ -1865,8 +1869,7 @@ let auto_func_block loc f st status res =
     end
   in
   let equalsStmt lval exp = (* assignment *)
-    Cil.mkStmtOneInstr ( Set ( lval , exp , loc) )
-
+    Cil.mkStmtOneInstr ~ghost:true (Set (lval, exp, loc))
   in
   let stmt_begin_list = 
 
@@ -1920,7 +1923,7 @@ let auto_func_block loc f st status res =
              (Cil.evar ~loc copy))
         copies
   in
-  let ret = [ Cil.mkStmt (Cil_types.Return(None,loc)) ] in
+  let ret = [ Cil.mkStmt ~ghost:true (Cil_types.Return(None,loc)) ] in
   let res_block =
     (Cil.mkBlock
        ( stmt_begin_list @ copies_update @ main_stmt @ stvar_update @ ret))

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -51,6 +51,7 @@ val int : int -> selection
 val cint : Integer.t -> selection
 val range : int -> int -> selection
 val compose : string -> selection list -> selection
+val get_int : selection -> int option
 val destruct : selection -> selection list
 
 val head : clause -> pred
@@ -132,15 +133,18 @@ val search :
   find:(string -> 'a) ->
   unit -> 'a named option field * parameter
 (** Search field.
-     - [browse s n] is the lookup function, used in the GUI only.
+    - [browse s n] is the lookup function, used in the GUI only.
        Shall returns at most [n] results applying to selection [s].
-     - [find n] is used at script replay, and shall retrieve the
+    - [find n] is used at script replay, and shall retrieve the
        selected item's [id] later on. *)
 
 type 'a formatter = ('a,Format.formatter,unit) format -> 'a
 
 class type feedback =
   object
+    (** Global fresh variable pool *)
+    method pool : pool
+
     (** Interactive mode.
         If [false] the GUI is not activated.
         Hence, detailed feedback is not reported to the user. *)

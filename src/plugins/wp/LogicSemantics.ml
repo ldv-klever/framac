@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -76,29 +76,6 @@ struct
   let result = C.result
   let status = C.status
   let guards = C.guards
-
-  (* -------------------------------------------------------------------------- *)
-  (* --- Debugging                                                          --- *)
-  (* -------------------------------------------------------------------------- *)
-
-  let pp_logic fmt = function
-    | Vexp e -> F.pp_term fmt e
-    | Vloc l -> M.pretty fmt l
-    | Lset _ | Vset _ -> Format.pp_print_string fmt "<set>"
-
-  let pp_bound fmt = function None -> () | Some p -> F.pp_term fmt p
-
-  let pp_sloc fmt = function
-    | Sloc l -> M.pretty fmt l
-    | Sarray(l,_,n) -> Format.fprintf fmt "@[<hov2>%a@,.(..%d)@]"
-                         M.pretty l (n-1)
-    | Srange(l,_,a,b) -> Format.fprintf fmt "@[<hov2>%a@,.(%a@,..%a)@]"
-                           M.pretty l pp_bound a pp_bound b
-    | Sdescr(xs,l,p) -> Format.fprintf fmt "@[<hov2>{ %a | %a }@]"
-                          M.pretty l F.pp_pred (F.p_forall xs p)
-
-  let pp_region fmt sloc =
-    List.iter (fun (_,s) -> Format.fprintf fmt "@ %a" pp_sloc s) sloc
 
   (* -------------------------------------------------------------------------- *)
   (* --- Translation Environment & Recursion                                --- *)
@@ -261,7 +238,7 @@ struct
           match logic_var env lv with
           | VAL v ->
               Wp_parameters.abort ~current:true
-                "Address of logic value (%a)@." pp_logic v
+                "Address of logic value (%a)@." (Cvalues.pp_logic M.pretty) v
           | VAR x ->
               logic_offset env x.vtype (Vloc (M.cvar x)) loffset
         end
@@ -295,6 +272,7 @@ struct
     | EQ_set
     | EQ_loc
     | EQ_plain
+    | EQ_float of c_float
     | EQ_array of Matrix.matrix
     | EQ_comp of compinfo
     | EQ_incomparable
@@ -306,7 +284,8 @@ struct
     | Ctype t ->
         match Ctypes.object_of t with
         | C_pointer _ -> EQ_loc
-        | C_int _ | C_float _ -> EQ_plain
+        | C_int _ -> EQ_plain
+        | C_float f -> EQ_float f
         | C_comp c -> EQ_comp c
         | C_array a -> EQ_array (Matrix.of_array a)
 
@@ -323,6 +302,7 @@ struct
           | None -> EQ_incomparable
         else EQ_incomparable
     | EQ_plain , EQ_plain -> EQ_plain
+    | EQ_float f1 , EQ_float f2 when f1 = f2 -> EQ_float f1
     | _ -> EQ_incomparable
 
   let use_equal = function
@@ -357,6 +337,9 @@ struct
         then p_equal va vb
         else Cvalues.equal_array m va vb
 
+    | EQ_float f ->
+        Cfloat.feq f (val_of_term env a) (val_of_term env b)
+
     | EQ_plain ->
         p_equal (val_of_term env a) (val_of_term env b)
 
@@ -370,11 +353,21 @@ struct
   let term_diff polarity env a b =
     p_not (term_equal (Cvalues.negate polarity) env a b)
 
-  let compare_term env vrel lrel a b =
+
+  let float_of_logic_type lt =
+    match Logic_utils.unroll_type lt with
+    | Ctype ty ->
+        (match Cil.unrollType ty with
+         | TFloat(f,_) -> Some (Ctypes.c_float f)
+         | _ -> None)
+    | _ -> None
+
+  let compare_term env vrel lrel frel a b =
     if Logic_typing.is_pointer_type a.term_type then
       lrel (loc_of_term env a) (loc_of_term env b)
-    else
-      vrel (val_of_term env a) (val_of_term env b)
+    else match float_of_logic_type a.term_type with
+      | Some f -> frel f (val_of_term env a) (val_of_term env b)
+      | None -> vrel (val_of_term env a) (val_of_term env b)
 
   (* -------------------------------------------------------------------------- *)
   (* --- Term Comparison                                                    --- *)
@@ -386,8 +379,8 @@ struct
   let exp_diff env a b =
     Vexp(e_prop (term_diff `NoPolarity env a b))
 
-  let exp_compare env vrel lrel a b =
-    Vexp(e_prop (compare_term env vrel lrel a b))
+  let exp_compare env vrel lrel frel a b =
+    Vexp(e_prop (compare_term env vrel lrel frel a b))
 
   (* -------------------------------------------------------------------------- *)
   (* --- Binary Operators                                                   --- *)
@@ -443,10 +436,10 @@ struct
     | BOr -> L.apply Cint.l_or (C.logic env a) (C.logic env b)
     | LAnd -> Vexp(e_and (List.map (val_of_term env) (fold_assoc LAnd [] [a;b])))
     | LOr  -> Vexp(e_or  (List.map (val_of_term env) (fold_assoc LOr  [] [a;b])))
-    | Lt -> exp_compare env p_lt M.loc_lt a b
-    | Gt -> exp_compare env p_lt M.loc_lt b a
-    | Le -> exp_compare env p_leq M.loc_leq a b
-    | Ge -> exp_compare env p_leq M.loc_leq b a
+    | Lt -> exp_compare env p_lt M.loc_lt Cfloat.flt a b
+    | Gt -> exp_compare env p_lt M.loc_lt Cfloat.flt b a
+    | Le -> exp_compare env p_leq M.loc_leq Cfloat.fle a b
+    | Ge -> exp_compare env p_leq M.loc_leq Cfloat.fle b a
     | Eq -> exp_equal env a b
     | Ne -> exp_diff env a b
 
@@ -510,8 +503,10 @@ struct
         L.map (Cint.convert i) (C.logic env t)
     | C_int i , L_pointer _ ->
         L.map_l2t (M.int_of_loc i) (C.logic env t)
-    | C_int i , (L_cfloat _ | L_real) ->
+    | C_int i , L_real ->
         L.map (Cint.of_real i) (C.logic env t)
+    | C_int i , L_cfloat f ->
+        L.map (fun v -> Cint.of_real i (Cfloat.real_of_float f v)) (C.logic env t)
     | C_int _, L_array _ ->
         Warning.error "@[Logic cast to sized integer (%a) from (%a) not implemented yet@]"
           Printer.pp_typ dst_ctype Printer.pp_logic_type t.term_type
@@ -541,6 +536,10 @@ struct
            to a deref of a cast to a pointer `*(T( * )[])(p)` *)
         let cast = cast_ptr dst_ctype t0 in
         L.load (C.current env) (Ctypes.object_of dst_ctype) cast
+    | C_array dst_arr_info, L_array src_arr_info
+      when Ctypes.AinfoComparable.equal dst_arr_info src_arr_info ->
+        (* cast from/to the same type *)
+        C.logic env t
     | C_array {arr_flat=Some _}, (L_integer|L_cint _|L_bool|L_real|L_cfloat _|L_array _) ->
         Warning.error "@[Logic cast to sized array (%a) from (%a) not implemented yet@]"
           Printer.pp_typ dst_ctype Printer.pp_logic_type t.term_type
@@ -577,7 +576,13 @@ struct
     | L_cint _ ->
         L.map Cint.to_integer (C.logic env t)
     | L_integer -> C.logic env t
-    | L_cfloat _|L_bool|L_pointer _|L_array _ ->
+    | L_cfloat f ->
+        L.map
+          (fun x -> Cmath.int_of_real (Cfloat.real_of_float f x))
+          (C.logic env t)
+    | L_bool ->
+        L.map Cmath.bool_of_int (C.logic env t)
+    | L_pointer _|L_array _ ->
         Warning.error "@[Logic cast from (%a) to (%a) not implemented yet@]"
           Printer.pp_logic_type src_ltype Printer.pp_logic_type Linteger
 
@@ -585,7 +590,9 @@ struct
     let src_ltype = Logic_utils.unroll_type ~unroll_typedef:false t.term_type in
     match cvsort_of_ltype src_ltype with
     | L_bool -> C.logic env t
-    | L_integer | L_cint _ | L_real | L_cfloat _ | L_pointer _ | L_array _ ->
+    | L_integer | L_cint _ ->
+        L.map Cmath.int_of_bool (C.logic env t)
+    | L_real | L_cfloat _ | L_pointer _ | L_array _ ->
         Warning.error "@[Logic cast from (%a) to (%a) not implemented yet@]"
           Printer.pp_logic_type src_ltype Printer.pp_logic_type Logic_const.boolean_type
 
@@ -633,6 +640,7 @@ struct
   (* -------------------------------------------------------------------------- *)
   (* --- Term Nodes                                                         --- *)
   (* -------------------------------------------------------------------------- *)
+
   let term_node (env:env) t =
     match t.term_node with
     | TConst c -> Vexp (Cvalues.logic_constant c)
@@ -644,7 +652,16 @@ struct
            Cvalues.volatile ~warn:"unsafe volatile access to (term) l-value" ()
         then term_undefined t
         else term_lval env lval
-    | TAddrOf lval | TStartOf lval -> addr_lval env lval
+    | TAddrOf lval -> addr_lval env lval
+    | TStartOf lval ->
+        begin
+          let lt = Cil.typeOfTermLval lval in
+          let base = addr_lval env lval in
+          match Logic_utils.unroll_type lt with
+          | Ctype ct ->
+              L.map_loc (fun l -> Cvalues.startof ~shift:M.shift l ct) base
+          | _ -> base
+        end
 
     | TUnOp(Neg _,t) when not (Logic_typing.is_integral_type t.term_type) ->
         L.map F.e_opp (C.logic env t)
@@ -661,7 +678,7 @@ struct
         let r = match LogicBuiltins.logic f with
           | ACSLDEF -> C.call_fun env f ls vs
           | HACK phi -> phi vs
-          | LFUN f -> e_fun f vs
+          | LFUN f -> e_fun f vs ~result:(Lang.tau_of_ltype t.term_type)
         in Vexp r
 
     | Tlambda _ ->
@@ -675,7 +692,7 @@ struct
         let r = match LogicBuiltins.ctor c with
           | ACSLDEF -> e_fun (CTOR c) es
           | HACK phi -> phi es
-          | LFUN f -> e_fun f es
+          | LFUN f -> e_fun f es ~result:(Lang.tau_of_ltype t.term_type)
         in Vexp r
 
     | Tif( cond , a , b ) ->
@@ -770,10 +787,10 @@ struct
 
   let relation polarity env rel a b =
     match rel with
-    | Rlt -> compare_term env p_lt M.loc_lt a b
-    | Rgt -> compare_term env p_lt M.loc_lt b a
-    | Rle -> compare_term env p_leq M.loc_leq a b
-    | Rge -> compare_term env p_leq M.loc_leq b a
+    | Rlt -> compare_term env p_lt M.loc_lt Cfloat.flt a b
+    | Rgt -> compare_term env p_lt M.loc_lt Cfloat.flt b a
+    | Rle -> compare_term env p_leq M.loc_leq Cfloat.fle a b
+    | Rge -> compare_term env p_leq M.loc_leq Cfloat.fle b a
     | Req -> term_equal polarity env a b
     | Rneq -> term_diff polarity env a b
 
@@ -861,6 +878,10 @@ struct
     | Pvalid(label,t) -> valid env RW label t
     | Pvalid_read(label,t) -> valid env RD label t
 
+    | Psubtype _ ->
+        Warning.error
+          "AstraVer subtype is not supported@\n@[<hov 0>(%a)@]" Printer.pp_predicate p
+
     | Pvalid_function _t ->
         Warning.error
           "\\valid_function not yet implemented@\n\
@@ -871,8 +892,6 @@ struct
           "Allocation, initialization and danglingness not yet implemented@\n\
            @[<hov 0>(%a)@]" Printer.pp_predicate p
 
-    | Psubtype _ ->
-        Warning.error "Type tags not implemented yet"
 
   (* -------------------------------------------------------------------------- *)
   (* --- Set of locations for a term representing a set of l-values         --- *)
@@ -891,7 +910,7 @@ struct
 
   let assignable_lval env ~unfold lv =
     match fst lv with
-    | TResult _ -> [] (* special case ! *)
+    | TResult _  | TVar{lv_name="\\exit_status"} -> [] (* special case ! *)
     | _ ->
         let offsets =
           let obj = Ctypes.object_of_logic_type (Cil.typeOfTermLval lv) in

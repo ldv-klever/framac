@@ -41,6 +41,8 @@
 (*                          et Automatique).                                *)
 (****************************************************************************)
 
+[@@@warning "-30"]
+
 (** The Abstract Syntax of CIL.
     @plugin development guide *)
 
@@ -1066,7 +1068,11 @@ and stmt = {
   mutable preds: stmt list;
   (** The inverse of the succs function. *)
 
-  mutable ghost : bool
+  mutable ghost : bool;
+
+  mutable sattr : attributes
+  (** Statement attributes.
+      @since 19.0-Potassium *)
 }
 
 (** Labels *)
@@ -1517,7 +1523,7 @@ and logic_body =
 (** Description of a logic type.
     @plugin development guide *)
 and logic_type_info = { 
-  lt_name: string;
+  mutable lt_name: string;
   lt_params : string list; (** type parameters*)
   mutable lt_def: logic_type_def option;
     (** definition of the type. None for abstract types. *)
@@ -1558,7 +1564,7 @@ and logic_var = {
 (** Description of a constructor of a logic sum-type.
     @plugin development guide *)
 and logic_ctor_info = {
-          ctor_name: string; (** name of the constructor. *)
+  mutable ctor_name: string; (** name of the constructor. *)
           ctor_type: logic_type_info; (** type to which the constructor belongs. *)
   mutable ctor_params: logic_type list 
  (** types of the parameters of the constructor. *)
@@ -1679,6 +1685,11 @@ and spec = {
 
 
 (** Extension to standard ACSL clause with an unique identifier.
+
+    The integer is a (unique) identifier.
+    The boolean flag is [true] if the annotation can be assigned a
+    property status.
+
     Use {!Logic_const.new_acsl_extension} to create new acsl extension with
     a fresh id.
     Each extension is associated with a keyword, and can be either a global
@@ -1697,7 +1708,13 @@ and spec = {
     grammar ambiguous.
 
     @plugin development guide *)
-and acsl_extension = int * string * location * acsl_extension_kind
+and acsl_extension = {
+  ext_id : int;
+  ext_name : string;
+  ext_loc : location;
+  ext_has_status : bool;
+  ext_kind : acsl_extension_kind
+}
 
 (** @plugin development guide *)
 and acsl_extension_kind =
@@ -1773,11 +1790,17 @@ and pragma =
   | Astraver_pragma of astraver_pragma
   | Assert_pragma of attribute
 
+(** Kind of an assertion:
+    - an assert is both evaluated and used as hypothesis afterwards;
+    - a check is only evaluated, but is not used as an hypothesis: it does not
+      affect the analyses. *)
+and assertion_kind = Assert | Check
+
 (** all annotations that can be found in the code.
     This type shares the name of its constructors with
     {!Logic_ptree.code_annot}. *)
 and code_annotation_node =
-  | AAssert of string list * predicate
+  | AAssert of string list * assertion_kind * predicate
   (** assertion to be checked. The list of strings is the list of
       behaviors to which this assertion applies. *)
 

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -22,8 +22,6 @@
 
 (** Computation of inputs of outputs. *)
 
-module D: Abstract_domain.Internal
+module D: Abstract_domain.Leaf
   with type value = Cvalue.V.t
    and type location = Precise_locs.precise_location
-
-val key: D.t Abstract_domain.key

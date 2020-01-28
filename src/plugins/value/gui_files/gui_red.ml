@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -43,7 +43,7 @@ let all_alarms () =
       all_red_statuses
   in
   let kf_name_compare kfname =
-    Transitioning.String.uncapitalize_ascii kfname
+    String.uncapitalize_ascii kfname
   in
   (* Sort by function names, then stmt, then alarms *)
   let cmp (k1, ki1, ap1, _) (k2, ki2, ap2, _) =
@@ -69,7 +69,7 @@ type red_alarm = {
 
 let get_predicate ca =
   match ca.annot_content with
-  | AAssert (_, p) -> { p with pred_name = [] }
+  | AAssert (_, _, p) -> { p with pred_name = [] }
   | _ -> assert false
 
 let make_red_alarm function_name ki alarm callstacks =
@@ -82,7 +82,7 @@ let make_red_alarm function_name ki alarm callstacks =
   in
   let ca, _ = Alarms.to_annot (Kstmt stmt) alarm in
   let ip = Property.ip_of_code_annot_single kf stmt ca in
-  let kind = Transitioning.String.capitalize_ascii (Alarms.get_name alarm) in
+  let kind = String.capitalize_ascii (Alarms.get_name alarm) in
   let p = get_predicate ca in
   let acsl = Format.asprintf "@[<hov>%a@]" Cil_datatype.Predicate.pretty p in
   let alarm_or_prop = Red_statuses.Alarm alarm in
@@ -108,7 +108,7 @@ type t =
 module Data = Indexer.Make(
   struct
     type t = int*row
-    let compare (x,_) (y,_) = Pervasives.compare x y
+    let compare (x,_) (y,_) = Transitioning.Stdlib.compare x y
   end)
 
 let append t message = t.append message

@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -37,7 +37,7 @@ struct ifaddrs {
   struct sockaddr *ifa_addr;
   struct sockaddr *ifa_netmask;
   struct sockaddr *ifa_dstaddr;
-  union {
+  union __fc_ifaddrs_ifa_ifu {
     struct sockaddr *ifu_broadaddr;
     struct sockaddr *ifu_dstaddr;
   } ifa_ifu;

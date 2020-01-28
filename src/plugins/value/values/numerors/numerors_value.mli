@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -20,14 +20,12 @@
 (*                                                                        *)
 (**************************************************************************)
 
-include Abstract_value.Internal
+include Abstract_value.Leaf
 
 val pretty_debug : t Pretty_utils.formatter
 
 (** Reduction of an error value according to a floating-point interval. *)
 val reduce: Fval.t -> t -> t Eval.or_bottom
-
-val error_key : t Structure.Key_Value.k
 
 val set_absolute_to_top : t -> t
 val set_relative_to_top : t -> t

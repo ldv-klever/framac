@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA   (Commissariat à l'énergie atomique et aux énergies            *)
 (*           alternatives)                                                *)
 (*    INRIA (Institut National de Recherche en Informatique et en         *)
@@ -365,13 +365,16 @@ val concat_allocation: allocation -> allocation -> allocation
 val merge_allocation : allocation -> allocation -> allocation
 
 val merge_behaviors :
-  silent:bool -> funbehavior list -> funbehavior list -> funbehavior list
+  ?oldloc:Cil_types.location -> silent:bool -> funbehavior list -> funbehavior list -> funbehavior list
 
-(** [merge_funspec oldspec newspec] merges [newspec] into [oldspec].
+(** [merge_funspec ?oldloc oldspec newspec] merges [newspec] into [oldspec].
     If the funspec belongs to a kernel function, do not forget to call
-    {!Kernel_function.set_spec} after merging. *)
+    {!Kernel_function.set_spec} after merging.
+    @modify 20.0-Calcium add optional parameter [oldloc].
+*)
 val merge_funspec :
-  ?silent_about_merging_behav:bool -> funspec -> funspec -> unit
+  ?oldloc:Cil_types.location -> ?silent_about_merging_behav:bool ->
+  funspec -> funspec -> unit
 
 (** Reset the given funspec to empty.
     @since Nitrogen-20111001 *)
@@ -383,6 +386,7 @@ val clear_funspec: funspec -> unit
     a particular kind of annotations associated to a statement. *)
 
 val is_assert : code_annotation -> bool
+val is_check : code_annotation -> bool
 val is_contract : code_annotation -> bool
 val is_stmt_invariant : code_annotation -> bool
 val is_loop_invariant : code_annotation -> bool

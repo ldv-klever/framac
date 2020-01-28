@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -214,7 +214,9 @@ type ('loc, 'value) call = {
   arguments: ('loc, 'value) argument list;    (** The arguments of the call. *)
   rest: (exp * ('loc, 'value) assigned) list; (** Extra-arguments. *)
   return: varinfo option;                     (** Fake varinfo to store the
-                                                  return value of the call. *)
+                                                  return value of the call.
+                                                  Same varinfo for every
+                                                  call to a given function. *)
   recursive: bool;
 }
 

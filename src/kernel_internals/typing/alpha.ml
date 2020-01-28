@@ -202,6 +202,7 @@ let alphaWorker      ~(alphaTable: 'a alphaTable)
                   find_unused_suffix (Integer.succ min) infix infixes suffixes
                 in
                 let newsuffix = make_suffix newmin in
+                Kernel.(debug ~dkey:dkey_alpha "New suffix: %s" newsuffix);
                 let base =
                   if is_generated_name prefix then prefix else lookupname
                 in
@@ -264,4 +265,3 @@ let undoAlphaChanges ~alphaTable ~undolist =
             "prefix %s has no entry in the table. Inconsistent undo list"
             prefix)
     undolist
-

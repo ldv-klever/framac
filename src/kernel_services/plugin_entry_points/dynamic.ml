@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -46,7 +46,7 @@ let dynlib_init () =
   if not !dynlib_init then
     begin
       dynlib_init := true ;
-      Dynlink.init () ;
+      Transitioning.Dynlink.init () ;
       Dynlink.allow_unsafe_modules true ;
     end
 
@@ -125,7 +125,7 @@ let is_object base =
 
 let packages = Hashtbl.create 64
 
-let () = List.iter (fun p -> Hashtbl.add packages p ()) Config.library_names
+let () = List.iter (fun p -> Hashtbl.add packages p ()) ("frama-c.kernel"::Config.library_names)
 
 let missing pkg = not (Hashtbl.mem packages pkg)
 
@@ -283,8 +283,9 @@ let set_module_load_path path =
   Klog.debug ~dkey "plugin_dir: %s" (String.concat ":" Config.plugin_dir);
   load_path :=
     List.fold_right (add_dir ~user:true) path
-      (List.fold_right (add_dir ~user:false) Config.plugin_dir []);
-  let findlib_path_ = String.concat ":" !load_path in
+      (List.fold_right (add_dir ~user:false) (Config.libdir::Config.plugin_dir) []);
+  let env_ocamlpath = try Str.split (Str.regexp ":") (Sys.getenv "OCAMLPATH") with Not_found -> [] in
+  let findlib_path_ = String.concat ":" (!load_path@env_ocamlpath) in
   Klog.debug ~dkey "setting findlib path to %s" findlib_path_;
   findlib_path := findlib_path_
 
@@ -332,7 +333,7 @@ let load_module m =
                 if is_package m && mem_package m then load_packages [m]
                 else
                   let fc =
-                    "frama-c-" ^ Transitioning.String.lowercase_ascii m
+                    "frama-c-" ^ String.lowercase_ascii m
                   in
                   if mem_package fc then load_packages [fc]
                   else Klog.error "package or module '%s' not found" m
@@ -446,6 +447,14 @@ module Parameter = struct
         type t = string
         let ty = Datatype.string
         let modname = "String"
+      end)
+
+  module Filepath =
+    Common
+      (struct
+        type t = Datatype.Filepath.t
+        let ty = Datatype.Filepath.ty
+        let modname = "Filepath"
       end)
 
   module StringSet = struct

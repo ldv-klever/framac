@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -26,8 +26,6 @@ open Locations
 type clobbered_set = {
   mutable clob: Base.SetLattice.t
 }
-
-let key = Structure.Key_Domain.create_key "clobbered_set"
 
 let structural_descr =
   let open Structural_descr in

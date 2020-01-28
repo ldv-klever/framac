@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -221,20 +221,4 @@ axiom proj_int32 :
 axiom proj_int64 :
   (forall x:int [to_sint64(to_uint64(x))].
   (to_sint64(to_uint64(x)) = to_sint64(x)))
-
-logic lnot : int -> int
-
-logic ac land : int, int -> int
-
-logic ac lxor : int, int -> int
-
-logic ac lor : int, int -> int
-
-logic lsl : int, int -> int
-
-logic lsr : int, int -> int
-
-logic bit_testb : int, int -> bool
-
-logic bit_test : int, int -> prop
 

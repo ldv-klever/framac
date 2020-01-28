@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -132,9 +132,6 @@ class check ?(is_normalized=true) what : Visitor.frama_c_visitor =
            (check_abort "variables %s and %s have the same id (%d)"
               v.vname v'.vname v.vid))
       else
-        if v.vformal || v.vglob || not v.vdefined then
-          (* A defined local will only enter scope when the corresponding
-             Local_init statement is reached. *)
         Varinfo.Hashtbl.add known_vars v v;
       match v.vlogic_var_assoc with
       | None -> Cil.DoChildren
@@ -378,7 +375,7 @@ class check ?(is_normalized=true) what : Visitor.frama_c_visitor =
         self#pop_behavior_stack ();
         f
       in
-      Cil.ChangeDoChildrenPost(f,check)
+        Cil.DoChildrenPost check
 
     method private check_label s =
       let ok = List.exists (function Label _ -> true | _ -> false) !s.labels in
@@ -615,8 +612,8 @@ class check ?(is_normalized=true) what : Visitor.frama_c_visitor =
       in
       let my_labels =
         match ca.annot_content with
-        | AExtended (_, is_loop, (_, name, _, _)) ->
-          (match Logic_env.extension_category name, is_loop with
+          | AExtended (_, is_loop, {ext_name}) ->
+            (match Logic_env.extension_category ext_name, is_loop with
            | Some (Ext_code_annot (Ext_next_stmt | Ext_next_both)), false ->
              Logic_const.post_label :: my_labels
            | Some (Ext_code_annot Ext_here), false -> my_labels
@@ -627,18 +624,18 @@ class check ?(is_normalized=true) what : Visitor.frama_c_visitor =
              Kernel.(
                warning ~wkey:wkey_acsl_extension
                  "%s is a code annotation extension, \
-                  but used as a loop annotation" name);
+                    but used as a loop annotation" ext_name);
              my_labels
            | Some (Ext_code_annot (Ext_next_loop)), false ->
              Kernel.(
                warning ~wkey:wkey_acsl_extension
                  "%s is a loop annotation extension, \
-                  but used as a code annotation" name;
+                    but used as a code annotation" ext_name;
                my_labels)
            | (Some (Ext_contract | Ext_global) | None), _ ->
              Kernel.(
                warning ~wkey:wkey_acsl_extension
-                 "%s is not a known code annotation extension" name);
+                   "%s is not a known code annotation extension" ext_name);
              my_labels)
         | AAssert _ | AStmtSpec _ | AInvariant _ | AVariant _
         | AAssigns _ | AAllocation _ | APragma _ -> my_labels
@@ -648,7 +645,7 @@ class check ?(is_normalized=true) what : Visitor.frama_c_visitor =
          names of statement contracts. *)
       if is_normalized then begin
         match ca.annot_content with
-        | AAssert(bhvs,_) | AStmtSpec(bhvs,_) | AInvariant (bhvs,_,_)
+          | AAssert(bhvs,_,_) | AStmtSpec(bhvs,_) | AInvariant (bhvs,_,_)
         | AAssigns(bhvs,_) | AAllocation(bhvs,_) | AExtended (bhvs,_,_) ->
           List.iter
             (fun b ->
@@ -1253,6 +1250,7 @@ class check ?(is_normalized=true) what : Visitor.frama_c_visitor =
          | None -> ()
          | Some lv ->
            let tlv = Cil.typeOfLval lv in
+               let tlv = Cil.type_remove_qualifier_attributes tlv in
            if not (Cabs2cil.allow_return_collapse ~tlv ~tf:treturn) then
              check_abort "in call %a, cannot implicitly cast from \
                           function return type %a to type of %a (%a)"

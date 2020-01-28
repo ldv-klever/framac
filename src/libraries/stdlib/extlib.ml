@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -108,6 +108,28 @@ let filter_map' f filter l=
     | [] -> []
     | x::tl -> let x' = f x in if filter x' then x' :: aux tl else aux tl
   in aux l
+let rec filter_map_opt f = function
+  | [] -> []
+  | x::tl ->
+    match f x with
+    | None -> filter_map_opt f tl
+    | Some x' -> x' :: filter_map_opt  f tl
+
+let rec fold_map f acc = function
+  | [] -> acc, []
+  | x::tl ->
+    let (acc,x) = f acc x in
+    let (acc,tl) = fold_map f acc tl in
+    (acc,x::tl)
+
+let rec fold_map_opt f acc = function
+  | [] -> acc, []
+  | x::tl ->
+    match f acc x with
+    | acc, None -> fold_map_opt f acc tl
+    | acc, Some x ->
+      let (acc,tl) = fold_map_opt f acc tl in
+      (acc,x::tl)
 
 let product_fold f acc e1 e2 =
   List.fold_left
@@ -127,8 +149,8 @@ let rec list_compare cmp_elt l1 l2 =
   else
     match l1, l2 with
       | [], [] -> assert false (* included in l1 == l2 above *)
-      | [], _ :: _ -> 1
-      | _ :: _, [] -> -1
+      | [], _ :: _ -> -1
+      | _ :: _, [] -> 1
       | v1::r1, v2::r2 ->
           let c = cmp_elt v1 v2 in
           if c = 0 then list_compare cmp_elt r1 r2 else c
@@ -158,18 +180,7 @@ let mapi f l =
     snd (List.fold_left (fun (i,acc) x -> (i+1,f i x :: acc)) (0,[]) l)
   in List.rev res
 
-(* Remove duplicates from a sorted list *)
-let list_unique cmp l =
-  let rec aux acc = function
-   | [] -> acc
-   | [e] -> e :: acc
-   | e1 :: (e2 :: _ as q) ->
-     if cmp e1 e2 = 0 then aux acc q else aux (e1 :: acc) q
-  in
-  List.rev (aux [] l)
-
-(* Remove once OCaml 4.02 is mandatory *)
-let sort_unique cmp l = list_unique cmp (List.sort cmp l)
+let sort_unique cmp l = List.sort_uniq cmp l
 
 let subsets k l =
   let rec aux k l len =
@@ -341,11 +352,23 @@ let try_finally ~finally f x =
 
   The alternative, such as registering an daemon that raises an exception,
   hence interrupting the process, might not work: child processes still need to
-  run some daemons, such as [Pervasives.flush_all] which is registered by default. *)
+  run some daemons, such as [flush_all] which is registered by default. *)
+
+let rec mkdir ?(parents=false) name perm =
+  try Unix.mkdir name perm
+  with
+  | Unix.Unix_error (Unix.ENOENT,_,_) when parents ->
+    let parent_name = Filename.dirname name in
+    if name <> parent_name then
+      begin
+        mkdir ~parents parent_name perm;
+        Unix.mkdir name perm
+      end
+  | e -> raise e
 
 let pid = Unix.getpid ()
 let safe_at_exit f =
-  Pervasives.at_exit
+  at_exit
     begin fun () ->
       let child = Unix.getpid () in
       if child = pid then f ()
@@ -465,11 +488,11 @@ let make_unique_name mem ?(sep=" ") ?(start=2) from =
 let strip_underscore s =
   let l = String.length s in
   let rec start i =
-    if i >= l then l-1
+    if i >= l then l
     else if s.[i] = '_' then start (i + 1) else i
   in
   let st = start 0 in
-  if st = l - 1 then ""
+  if st = l then ""
   else begin
     let rec finish i =
       (* We know that we will stop at >= st >= 0 *)
@@ -498,8 +521,8 @@ external compare_basic: 'a -> 'a -> int = "%compare"
 
 let compare_ignore_case s1 s2 =
   String.compare
-    (Transitioning.String.lowercase_ascii s1)
-    (Transitioning.String.lowercase_ascii s2)
+    (String.lowercase_ascii s1)
+    (String.lowercase_ascii s2)
 
 (*
 Local Variables:

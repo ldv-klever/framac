@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -46,6 +46,7 @@ module type S = sig
         or `Value (valuation, value), where [value] is the numeric value computed
         for the expression [expr], and [valuation] contains all the intermediate
         results of the evaluation.
+
       The [valuation] argument is a cache of already computed expressions.
       It is empty by default.
       The [reduction] argument allows deactivating the backward reduction
@@ -94,21 +95,6 @@ module type S = sig
     ?valuation:Valuation.t ->
     state -> exp -> value -> Valuation.t or_bottom
 
-  (* Sorts a list of states by the evaluation of an expression, according to
-     a list of expected integer values.
-     [split_by_evaluation expr expected_values states] returns two list
-     (matched, tail) such as:
-     - for each element (i, states, mess) of the first list [matched],
-       i was in the list of integer [expected_values], [states] is the list of
-       input states where [expr] evaluates to exactly [i], and [mess] is true
-       if there was some other input state on which [expr] evaluates to a value
-       including [i] (but not equal to [i]).
-     - tail are the states on which [expr] does not evaluate to none of the
-       [expected_values]. *)
-  val split_by_evaluation:
-    exp -> Integer.t list -> state list ->
-    (Integer.t * state list * bool) list * state list
-
   val eval_function_exp:
     exp -> ?args:exp list -> state ->
     (Kernel_function.t * Valuation.t) list evaluated
@@ -119,7 +105,7 @@ module type S = sig
 end
 
 module type Value = sig
-  include Abstract_value.External
+  include Abstract.Value.External
 
   (** Inter-reduction of values. Useful when the value module is a reduced
       product of several abstraction.

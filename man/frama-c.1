@@ -2,7 +2,7 @@
 .\"                                                                        
 .\"  This file is part of Frama-C.                                         
 .\"                                                                        
-.\"  Copyright (C) 2007-2018                                               
+.\"  Copyright (C) 2007-2019                                               
 .\"    CEA (Commissariat à l'énergie atomique et aux énergies              
 .\"         alternatives)                                                  
 .\"                                                                        
@@ -25,7 +25,7 @@
 .\" using pandoc 2.0 or newer. To modify this file, edit the Markdown file
 .\" and run `make man/frama-c.1`.
 
-.TH FRAMA-C 1 2018-01-17
+.TH FRAMA-C 1 2019-07-29
 .SH NAME
 .PP
 frama\-c[.byte] \- a static analyzer for C programs
@@ -383,8 +383,6 @@ specifications in \f[I]path\f[].
 If \f[I]path\f[] is a directory, use
 \f[B]<path>/compile_commands.json\f[].
 Disabled by default.
-\f[B]Note\f[]: this option is only available if Frama\-C was compiled
-with yojson support.
 .RS
 .RE
 .TP
@@ -402,6 +400,11 @@ Defaults to no.
 .TP
 .B \-keep\-unused\-specified\-functions
 see \f[B]\-remove\-unused\-specified\-functions\f[].
+.RS
+.RE
+.TP
+.B \-keep\-unused\-types
+see \f[B]\-remove\-unused\-types\f[].
 .RS
 .RE
 .TP
@@ -586,6 +589,14 @@ keeps function prototypes that have an ACSL specification but are not
 used in the code.
 This is the default.
 Functions having the attribute \f[B]FRAMAC_BUILTIN\f[] are always kept.
+.RS
+.RE
+.TP
+.B \-remove\-unused\-types
+remove types and struct/union/enum declarations that are not referenced
+anywhere else in the code.
+This is the default.
+Use \f[B]\-keep\-unused\-types\f[] to keep these definitions.
 .RS
 .RE
 .TP

@@ -1,7 +1,7 @@
 (**************************************************************************)
 (*                                                                        *)
 (*  The Why3 Verification Platform   /   The Why3 Development Team        *)
-(*  Copyright 2010-2013   --   INRIA - CNRS - Paris-Sud University        *)
+(*  Copyright 2010-2019   --   Inria - CNRS - Paris-Sud University        *)
 (*                                                                        *)
 (*  This software is distributed under the terms of the GNU Lesser        *)
 (*  General Public License version 2.1, with the special exception        *)
@@ -39,7 +39,7 @@ axiom Pi_double_precision_bounds : (0x1.921fb54442d18p1 <  pi)
 
 axiom Pi_double_precision_bounds1 : (pi <  0x1.921fb54442d19p1)
 
-axiom Cos_pi : (cos(pi) = (-1.0))
+axiom Cos_pi : (cos(pi) = (- 1.0))
 
 axiom Sin_pi : (sin(pi) = 0.0)
 

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -21,12 +21,11 @@
 (**************************************************************************)
 
 module R = Report_parameters
-module T = Transitioning
 
 type action = SKIP | INFO | ERROR | REVIEW
 
 let action s =
-  match T.String.uppercase_ascii s with
+  match String.uppercase_ascii s with
   | "INFO" -> INFO
   | "ERROR" -> ERROR
   | "REVIEW" -> REVIEW
@@ -74,7 +73,7 @@ let errors = {
 type props = {
   ps_name : string ;
   ps_rules : rule Queue.t ;
-  ps_action : (unit -> string) ;
+  ps_action : (unit -> string) ; (* plugin option getter *)
 }
 
 let props ps_name ps_action =
@@ -150,7 +149,7 @@ let get_queue env plugin =
 let add_rule jvalue =
   try
     match jvalue with
-    | Json.Assoc fields ->
+    | `Assoc fields ->
       let tgt , rule = List.fold_left rule_of_fields default fields in
       let properties p =
         if rule.r_plugin <> (snd default).r_plugin then
@@ -177,7 +176,7 @@ let configure file =
     R.feedback "Loading '%a'" Datatype.Filepath.pretty path;
     try
       match Json.load_file file with
-      | Json.Array values -> List.iter add_rule values
+      | `List values -> List.iter add_rule values
       | _ -> failwith "Array expected"
     with
     | Json.Error(file,line,msg) ->
@@ -230,7 +229,7 @@ let json_of_source = function
     ]
 
 let json_of_event e =
-  Json.Assoc
+  `Assoc
     begin [
       "classid" , Json.of_string e.e_id ;
       "action" , Json.of_string @@ string_of_action e.e_action ;
@@ -242,7 +241,7 @@ let json_of_event e =
 module EVENTS = Set.Make
     (struct
       type t = event
-      let compare = Pervasives.compare
+      let compare = Transitioning.Stdlib.compare
     end)
 
 let events_queue = Queue.create ()
@@ -358,7 +357,7 @@ let monitor_log_event (evt : Log.event) =
         Printf.sprintf "%s.unclassified.%s" evt.evt_plugin env.rs_name in
       let e_title =
         Printf.sprintf "Unclassified %s (Plugin '%s')"
-          (T.String.capitalize_ascii env.rs_name) evt.evt_plugin in
+          (String.capitalize_ascii env.rs_name) evt.evt_plugin in
       let e_action = action (env.rs_action ()) in
       { unclassified with e_id ; e_title ; e_action } in
     monitor ~lookup ~category ~msg ~source unclassified
@@ -408,19 +407,50 @@ let pending f pending =
         (fun _ ips -> Property.Set.iter f ips) m)
     pending
 
+let rec monitored_property ip =
+  let open Cil_types in
+  let open Property in
+  match ip with
+  | IPBehavior _ -> false
+  | IPPredicate {ip_kind = PKAssumes _} -> false
+  | IPPredicate {ip_kind = PKRequires _} -> true
+  | IPPredicate {ip_kind = PKEnsures _} -> true
+  | IPPredicate {ip_kind = PKTerminates} -> true
+  | IPAllocation _ -> true
+  | IPAssigns _ -> true
+  | IPFrom _-> true
+  | IPDecrease _ -> true
+  | IPCodeAnnot {ica_ca = { annot_content = AStmtSpec _ }} -> false
+  | IPCodeAnnot {ica_ca = { annot_content = APragma _ }} -> false
+  | IPCodeAnnot {ica_ca = { annot_content = AExtended _ }} -> true
+  | IPCodeAnnot {ica_ca = { annot_content = AAssert _ }} -> true
+  | IPCodeAnnot {ica_ca = { annot_content = AInvariant _ }} -> true
+  | IPCodeAnnot {ica_ca = { annot_content = AVariant _ }} -> true
+  | IPCodeAnnot {ica_ca = { annot_content = AAssigns _ }} -> true
+  | IPCodeAnnot {ica_ca = { annot_content = AAllocation _ }} -> true
+  | IPComplete _ -> true
+  | IPDisjoint _ -> true
+  | IPReachable {ir_kf=None} -> false
+  | IPReachable {ir_kf=Some _} -> true
+  | IPAxiomatic _ | IPAxiom _ -> false
+  | IPLemma _ -> true
+  | IPTypeInvariant _ | IPGlobalInvariant _ -> true
+  | IPOther _ -> true
+  | IPExtended _ -> true
+  | IPPropertyInstance {ii_ip} -> monitored_property ii_ip
+
 let monitor_status properties ip =
-  let ps = Property_names.parts_of_property ip in
-  if ps = [] then () else
-    let msg = Property_names.string_of_parts ps in
+  if monitored_property ip then
+    let name = Property.Names.get_prop_name_id ip in
     let lookup = find properties.ps_rules in
     let source = Property.source ip in
     let unclassified () =
       let e_id = "unclassified." ^ properties.ps_name in
-      let e_title = msg in
+      let e_title = name in
       let e_action = properties.ps_action () |> action in
-      let e_descr = T.String.capitalize_ascii properties.ps_name ^ " status" in
+      let e_descr = String.capitalize_ascii properties.ps_name ^ " status" in
       { unclassified with e_id ; e_action ; e_title ; e_descr }
-    in monitor ~lookup ~category:[] ~msg ~source unclassified
+    in monitor ~lookup ~category:[] ~msg:name ~source unclassified
 
 let monitor_property pool push ip =
   begin

@@ -3,7 +3,7 @@
 #                                                                        #
 #  This file is part of Frama-C.                                         #
 #                                                                        #
-#  Copyright (C) 2007-2018                                               #
+#  Copyright (C) 2007-2019                                               #
 #    CEA (Commissariat à l'énergie atomique et aux énergies              #
 #         alternatives)                                                  #
 #                                                                        #
@@ -26,14 +26,17 @@ while [ $# -ge 1 -a "$1" = "-check" ]; do
     shift
 done
 
-if [ $# -lt 1 ]; then
+usage() {
    echo "usage: $0 cmd [args]"
    echo ""
    echo "  where cmd is:"
    echo ""
+   echo "  - help"
+   echo "      Display this help message and exit."
+   echo ""
    echo "  - make-template [dir]"
    echo "      Interactively prepares a template for running analysis scripts,"
-   echo "      writing it to [dir/GNUmakefile]. [dir] is [.] if ommitted."
+   echo "      writing it to [dir/GNUmakefile]. [dir] is [.] if omitted."
    echo ""
    echo "  - make-path"
    echo "      [for Frama-C developers and advanced users without Frama-C in the path]"
@@ -49,7 +52,36 @@ if [ $# -lt 1 ]; then
    echo "      Generates flamegraph.svg and flamegraph.html in [dir]"
    echo "      (or in the FRAMAC_SESSION directory by default)."
    echo "      Also opens it in a browser, unless variable NOGUI is set."
-   exit
+   echo ""
+   echo "  - find-fun <function-name> [dirs]"
+   echo "      Lists files in [dirs] declaring or defining <function-name>"
+   echo "      (defaults to PWD + /usr/include)."
+   echo "      Heuristics-based: neither correct nor complete."
+   echo ""
+   echo "  - summary [options]"
+   echo "      Monitors and summarizes multiple analyses dispatched by a Makefile"
+   echo "      in the current PWD."
+   echo "      Use $0 summary --help for more informations."
+   echo ""
+   echo "  - configure <machdep>"
+   echo "      Runs an existing configure script to only consider files"
+   echo "      in Frama-C's libc; this will hopefully disable non-essential"
+   echo "      and non-POSIX external libraries."
+   echo "      <machdep> is necessary to define a required preprocessor symbol"
+   echo "      (run 'frama-c -machdep' help to get the list of machdeps)."
+   echo ""
+   echo "  - make-wrapper <target> <args>"
+   echo "      Runs 'make <target> <args>', parsing the output to suggest"
+   echo "      useful commands in case of failure."
+   echo ""
+   echo "  - normalize-jcdb [path/to/compile_commands.json]"
+   echo "      Applies some transformations to an existing compile_commands.json"
+   echo "      (such as relativizing paths) to improve portability"
+   exit $1
+}
+
+if [ $# -lt 1 ]; then
+    usage 1
 fi
 
 DIR="$( cd "$( dirname "$0" )" && pwd )"
@@ -86,29 +118,6 @@ open_file() {
             open "$1"
             ;;
     esac
-}
-
-make_template() {
-    if [ "$#" -gt 0 ]; then
-        dir="${1%/}"
-    else
-        dir="."
-    fi
-    path="$dir/GNUmakefile"
-    check_path_exists "$path"
-    read -p "Main target name: " main
-    if [[ ! ( "$main" =~ ^[a-zA-Z_0-9]+$ ) ]]; then
-        echo "error: invalid main target name";
-        exit 1
-    fi
-    read -p "Source files separated by spaces (default if empty: *.c): " sources
-    if [ "$sources" = "" ]; then
-        sources="*.c"
-    fi
-    sed "s/^MAIN_TARGET :=/MAIN_TARGET := ${main}/" "${FRAMAC_SHARE}/analysis-scripts/template.mk" > "${path}.tmp"
-    sed "s|\$(MAIN_TARGET).parse:|\$(MAIN_TARGET).parse: $sources|" "${path}.tmp" | sed "/# Remove these lines after defining the main target/{N;N;N;N;d;}" > "$path"
-    rm "${path}.tmp"
-    echo "Template created: $path"
 }
 
 make_path() {
@@ -175,10 +184,55 @@ EOF
     fi
 }
 
+configure_for_frama_c() {
+    if [ "$#" -eq 0 ]; then
+        echo "error: 'configure' command requires a machdep";
+        exit 1
+    fi
+    MACHDEP="$(echo $1 | tr a-z A-Z)"
+    shift
+    CPP="gcc -E -nostdinc -fno-builtin -I${FRAMAC_SHARE}/libc -D__FC_MACHDEP_${MACHDEP}" ./configure "$@"
+}
+
+normalize_jcdb() {
+    path=""
+    if [ "$#" -eq 0 ]; then
+        path="./compile_commands.json"
+    else
+        path="$1"
+    fi
+    if [ ! -e "$path" ]; then
+        echo "error: cannot find file: $path";
+        exit 1
+    fi
+    sed "s|$PWD/||g" "$path" > "${path}.tmp"
+    cmp -s "$path" "${path}.tmp"
+    if [ $? -eq 0 ]; then
+        echo "No changes to be applied to $path"
+        rm "${path}.tmp"
+    else
+        echo "Differences to be applied to $path:"
+        diff -u0 "$path" "${path}.tmp"
+        read -p "Normalize $path? [y/N] " yn
+        case $yn in
+            [Yy])
+                mv "${path}.tmp" "$path"
+                echo "Normalization applied to $path"
+            ;;
+            *)
+                echo "Exiting without overwriting."
+                exit 0;;
+        esac
+    fi
+}
+
 case "$command" in
+    "help" | "-help" | "--help" | "-h")
+        usage 0;
+        ;;
     "make-template")
         shift;
-        make_template "$@";
+        ${FRAMAC_SHARE}/analysis-scripts/make_template.py "$0" "$@";
         ;;
     "make-path")
         shift;
@@ -188,10 +242,31 @@ case "$command" in
         shift;
         ${FRAMAC_SHARE}/analysis-scripts/list_files.py "$@";
         ;;
+    "find-fun")
+        shift;
+        ${FRAMAC_SHARE}/analysis-scripts/find_fun.py "$@";
+        ;;
     "flamegraph")
         shift;
         flamegraph "$@";
         ;;
+    "summary")
+        shift;
+        ${FRAMAC_SHARE}/analysis-scripts/summary.py "$@";
+        ;;
+    "configure")
+        shift;
+        configure_for_frama_c "$@";
+        ;;
+    "make-wrapper")
+        shift;
+        ${FRAMAC_SHARE}/analysis-scripts/make_wrapper.py "$0" "$@";
+        ;;
+    "normalize-jcdb")
+        shift;
+        normalize_jcdb "$@";
+        ;;
     *)
-        echo "error: unrecognized command: $command"
+        echo "error: unrecognized command: $command";
+        exit 1
 esac

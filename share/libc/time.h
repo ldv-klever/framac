@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -31,7 +31,7 @@ __PUSH_FC_STDLIB
 #include "__fc_string_axiomatic.h"
 
 #include "errno.h"
-
+#include "signal.h"
 /*
  * Names of the interval timers, and structure
  * defining a timer setting:
@@ -86,7 +86,11 @@ extern clock_t clock(void);
 /*@ assigns \result \from time1, time0; */
 extern double difftime(time_t time1, time_t time0);
 
-/*@ assigns *timeptr, \result \from *timeptr; */
+/*@
+  requires valid_timeptr: \valid(timeptr);
+  assigns *timeptr \from *timeptr;
+  assigns \result \from indirect:*timeptr;
+ */
 extern time_t mktime(struct tm *timeptr);
 
 /*@
@@ -104,21 +108,36 @@ extern time_t mktime(struct tm *timeptr);
 */
 extern time_t time(time_t *timer);
 
+char __fc_ctime[26];
+char * const  __fc_p_ctime = __fc_ctime;
+
 extern char *asctime(const struct tm *timeptr);
 
+/*@
+  requires valid_timer: \valid_read(timer);
+  requires initialization:init_timer: \initialized(timer);
+  assigns __fc_ctime[0..25] \from indirect:*timer, indirect:__fc_time;
+  assigns \result \from indirect:*timer, indirect:__fc_time, __fc_p_ctime;
+  ensures result_points_to_ctime: \result == __fc_p_ctime;
+  ensures result_valid_string: valid_read_string(__fc_p_ctime);
+*/
 extern char *ctime(const time_t *timer);
 
 struct tm __fc_time_tm;
 struct tm * const  __fc_p_time_tm = &__fc_time_tm;
 
-/*@ assigns \result \from __fc_p_time_tm;
+/*@
+  requires valid_timer: \valid_read(timer);
+  assigns \result \from __fc_p_time_tm;
   assigns __fc_time_tm \from *timer;
   ensures result_null_or_internal_tm:
     \result == &__fc_time_tm || \result == \null ;
 */
 extern struct tm *gmtime(const time_t *timer);
 
-/*@ assigns \result \from __fc_p_time_tm;
+/*@
+  requires valid_timer: \valid_read(timer);
+  assigns \result \from __fc_p_time_tm;
   assigns __fc_time_tm \from *timer;
   ensures result_null_or_internal_tm:
     \result == &__fc_time_tm || \result == \null;
@@ -158,7 +177,7 @@ extern int clock_getres(clockid_t, struct timespec *);
 #else
     // simulates a system without monotonic clock
     assigns \result\from clk_id;
-    ensures error: \result == EINVAL
+    ensures error: \result == EINVAL;
 #endif
   behavior bad_clock_id:
     assumes bad_id: clk_id != CLOCK_REALTIME && clk_id != CLOCK_MONOTONIC;
@@ -205,9 +224,8 @@ extern int clock_gettime(clockid_t clk_id, struct timespec *tp);
     assumes no_einval: valid_clock_id(clock_id);
     assigns \result \from indirect:__fc_time, indirect:clock_id, indirect:rqtp,
                           indirect:*rqtp;
-    assigns rmtp == \null ? \empty : *rmtp \from __fc_time, indirect:clock_id,
-                                                 indirect:rqtp, indirect:*rqtp,
-                                                 indirect:rmtp;
+    assigns *rmtp \from __fc_time, indirect:clock_id, indirect:rqtp,
+                        indirect:*rqtp, indirect:rmtp;
     ensures result_interrupted: \result == EINTR;
     ensures initialization:interrupted_remaining:
       rmtp != \null ==> \initialized(&rmtp->tv_sec) && \initialized(&rmtp->tv_nsec);
@@ -252,9 +270,8 @@ extern struct tm *localtime_r(const time_t *restrict timep,
   requires valid_nanosecs: 0 <= rqtp->tv_nsec < 1000000000;
   requires valid_remaining_or_null: rmtp == \null || \valid(rmtp);
   assigns \result \from indirect:__fc_time, indirect:rqtp, indirect:*rqtp;
-  assigns rmtp == \null ? \empty : *rmtp \from indirect:__fc_time,
-                                               indirect:rqtp, indirect:*rqtp,
-                                               indirect:rmtp;
+  assigns *rmtp \from indirect:__fc_time, indirect:rqtp, indirect:*rqtp,
+                      indirect:rmtp;
   ensures result_elapsed_or_interrupted: \result == 0 || \result == -1;
   ensures initialization:interrupted_remaining:
     rmtp != \null && \result == -1 ==>
@@ -281,7 +298,6 @@ extern int timer_getoverrun(timer_t);
 extern int timer_gettime(timer_t, struct itimerspec *);
 extern int timer_settime(timer_t, int, const struct itimerspec *restrict,
                          struct itimerspec *restrict);
-extern void tzset(void);
 
 extern int daylight;
 extern long timezone;

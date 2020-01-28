@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -316,6 +316,13 @@ module Value = struct
         let size = size
         let dependencies = [ Table_By_Callstack.self ]
        end)
+  module AfterTable =
+    Cil_state_builder.Stmt_hashtbl(Cvalue.Model)
+      (struct
+        let name = "Db.Value.AfterTable"
+        let size = size
+        let dependencies = [ AfterTable_By_Callstack.self ]
+      end)
 
 
   let self = Table_By_Callstack.self
@@ -519,13 +526,18 @@ module Value = struct
 
   let add_formals_to_state = mk_fun "add_formals_to_state"
 
-  let noassert_get_stmt_state s =
+  let noassert_get_stmt_state ~after s =
     if !no_results (Kernel_function.(get_definition (find_englobing_kf s)))
     then Cvalue.Model.top
     else
-      try Table.find s
+      let (find, add), find_by_callstack =
+        if after
+        then AfterTable.(find, add), AfterTable_By_Callstack.find
+        else Table.(find, add), Table_By_Callstack.find
+      in
+      try find s
       with Not_found ->
-        let ho = try Some (Table_By_Callstack.find s) with Not_found -> None in
+        let ho = try Some (find_by_callstack s) with Not_found -> None in
         let state =
           match ho with
           | None -> Cvalue.Model.bottom
@@ -534,21 +546,22 @@ module Value = struct
               Cvalue.Model.join acc state
             ) h Cvalue.Model.bottom
         in
-        Table.add s state;
+        add s state;
         state
 
-  let noassert_get_state k =
+  let noassert_get_state ?(after=false) k =
     match k with
       | Kglobal -> globals_state ()
-      | Kstmt s -> noassert_get_stmt_state s
+      | Kstmt s ->
+        noassert_get_stmt_state ~after s
 
-  let get_stmt_state s =
+  let get_stmt_state ?(after=false) s =
     assert (is_computed ()); (* this assertion fails during value analysis *)
-    noassert_get_stmt_state s
+    noassert_get_stmt_state ~after s
 
-  let get_state k =
+  let get_state ?(after=false) k =
     assert (is_computed ()); (* this assertion fails during value analysis *)
-    noassert_get_state k
+    noassert_get_state ~after k
 
   let get_stmt_state_callstack ~after stmt =
     assert (is_computed ()); (* this assertion fails during value analysis *)
@@ -825,18 +838,6 @@ module Pdg = struct
 end
 
 (* ************************************************************************* *)
-(** {2 Spare Code} *)
-(* ************************************************************************* *)
-
-(** Detection of the unused code of an application. *)
-module Sparecode = struct
-  let get =
-    ref (fun ~select_annot:_  -> mk_labeled_fun "Sparecode.run")
-  let rm_unused_globals =
-    ref (fun ?new_proj_name:_ -> mk_labeled_fun "Sparecode.rm_unused_globals")
-end
-
-(* ************************************************************************* *)
 (** {2 Properties} *)
 (* ************************************************************************* *)
 
@@ -1021,6 +1022,7 @@ module RteGen = struct
   let get_unsignedDownCast_status = mk_fun "RteGen.get_unsignedDownCast_status"
   let get_float_to_int_status = mk_fun "RteGen.get_float_to_int_status"
   let get_finite_float_status = mk_fun "RteGen.get_finite_float_status"
+  let get_bool_value_status = mk_fun "RteGen.get_bool_value_status"
 end
 
 module PostdominatorsTypes = struct

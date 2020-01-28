@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of Frama-C.                                         *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat à l'énergie atomique et aux énergies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -106,8 +106,8 @@ module Make_Domain
     (Value: Value)
   : sig
 
-    include Abstract_domain.Internal with type value = Value.t
-                                      and type location = Precise_locs.precise_location
+    include Abstract_domain.Leaf with type value = Value.t
+                                  and type location = Precise_locs.precise_location
 
     include S with type t := t
                and type value := Value.t

@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -460,7 +460,7 @@ Proof.
 Qed.					      
 					      
 Remark NxHpos_div2_p: forall n:N,
-  (0 < n)%N -> NxHpos (Ndiv2 n) = pred (NxHpos n).
+  (0 < n)%N -> NxHpos (N.div2 n) = pred (NxHpos n).
 Proof.
   destruct n.
   (** zero *)
@@ -587,7 +587,7 @@ Qed.
 (** {@integer:} *)
 (** * Bits of Integers *)
 
-Open Local Scope Z_scope.
+Local Open Scope Z_scope.
 
 (** The bits representation of an integer consists of a bit function,
     packed with its trailing property. 

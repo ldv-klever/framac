@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -128,6 +128,7 @@ let env console cmd arg = spaces console ; console.env console.fline cmd arg
 let blank = [ ' ' '\t' ]
 let number = [ '0'-'9' ]+
              let ident = [ 'a'-'z' 'A'-'Z' '-' '0'-'9' ]+
+                         let in_braces = [^ '}' ':' ]+
 
                          rule word console =
                          parse
@@ -151,12 +152,12 @@ let number = [ '0'-'9' ]+
                              word console lexbuf
                            }
 
-                       | "%{" (ident as cmd) ':' (ident as arg) '}'
+                       | "%{" (in_braces as cmd) ':' (in_braces as arg) '}'
                        | '%' (ident as cmd) ':' (ident as arg)
 
                            { env console cmd arg ; word console lexbuf }
 
-                       | "%{" (ident as cmd) "}"
+                       | "%{" (in_braces as cmd) "}"
                        | '%' (ident as cmd)
 
                            { env console cmd "" ; word console lexbuf }

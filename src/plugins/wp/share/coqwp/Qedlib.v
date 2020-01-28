@@ -2,7 +2,7 @@
 (*                                                                        *)
 (*  This file is part of WP plug-in of Frama-C.                           *)
 (*                                                                        *)
-(*  Copyright (C) 2007-2018                                               *)
+(*  Copyright (C) 2007-2019                                               *)
 (*    CEA (Commissariat a l'energie atomique et aux energies              *)
 (*         alternatives)                                                  *)
 (*                                                                        *)
@@ -33,12 +33,12 @@ Set Implicit Arguments.
 
 (** ** Tactical *)
 
-Ltac forward := 
-  repeat (first [ split | intros ]) ; 
-  try discriminate ; 
-  try contradiction ; 
-  try tauto ; 
-  try constructor ; 
+Ltac forward :=
+  repeat (first [ split | intros ]) ;
+  try discriminate ;
+  try contradiction ;
+  try tauto ;
+  try constructor ;
   try (apply False_ind ; omega ; fail) ;
   try (apply False_ind ; auto with zarith ; fail) ;
   auto with zarith.
@@ -75,16 +75,16 @@ Inductive reflect (P:Prop) : bool -> Prop :=
   | R_true  : P -> reflect P true
   | R_false : ~P -> reflect P false.
 
-Definition boolean {A : Set} 
-  (f : A -> A -> bool) 
+Definition boolean {A : Set}
+  (f : A -> A -> bool)
   (p : A -> A -> Prop) : Prop := forall x y, reflect (p x y) (f x y).
-  
+
 (*
   forall x y, (f x y = true <-> p x y) /\
               (f x y = false <-> ~(p x y)).
 *)
 
-Ltac case_leq x y := 
+Ltac case_leq x y :=
   generalize (Zle_cases x y) ; induction (Zle_bool x y) ; try omega.
 
 Ltac case_lt x y :=
@@ -130,12 +130,12 @@ Proof.
   unfold boolean. intros x y. by (case_neq x y).
 Qed.
 
-Theorem Zlt_boolean : boolean Zlt_bool Zlt.
+Theorem Zlt_boolean : boolean Zlt_bool Z.lt.
 Proof.
   unfold boolean. intros x y. by (case_lt x y).
 Qed.
 
-Theorem Zle_boolean : boolean Zle_bool Zle.
+Theorem Zle_boolean : boolean Zle_bool Z.le.
 Proof.
   unfold boolean. intros x y. by (case_leq x y).
 Qed.
@@ -156,7 +156,7 @@ Hypothesis Aneq_boolean : forall A : Set, boolean (@Aneq_bool A) (fun x y => x<>
 
 (** ** Integer Induction (after a given rank) *)
 
-Theorem Z_induction(m : Z)(P : Z -> Prop) : 
+Theorem Z_induction(m : Z)(P : Z -> Prop) :
   (forall n, n <= m -> P n ) ->
   (forall n, n >= m -> P n -> P (n+1)) ->
   (forall n, P n).
@@ -165,12 +165,12 @@ Proof.
   induction (Z_le_dec n m) ; auto with zarith.
   apply Z.le_ind with (n := m) ; auto with zarith.
   unfold Morphisms.Proper.
-  unfold Morphisms.respectful. 
+  unfold Morphisms.respectful.
   intros. rewrite H1. intuition.
   intros. apply H0; auto with zarith.
 Qed.
 
-Theorem Z_induction_rank(m : Z)(P : Z -> Prop) : 
+Theorem Z_induction_rank(m : Z)(P : Z -> Prop) :
   P m ->
   (forall n, m <= n -> P n -> P (n+1)) ->
   (forall n, m <= n -> P n).
@@ -180,7 +180,7 @@ Proof.
   + intros.
     apply Z.le_ind with (n := m) ; auto with zarith.
     unfold Morphisms.Proper.
-    unfold Morphisms.respectful. 
+    unfold Morphisms.respectful.
     intros. rewrite H1. intuition.
    + intros. auto with zarith.
 Qed.
@@ -211,8 +211,9 @@ Definition array (A : Type) := farray Z A.
 Hypothesis extensionality: forall (A B : Type) (f g : A -> B),
   (forall x, f x = g x) -> f = g.
 
+
 Definition select {A B : Type}
-  (m : farray A B) (k : A) : B := @Map.get A (whytype1 m) B (whytype2 m) m k.
+  (m : farray A B) (k : A) : B := (access m) k.
 
 Lemma farray_eq : forall A B (m1 m2 : farray A B),
    whytype1 m1 = whytype1 m2 -> whytype2 m1 = whytype2 m2 ->
@@ -221,15 +222,14 @@ Proof.
   intros A B m1 m2.
   destruct m1. destruct m2. simpl.
   intros H1 H2; rewrite H1; rewrite H2 ; clear H1 H2.
-  destruct access0. destruct access1. compute.
   intro K.
-  rewrite (extensionality b b0 K).
+  rewrite (extensionality _ _ K).
   reflexivity.
 Qed.
 
 Definition update {A B : Type}
   (m : farray A B) (k : A) (v : B) : (farray A B) :=
-  {| whytype1 := whytype1 m; whytype2 := whytype2 m; access := @Map.set A (whytype1 m) B (whytype2 m) m k v|}.
+  {| whytype1 := whytype1 m; whytype2 := whytype2 m; access := @Map.set A (whytype1 m) B (whytype2 m) (access m) k v|}.
 
 Notation " a .[ k ] " := (select a k) (at level 60).
 Notation " a .[ k <- v ] " := (update a k v) (at level 60).
@@ -239,7 +239,7 @@ Lemma access_update :
   m.[k <- v].[k] = v.
 Proof.
   intros.
-  apply Map.Select_eq.
+  apply (proj1 (Map.set_def (access m) k v k)).
   reflexivity.
 Qed.
 
@@ -248,8 +248,8 @@ Lemma access_update_neq :
   i <> j -> m.[ i <- v ].[j] = m.[j].
 Proof.
   intros.
-  apply Map.Select_neq.
-  assumption.
+  apply (proj2 (Map.set_def (access m) i v j)).
+  auto.
 Qed.
 
 (** ** Division on Z *)
@@ -257,7 +257,7 @@ Qed.
 Definition Cdiv (n d : Z) : Z :=
   match n , d with
     | 0 , _ | _ , 0 => 0
-    | Zpos a , Zpos b 
+    | Zpos a , Zpos b
     | Zneg a , Zneg b => (Zpos a/Zpos b)
     | Zpos a , Zneg b
     | Zneg a , Zpos b => (-(Zpos a/Zpos b))
@@ -269,7 +269,7 @@ Definition Cmod (n d : Z) : Z :=
     | Zpos a , Zpos b
     | Zpos a , Zneg b => ( (Zpos a) mod (Zpos b) )
     | Zneg a , Zpos b
-    | Zneg a , Zneg b => (-( (Zpos a) mod (Zpos b) )) 
+    | Zneg a , Zneg b => (-( (Zpos a) mod (Zpos b) ))
   end.
 
 Lemma Cdiv_cases : forall n d,
@@ -279,7 +279,7 @@ Lemma Cdiv_cases : forall n d,
   ((n <= 0) -> (d < 0) -> Cdiv n d = (-n)/(-d)).
 Proof.
   intros.
-  destruct n as [|a|a] ; 
+  destruct n as [|a|a] ;
   destruct d as [|b|b] ;
   intuition ;
   by auto with zarith.
@@ -292,14 +292,14 @@ Lemma Cmod_cases : forall n d,
   ((n <= 0) -> (d < 0) -> Cmod n d = -((-n) mod (-d))).
 Proof.
   intros.
-  destruct n as [|a|a] ; 
+  destruct n as [|a|a] ;
   destruct d as [|b|b] ;
   intuition ;
   by auto with zarith.
 Qed.
 
-Theorem Cdiv_enclidian : 
-  forall (n d : Z), 
+Theorem Cdiv_enclidian :
+  forall (n d : Z),
   d <> 0 ->
   let q := Cdiv n d in let r := Cmod n d in
   (q * d + r = n).
@@ -307,11 +307,11 @@ Proof.
   intros n d NEQ q r.
   assert (OPP: forall p, (- (Zneg p) = Zpos p)) by auto with zarith.
   assert (NEG: forall p, (Zneg p = - (Zpos p))) by auto with zarith.
-  destruct n as [|a|a] ; 
+  destruct n as [|a|a] ;
   destruct d as [|b|b] ; auto with zarith ;
-  unfold Cdiv in q ; unfold Cmod in r ; 
-  unfold q ; unfold r ; 
-  repeat rewrite OPP ; repeat rewrite NEG ; 
+  unfold Cdiv in q ; unfold Cmod in r ;
+  unfold q ; unfold r ;
+  repeat rewrite OPP ; repeat rewrite NEG ;
   rewrite (Zmod_eq_full (Zpos a) (Zpos b)) ; try discriminate ;
   try ring.
 Qed.
@@ -323,7 +323,7 @@ Lemma Cmod_less : forall n d,
   ((n <= 0) -> (d < 0) ->  d <  Cmod n d <= 0).
 Proof.
   intros.
-  destruct n as [|a|a] ; 
+  destruct n as [|a|a] ;
   destruct d as [|b|b] ;
   intuition ; simpl ; forward ;
   generalize (Z_mod_lt (Zpos a) (Zpos b) (Zgt_pos_0 b)) ;
@@ -345,18 +345,3 @@ Proof.
   replace (d*x) with (x*d) by ring.
   omega.
 Qed.
-
-(* -------------------------------------------------------------------------- *)
-(* --- Missing Definitions                                                --- *)
-(* -------------------------------------------------------------------------- *)
-
-Variable truncate : R -> Z.
-Variable ceil : R -> Z.
-Variable floor : R -> Z.
-Variable sinh : R -> R.
-Variable cosh : R -> R.
-Variable tanh : R -> R.
-Variable atan2 : R -> R -> R.
-Variable hypot : R -> R -> R.
-
-(* -------------------------------------------------------------------------- *)

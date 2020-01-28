@@ -2,7 +2,7 @@
 /*                                                                        */
 /*  This file is part of Frama-C.                                         */
 /*                                                                        */
-/*  Copyright (C) 2007-2018                                               */
+/*  Copyright (C) 2007-2019                                               */
 /*    CEA (Commissariat à l'énergie atomique et aux énergies              */
 /*         alternatives)                                                  */
 /*                                                                        */
@@ -23,4 +23,10 @@
 // According to POSIX, definitions from both arpa/inet.h and netinet/in.h
 // may be exported by one another, so everything is defined in a common file.
 
+#ifndef __FC_ARPA_INET
+#define __FC_ARPA_INET
+#include "features.h"
+__PUSH_FC_STDLIB
 #include "../__fc_inet.h"
+__POP_FC_STDLIB
+#endif
