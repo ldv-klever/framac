@@ -7598,7 +7598,7 @@ and doExp local_env
         let old_gnu = ! gnu_body_result in
         let lastComp, isvoidbody =
           match what with
-          | ADrop -> (* We are dropping the result *)
+          | ADrop | AType -> (* We are dropping the result *)
             {stmt_ghost = local_env.is_ghost; stmt_node = A.NOP loc}, true
           | _ ->
             try findLastComputation (List.rev b.A.bstmts), false
