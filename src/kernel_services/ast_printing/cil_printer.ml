@@ -1702,7 +1702,7 @@ class cil_printer () = object (self)
           ignore
             Cil.(
               visitCilFunction
-                (object
+                (object (self')
                   inherit genericCilVisitor (Visitor_behavior.inplace ())
                   method! vinst =
                     function
@@ -1756,6 +1756,12 @@ class cil_printer () = object (self)
                     | Lval (Var ({ vtemp = true; _ } as vi), NoOffset)
                       when Extlib.opt_map fst (VH.find_opt unfolds vi) = Some `Try ->
                       VH.(replace unfolds vi (`Unfold, snd @@ find unfolds vi));
+                      SkipChildren
+                    | _ -> DoChildren
+                  method! vstmt s =
+                    match s.skind with
+                    | UnspecifiedSequence l ->
+                      List.iter (fun (stmt, _, _, _, _) -> ignore @@ visitCilStmt self' stmt) l;
                       SkipChildren
                     | _ -> DoChildren
                   method! vblock _ =
