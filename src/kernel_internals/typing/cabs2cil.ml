@@ -4342,7 +4342,7 @@ let append_chunk_to_annot ~ghost annot_chunk current_chunk =
                       local_var_chunk chunk (List.rev locals), ghost)
     end
 
-let default_argument_promotion idx exp =
+let default_argument_promotion ~implicit idx exp =
   let name = "x_" ^ string_of_int idx in
   let arg_type = Cil.typeOf exp in
   let typ =
@@ -4359,8 +4359,8 @@ let default_argument_promotion idx exp =
     | (TFun _) as t -> TPtr(t,[])
     | TComp(ci,_,_) -> TComp(ci,{ scache = Not_Computed },[])
     | TEnum(ei,_) -> TEnum(ei,[])
-    | TBuiltin_va_list _ -> 
-      abort_context "implicit prototype cannot have variadic arguments"
+    | TBuiltin_va_list _ as t ->
+      if implicit then abort_context "implicit prototype cannot have variadic arguments" else t
     | TNamed _ -> assert false (* unrollType *)
   in
   (* if we make a promotion, take it explicitly
@@ -4372,7 +4372,7 @@ let default_argument_promotion idx exp =
 let promote_variadic_arguments (chunk,args) = 
   let args =
     Extlib.mapi 
-      (fun i arg -> snd (default_argument_promotion i arg))
+      (fun i arg -> snd (default_argument_promotion ~implicit:false i arg))
       args
   in
   (chunk,args)
@@ -6917,7 +6917,7 @@ and doExp local_env
                warn_no_proto f;
                let (prm_types,args) =
                  List.split
-                   (Extlib.mapi default_argument_promotion args)
+                   (Extlib.mapi (default_argument_promotion ~implicit:true) args)
                in
                let typ = TFun (resType, Some prm_types, false,attrs) in
                Cil.update_var_type f typ;
