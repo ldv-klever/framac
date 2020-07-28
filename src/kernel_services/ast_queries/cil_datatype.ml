@@ -953,9 +953,7 @@ module StructEq =
         | StartOf lv1, StartOf lv2 -> compare_lval lv1 lv2
         | StartOf _, _ -> 1
         | _, StartOf _ -> -1
-        | Info _, Info _ ->
-          Cmdline.Kernel_log.fatal
-            "[exp_compare] Info node is obsolete. Do not use it"
+        | Info (e1, _), Info (e2, _) -> compare_exp e1 e2
 
     and compare_lval (h1,o1) (h2,o2) =
       let res = compare_lhost h1 h2 in
