@@ -160,6 +160,7 @@ let signed_ikind = function
   | IShort | IUShort        -> IShort
   | ILong | IULong          -> ILong
   | ILongLong | IULongLong  -> ILongLong
+  | I128 | IU128            -> I128
 
 let rec signed_counterpart typ =
   match Cil.unrollType typ with

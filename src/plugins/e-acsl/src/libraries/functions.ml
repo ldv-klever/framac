@@ -167,6 +167,7 @@ module Libc = struct
       | IULong -> "L" (* [unsigned long] *)
       | ILongLong -> "r" (* [long long] *)
       | IULongLong -> "R" (* [unsigned long long] *)
+      | I128 | IU128 -> assert false
       (* _Bool, char and short (either signed or unsigned are promoted to
          int) *)
       | IBool | IChar | ISChar | IUChar | IShort | IUShort -> "d"

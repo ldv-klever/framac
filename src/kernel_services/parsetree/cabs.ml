@@ -58,6 +58,7 @@ type typeSpecifier = (* Merge all specifiers into one type *)
   | Tint
   | Tlong
   | Tint64
+  | Tint128
   | Tfloat
   | Tdouble
   | Tlong_double

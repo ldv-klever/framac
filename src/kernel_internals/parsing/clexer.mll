@@ -210,6 +210,7 @@ let init_lexicon _ =
       ("__restrict", fun loc -> RESTRICT loc);
       ("restrict", fun loc -> RESTRICT loc);
 (*      ("__extension__", EXTENSION); *)
+      ("__int128", fun loc -> INT128 loc);
       (**** MS VC ***)
       ("__int64", fun _ -> INT64 (currentLoc ()));
       ("__int32", fun loc -> INT loc);

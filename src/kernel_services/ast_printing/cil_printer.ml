@@ -609,7 +609,7 @@ class cil_printer () = object (self)
     | CInt64(_, _, Some s) when print_as_source s ->
       fprintf fmt "%s" s (* Always print the text if there is one, unless
                             we want to print it as hexa *)
-    | CInt64(i, ik, _) ->
+    | CInt64(i, ik, s) ->
       (*fprintf fmt "/* %Lx */" i;*)
       (** We must make sure to capture the type of the constant. For some
           constants this is done with a suffix, for others with a cast
@@ -620,6 +620,9 @@ class cil_printer () = object (self)
         | IULong -> "UL"
         | ILongLong -> if Cil.msvcMode () then "L" else "LL"
         | IULongLong -> if Cil.msvcMode () then "UL" else "ULL"
+        | I128 | IU128 ->
+          Kernel.fatal "Cannot print a 128-bit integer literal: no appropriate syntax exists: %a%a"
+            (Integer.pretty ~hexa:false) i (Pretty_utils.pp_opt ~pre:" (" ~suf:")" ~none:"" pp_print_string) s
         | IInt | IBool | IShort | IUShort | IChar | ISChar | IUChar -> ""
       in
       let prefix =
@@ -2025,6 +2028,8 @@ class cil_printer () = object (self)
 	 if Cil.msvcMode () then "__int64" else "long long"
        | IULongLong ->
 	 if Cil.msvcMode () then "unsigned __int64" else "unsigned long long"
+       | I128 -> "__int128"
+       | IU128 -> "unsigned __int128"
       )
 
   method typ ?fundecl nameOpt

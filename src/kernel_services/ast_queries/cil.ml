@@ -2923,6 +2923,7 @@ let bytesSizeOfInt (ik: ikind): int =
   | IShort | IUShort -> theMachine.theMachine.sizeof_short
   | ILong | IULong -> theMachine.theMachine.sizeof_long
   | ILongLong | IULongLong -> theMachine.theMachine.sizeof_longlong
+  | I128 | IU128 -> 16
 
 let bitsSizeOfInt ik = 8 * bytesSizeOfInt ik
 
@@ -2963,13 +2964,15 @@ let isSigned = function
   | IUShort
   | IUInt
   | IULong
-  | IULongLong ->
+  | IULongLong
+  | IU128 ->
       false
   | ISChar
   | IShort
   | IInt
   | ILong
-  | ILongLong -> 
+  | ILongLong
+  | I128 ->
     true
   | IChar -> 
     not theMachine.theMachine.Cil_types.char_is_unsigned
@@ -3890,6 +3893,7 @@ let no_op_coerce typ t =
    | IInt | IUInt -> 3
    | ILong | IULong -> 4
    | ILongLong | IULongLong -> 5
+   | I128 | IU128 -> 6
 
  let unsignedVersionOf (ik:ikind): ikind =
    match ik with
@@ -3967,6 +3971,7 @@ let rec bytesAlignOf t =
   | TInt((ILong|IULong), _) -> theMachine.theMachine.alignof_long
   | TInt((ILongLong|IULongLong), _) ->
     theMachine.theMachine.alignof_longlong
+  | TInt((I128|IU128), _) -> 16
   | TEnum (ei,_) ->  bytesAlignOf (TInt(ei.ekind, []))
   | TFloat(FFloat, _) -> theMachine.theMachine.alignof_float
   | TFloat(FDouble, _) -> theMachine.theMachine.alignof_double

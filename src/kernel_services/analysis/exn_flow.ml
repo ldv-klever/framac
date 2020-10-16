@@ -286,6 +286,7 @@ let get_type_tag t =
       | TInt (IULong,_) -> "ul"
       | TInt (ILongLong,_) -> "ll"
       | TInt (IULongLong,_) -> "ull"
+      | TInt (I128,_) | TInt (IU128,_) -> Kernel.fatal "no support for 128-bit integers in exception flow analysis"
       | TFloat(FFloat,_) -> "f"
       | TFloat(FDouble,_) -> "d"
       | TFloat (FLongDouble,_) -> "ld"

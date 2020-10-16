@@ -95,7 +95,7 @@ WARNINGS ?= -w +a-4-6-9-41-42-44-45-48-50
 # - 58 (missing cmx) is triggered by some versions of external libraries.
 #   Situation should probably improve as these libraries get updated, leading
 #   to treat this warning as error.
-WARN_ERROR ?= -warn-error +a-3-4-32-33-34-35-36-37-38-39-58
+WARN_ERROR ?= -warn-error +a-3-4-32-33-34-35-36-37-38-39-58-60-67
 
 else
 

@@ -91,6 +91,8 @@ let c_int ikind =
   | IULong -> make_c_int false mach.sizeof_long
   | ILongLong -> make_c_int true mach.sizeof_longlong
   | IULongLong -> make_c_int false mach.sizeof_longlong
+  | I128 -> make_c_int true 16
+  | IU128 -> make_c_int false 16
 
 let c_bool () = c_int IBool
 let c_char () = c_int IChar

@@ -260,6 +260,8 @@ and ikind =
   | ILongLong   (** [long long] (or [_int64] on Microsoft Visual C) *)
   | IULongLong  (** [unsigned long long] (or [unsigned _int64] on Microsoft
                     Visual C) *)
+  | I128        (** [__int128] *)
+  | IU128       (** [unsigned __int128] *)
 
 (** Various kinds of floating-point numbers*)
 and fkind =

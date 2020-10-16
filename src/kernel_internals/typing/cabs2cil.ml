@@ -4600,9 +4600,10 @@ let rec doSpecList ghost (suggestedAnonName: string)
       | A.Tlong -> 5
       | A.Tint -> 6
       | A.Tint64 -> 7
-      | A.Tfloat -> 8
-      | A.Tdouble -> 9
-      | _ -> 10 (* There should be at most one of the others *)
+      | A.Tint128 -> 8
+      | A.Tfloat -> 9
+      | A.Tdouble -> 10
+      | _ -> 11 (* There should be at most one of the others *)
     in
     List.stable_sort (fun ts1 ts2 ->
         Datatype.Int.compare (order ts1) (order ts2)) tspecs''
@@ -4662,6 +4663,10 @@ let rec doSpecList ghost (suggestedAnonName: string)
 
     | [A.Tunsigned; A.Tlong; A.Tlong] -> TInt(IULongLong, [])
     | [A.Tunsigned; A.Tlong; A.Tlong; A.Tint] -> TInt(IULongLong, [])
+
+    | [A.Tint128] -> TInt(I128, [])
+    | [A.Tsigned; A.Tint128] -> TInt(I128, [])
+    | [A.Tunsigned; A.Tint128] -> TInt(IU128, [])
 
     (* int64 is to support MSVC *)
     | [A.Tint64] -> TInt(ILongLong, [])
