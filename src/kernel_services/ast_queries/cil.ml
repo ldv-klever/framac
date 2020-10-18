@@ -5982,7 +5982,20 @@ let argsToPairOfLists args =
       let t1' = integralPromotion t1 in
       let t2' = integralPromotion t2 in
       match unrollTypeSkel t1', unrollTypeSkel t2' with
-        TInt(IULongLong, _), _ -> checkToInt t2'; t1'
+        TInt(IU128, _), _ -> checkToInt t2'; t1'
+      | _, TInt(IU128, _) -> checkToInt t1'; t2'
+
+      | TInt(I128,_), _
+            when bitsSizeOf t1' <= bitsSizeOf t2' &&
+	      (not (isSignedInteger t2')) -> TInt(IU128,[])
+      | _, TInt(I128,_)
+            when bitsSizeOf t2' <= bitsSizeOf t1' &&
+	      (not (isSignedInteger t1')) -> TInt(IU128,[])
+
+      | TInt(I128, _), _ -> checkToInt t2'; t1'
+      | _, TInt(I128, _) -> checkToInt t1'; t2'
+
+      | TInt(IULongLong, _), _ -> checkToInt t2'; t1'
       | _, TInt(IULongLong, _) -> checkToInt t1'; t2'
 
       | TInt(ILongLong,_), _
