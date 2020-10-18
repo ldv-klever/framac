@@ -212,7 +212,7 @@ let parse_error ?(source=Cil_datatype.Position.of_lexing_pos (Lexing.lexeme_star
   match start_pos with
   | None ->
     Pretty_utils.ksfprintf (fun str ->
-        Kernel.feedback ~source "%s:@." str ~append:(fun fmt ->
+        Kernel.error ~source "%s:@." str ~append:(fun fmt ->
             Format.fprintf fmt "%a\n"
               pretty_token (Lexing.lexeme !current.lexbuf);
             Format.fprintf fmt "%a@."
@@ -222,7 +222,7 @@ let parse_error ?(source=Cil_datatype.Position.of_lexing_pos (Lexing.lexeme_star
   | Some start_pos ->
     let start_pos = Cil_datatype.Position.of_lexing_pos start_pos in
     Pretty_utils.ksfprintf (fun str ->
-        Kernel.feedback ~source:start_pos "%s:@." str
+        Kernel.error ~source:start_pos "%s:@." str
           ~append:(fun fmt ->
             Format.fprintf fmt "%a%a\n"
               pretty_pos_between (start_pos, source)
