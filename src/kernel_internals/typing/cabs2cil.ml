@@ -7217,15 +7217,17 @@ and doExp local_env
                    "Invalid call to builtin_expect"
              end
 
-           | "__fc_infinity" -> begin
+           | "__fc_infinity" | "__builtin_inff" as b -> begin
                piscall := false;
-               let cst = CReal (infinity, FFloat, Some "INFINITY") in
+               let s = if b = "__fc_infinity" then "INFINITY" else "__builtin_inff()" in
+               let cst = CReal (infinity, FFloat, Some s) in
                pres := Cil.new_exp ~loc (Const cst);
                prestype := Cil.floatType;
              end
-           | "__fc_nan" -> begin
+           | "__fc_nan" | "__builtin_nanf" as b -> begin
                piscall := false;
-               let cst = CReal (nan, FFloat, Some "NAN") in
+               let s = if b = "__fc_nan" then "NAN" else "__builtin_nanf(\"\")" in
+               let cst = CReal (nan, FFloat, Some s) in
                pres := Cil.new_exp ~loc (Const cst);
                prestype := Cil.floatType;
              end
