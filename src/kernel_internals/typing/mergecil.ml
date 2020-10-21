@@ -1703,7 +1703,7 @@ let oneFilePass1 (f:file) : unit =
        * because it might fail *)
       let newtype, newrep =
         try
-          combineTypes CombineOther
+          combineTypes (if isFunctionType vi.vtype then CombineFundef else CombineOther)
             oldvinode.nfidx oldvi.vtype
             !currentFidx vi.vtype, fst (union oldvinode vinode);
         with (Failure reason) -> begin
