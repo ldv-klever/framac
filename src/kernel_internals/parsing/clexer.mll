@@ -103,6 +103,7 @@ let init_lexicon _ =
            | 4 -> `_32
            | 8 -> `_64
            | 10 -> `_80
+           | 12 -> `_96
            | 16 -> `_128
            | _ -> assert false),
           tok
@@ -153,6 +154,8 @@ let init_lexicon _ =
       float "_Float64x" `_64;
       float "_Float80" `_80;
       float "_Float80x" `_80;
+      float "_Float96" `_96;
+      float "_Float96x" `_96;
       float "_Float128" `_128;
       float "_Float128x" `_128;
       ("void", fun loc -> VOID loc);
