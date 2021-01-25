@@ -169,6 +169,88 @@ let gcc_x86_64 = { x86_64 with
                    sizeof_fun = 1; alignof_fun = 1;
                  }
 
+let arm_32 = {
+  version          = "gcc 10.2.1 - ARM-32bits mode";
+  compiler         = "generic";
+  cpp_arch_flags   = ["-m32"];
+  sizeof_short     = 2;
+  sizeof_int       = 4;
+  sizeof_long      = 4;
+  sizeof_longlong  = 8;
+  sizeof_ptr       = 4;
+  sizeof_float     = 4;
+  sizeof_double    = 8;
+  sizeof_longdouble  = 8;
+  sizeof_void      = 1;
+  sizeof_fun       = -1;
+  size_t = "unsigned int";
+  wchar_t = "unsigned short";
+  ptrdiff_t = "int";
+  alignof_short = 2;
+  alignof_int = 4;
+  alignof_long = 4;
+  alignof_longlong = 8;
+  alignof_ptr = 4;
+  alignof_float = 4;
+  alignof_double = 8;
+  alignof_longdouble = 8;
+  alignof_str = 1;
+  alignof_fun = -1;
+  alignof_aligned= 16;
+  char_is_unsigned = true;
+  const_string_literals = true;
+  little_endian = true;
+  underscore_name = false;
+  has__builtin_va_list = true;
+  __thread_is_keyword = true;
+}
+
+let gcc_arm_32 = { x86_32 with
+                   compiler = "gcc";
+                   sizeof_fun = 1; alignof_fun = 1;
+                 }
+
+let arm_64 = {
+  version          = "gcc 10.2.1 - ARM-64bits mode";
+  compiler         = "generic";
+  cpp_arch_flags   = ["-m64"];
+  sizeof_short     = 2;
+  sizeof_int       = 4;
+  sizeof_long      = 8;
+  sizeof_longlong  = 8;
+  sizeof_ptr       = 8;
+  sizeof_float     = 4;
+  sizeof_double    = 8;
+  sizeof_longdouble  = 16;
+  sizeof_void      = 1;
+  sizeof_fun       = -1;
+  size_t = "unsigned long";
+  wchar_t = "unsigned short";
+  ptrdiff_t = "long";
+  alignof_short = 2;
+  alignof_int = 4;
+  alignof_long = 8;
+  alignof_longlong = 8;
+  alignof_ptr = 8;
+  alignof_float = 4;
+  alignof_double = 8;
+  alignof_longdouble = 16;
+  alignof_str = 1;
+  alignof_fun = -1;
+  alignof_aligned= 16;
+  char_is_unsigned = true;
+  const_string_literals = true;
+  little_endian = true;
+  underscore_name = false ;
+  has__builtin_va_list = true;
+  __thread_is_keyword = true;
+}
+
+let gcc_arm_64 = { x86_64 with
+                   compiler = "gcc";
+                   sizeof_fun = 1; alignof_fun = 1;
+                 }
+
 let ppc_32 = {
   version          = "4.0.1 (Apple Computer, Inc. build 5367)";
   compiler         = "standard";

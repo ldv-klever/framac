@@ -294,9 +294,13 @@ let default_machdeps =
   [ "x86_16", Machdeps.x86_16;
     "x86_32", Machdeps.x86_32;
     "x86_64", Machdeps.x86_64;
+    "arm_32", Machdeps.arm_32;
+    "arm_64", Machdeps.arm_64;
     "gcc_x86_16", Machdeps.x86_16;
     "gcc_x86_32", Machdeps.gcc_x86_32;
     "gcc_x86_64", Machdeps.gcc_x86_64;
+    "gcc_arm_32", Machdeps.gcc_arm_32;
+    "gcc_arm_64", Machdeps.gcc_arm_64;
     "ppc_32", Machdeps.ppc_32;
     "msvc_x86_64", Machdeps.msvc_x86_64;
   ]
