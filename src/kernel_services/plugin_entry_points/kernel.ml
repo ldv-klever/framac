@@ -1337,6 +1337,28 @@ module Files = struct
 
 end
 
+let () = Parameter_customize.set_group inout_source
+module MoreFiles =
+  P.Filepath
+    (struct
+      let module_name = "MoreFiles"
+      let option_name = "-more-files"
+      let arg_name = "filename"
+      let existence = Parameter_sig.Must_exist
+      let help = "read more input file paths from file (paths are separated by newlines)"
+    end)
+let () =
+  MoreFiles.add_set_hook
+    (fun _ f ->
+       Filepath.Normalized.pp_abs Format.str_formatter f;
+       let f = Format.flush_str_formatter () in
+       let ic = open_in f in
+       let n = in_channel_length ic in
+       let s = Bytes.create n in
+       really_input ic s 0 n;
+       close_in ic;
+       Files.append_after (Str.split (Str.regexp "\n") (Bytes.unsafe_to_string s)))
+
 let () = Parameter_customize.set_group normalisation
 module AllowDuplication =
   True(struct
