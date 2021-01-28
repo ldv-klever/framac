@@ -1333,7 +1333,7 @@ module Files = struct
        let arg_name = ""
        let help = ""
      end)
-  let () = Cmdline.use_cmdline_files set
+  let () = Cmdline.use_cmdline_files append_before
 
 end
 
