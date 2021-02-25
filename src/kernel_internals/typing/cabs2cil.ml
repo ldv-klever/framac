@@ -10128,7 +10128,7 @@ and doStatement local_env (s : A.statement) : chunk =
     CurrentLoc.set loc';
     (* Sometimes we return the result of a void function call *)
     if isVoidType !currentReturnType then begin
-      let (se, _, et) = doFullExp local_env CNoConst e ADrop in
+      let (se, _, et) = doFullExp local_env CNoConst e AType in
       if not (isVoidType et) then
         Kernel.error ~current:true
         "Return statement with a value in function returning void";
