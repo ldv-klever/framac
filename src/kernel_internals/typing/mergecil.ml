@@ -1771,6 +1771,7 @@ let oneFilePass1 (f:file) : unit =
         | NoStorage, Extern -> (if oldvi.vdefined then NoStorage else Extern), oldvi.vdecl
         | Extern, NoStorage when vi.vdefined -> NoStorage, vi.vdecl
         | Extern, (Extern | NoStorage) -> Extern, vi.vdecl
+        | _ when vi.vstorage = oldvi.vstorage -> oldvi.vstorage, oldvi.vdecl
         | _ ->
           Kernel.abort ~current:true
 	    "Inconsistent storage specification for %s. \
