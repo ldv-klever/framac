@@ -1350,9 +1350,7 @@ module MoreFiles =
 let () =
   MoreFiles.add_set_hook
     (fun _ f ->
-       Filepath.Normalized.pp_abs Format.str_formatter f;
-       let f = Format.flush_str_formatter () in
-       let ic = open_in f in
+       let ic = open_in (f :> string) in
        let n = in_channel_length ic in
        let s = Bytes.create n in
        really_input ic s 0 n;
