@@ -907,8 +907,9 @@ let add_label_env lab =
     | _ -> map
   in
   let open Datatype.String.Hashtbl in
-  let lab_env = fold add_if_absent ghost_env Datatype.String.Map.empty in
-  add label_env lab lab_env
+  if Kernel.ReadAnnot.get () then
+    let lab_env = fold add_if_absent ghost_env Datatype.String.Map.empty in
+    add label_env lab lab_env
 
 let remove_label_env lab =
   Datatype.String.Hashtbl.remove label_env lab
