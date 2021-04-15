@@ -956,8 +956,17 @@ class cil_printer () = object (self)
 
   (*** INSTRUCTIONS ****)
   method instr fmt (i:instr) = (* imperative instruction *)
-    fprintf fmt "%a"
-      (self#line_directive ~forcefile:false) (Cil_datatype.Instr.loc i);
+    let hidden =
+      match i with
+      | Set ((Var ({ vtemp = true; _ } as vi), NoOffset), _, _)
+      | Call (Some (Var ({ vtemp = true; _ } as vi), NoOffset), _, _, _)
+      | Local_init ({ vtemp = true; _ } as vi, _, _) ->
+        fmt != str_formatter && Extlib.opt_map fst @@ VH.find_opt unfolds vi = Some `Unfold
+      | _ -> false
+    in
+    if not hidden then
+      fprintf fmt "%a"
+        (self#line_directive ~forcefile:false) (Cil_datatype.Instr.loc i);
     let pp_call dest e fmt args =
       (match dest with
        | None -> ()
@@ -1003,12 +1012,8 @@ class cil_printer () = object (self)
       (* Now the terminator *)
       fprintf fmt "@]%s" instr_terminator
     in
-    match i with
+    if not hidden then match i with
     | Skip _ -> fprintf fmt ";"
-    | Set ((Var ({ vtemp = true; _ } as vi), NoOffset), _, _)
-    | Call (Some (Var ({ vtemp = true; _ } as vi), NoOffset), _, _, _)
-    | Local_init ({ vtemp = true; _ } as vi, _, _)
-      when fmt != str_formatter && Extlib.opt_map fst @@ VH.find_opt unfolds vi = Some `Unfold -> ()
     | Set(lv,e,_) -> begin
       (* Be nice to some special cases *)
       match e.enode with
