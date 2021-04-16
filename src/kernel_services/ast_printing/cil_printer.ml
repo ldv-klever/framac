@@ -1246,11 +1246,15 @@ class cil_printer () = object (self)
       Pretty_utils.pp_list
         ~pre:"@[<hov>" ~sep:"@ " ~suf self#label fmt s.labels
 
-  method label fmt = function
-    | Label (s, _, b) when b || not verbose -> fprintf fmt "@[%s:@]" s
-    | Label (s, _, _) -> fprintf fmt "@[%s: /* internal */@]" s
-    | Case (e, _) -> fprintf fmt "@[%a %a:@]" self#pp_keyword "case" self#exp e
-    | Default _ -> fprintf fmt "@[%a:@]" self#pp_keyword "default"
+  method label =
+    let loc = function Label (_, l, _) | Case (_, l) | Default l -> l in
+    fun fmt l ->
+      self#line_directive fmt (loc l);
+      match l with
+      | Label (s, _, b) when b || not verbose -> fprintf fmt "@[%s:@]" s
+      | Label (s, _, _) -> fprintf fmt "@[%s: /* internal */@]" s
+      | Case (e, _) -> fprintf fmt "@[%a %a:@]" self#pp_keyword "case" self#exp e
+      | Default _ -> fprintf fmt "@[%a:@]" self#pp_keyword "default"
 
   method compinfo fmt x = fprintf fmt "compinfo:%a" pp_print_bool x.cstruct
 
@@ -1350,6 +1354,7 @@ class cil_printer () = object (self)
     | _ -> false
 
   method private vdecl_complete fmt v =
+    self#line_directive fmt v.vdecl;
     Format.fprintf fmt "@[<hov 0>" ;
     self#in_ghost_if_needed fmt v.vghost ~post_fmt:"@ %t" ~block:false
       (fun () -> Format.fprintf fmt "%a;" self#vdecl v) ;
