@@ -8092,7 +8092,7 @@ and doFullExp local_env const e what =
   (* there is a sequence point after a full exp *)
   empty @@ (se', local_env.is_ghost),e,t
 
-and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
+and doInitializer ?(global=false) local_env (vi: varinfo) (inite: A.init_expression)
   (* Return the accumulated chunk, the initializer and the new type (might be
    * different for arrays), together with the lvals read during evaluation of
    * the initializer (for local intialization)
@@ -8131,7 +8131,7 @@ and doInitializer local_env (vi: varinfo) (inite: A.init_expression)
     in
     fun i -> shrink (NoOffset, i) |> function [_, i] -> i | _ -> i
   in
-  let init = if Kernel.Shrink_initializers.get () then shrink_init init else init in
+  let init = if global && Kernel.Shrink_initializers.get () then shrink_init init else init in
   Kernel.debug ~dkey:Kernel.dkey_typing_init
     "Finished the initializer for %s@\n  init=%a@\n  typ=%a@\n  acc=%a@\n"
     vi.vname (fun fmt -> resolveGotos (); Cil_printer.pp_init fmt) init Cil_printer.pp_typ typ' d_chunk acc;
@@ -8678,7 +8678,7 @@ and createGlobal ghost logic_spec ((t,s,b,attr_list) : (typ * storage * bool * A
     if inite = A.NO_INIT then
       None
     else
-      let se, ie', et, _ = doInitializer (ghost_local_env ghost) vi inite in
+      let se, ie', et, _ = doInitializer ~global:true (ghost_local_env ghost) vi inite in
       (* Maybe we now have a better type?  Use the type of the
        * initializer only if it really differs from the type of
        * the variable. *)
