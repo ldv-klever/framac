@@ -1758,6 +1758,12 @@ class cil_printer () = object (self)
                            in
                            VH.add unfolds vi (`Try, (s, p, e));
                            [i])
+                    | Set ((Var ({ vtemp = true; _ } as vi), NoOffset), _, _)
+                    | Call (Some (Var ({ vtemp = true; _ } as vi), NoOffset), _, _, _)
+                    | Local_init ({ vtemp = true; _ } as vi, _, _)
+                      when Extlib.opt_map fst (VH.find_opt unfolds vi) = Some `Unfold ->
+                      VH.(replace unfolds vi (`Fail, snd @@ find unfolds vi));
+                      DoChildren
                     | Set _ | Call _ | Local_init _ | Asm _ ->
                       DoChildrenPost
                         (fun i ->
