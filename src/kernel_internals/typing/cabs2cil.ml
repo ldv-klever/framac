@@ -4561,6 +4561,7 @@ let rec doSpecList ghost (suggestedAnonName: string)
       acc
 
     | A.SpecCV cv -> cvattrs := cv :: !cvattrs; acc
+    | A.SpecAtomic -> attrs := ("_Atomic", []) :: !attrs; acc
     | A.SpecAttr a -> attrs := a :: !attrs; acc
     | A.SpecType ts -> ts :: acc
     | A.SpecPattern _ -> abort_context "SpecPattern in cabs2cil input"
@@ -4872,6 +4873,12 @@ let rec doSpecList ghost (suggestedAnonName: string)
 
     | [A.TtypeofT (specs, dt)] ->
       doOnlyType ghost specs dt
+
+    | [A.Tatomic (specs, dt)] ->
+      let typ = doOnlyType ghost specs dt in
+      if List.exists (fun q -> typeHasQualifier q typ) ["const"; "restrict"; "volatile"; "_Atomic"] then
+        Kernel.error ~current:true "New atomic type cannot be atomic or cvr-qualified";
+      typeAddAttributes [Attr ("_Atomic", [])] typ
 
     | l ->
       Kernel.fatal ~current:true

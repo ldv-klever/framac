@@ -328,7 +328,7 @@ let in_block l =
 %token<Cabs.cabsloc> BOOL CHAR INT DOUBLE FLOAT LONG_DOUBLE VOID INT64 INT128
 %token<Cabs.cabsloc> ENUM STRUCT TYPEDEF UNION
 %token<Cabs.cabsloc> SIGNED UNSIGNED LONG SHORT
-%token<Cabs.cabsloc> VOLATILE EXTERN STATIC CONST RESTRICT AUTO REGISTER
+%token<Cabs.cabsloc> VOLATILE EXTERN STATIC CONST RESTRICT AUTO REGISTER ATOMIC
 %token<Cabs.cabsloc> THREAD NORETURN
 
 %token<Cabs.cabsloc> SIZEOF ALIGNOF
@@ -1101,6 +1101,7 @@ decl_spec_wo_type:                         /* ISO 6.7 */
                                         /* ISO 6.7.4 */
 |   INLINE           { SpecInline, $1 }
 |   cvspec           { $1 }
+|   ATOMIC           { SpecAtomic, $1 }
 |   attribute_nocv   { SpecAttr (fst $1), snd $1 }
 ;
 
@@ -1178,6 +1179,7 @@ type_spec:   /* ISO 6.7.2 */
 |   TYPEOF LPAREN expression RPAREN     { TtypeofE $3, $1 }
 |   TYPEOF LPAREN type_name RPAREN      { let s, d = $3 in
                                           TtypeofT (s, d), $1 }
+|   ATOMIC LPAREN type_name RPAREN      { let s, d = $3 in Tatomic (s, d), $1 }
 ;
 struct_decl_list: /* (* ISO 6.7.2. Except that we allow empty structs. We
                       * also allow missing field names. *)

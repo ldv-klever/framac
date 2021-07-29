@@ -202,6 +202,12 @@ let init_lexicon _ =
             ALIGNOF loc
           else
             IDENT "_Alignof"));
+      ("_Atomic",
+        (fun loc ->
+          if Kernel.C11.get () then
+            ATOMIC loc
+          else
+            IDENT "_Atomic"));
       ("__volatile__", fun loc -> VOLATILE loc);
       ("__volatile", fun loc -> VOLATILE loc);
 

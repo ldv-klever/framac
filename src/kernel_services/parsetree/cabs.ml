@@ -75,6 +75,7 @@ type typeSpecifier = (* Merge all specifiers into one type *)
   | Tenum of string * enum_item list option * attribute list
   | TtypeofE of expression                      (* GCC __typeof__ *)
   | TtypeofT of specifier * decl_type       (* GCC __typeof__ *)
+  | Tatomic of specifier * decl_type       (* C11 `_Atomic (type-name)` *)
 
 and storage =
     NO_STORAGE | AUTO | STATIC | EXTERN | REGISTER
@@ -94,6 +95,7 @@ and cvspec =
 and spec_elem =
     SpecTypedef
   | SpecCV of cvspec            (* const/volatile *)
+  | SpecAtomic                  (* C11 _Atomic *)
   | SpecAttr of attribute       (* __attribute__ *)
   | SpecStorage of storage
   | SpecInline
