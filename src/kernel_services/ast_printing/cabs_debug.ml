@@ -99,11 +99,13 @@ let rec pp_typeSpecifier fmt = function
     fprintf fmt "}@ %a" pp_attrs alist;
   |	TtypeofE exp -> fprintf fmt "typeOfE %a" pp_exp exp
   |	TtypeofT (spec, d_type) -> fprintf fmt "typeOfT(%a,%a)" pp_spec spec pp_decl_type d_type
+  |	Tatomic (spec, d_type) -> fprintf fmt "Tatomic(%a,%a)" pp_spec spec pp_decl_type d_type
 
 
 and pp_spec_elem  fmt = function
   |	SpecTypedef -> fprintf fmt "SpecTypedef"
   |	SpecCV cvspec -> fprintf fmt "SpecCV %a" pp_cvspec cvspec
+  |	SpecAtomic -> fprintf fmt "SpecAtomic"
   |	SpecAttr attr -> fprintf fmt "SpecAttr %a" pp_attr attr
   |	SpecStorage storage -> fprintf fmt "SpecStorage %a" pp_storage storage
   |	SpecInline -> fprintf fmt "SpecInline"

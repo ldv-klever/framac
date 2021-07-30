@@ -209,6 +209,7 @@ let rec print_specifiers fmt (specs: spec_elem list) =
     | SpecCV CV_CONST -> fprintf fmt "const"
     | SpecCV CV_VOLATILE -> fprintf fmt "volatile"
     | SpecCV CV_RESTRICT -> fprintf fmt "restrict"
+    | SpecAtomic -> fprintf fmt "_Atomic"
     | SpecCV (CV_ATTRIBUTE_ANNOT a) -> fprintf fmt "/*@@ %s */" a
     | SpecAttr al -> print_attribute fmt al
     | SpecType bt -> print_type_spec fmt bt
@@ -247,6 +248,8 @@ and print_type_spec fmt = function
   | TtypeofE e -> fprintf fmt "__typeof__(@[%a@])" print_expression e
   | TtypeofT (s,d) ->
       fprintf fmt "__typeof__(@[%a@])"print_onlytype (s, d)
+  | Tatomic (s,d) ->
+      fprintf fmt "_Atomic (@[%a@])" print_onlytype (s, d)
 
 (* print "struct foo", but with specified keyword and a list of
  * attributes to put between keyword and name *)
