@@ -9771,14 +9771,14 @@ and doTypedef ghost ((specs, nl): A.name_group) =
       let n', _  = newAlphaName ghost true "type" n in
       let ti =
         try
-          H.find typeInfoNameEnv n
+          H.find typeInfoNameEnv n'
         with
         | Not_found ->
           let ti =
             { torig_name = n; tname = n';
               ttype = newTyp'; treferenced = false }
           in
-          H.add typeInfoNameEnv n ti;
+          H.add typeInfoNameEnv n' ti;
           ti
       in
       (* Since we use the same name space, we might later hit a global with
