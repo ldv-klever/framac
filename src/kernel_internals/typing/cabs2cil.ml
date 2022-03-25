@@ -3335,7 +3335,6 @@ let conditionalConversion (t2: typ) (t3: typ) : typ =
             t2 (* Just pick one *)
           end
       end
-    | t1, t2 when Typ.equal t1 t2 -> t1
     | _, _ ->
       Kernel.fatal ~current:true "invalid implicit conversion from %a to %a"
         Cil_printer.pp_typ t2 Cil_printer.pp_typ t3
@@ -6221,7 +6220,7 @@ and doExp local_env
         in
         let (t'', e'') =
           match typ with
-            TVoid _ when what' = ADrop && asconst <> CNoConst -> (t', e') (* strange GNU thing *)
+            TVoid _ when what' = ADrop -> (t', e') (* strange GNU thing *)
           |  _ ->
                (* Do this to check the cast, unless we are sure that we do not
                 * need the check. *)
