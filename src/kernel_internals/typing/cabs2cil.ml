@@ -7611,15 +7611,13 @@ and doExp local_env
         in
         (* Save the previous data *)
         let old_gnu = ! gnu_body_result in
-        let lastComp, isvoidbody =
-          match what with
-          | ADrop | AType -> (* We are dropping the result *)
-            {stmt_ghost = local_env.is_ghost; stmt_node = A.NOP loc}, true
-          | _ ->
-            try findLastComputation (List.rev b.A.bstmts), false
-            with Not_found ->
-              Kernel.fatal ~current:true "Cannot find COMPUTATION in GNU.body"
-              (*                A.NOP cabslu, true *)
+        let isvoidbody = what = ADrop || what = AType in (* We are dropping the result *)
+        let lastComp =
+          try findLastComputation (List.rev b.A.bstmts)
+          with Not_found ->
+            if isvoidbody then {stmt_ghost = local_env.is_ghost; stmt_node = A.NOP loc}
+            else Kernel.fatal ~current:true "Cannot find COMPUTATION in GNU.body"
+            (*                A.NOP cabslu, true *)
         in
         let loc = Cabshelper.get_statementloc lastComp in
         (* Prepare some data to be filled by doExp ghost *)
@@ -7635,6 +7633,9 @@ and doExp local_env
         | None when isvoidbody ->
           finishExp [] se (zero ~loc:e.expr_loc) voidType
         | None -> abort_context "Cannot find COMPUTATION in GNU.body"
+        | Some (e, t) when isvoidbody ->
+          let e, t = match e.enode with CastE (TVoid _, _, e) -> e, typeOf e | _ -> e, t in
+          finishExp [] se e t
         | Some (e, t) ->
           let se, e =
             match se.stmts with
