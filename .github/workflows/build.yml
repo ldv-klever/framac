@@ -1,0 +1,42 @@
+name: build
+
+on: [push]
+
+jobs:
+  build:
+    # It is necessary to use a pretty old version of Ubuntu to prepare binaries to be run on different newer Linux
+    # distributions.
+    runs-on: ubuntu-18.04
+
+    steps:
+      - name: Check out the target branch
+        uses: actions/checkout@v2
+
+      - name: Install dependencies necessary to build Frama-C
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y git bubblewrap build-essential autoconf graphviz libexpat1-dev libgmp-dev libgnomecanvas2-dev libgtk2.0-dev libgtksourceview2.0-dev pkg-config
+          wget https://raw.github.com/ocaml/opam/master/shell/install.sh
+          chmod +x install.sh
+          sudo bash -c 'printf "\n" | ./install.sh'
+          opam init -y
+          opam switch create as_new_cil 4.07.1
+          opam switch as_new_cil
+          eval $(opam env)
+          opam install -y --deps-only frama-c
+
+      - name: Build Frama-C
+        run: |
+          eval $(opam env)
+          autoconf
+          ./configure --prefix=$(opam var prefix) --with-no-plugin
+          make -j $(nproc)
+
+      - name: Archive Frama-C binaries
+        run: tar -cJf frama-c-cil-$(git rev-parse --short HEAD).tar.xz -C bin toplevel.opt
+
+      - name: Upload the archive with Frama-C binaries
+        uses: actions/upload-artifact@v2
+        with:
+          name: frama-c
+          path: "*.tar.xz"
