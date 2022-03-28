@@ -3311,7 +3311,7 @@ let vla_free_fun () =
   memoBuiltin ~force_keep:true ~spec "__fc_vla_free"
     (voidType, Args [p_arg], false)
 
-let conditionalConversion (t2: typ) (t3: typ) : typ =
+let conditionalConversion ?(drop=false) (t2: typ) (t3: typ) : typ =
   let tresult =  (* ISO 6.5.15 *)
     match unrollType t2, unrollType t3 with
     | (TInt _ | TEnum _ | TFloat _), (TInt _ | TEnum _ | TFloat _) ->
@@ -3335,6 +3335,8 @@ let conditionalConversion (t2: typ) (t3: typ) : typ =
             t2 (* Just pick one *)
           end
       end
+    | TVoid _, t
+    | t, TVoid _ when drop -> t
     | _, _ ->
       Kernel.fatal ~current:true "invalid implicit conversion from %a to %a"
         Cil_printer.pp_typ t2 Cil_printer.pp_typ t3
@@ -7436,7 +7438,7 @@ and doExp local_env
           let r3, se3, e3', t3 =
             doExp (no_paren_local_env local_env) asconst e3 what'
           in
-          let tresult = conditionalConversion t2 t3 in
+          let tresult = conditionalConversion ~drop:(what = ADrop) t2 t3 in
           let ttmp = typeRemoveAttributes ["const"] tresult in
           if not (isEmpty se2) then
             ConditionalSideEffectHook.apply (e,e2);
@@ -7621,7 +7623,7 @@ and doExp local_env
         in
         let loc = Cabshelper.get_statementloc lastComp in
         (* Prepare some data to be filled by doExp ghost *)
-        let data : (exp * typ) option ref = ref None in
+        let data : (exp * typ) option ref = ref (if isvoidbody then Some (zero ~loc:e.expr_loc, voidType) else None) in
         gnu_body_result := (lastComp, data);
 
         let se = doBodyScope local_env b in
@@ -7635,7 +7637,7 @@ and doExp local_env
         | None -> abort_context "Cannot find COMPUTATION in GNU.body"
         | Some (e, t) when isvoidbody ->
           let e, t = match e.enode with CastE (TVoid _, _, e) -> e, typeOf e | _ -> e, t in
-          finishExp [] se e t
+          if not (isVoidType t) then finishExp [] se e t else finishExp [] se (zero ~loc:e.eloc) voidType
         | Some (e, t) ->
           let se, e =
             match se.stmts with
@@ -9985,7 +9987,8 @@ and doStatement local_env (s : A.statement) : chunk =
     CurrentLoc.set (convLoc loc);
     let (lasts, data) = !gnu_body_result in
     if lasts == s then begin      (* This is the last in a GNU_BODY *)
-      let (s', e', t') = doFullExp local_env CNoConst e (AExp None) in
+      let what = match !data with Some (e, t) when isZero e && isVoidType t -> ADrop | _ -> AExp None in
+      let (s', e', t') = doFullExp local_env CNoConst e what in
       data := Some (e', t');      (* Record the result *)
       s'
     end else
